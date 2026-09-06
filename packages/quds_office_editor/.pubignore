@@ -1,0 +1,13 @@
+# Keep the published package lean; ship a runnable example, not build trees.
+.dart_tool/
+build/
+coverage/
+doc/api/
+test/
+analysis_options.yaml
+example/.dart_tool/
+example/build/
+example/**/ephemeral/
+example/**/.plugin_symlinks/
+example/**/CMakeFiles/
+example/**/CMakeCache.txt

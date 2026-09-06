@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  engine:
+    name: quds_office_engine
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/quds_office_engine
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: 3.12.0
+      - name: Resolve workspace
+        working-directory: .
+        run: dart pub get
+      - run: dart analyze --fatal-infos
+      - run: dart test
+
+  editor:
+    name: quds_office_editor
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/quds_office_editor
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: Resolve workspace
+        working-directory: .
+        run: dart pub get
+      - run: flutter analyze
+      - run: flutter test

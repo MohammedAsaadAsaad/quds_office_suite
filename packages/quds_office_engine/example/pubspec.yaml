@@ -1,0 +1,10 @@
+name: quds_office_engine_example
+description: Quickstart and export galleries for quds_office_engine.
+publish_to: none
+
+environment:
+  sdk: ^3.12.0
+
+dependencies:
+  quds_office_engine:
+    path: ..

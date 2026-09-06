@@ -1,0 +1,23 @@
+# Quds Office Suite — Agent Operating Rules
+
+You are implementing a two-package Office suite:
+
+- `packages/quds_office_engine` — pure Dart. NEVER import `dart:ui` or Flutter.
+- `packages/quds_office_editor` — Flutter RenderBox / LeafRenderObjectWidget only.
+
+## Architecture
+
+Follow the layout and Phase 1–5 roadmap in the original mission spec.
+Do not skip phases. Do not leave `TODO` stubs or placeholder return values.
+100% type safety: no `dynamic`, no untyped maps.
+
+## Editor prohibition
+
+Do not use TextField, TextFormField, EditableText, SelectableRegion,
+SingleChildScrollView, ListView, or InteractiveViewer. All editing surfaces
+are custom RenderBox subclasses.
+
+## Current focus
+
+Complete each phase fully before starting the next. Prefer Uint8List views,
+index slicing, and object pooling over heap-heavy DOM trees.

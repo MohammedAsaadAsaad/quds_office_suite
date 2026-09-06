@@ -1,0 +1,42 @@
+name: quds_office_editor
+description: >-
+  Flutter Word, Excel, and PowerPoint editors on custom RenderBox
+  surfaces — IME, BiDi caret, formulas, and slideshows.
+version: 0.1.0
+homepage: https://github.com/MohammedAsaadAsaad/quds_office_suite
+repository: https://github.com/MohammedAsaadAsaad/quds_office_suite
+issue_tracker: https://github.com/MohammedAsaadAsaad/quds_office_suite/issues
+documentation: https://pub.dev/documentation/quds_office_editor/latest/
+resolution: workspace
+
+topics:
+  - flutter
+  - office
+  - editor
+  - word
+  - excel
+
+screenshots:
+  - description: "Word canvas — paginated pages, BiDi caret, and custom chrome."
+    path: example/screenshots/word.png
+  - description: "Excel grid — virtualized sheet, formula bar, and freeze panes."
+    path: example/screenshots/excel.png
+  - description: "PowerPoint stage — shapes, snap guides, and slideshow."
+    path: example/screenshots/powerpoint.png
+
+environment:
+  sdk: ^3.12.0
+  flutter: ">=3.44.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  quds_office_engine: ^0.1.0
+
+dev_dependencies:
+  flutter_lints: ^6.0.0
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: false

@@ -1,0 +1,9 @@
+# Keep the published package lean.
+.dart_tool/
+build/
+coverage/
+doc/api/
+example/out/
+test/
+tool/
+analysis_options.yaml

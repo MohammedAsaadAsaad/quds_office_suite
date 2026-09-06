@@ -1,0 +1,41 @@
+# Dart / Flutter
+.dart_tool/
+.packages
+.pub-cache/
+.pub/
+.flutter-plugins
+.flutter-plugins-dependencies
+.flutter-plugins-dependencies
+**/doc/api/
+coverage/
+build/
+*.iml
+*.log
+
+# Editors
+.idea/
+.vscode/
+*.swp
+*~
+
+# Locks (libraries publish without them; workspace lock stays local)
+pubspec.lock
+
+# Engine gallery output
+packages/quds_office_engine/example/out/
+
+# Flutter generated / ephemeral
+**/flutter/ephemeral/
+**/.plugin_symlinks/
+
+# Native build leftovers
+**/CMakeFiles/
+**/CMakeCache.txt
+**/*.so
+**/*.dll
+**/*.exe
+**/*.app
+
+# OS
+.DS_Store
+Thumbs.db
