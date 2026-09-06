@@ -1,6 +1,5 @@
-import 'dart:typed_data';
-
 import 'dart:convert';
+import 'dart:typed_data';
 
 import '../../builders/drawingml_charts.dart';
 import '../../builders/image_fit.dart';
@@ -18,10 +17,14 @@ import '../../xml/xml_writer.dart';
 
 /// Word inline pictures (`w:drawing` / `wp:inline` / `pic:pic`).
 abstract final class WordDrawingIo {
+  /// emuPerPoint API.
   static const int emuPerPoint = 12700;
+
+  /// pictureUri API.
   static const String pictureUri =
       'http://schemas.openxmlformats.org/drawingml/2006/picture';
 
+  /// mimeOf API.
   static String mimeOf(Uint8List bytes) {
     if (bytes.length > 3 && bytes[0] == 0xFF && bytes[1] == 0xD8) {
       return 'image/jpeg';
@@ -29,6 +32,7 @@ abstract final class WordDrawingIo {
     return 'image/png';
   }
 
+  /// extensionOf API.
   static String extensionOf(String mime) {
     if (mime == 'image/jpeg') {
       return '.jpeg';
@@ -39,14 +43,18 @@ abstract final class WordDrawingIo {
     return '.png';
   }
 
+  /// pointsToEmu API.
   static int pointsToEmu(double points) =>
       (points.clamp(8, 2000) * emuPerPoint).round();
 
+  /// emuToPoints API.
   static double emuToPoints(int emu) => emu / emuPerPoint;
 
+  /// cropToSrc API.
   static int cropToSrc(double fraction) =>
       (fraction.clamp(0.0, 0.49) * 100000).round();
 
+  /// srcToCrop API.
   static double srcToCrop(String? raw) {
     final int? value = int.tryParse(raw ?? '');
     if (value == null || value <= 0) {
@@ -55,6 +63,7 @@ abstract final class WordDrawingIo {
     return (value / 100000).clamp(0.0, 0.49);
   }
 
+  /// syncVisuals API.
   static Map<OfficeVisual, String> syncVisuals(
     Iterable<OfficeVisual> visuals,
     OpcPackage package, {
@@ -91,7 +100,9 @@ abstract final class WordDrawingIo {
         ids[visual] = found.id;
         continue;
       }
-      images.add(WmlVisualImage(bytes: PngBytes.fromVisual(visual), visual: visual));
+      images.add(
+        WmlVisualImage(bytes: PngBytes.fromVisual(visual), visual: visual),
+      );
     }
     final Map<WmlVisualImage, String> raw = syncMedia(
       images,
@@ -112,35 +123,34 @@ abstract final class WordDrawingIo {
         : visual.points;
     return switch (visual.kind) {
       OfficeVisualKind.chartPie => DrawingmlCharts.pie(
-          title: title,
-          series: points,
-          rtl: false,
-          display: visual.chart,
-        ),
+        title: title,
+        series: points,
+        rtl: false,
+        display: visual.chart,
+      ),
       OfficeVisualKind.chartLine => DrawingmlCharts.line(
-          title: title,
-          series: <ChartSeries>[
-            ChartSeries(name: title, points: points),
-          ],
-          rtl: false,
-          display: visual.chart,
-        ),
+        title: title,
+        series: <ChartSeries>[ChartSeries(name: title, points: points)],
+        rtl: false,
+        display: visual.chart,
+      ),
       OfficeVisualKind.chartBar => DrawingmlCharts.bar(
-          title: title,
-          series: points,
-          rtl: false,
-          display: visual.chart,
-        ),
+        title: title,
+        series: points,
+        rtl: false,
+        display: visual.chart,
+      ),
       _ => DrawingmlCharts.bar(
-          title: title,
-          series: points,
-          rtl: false,
-          horizontal: false,
-          display: visual.chart,
-        ),
+        title: title,
+        series: points,
+        rtl: false,
+        horizontal: false,
+        display: visual.chart,
+      ),
     };
   }
 
+  /// syncMedia API.
   static Map<WmlVisualImage, String> syncMedia(
     Iterable<WmlVisualImage> images,
     OpcPackage package, {
@@ -169,14 +179,13 @@ abstract final class WordDrawingIo {
           break;
         }
       }
-      if (found == null) {
-        found = rels.add(type: RelationshipTypes.image, target: target);
-      }
+      found ??= rels.add(type: RelationshipTypes.image, target: target);
       ids[image] = found.id;
     }
     return ids;
   }
 
+  /// writeInline API.
   static void writeInline(
     XmlWriter w, {
     required String relationshipId,
@@ -189,7 +198,9 @@ abstract final class WordDrawingIo {
     final String name = adj.altTitle.isNotEmpty
         ? adj.altTitle
         : (visual.title.isEmpty ? 'Picture' : visual.title);
-    final String descr = adj.altDescription.isNotEmpty ? adj.altDescription : name;
+    final String descr = adj.altDescription.isNotEmpty
+        ? adj.altDescription
+        : name;
     w.writeStartElement('p', prefix: 'w');
     w.writeStartElement('r', prefix: 'w');
     w.writeStartElement('drawing', prefix: 'w');
@@ -354,6 +365,7 @@ abstract final class WordDrawingIo {
     }
   }
 
+  /// writeChart API.
   static void writeChart(
     XmlWriter w, {
     required String relationshipId,
@@ -394,6 +406,7 @@ abstract final class WordDrawingIo {
     w.writeEndElement(); // w:p
   }
 
+  /// read API.
   static OfficeVisual? read(
     XmlPullReader reader,
     OpcPackage package,
@@ -448,14 +461,16 @@ abstract final class WordDrawingIo {
             }
           }
         } else if (reader.localName == 'blip') {
-          embed = reader.getAttribute('embed', namespaceUri: OfficeNamespaces.r) ??
+          embed =
+              reader.getAttribute('embed', namespaceUri: OfficeNamespaces.r) ??
               reader.getAttribute('embed') ??
               embed;
         } else if (reader.localName == 'lum') {
           DrawingmlVisualIo.applyLum(adj, reader);
         } else if (reader.localName == 'alphaModFix') {
-          adj.transparency =
-              DrawingmlVisualIo.alphaToTransparency(reader.getAttribute('amt'));
+          adj.transparency = DrawingmlVisualIo.alphaToTransparency(
+            reader.getAttribute('amt'),
+          );
         } else if (reader.localName == 'outerShdw') {
           adj.shadow = true;
         } else if (reader.localName == 'ln') {
@@ -472,7 +487,8 @@ abstract final class WordDrawingIo {
         } else if (reader.localName == 'chart' &&
             (reader.prefix == 'c' ||
                 reader.namespaceUri == OfficeNamespaces.c)) {
-          chartId = reader.getAttribute('id', namespaceUri: OfficeNamespaces.r) ??
+          chartId =
+              reader.getAttribute('id', namespaceUri: OfficeNamespaces.r) ??
               reader.getAttribute('id') ??
               chartId;
         } else if (reader.localName == 'extent' || reader.localName == 'ext') {
@@ -493,14 +509,7 @@ abstract final class WordDrawingIo {
       ..altTitle = name
       ..altDescription = descr;
     if (chartId != null) {
-      return _readChart(
-        package,
-        docUri,
-        chartId,
-        name: name,
-        cx: cx,
-        cy: cy,
-      );
+      return _readChart(package, docUri, chartId, name: name, cx: cx, cy: cy);
     }
     if (embed == null) {
       return null;
@@ -534,10 +543,18 @@ abstract final class WordDrawingIo {
   }
 
   static void _readWrapDist(PictureAdjust adj, XmlPullReader reader) {
-    adj.wrapDistT = emuToPoints(int.tryParse(reader.getAttribute('distT') ?? '') ?? 0);
-    adj.wrapDistB = emuToPoints(int.tryParse(reader.getAttribute('distB') ?? '') ?? 0);
-    adj.wrapDistL = emuToPoints(int.tryParse(reader.getAttribute('distL') ?? '') ?? 0);
-    adj.wrapDistR = emuToPoints(int.tryParse(reader.getAttribute('distR') ?? '') ?? 0);
+    adj.wrapDistT = emuToPoints(
+      int.tryParse(reader.getAttribute('distT') ?? '') ?? 0,
+    );
+    adj.wrapDistB = emuToPoints(
+      int.tryParse(reader.getAttribute('distB') ?? '') ?? 0,
+    );
+    adj.wrapDistL = emuToPoints(
+      int.tryParse(reader.getAttribute('distL') ?? '') ?? 0,
+    );
+    adj.wrapDistR = emuToPoints(
+      int.tryParse(reader.getAttribute('distR') ?? '') ?? 0,
+    );
   }
 
   static OfficeVisual? _readChart(
@@ -548,8 +565,9 @@ abstract final class WordDrawingIo {
     required int cx,
     required int cy,
   }) {
-    final PackageRelationship? rel =
-        package.relationshipsFor(docUri).byId(relationshipId);
+    final PackageRelationship? rel = package
+        .relationshipsFor(docUri)
+        .byId(relationshipId);
     if (rel == null || rel.targetMode != RelationshipTargetMode.internal) {
       return null;
     }
@@ -582,9 +600,14 @@ abstract final class WordDrawingIo {
   }
 }
 
+/// Class WmlVisualImage.
 class WmlVisualImage {
+  /// WmlVisualImage API.
   WmlVisualImage({required this.bytes, required this.visual});
 
+  /// bytes API.
   final Uint8List bytes;
+
+  /// visual API.
   final OfficeVisual visual;
 }

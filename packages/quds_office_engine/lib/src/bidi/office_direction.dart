@@ -7,11 +7,15 @@ bool? officeParagraphDirectionFromSides({
   required bool rightCtrl,
   required bool leftShift,
   required bool rightShift,
+
+  /// extraKeys API.
   bool extraKeys = false,
 }) {
   if (extraKeys) {
     return null;
   }
+
+  /// anyCtrl API.
   final bool anyCtrl = leftCtrl || rightCtrl;
   if (!anyCtrl) {
     return null;

@@ -84,8 +84,9 @@ void main() {
         maxWidth: 1000,
         widthOf: (int cp) => 10,
       );
-      final List<int> cps =
-          lines.single.glyphs.map((ShapedGlyph g) => g.codePoint).toList();
+      final List<int> cps = lines.single.glyphs
+          .map((ShapedGlyph g) => g.codePoint)
+          .toList();
       expect(cps.first, anyOf(0xFE8D, 0xFE8E, 0x0627));
       expect(cps.last, anyOf(0xFEE3, 0xFEE4, 0x0645));
     });
@@ -157,25 +158,28 @@ void main() {
       );
     });
 
-    test('Ctrl plus sided Shift still resolves when logical Ctrl is generic', () {
-      expect(
-        officeParagraphDirectionFromSides(
-          leftCtrl: true,
-          rightCtrl: false,
-          leftShift: false,
-          rightShift: true,
-        ),
-        isTrue,
-      );
-      expect(
-        officeParagraphDirectionFromSides(
-          leftCtrl: false,
-          rightCtrl: true,
-          leftShift: true,
-          rightShift: false,
-        ),
-        isFalse,
-      );
-    });
+    test(
+      'Ctrl plus sided Shift still resolves when logical Ctrl is generic',
+      () {
+        expect(
+          officeParagraphDirectionFromSides(
+            leftCtrl: true,
+            rightCtrl: false,
+            leftShift: false,
+            rightShift: true,
+          ),
+          isTrue,
+        );
+        expect(
+          officeParagraphDirectionFromSides(
+            leftCtrl: false,
+            rightCtrl: true,
+            leftShift: true,
+            rightShift: false,
+          ),
+          isFalse,
+        );
+      },
+    );
   });
 }

@@ -1,4 +1,3 @@
-import 'dart:isolate';
 import 'dart:typed_data';
 
 import '../sheet/model/sml_workbook.dart';
@@ -8,18 +7,29 @@ import '../slide/serial/slide_serial.dart';
 import '../visual/office_visual.dart';
 import '../word/model/wml_document.dart';
 import '../word/serial/word_serializer.dart';
+import 'office_isolate_run.dart'
+    if (dart.library.io) 'office_isolate_run_io.dart';
 import 'opc_archive.dart';
 
 /// Cost heuristics so hosts can offload ZIP/XML encoding off the UI isolate.
 abstract final class OfficeSaveCost {
+  /// isolateThresholdBytes API.
   static const int isolateThresholdBytes = 128 * 1024;
+
+  /// isolateThresholdParagraphs API.
   static const int isolateThresholdParagraphs = 50;
+
+  /// isolateThresholdCells API.
   static const int isolateThresholdCells = 400;
+
+  /// isolateThresholdSlides API.
   static const int isolateThresholdSlides = 8;
 
+  /// isHeavyPackage API.
   static bool isHeavyPackage(OpcPackage? package) =>
       package != null && package.sourceLength >= isolateThresholdBytes;
 
+  /// isHeavyWord API.
   static bool isHeavyWord(WmlDocument document) {
     if (isHeavyPackage(document.package)) {
       return true;
@@ -41,6 +51,7 @@ abstract final class OfficeSaveCost {
     return false;
   }
 
+  /// isHeavyWorkbook API.
   static bool isHeavyWorkbook(SmlWorkbook workbook) {
     if (isHeavyPackage(workbook.package)) {
       return true;
@@ -71,6 +82,7 @@ abstract final class OfficeSaveCost {
     return false;
   }
 
+  /// isHeavyPresentation API.
   static bool isHeavyPresentation(PmlPresentation presentation) {
     if (isHeavyPackage(presentation.package)) {
       return true;
@@ -98,22 +110,19 @@ abstract final class OfficeSaveCost {
 
 /// Encodes Office packages on a worker isolate so the UI isolate stays live.
 abstract final class OfficeIsolateSave {
-  static Future<Uint8List> word(
-    WmlDocument document, {
-    String? password,
-  }) {
+  /// word API.
+  static Future<Uint8List> word(WmlDocument document, {String? password}) {
     final _WordSaveJob job = _WordSaveJob(document, password);
     return _run(() => _encodeWord(job));
   }
 
-  static Future<Uint8List> workbook(
-    SmlWorkbook workbook, {
-    String? password,
-  }) {
+  /// workbook API.
+  static Future<Uint8List> workbook(SmlWorkbook workbook, {String? password}) {
     final _SheetSaveJob job = _SheetSaveJob(workbook, password);
     return _run(() => _encodeWorkbook(job));
   }
 
+  /// presentation API.
   static Future<Uint8List> presentation(
     PmlPresentation presentation, {
     String? password,
@@ -122,41 +131,39 @@ abstract final class OfficeIsolateSave {
     return _run(() => _encodePresentation(job));
   }
 
-  static Future<Uint8List> _run(Uint8List Function() encode) async {
-    try {
-      return await Isolate.run(encode);
-    } on IsolateSpawnException {
-      return encode();
-    } on UnsupportedError {
-      return encode();
-    } on ArgumentError catch (error) {
-      final String text = error.toString();
-      if (text.contains('isolate message') || text.contains('unsendable')) {
-        return encode();
-      }
-      rethrow;
-    }
+  /// Function API.
+  static Future<Uint8List> _run(Uint8List Function() encode) {
+    return officeIsolateRun(encode);
   }
 }
 
 class _WordSaveJob {
   const _WordSaveJob(this.document, this.password);
 
+  /// document API.
   final WmlDocument document;
+
+  /// password API.
   final String? password;
 }
 
 class _SheetSaveJob {
   const _SheetSaveJob(this.workbook, this.password);
 
+  /// workbook API.
   final SmlWorkbook workbook;
+
+  /// password API.
   final String? password;
 }
 
 class _SlideSaveJob {
   const _SlideSaveJob(this.presentation, this.password);
 
+  /// presentation API.
   final PmlPresentation presentation;
+
+  /// password API.
   final String? password;
 }
 
@@ -169,8 +176,5 @@ Uint8List _encodeWorkbook(_SheetSaveJob job) {
 }
 
 Uint8List _encodePresentation(_SlideSaveJob job) {
-  return SlideSerializer().writeBytes(
-    job.presentation,
-    password: job.password,
-  );
+  return SlideSerializer().writeBytes(job.presentation, password: job.password);
 }

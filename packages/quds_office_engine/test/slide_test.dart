@@ -12,17 +12,28 @@ void main() {
               id: 2,
               name: 'Title',
               text: 'مرحبا',
-              transform: const PmlTransform(x: 0, y: 0, cx: 2000000, cy: 500000),
+              transform: const PmlTransform(
+                x: 0,
+                y: 0,
+                cx: 2000000,
+                cy: 500000,
+              ),
             ),
           ],
         ),
       ],
     );
-    expect(pres.resolveText(pres.slides.first.shapes.first, pres.slides.first), 'مرحبا');
+    expect(
+      pres.resolveText(pres.slides.first.shapes.first, pres.slides.first),
+      'مرحبا',
+    );
     final bytes = SlideSerializer().writeBytes(pres);
     final PmlPresentation opened = SlideDeserializer().readBytes(bytes);
     expect(opened.slides, isNotEmpty);
-    expect(opened.slides.first.shapes.any((PmlShape s) => s.text.contains('مرحبا')), isTrue);
+    expect(
+      opened.slides.first.shapes.any((PmlShape s) => s.text.contains('مرحبا')),
+      isTrue,
+    );
   });
 
   test('round-trips shape text direction and alignment', () {
@@ -37,7 +48,12 @@ void main() {
               text: 'بطاقة جديدة',
               rightToLeft: true,
               textAlign: PmlTextAlign.right,
-              transform: const PmlTransform(x: 0, y: 0, cx: 2000000, cy: 500000),
+              transform: const PmlTransform(
+                x: 0,
+                y: 0,
+                cx: 2000000,
+                cy: 500000,
+              ),
             ),
           ],
         ),
@@ -96,8 +112,10 @@ void main() {
     expect(opened.slides.first.shapes.single.table?.colCount, 3);
   });
 
-  test('parseSlideShapes keeps noFill and run ink separate from shape fill', () {
-    const String xml = '''
+  test(
+    'parseSlideShapes keeps noFill and run ink separate from shape fill',
+    () {
+      const String xml = '''
 <p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
  xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
   <p:sp>
@@ -124,16 +142,20 @@ void main() {
     </a:r></a:p></p:txBody>
   </p:sp>
 </p:sld>''';
-    final List<PmlShape> shapes = parseSlideShapes(xml);
-    expect(shapes, hasLength(2));
-    expect(shapes[0].fillColor.toUpperCase(), '2B579A'); // ln/noFill must not clear fill
-    expect(shapes[0].textColor.toUpperCase(), 'FFFFFF');
-    expect(shapes[0].text, 'Title');
-    expect(shapes[0].fontSizePt, 40);
-    expect(shapes[1].fillColor, isEmpty);
-    expect(shapes[1].textColor.toUpperCase(), 'F4C542');
-    expect(shapes[1].text, 'Kicker');
-  });
+      final List<PmlShape> shapes = parseSlideShapes(xml);
+      expect(shapes, hasLength(2));
+      expect(
+        shapes[0].fillColor.toUpperCase(),
+        '2B579A',
+      ); // ln/noFill must not clear fill
+      expect(shapes[0].textColor.toUpperCase(), 'FFFFFF');
+      expect(shapes[0].text, 'Title');
+      expect(shapes[0].fontSizePt, 40);
+      expect(shapes[1].fillColor, isEmpty);
+      expect(shapes[1].textColor.toUpperCase(), 'F4C542');
+      expect(shapes[1].text, 'Kicker');
+    },
+  );
 
   test('parseChartVisual reads pie points and colors', () {
     const String xml = '''
@@ -194,15 +216,14 @@ void main() {
               order: 1,
             ),
           ],
-          shapes: <PmlShape>[
-            PmlShape(id: 2, name: 'Title', text: 'Hello'),
-          ],
+          shapes: <PmlShape>[PmlShape(id: 2, name: 'Title', text: 'Hello')],
         ),
       ],
     );
     final bytes = SlideSerializer().writeBytes(pres);
-    final String xml =
-        OpcPackage.openBytes(bytes).getPart('/ppt/slides/slide1.xml')!.readText();
+    final String xml = OpcPackage.openBytes(
+      bytes,
+    ).getPart('/ppt/slides/slide1.xml')!.readText();
     expect(xml, contains('<p:transition'));
     expect(xml, contains('<p:push'));
     expect(xml, contains('<p:timing'));
@@ -212,8 +233,14 @@ void main() {
     expect(opened.slides.first.transition.direction, PmlTransitionDir.right);
     expect(opened.slides.first.animations, hasLength(2));
     expect(opened.slides.first.animations.first.preset, PmlAnimPreset.flyIn);
-    expect(opened.slides.first.animations.last.trigger, PmlAnimTrigger.afterPrevious);
-    expect(opened.slides.first.animations.first.direction, PmlTransitionDir.left);
+    expect(
+      opened.slides.first.animations.last.trigger,
+      PmlAnimTrigger.afterPrevious,
+    );
+    expect(
+      opened.slides.first.animations.first.direction,
+      PmlTransitionDir.left,
+    );
   });
 
   test('preview-only slideshow never advances to the next slide', () {
@@ -379,82 +406,82 @@ void main() {
     expect(show.sample(2).visible, isFalse);
   });
 
-  test('slideshow back during a slide transition reverses the remaining motion', () {
-    final PmlPresentation pres = PmlPresentation(
-      slides: <PmlSlide>[
-        PmlSlide(
-          id: 256,
-          shapes: <PmlShape>[PmlShape(id: 2, name: 'A')],
-        ),
-        PmlSlide(
-          id: 257,
-          transition: const PmlSlideTransition(
-            kind: PmlTransitionKind.fade,
-            durationMs: 400,
+  test(
+    'slideshow back during a slide transition reverses the remaining motion',
+    () {
+      final PmlPresentation pres = PmlPresentation(
+        slides: <PmlSlide>[
+          PmlSlide(id: 256, shapes: <PmlShape>[PmlShape(id: 2, name: 'A')]),
+          PmlSlide(
+            id: 257,
+            transition: const PmlSlideTransition(
+              kind: PmlTransitionKind.fade,
+              durationMs: 400,
+            ),
+            shapes: <PmlShape>[PmlShape(id: 2, name: 'B')],
           ),
-          shapes: <PmlShape>[PmlShape(id: 2, name: 'B')],
-        ),
-      ],
-    );
-    final PmlSlideShow show = PmlSlideShow(pres)..start(from: 0);
-    show.next();
-    expect(show.isTransitioning, isTrue);
-    expect(show.slideIndex, 1);
-    show.elapse(200);
-    expect(show.transitionProgress, closeTo(0.5, 0.05));
-    show.previous();
-    expect(show.isTransitioning, isTrue);
-    expect(show.isTransitionReverse, isTrue);
-    expect(show.slideIndex, 1);
-    expect(show.outgoingSlide?.id, 256);
-    expect(show.transitionProgress, closeTo(0.5, 0.05));
-    show.elapse(100);
-    expect(show.transitionProgress, lessThan(0.4));
-    expect(show.slideIndex, 1);
-    show.elapse(200);
-    expect(show.isTransitioning, isFalse);
-    expect(show.slideIndex, 0);
-    expect(show.currentSlide.id, 256);
-  });
+        ],
+      );
+      final PmlSlideShow show = PmlSlideShow(pres)..start(from: 0);
+      show.next();
+      expect(show.isTransitioning, isTrue);
+      expect(show.slideIndex, 1);
+      show.elapse(200);
+      expect(show.transitionProgress, closeTo(0.5, 0.05));
+      show.previous();
+      expect(show.isTransitioning, isTrue);
+      expect(show.isTransitionReverse, isTrue);
+      expect(show.slideIndex, 1);
+      expect(show.outgoingSlide?.id, 256);
+      expect(show.transitionProgress, closeTo(0.5, 0.05));
+      show.elapse(100);
+      expect(show.transitionProgress, lessThan(0.4));
+      expect(show.slideIndex, 1);
+      show.elapse(200);
+      expect(show.isTransitioning, isFalse);
+      expect(show.slideIndex, 0);
+      expect(show.currentSlide.id, 256);
+    },
+  );
 
-  test('slideshow back from a finished slide reverses that slide transition', () {
-    final PmlPresentation pres = PmlPresentation(
-      slides: <PmlSlide>[
-        PmlSlide(
-          id: 256,
-          shapes: <PmlShape>[PmlShape(id: 2, name: 'A')],
-        ),
-        PmlSlide(
-          id: 257,
-          transition: const PmlSlideTransition(
-            kind: PmlTransitionKind.push,
-            direction: PmlTransitionDir.left,
-            durationMs: 400,
+  test(
+    'slideshow back from a finished slide reverses that slide transition',
+    () {
+      final PmlPresentation pres = PmlPresentation(
+        slides: <PmlSlide>[
+          PmlSlide(id: 256, shapes: <PmlShape>[PmlShape(id: 2, name: 'A')]),
+          PmlSlide(
+            id: 257,
+            transition: const PmlSlideTransition(
+              kind: PmlTransitionKind.push,
+              direction: PmlTransitionDir.left,
+              durationMs: 400,
+            ),
+            shapes: <PmlShape>[PmlShape(id: 2, name: 'B')],
           ),
-          shapes: <PmlShape>[PmlShape(id: 2, name: 'B')],
-        ),
-      ],
-    );
-    final PmlSlideShow show = PmlSlideShow(pres)..start(from: 0);
-    show.next();
-    show.elapse(400);
-    expect(show.isTransitioning, isFalse);
-    expect(show.slideIndex, 1);
-    show.previous();
-    expect(show.isTransitioning, isTrue);
-    expect(show.isTransitionReverse, isTrue);
-    expect(show.slideIndex, 1);
-    expect(show.transitionProgress, closeTo(1, 0.01));
-    expect(show.outgoingSlide?.id, 256);
-    expect(show.playingTransition?.kind, PmlTransitionKind.push);
-    show.elapse(100);
-    expect(show.transitionProgress, closeTo(0.75, 0.05));
-    expect(show.slideIndex, 1);
-    show.elapse(400);
-    expect(show.isTransitioning, isFalse);
-    expect(show.isTransitionReverse, isFalse);
-    expect(show.slideIndex, 0);
-  });
+        ],
+      );
+      final PmlSlideShow show = PmlSlideShow(pres)..start(from: 0);
+      show.next();
+      show.elapse(400);
+      expect(show.isTransitioning, isFalse);
+      expect(show.slideIndex, 1);
+      show.previous();
+      expect(show.isTransitioning, isTrue);
+      expect(show.isTransitionReverse, isTrue);
+      expect(show.slideIndex, 1);
+      expect(show.transitionProgress, closeTo(1, 0.01));
+      expect(show.outgoingSlide?.id, 256);
+      expect(show.playingTransition?.kind, PmlTransitionKind.push);
+      show.elapse(100);
+      expect(show.transitionProgress, closeTo(0.75, 0.05));
+      expect(show.slideIndex, 1);
+      show.elapse(400);
+      expect(show.isTransitioning, isFalse);
+      expect(show.isTransitionReverse, isFalse);
+      expect(show.slideIndex, 0);
+    },
+  );
 
   test('slideshow back reverses fly-in along the same path', () {
     final PmlPresentation pres = PmlPresentation(
@@ -469,9 +496,7 @@ void main() {
               durationMs: 400,
             ),
           ],
-          shapes: <PmlShape>[
-            PmlShape(id: 2, name: 'Title', text: 'A'),
-          ],
+          shapes: <PmlShape>[PmlShape(id: 2, name: 'Title', text: 'A')],
         ),
       ],
     );
@@ -533,121 +558,143 @@ void main() {
     expect(show.sample(3).visible, isFalse);
   });
 
-  test('Morph pairs unique names and interpolates position size and rotation', () {
-    final PmlSlide outgoing = PmlSlide(
-      id: 256,
-      shapes: <PmlShape>[
-        PmlShape(
-          id: 2,
-          name: 'Title',
-          text: 'A',
-          fillColor: '000000',
-          transform: const PmlTransform(x: 0, y: 0, cx: 1000000, cy: 1000000, rot: 0),
-        ),
-        PmlShape(
-          id: 3,
-          name: 'Card',
-          text: 'Old',
-          fillColor: 'FF0000',
-          transform: const PmlTransform(x: 0, y: 2000000, cx: 1000000, cy: 1000000),
-        ),
-      ],
-    );
-    final PmlSlide incoming = PmlSlide(
-      id: 257,
-      shapes: <PmlShape>[
-        PmlShape(
-          id: 2,
-          name: 'Title',
-          text: 'A',
-          fillColor: 'FFFFFF',
-          transform: const PmlTransform(
-            x: 2000000,
-            y: 0,
-            cx: 2000000,
-            cy: 1000000,
-            rot: 10800000,
+  test(
+    'Morph pairs unique names and interpolates position size and rotation',
+    () {
+      final PmlSlide outgoing = PmlSlide(
+        id: 256,
+        shapes: <PmlShape>[
+          PmlShape(
+            id: 2,
+            name: 'Title',
+            text: 'A',
+            fillColor: '000000',
+            transform: const PmlTransform(
+              x: 0,
+              y: 0,
+              cx: 1000000,
+              cy: 1000000,
+              rot: 0,
+            ),
           ),
-        ),
-        PmlShape(
-          id: 9,
-          name: 'Card',
-          text: 'New',
-          fillColor: '00FF00',
-          transform: const PmlTransform(x: 3000000, y: 2000000, cx: 1000000, cy: 1000000),
-        ),
-        PmlShape(
-          id: 4,
-          name: 'Fresh',
-          text: 'In',
-          fillColor: '0000FF',
-        ),
-      ],
-    );
+          PmlShape(
+            id: 3,
+            name: 'Card',
+            text: 'Old',
+            fillColor: 'FF0000',
+            transform: const PmlTransform(
+              x: 0,
+              y: 2000000,
+              cx: 1000000,
+              cy: 1000000,
+            ),
+          ),
+        ],
+      );
+      final PmlSlide incoming = PmlSlide(
+        id: 257,
+        shapes: <PmlShape>[
+          PmlShape(
+            id: 2,
+            name: 'Title',
+            text: 'A',
+            fillColor: 'FFFFFF',
+            transform: const PmlTransform(
+              x: 2000000,
+              y: 0,
+              cx: 2000000,
+              cy: 1000000,
+              rot: 10800000,
+            ),
+          ),
+          PmlShape(
+            id: 9,
+            name: 'Card',
+            text: 'New',
+            fillColor: '00FF00',
+            transform: const PmlTransform(
+              x: 3000000,
+              y: 2000000,
+              cx: 1000000,
+              cy: 1000000,
+            ),
+          ),
+          PmlShape(id: 4, name: 'Fresh', text: 'In', fillColor: '0000FF'),
+        ],
+      );
 
-    final List<PmlMorphPair> pairs = PmlMorph.pair(outgoing, incoming);
-    expect(pairs.where((PmlMorphPair p) => p.role == PmlMorphRole.keep), hasLength(2));
-    expect(pairs.where((PmlMorphPair p) => p.role == PmlMorphRole.enter), hasLength(1));
-    expect(pairs.where((PmlMorphPair p) => p.role == PmlMorphRole.exit), isEmpty);
+      final List<PmlMorphPair> pairs = PmlMorph.pair(outgoing, incoming);
+      expect(
+        pairs.where((PmlMorphPair p) => p.role == PmlMorphRole.keep),
+        hasLength(2),
+      );
+      expect(
+        pairs.where((PmlMorphPair p) => p.role == PmlMorphRole.enter),
+        hasLength(1),
+      );
+      expect(
+        pairs.where((PmlMorphPair p) => p.role == PmlMorphRole.exit),
+        isEmpty,
+      );
 
-    final List<PmlMorphFrame> start = PmlMorph.frames(outgoing, incoming, 0);
-    final PmlMorphFrame title0 = start.firstWhere(
-      (PmlMorphFrame f) => f.shape.name == 'Title',
-    );
-    expect(title0.transform.x, 0);
-    expect(title0.transform.cx, 1000000);
-    expect(title0.fillColor, '000000');
-    expect(title0.opacity, 1);
+      final List<PmlMorphFrame> start = PmlMorph.frames(outgoing, incoming, 0);
+      final PmlMorphFrame title0 = start.firstWhere(
+        (PmlMorphFrame f) => f.shape.name == 'Title',
+      );
+      expect(title0.transform.x, 0);
+      expect(title0.transform.cx, 1000000);
+      expect(title0.fillColor, '000000');
+      expect(title0.opacity, 1);
 
-    final List<PmlMorphFrame> mid = PmlMorph.frames(outgoing, incoming, 0.5);
-    final PmlMorphFrame titleMid = mid.firstWhere(
-      (PmlMorphFrame f) => f.shape.name == 'Title',
-    );
-    expect(titleMid.transform.x, 1000000);
-    expect(titleMid.transform.cx, 1500000);
-    expect(titleMid.transform.rot, 5400000);
-    expect(titleMid.fillColor, '808080');
-    expect(titleMid.opacity, 1);
-    final PmlMorphFrame enter = mid.firstWhere(
-      (PmlMorphFrame f) => f.role == PmlMorphRole.enter,
-    );
-    expect(enter.opacity, closeTo(PmlMorph.ease(0.5), 0.0001));
-    expect(enter.transform.x, enter.shape.transform.x);
+      final List<PmlMorphFrame> mid = PmlMorph.frames(outgoing, incoming, 0.5);
+      final PmlMorphFrame titleMid = mid.firstWhere(
+        (PmlMorphFrame f) => f.shape.name == 'Title',
+      );
+      expect(titleMid.transform.x, 1000000);
+      expect(titleMid.transform.cx, 1500000);
+      expect(titleMid.transform.rot, 5400000);
+      expect(titleMid.fillColor, '808080');
+      expect(titleMid.opacity, 1);
+      final PmlMorphFrame enter = mid.firstWhere(
+        (PmlMorphFrame f) => f.role == PmlMorphRole.enter,
+      );
+      expect(enter.opacity, closeTo(PmlMorph.ease(0.5), 0.0001));
+      expect(enter.transform.x, enter.shape.transform.x);
 
-    final List<PmlMorphFrame> end = PmlMorph.frames(outgoing, incoming, 1);
-    final PmlMorphFrame title1 = end.firstWhere(
-      (PmlMorphFrame f) => f.shape.name == 'Title',
-    );
-    expect(title1.transform.x, 2000000);
-    expect(title1.transform.cx, 2000000);
-    expect(title1.transform.rot, 10800000);
-    expect(title1.fillColor, 'FFFFFF');
-    expect(title1.opacity, 1);
-  });
+      final List<PmlMorphFrame> end = PmlMorph.frames(outgoing, incoming, 1);
+      final PmlMorphFrame title1 = end.firstWhere(
+        (PmlMorphFrame f) => f.shape.name == 'Title',
+      );
+      expect(title1.transform.x, 2000000);
+      expect(title1.transform.cx, 2000000);
+      expect(title1.transform.rot, 10800000);
+      expect(title1.fillColor, 'FFFFFF');
+      expect(title1.opacity, 1);
+    },
+  );
 
-  test('Morph ignores shapes that exist only on another slide column of ids', () {
-    final PmlSlide outgoing = PmlSlide(
-      id: 256,
-      shapes: <PmlShape>[
-        PmlShape(id: 2, name: 'OnlyHere', text: 'Stay'),
-      ],
-    );
-    final PmlSlide incoming = PmlSlide(
-      id: 257,
-      shapes: <PmlShape>[
-        PmlShape(id: 8, name: 'Other', text: 'Arrive'),
-      ],
-    );
-    final List<PmlMorphPair> pairs = PmlMorph.pair(outgoing, incoming);
-    expect(pairs, hasLength(2));
-    expect(pairs.first.role, PmlMorphRole.exit);
-    expect(pairs.last.role, PmlMorphRole.enter);
-    final List<PmlMorphFrame> mid = PmlMorph.frames(outgoing, incoming, 0.5);
-    expect(mid.first.opacity, lessThan(1));
-    expect(mid.last.opacity, greaterThan(0));
-    expect(mid.first.shape.name, 'OnlyHere');
-    expect(mid.last.shape.name, 'Other');
-  });
+  test(
+    'Morph ignores shapes that exist only on another slide column of ids',
+    () {
+      final PmlSlide outgoing = PmlSlide(
+        id: 256,
+        shapes: <PmlShape>[PmlShape(id: 2, name: 'OnlyHere', text: 'Stay')],
+      );
+      final PmlSlide incoming = PmlSlide(
+        id: 257,
+        shapes: <PmlShape>[PmlShape(id: 8, name: 'Other', text: 'Arrive')],
+      );
+      final List<PmlMorphPair> pairs = PmlMorph.pair(outgoing, incoming);
+      expect(pairs, hasLength(2));
+      expect(pairs.first.role, PmlMorphRole.exit);
+      expect(pairs.last.role, PmlMorphRole.enter);
+      final List<PmlMorphFrame> mid = PmlMorph.frames(outgoing, incoming, 0.5);
+      expect(mid.first.opacity, lessThan(1));
+      expect(mid.last.opacity, greaterThan(0));
+      expect(mid.first.shape.name, 'OnlyHere');
+      expect(mid.last.shape.name, 'Other');
+    },
+  );
 
   test('round-trips the Morph transition and reads prstTrans', () {
     final PmlPresentation pres = PmlPresentation(
@@ -663,8 +710,9 @@ void main() {
       ],
     );
     final bytes = SlideSerializer().writeBytes(pres);
-    final String xml =
-        OpcPackage.openBytes(bytes).getPart('/ppt/slides/slide1.xml')!.readText();
+    final String xml = OpcPackage.openBytes(
+      bytes,
+    ).getPart('/ppt/slides/slide1.xml')!.readText();
     expect(xml, contains('<p:morph'));
     expect(xml, contains('option="byObject"'));
     final PmlPresentation opened = SlideDeserializer().readBytes(bytes);
@@ -695,8 +743,9 @@ void main() {
     expect(pres.visibleIndexAfter(2, direction: -1), 0);
 
     final bytes = SlideSerializer().writeBytes(pres);
-    final String xml =
-        OpcPackage.openBytes(bytes).getPart('/ppt/slides/slide2.xml')!.readText();
+    final String xml = OpcPackage.openBytes(
+      bytes,
+    ).getPart('/ppt/slides/slide2.xml')!.readText();
     expect(xml, contains('show="0"'));
     final PmlPresentation opened = SlideDeserializer().readBytes(bytes);
     expect(opened.slides[1].hidden, isTrue);

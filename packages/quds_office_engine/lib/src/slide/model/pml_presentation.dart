@@ -2,7 +2,9 @@ import '../../opc/opc_archive.dart';
 import '../../visual/office_visual.dart';
 import '../anim/pml_motion.dart';
 
+/// Class PmlTransform.
 class PmlTransform {
+  /// PmlTransform API.
   const PmlTransform({
     this.x = 0,
     this.y = 0,
@@ -13,53 +15,82 @@ class PmlTransform {
 
   /// Offsets and extents in EMUs (1 pt = 12,700 EMUs).
   final int x;
+
+  /// y API.
   final int y;
+
+  /// cx API.
   final int cx;
+
+  /// cy API.
   final int cy;
+
+  /// rot API.
   final int rot;
 
+  /// xPoints API.
   double get xPoints => x / 12700;
+
+  /// yPoints API.
   double get yPoints => y / 12700;
+
+  /// widthPoints API.
   double get widthPoints => cx / 12700;
+
+  /// heightPoints API.
   double get heightPoints => cy / 12700;
+
+  /// rotationDegrees API.
   double get rotationDegrees => rot / 60000;
 }
 
+/// Enum PmlShapePreset.
 enum PmlShapePreset { rect, roundRect, ellipse, triangle, connector, freeform }
 
+/// Enum PmlTextAlign.
 enum PmlTextAlign { left, center, right, justify }
 
+/// Class PmlTableCell.
 class PmlTableCell {
-  PmlTableCell({
-    this.text = '',
-    this.fillColor = '',
-    this.textColor = '',
-  });
+  /// PmlTableCell API.
+  PmlTableCell({this.text = '', this.fillColor = '', this.textColor = ''});
 
+  /// text API.
   String text;
+
+  /// fillColor API.
   String fillColor;
+
+  /// textColor API.
   String textColor;
 
-  PmlTableCell copy() => PmlTableCell(
-        text: text,
-        fillColor: fillColor,
-        textColor: textColor,
-      );
+  /// copy API.
+  PmlTableCell copy() =>
+      PmlTableCell(text: text, fillColor: fillColor, textColor: textColor);
 }
 
+/// Class PmlTable.
 class PmlTable {
+  /// PmlTable API.
   PmlTable({
     List<List<PmlTableCell>>? rows,
     this.headerRow = true,
     this.rightToLeft = false,
   }) : rows = rows ?? <List<PmlTableCell>>[];
 
+  /// rows API.
   List<List<PmlTableCell>> rows;
+
+  /// headerRow API.
   bool headerRow;
+
+  /// rightToLeft API.
   bool rightToLeft;
 
+  /// rowCount API.
   int get rowCount => rows.length;
 
+  /// colCount API.
   int get colCount {
     var max = 0;
     for (final List<PmlTableCell> row in rows) {
@@ -70,6 +101,7 @@ class PmlTable {
     return max;
   }
 
+  /// cellAt API.
   PmlTableCell cellAt(int row, int col) {
     while (rows.length <= row) {
       rows.add(<PmlTableCell>[]);
@@ -80,6 +112,7 @@ class PmlTable {
     return rows[row][col];
   }
 
+  /// cellBounds API.
   ({double x, double y, double width, double height}) cellBounds({
     required double x,
     required double y,
@@ -93,14 +126,10 @@ class PmlTable {
     final double cw = width / colsN;
     final double rh = height / rowsN;
     final int visualCol = rightToLeft ? colsN - 1 - col : col;
-    return (
-      x: x + visualCol * cw,
-      y: y + row * rh,
-      width: cw,
-      height: rh,
-    );
+    return (x: x + visualCol * cw, y: y + row * rh, width: cw, height: rh);
   }
 
+  /// hitCell API.
   ({int row, int col})? hitCell({
     required double x,
     required double y,
@@ -112,20 +141,22 @@ class PmlTable {
     if (rowCount <= 0 || colCount <= 0) {
       return null;
     }
-    if (localX < x ||
-        localY < y ||
-        localX > x + width ||
-        localY > y + height) {
+    if (localX < x || localY < y || localX > x + width || localY > y + height) {
       return null;
     }
-    final int row =
-        ((localY - y) / (height / rowCount)).floor().clamp(0, rowCount - 1);
-    final int visualCol =
-        ((localX - x) / (width / colCount)).floor().clamp(0, colCount - 1);
+    final int row = ((localY - y) / (height / rowCount)).floor().clamp(
+      0,
+      rowCount - 1,
+    );
+    final int visualCol = ((localX - x) / (width / colCount)).floor().clamp(
+      0,
+      colCount - 1,
+    );
     final int col = rightToLeft ? colCount - 1 - visualCol : visualCol;
     return (row: row, col: col);
   }
 
+  /// grid API.
   static PmlTable grid({
     required int rows,
     required int cols,
@@ -142,10 +173,10 @@ class PmlTable {
           PmlTableCell(
             text: isHeader
                 ? (arabic ? 'عمود ${c + 1}' : 'Column ${c + 1}')
-                : (arabic ? 'خلية ${r + 1}×${c + 1}' : 'Cell ${r + 1}×${c + 1}'),
-            fillColor: isHeader
-                ? '2B579A'
-                : (r.isOdd ? 'D6DCE4' : 'FFFFFF'),
+                : (arabic
+                      ? 'خلية ${r + 1}×${c + 1}'
+                      : 'Cell ${r + 1}×${c + 1}'),
+            fillColor: isHeader ? '2B579A' : (r.isOdd ? 'D6DCE4' : 'FFFFFF'),
             textColor: isHeader ? 'FFFFFF' : '1A1A1A',
           ),
       ]);
@@ -153,19 +184,20 @@ class PmlTable {
     return table;
   }
 
+  /// copy API.
   PmlTable copy() => PmlTable(
-        headerRow: headerRow,
-        rightToLeft: rightToLeft,
-        rows: <List<PmlTableCell>>[
-          for (final List<PmlTableCell> row in rows)
-            <PmlTableCell>[
-              for (final PmlTableCell cell in row) cell.copy(),
-            ],
-        ],
-      );
+    headerRow: headerRow,
+    rightToLeft: rightToLeft,
+    rows: <List<PmlTableCell>>[
+      for (final List<PmlTableCell> row in rows)
+        <PmlTableCell>[for (final PmlTableCell cell in row) cell.copy()],
+    ],
+  );
 }
 
+/// Class PmlShape.
 class PmlShape {
+  /// PmlShape API.
   PmlShape({
     required this.id,
     required this.name,
@@ -183,31 +215,64 @@ class PmlShape {
     this.textAlign = PmlTextAlign.left,
   }) : path = path ?? <PmlPathPoint>[];
 
+  /// id API.
   int id;
+
+  /// name API.
   String name;
+
+  /// preset API.
   PmlShapePreset preset;
+
+  /// transform API.
   PmlTransform transform;
+
+  /// text API.
   String text;
+
+  /// fillColor API.
   String fillColor;
+
+  /// textColor API.
   String textColor;
+
+  /// fontSizePt API.
   double fontSizePt;
+
+  /// embedRelId API.
   String? embedRelId;
+
+  /// path API.
   List<PmlPathPoint> path;
+
+  /// visual API.
   OfficeVisual? visual;
+
+  /// table API.
   PmlTable? table;
 
   /// DrawingML `a:pPr/@rtl`. `null` auto-detects from the text.
   bool? rightToLeft;
+
+  /// textAlign API.
   PmlTextAlign textAlign;
 }
 
+/// Class PmlPathPoint.
 class PmlPathPoint {
+  /// PmlPathPoint API.
   const PmlPathPoint(this.x, this.y);
+
+  /// x API.
   final int x;
+
+  /// y API.
   final int y;
 }
 
+/// Class PmlSlide.
 class PmlSlide {
+  /// PmlSlide API.
   PmlSlide({
     required this.id,
     List<PmlShape>? shapes,
@@ -217,36 +282,61 @@ class PmlSlide {
     this.transition = const PmlSlideTransition(),
     List<PmlShapeAnimation>? animations,
     this.hidden = false,
-  })  : shapes = shapes ?? <PmlShape>[],
-        animations = animations ?? <PmlShapeAnimation>[];
+  }) : shapes = shapes ?? <PmlShape>[],
+       animations = animations ?? <PmlShapeAnimation>[];
 
+  /// id API.
   int id;
+
+  /// shapes API.
   List<PmlShape> shapes;
+
+  /// layoutName API.
   String layoutName;
+
+  /// masterName API.
   String masterName;
+
+  /// notes API.
   String notes;
+
+  /// transition API.
   PmlSlideTransition transition;
+
+  /// animations API.
   final List<PmlShapeAnimation> animations;
 
   /// PowerPoint `p:sld/@show="0"` — skipped during a slide show.
   bool hidden;
 }
 
+/// Class PmlLayout.
 class PmlLayout {
+  /// PmlLayout API.
   PmlLayout({required this.name, this.placeholderText = ''});
 
+  /// name API.
   String name;
+
+  /// placeholderText API.
   String placeholderText;
 }
 
+/// Class PmlMaster.
 class PmlMaster {
+  /// PmlMaster API.
   PmlMaster({required this.name, this.background = 'FFFFFF'});
 
+  /// name API.
   String name;
+
+  /// background API.
   String background;
 }
 
+/// Class PmlPresentation.
 class PmlPresentation {
+  /// PmlPresentation API.
   PmlPresentation({
     List<PmlSlide>? slides,
     PmlMaster? master,
@@ -254,15 +344,26 @@ class PmlPresentation {
     this.package,
     this.slideWidth = 9144000,
     this.slideHeight = 5143500,
-  })  : slides = slides ?? <PmlSlide>[PmlSlide(id: 256)],
-        master = master ?? PmlMaster(name: 'Office Theme'),
-        layouts = layouts ?? <PmlLayout>[PmlLayout(name: 'Blank')];
+  }) : slides = slides ?? <PmlSlide>[PmlSlide(id: 256)],
+       master = master ?? PmlMaster(name: 'Office Theme'),
+       layouts = layouts ?? <PmlLayout>[PmlLayout(name: 'Blank')];
 
+  /// slides API.
   List<PmlSlide> slides;
+
+  /// master API.
   PmlMaster master;
+
+  /// layouts API.
   List<PmlLayout> layouts;
+
+  /// package API.
   OpcPackage? package;
+
+  /// slideWidth API.
   int slideWidth;
+
+  /// slideHeight API.
   int slideHeight;
 
   /// Cascade: slide shape → layout placeholder → master defaults.
@@ -271,7 +372,8 @@ class PmlPresentation {
       return shape.text;
     }
     for (final PmlLayout layout in layouts) {
-      if (layout.name == slide.layoutName && layout.placeholderText.isNotEmpty) {
+      if (layout.name == slide.layoutName &&
+          layout.placeholderText.isNotEmpty) {
         return layout.placeholderText;
       }
     }

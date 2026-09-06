@@ -59,8 +59,9 @@ void main() {
     book.firstSheet.freezeCols = 2;
     book.firstSheet.cellA1('C5').value = 1;
     final bytes = SheetSerializer().writeBytes(book);
-    final String xml =
-        OpcPackage.openBytes(bytes).getPart('/xl/worksheets/sheet1.xml')!.readText();
+    final String xml = OpcPackage.openBytes(
+      bytes,
+    ).getPart('/xl/worksheets/sheet1.xml')!.readText();
     expect(xml, contains('xSplit="2"'));
     expect(xml, contains('ySplit="4"'));
     expect(xml, contains('topLeftCell="C5"'));
@@ -75,8 +76,9 @@ void main() {
     book.firstSheet.rightToLeft = true;
     book.firstSheet.cellA1('A1').value = 'مرحبا';
     final bytes = SheetSerializer().writeBytes(book);
-    final String xml =
-        OpcPackage.openBytes(bytes).getPart('/xl/worksheets/sheet1.xml')!.readText();
+    final String xml = OpcPackage.openBytes(
+      bytes,
+    ).getPart('/xl/worksheets/sheet1.xml')!.readText();
     expect(xml, contains('rightToLeft="1"'));
     expect(xml, contains('<sheetViews>'));
     final SmlWorkbook opened = SheetDeserializer().readBytes(bytes);
@@ -119,21 +121,24 @@ void main() {
     expect(evaluateFormula('=لوحة!B2', ctx), 11);
   });
 
-  test('applyInput caches the computed value and recalculate updates dependents', () {
-    final SmlWorkbook book = SmlWorkbook();
-    final SmlWorksheet s = book.firstSheet;
-    FormulaEvaluator.applyInput(book, s, s.cellA1('A1'), '4');
-    FormulaEvaluator.applyInput(book, s, s.cellA1('B1'), '6');
-    FormulaEvaluator.applyInput(book, s, s.cellA1('C1'), '=A1+B1');
-    expect(s.cellA1('C1').value, 10);
-    expect(s.cellA1('C1').formula, '=A1+B1');
-    expect(s.cellA1('C1').type, SmlCellType.formula);
+  test(
+    'applyInput caches the computed value and recalculate updates dependents',
+    () {
+      final SmlWorkbook book = SmlWorkbook();
+      final SmlWorksheet s = book.firstSheet;
+      FormulaEvaluator.applyInput(book, s, s.cellA1('A1'), '4');
+      FormulaEvaluator.applyInput(book, s, s.cellA1('B1'), '6');
+      FormulaEvaluator.applyInput(book, s, s.cellA1('C1'), '=A1+B1');
+      expect(s.cellA1('C1').value, 10);
+      expect(s.cellA1('C1').formula, '=A1+B1');
+      expect(s.cellA1('C1').type, SmlCellType.formula);
 
-    FormulaEvaluator.applyInput(book, s, s.cellA1('A1'), '9');
-    FormulaEvaluator.recalculate(book);
-    expect(s.cellA1('C1').value, 15);
-    expect(FormulaEvaluator.evaluateCell(book, s, s.cellA1('C1')), 15);
-  });
+      FormulaEvaluator.applyInput(book, s, s.cellA1('A1'), '9');
+      FormulaEvaluator.recalculate(book);
+      expect(s.cellA1('C1').value, 15);
+      expect(FormulaEvaluator.evaluateCell(book, s, s.cellA1('C1')), 15);
+    },
+  );
 
   test('scans formula references with source offsets', () {
     final List<FormulaRefSpan> refs = FormulaRefScanner.scan('=A1+B1');
@@ -154,8 +159,9 @@ void main() {
     expect(FormulaRefScanner.scan('="A1"+C3'), hasLength(1));
     expect(FormulaRefScanner.scan('="A1"+C3').first.lexeme, 'C3');
 
-    final List<FormulaRefSpan> sheetRef =
-        FormulaRefScanner.scan("='لوحة'!B2+A1");
+    final List<FormulaRefSpan> sheetRef = FormulaRefScanner.scan(
+      "='لوحة'!B2+A1",
+    );
     expect(sheetRef, hasLength(2));
     expect(sheetRef[0].sheetName, 'لوحة');
     expect(sheetRef[0].onSheet('لوحة'), isTrue);
@@ -208,8 +214,9 @@ void main() {
     book.firstSheet.setRowHeight(2, 40);
     book.firstSheet.cellA1('A1').value = 1;
     final bytes = SheetSerializer().writeBytes(book);
-    final String xml =
-        OpcPackage.openBytes(bytes).getPart('/xl/worksheets/sheet1.xml')!.readText();
+    final String xml = OpcPackage.openBytes(
+      bytes,
+    ).getPart('/xl/worksheets/sheet1.xml')!.readText();
     expect(xml, contains('<cols>'));
     expect(xml, contains('customWidth="1"'));
     expect(xml, contains('customHeight="1"'));

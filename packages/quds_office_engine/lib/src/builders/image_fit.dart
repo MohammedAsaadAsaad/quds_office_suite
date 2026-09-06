@@ -3,11 +3,16 @@ import 'dart:typed_data';
 
 /// Intrinsic pixel size of a raster image.
 class ImageSize {
+  /// ImageSize API.
   const ImageSize(this.widthPx, this.heightPx);
 
+  /// widthPx API.
   final int widthPx;
+
+  /// heightPx API.
   final int heightPx;
 
+  /// isValid API.
   bool get isValid => widthPx > 0 && heightPx > 0;
 }
 
@@ -16,10 +21,12 @@ abstract final class ImageFit {
   /// EMUs per CSS/pixel (96 dpi).
   static const int emuPerPx = 9525;
 
+  /// readSize API.
   static ImageSize? readSize(Uint8List bytes) {
     return readPngSize(bytes) ?? readJpegSize(bytes);
   }
 
+  /// readPngSize API.
   static ImageSize? readPngSize(Uint8List bytes) {
     if (bytes.length < 24) {
       return null;
@@ -65,10 +72,8 @@ abstract final class ImageFit {
       if (len < 2) {
         break;
       }
-      final bool sof = marker == 0xC0 ||
-          marker == 0xC1 ||
-          marker == 0xC2 ||
-          marker == 0xC3;
+      final bool sof =
+          marker == 0xC0 || marker == 0xC1 || marker == 0xC2 || marker == 0xC3;
       if (sof && i + 8 < bytes.length) {
         final int height = (bytes[i + 5] << 8) | bytes[i + 6];
         final int width = (bytes[i + 7] << 8) | bytes[i + 8];
@@ -81,7 +86,7 @@ abstract final class ImageFit {
     return null;
   }
 
-  /// Scales [src] into [maxCx]×[maxCy] EMUs while preserving aspect (contain).
+  /// Scales `srcWidthPx`×`srcHeightPx` into [maxCx]×[maxCy] EMUs (contain).
   static ({int cx, int cy}) containEmu({
     required int srcWidthPx,
     required int srcHeightPx,

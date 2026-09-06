@@ -4,6 +4,7 @@ import 'dart:typed_data';
 abstract final class Crc32 {
   static final Uint32List _table = _buildTable();
 
+  /// compute API.
   static int compute(List<int> data, [int crc = 0]) {
     int c = crc ^ 0xFFFFFFFF;
     for (int i = 0; i < data.length; i++) {

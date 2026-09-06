@@ -4,8 +4,10 @@ import 'dart:typed_data';
 ///
 /// No `dart:io` dependency — safe on CLI, server, web, and native.
 abstract final class RawDeflate {
+  /// inflate API.
   static Uint8List inflate(List<int> data) => _Inflater(data).run();
 
+  /// deflate API.
   static Uint8List deflate(List<int> data, {int level = 6}) {
     return _Deflater(Uint8List.fromList(data), level: level).run();
   }
@@ -21,6 +23,7 @@ class _Inflater {
   int _bitCount = 0;
   final List<int> _out = <int>[];
 
+  /// run API.
   Uint8List run() {
     var finalBlock = false;
     while (!finalBlock) {
@@ -161,6 +164,7 @@ class _Inflater {
     return _Huffman.fromLengths(lengths);
   }
 
+  /// fromLengths API.
   static _Huffman _fixedDist() => _Huffman.fromLengths(List<int>.filled(32, 5));
 }
 
@@ -171,8 +175,11 @@ class _Deflater {
   final int _level;
   int _bitBuf = 0;
   int _bitCount = 0;
+
+  /// BytesBuilder API.
   final BytesBuilder _out = BytesBuilder(copy: false);
 
+  /// run API.
   Uint8List run() {
     if (_src.isEmpty || _level <= 0) {
       _stored();
@@ -316,6 +323,7 @@ class _Huffman {
   static const int _fastBits = 9;
   static const int _fastMask = (1 << _fastBits) - 1;
 
+  /// fromLengths API.
   factory _Huffman.fromLengths(List<int> lengths) {
     var maxBits = 0;
     for (final int len in lengths) {
@@ -363,6 +371,7 @@ class _Huffman {
     return _Huffman._(symbols, bits);
   }
 
+  /// decode API.
   int decode(_Inflater inflater) {
     final int peek = inflater._bitBuf | _peekAhead(inflater);
     final int fast = _bits[peek & _fastMask];
@@ -401,21 +410,30 @@ class _Huffman {
 class _Tables {
   const _Tables({required this.lit, required this.dist});
 
+  /// lit API.
   final _Huffman lit;
+
+  /// dist API.
   final _Huffman dist;
 }
 
 class _Code {
   const _Code(this.bits, this.length);
 
+  /// bits API.
   final int bits;
+
+  /// length API.
   final int length;
 }
 
 class _Match {
   const _Match(this.length, this.distance);
 
+  /// length API.
   final int length;
+
+  /// distance API.
   final int distance;
 }
 
@@ -454,7 +472,10 @@ int _triple(Uint8List data, int offset) =>
     data[offset] | (data[offset + 1] << 8) | (data[offset + 2] << 16);
 
 int _reverseBits(int value, int bits) {
+  /// v API.
   var v = value;
+
+  /// r API.
   var r = 0;
   for (int i = 0; i < bits; i++) {
     r = (r << 1) | (v & 1);
@@ -465,11 +486,14 @@ int _reverseBits(int value, int bits) {
 
 /// Thrown when a DEFLATE stream is corrupt.
 class ZipDeflateException implements Exception {
+  /// ZipDeflateException API.
   const ZipDeflateException(this.message);
 
+  /// message API.
   final String message;
 
   @override
+  /// toString API.
   String toString() => 'ZipDeflateException: $message';
 }
 

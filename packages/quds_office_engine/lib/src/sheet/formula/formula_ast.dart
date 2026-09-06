@@ -2,6 +2,7 @@ import '../model/sml_workbook.dart';
 import 'formula_eval.dart';
 import 'formula_functions.dart';
 
+/// Enum FormulaTokenKind.
 enum FormulaTokenKind {
   number,
   string,
@@ -17,7 +18,9 @@ enum FormulaTokenKind {
   eof,
 }
 
+/// Class FormulaToken.
 class FormulaToken {
+  /// FormulaToken API.
   const FormulaToken(
     this.kind,
     this.lexeme, {
@@ -26,20 +29,31 @@ class FormulaToken {
     this.end = 0,
   });
 
+  /// kind API.
   final FormulaTokenKind kind;
+
+  /// lexeme API.
   final String lexeme;
+
+  /// number API.
   final double? number;
 
   /// Offsets into the original formula string, including a leading `=`.
   final int start;
+
+  /// end API.
   final int end;
 }
 
+/// Class FormulaNode.
 sealed class FormulaNode {
+  /// eval API.
   Object? eval(FormulaContext ctx);
 }
 
+/// Class FormulaContext.
 class FormulaContext {
+  /// FormulaContext API.
   FormulaContext({
     required this.workbook,
     required this.sheet,
@@ -47,12 +61,20 @@ class FormulaContext {
     this.onCircular,
   });
 
+  /// workbook API.
   final SmlWorkbook workbook;
+
+  /// sheet API.
   final SmlWorksheet sheet;
+
+  /// origin API.
   final SmlCellRef origin;
+
+  /// Function API.
   final void Function(SmlCellRef ref)? onCircular;
   final Set<String> _stack = <String>{};
 
+  /// valueOf API.
   Object? valueOf(SmlCellRef ref, {SmlWorksheet? onSheet}) {
     final SmlWorksheet target = onSheet ?? sheet;
     final String key = '${target.name}!${ref.a1}';
@@ -74,39 +96,57 @@ class FormulaContext {
   }
 }
 
+/// Class LiteralNode.
 class LiteralNode extends FormulaNode {
+  /// LiteralNode API.
   LiteralNode(this.value);
 
+  /// value API.
   final Object? value;
 
   @override
+  /// eval API.
   Object? eval(FormulaContext ctx) => value;
 }
 
+/// Class CellNode.
 class CellNode extends FormulaNode {
+  /// CellNode API.
   CellNode(this.ref, {this.sheetName});
 
+  /// ref API.
   final SmlCellRef ref;
+
+  /// sheetName API.
   final String? sheetName;
 
   @override
+  /// eval API.
   Object? eval(FormulaContext ctx) {
-    final SmlWorksheet? sheet =
-        sheetName == null ? ctx.sheet : ctx.workbook.sheetByName(sheetName!);
+    final SmlWorksheet? sheet = sheetName == null
+        ? ctx.sheet
+        : ctx.workbook.sheetByName(sheetName!);
     return ctx.valueOf(ref, onSheet: sheet);
   }
 }
 
+/// Class RangeNode.
 class RangeNode extends FormulaNode {
+  /// RangeNode API.
   RangeNode(this.range, {this.sheetName});
 
+  /// range API.
   final SmlRange range;
+
+  /// sheetName API.
   final String? sheetName;
 
   @override
+  /// eval API.
   Object? eval(FormulaContext ctx) {
-    final SmlWorksheet? sheet =
-        sheetName == null ? ctx.sheet : ctx.workbook.sheetByName(sheetName!);
+    final SmlWorksheet? sheet = sheetName == null
+        ? ctx.sheet
+        : ctx.workbook.sheetByName(sheetName!);
     final List<Object?> values = <Object?>[];
     for (final SmlCellRef ref in range.cells) {
       values.add(ctx.valueOf(ref, onSheet: sheet));
@@ -115,14 +155,22 @@ class RangeNode extends FormulaNode {
   }
 }
 
+/// Class BinaryNode.
 class BinaryNode extends FormulaNode {
+  /// BinaryNode API.
   BinaryNode(this.op, this.left, this.right);
 
+  /// op API.
   final String op;
+
+  /// left API.
   final FormulaNode left;
+
+  /// right API.
   final FormulaNode right;
 
   @override
+  /// eval API.
   Object? eval(FormulaContext ctx) {
     final Object? a = left.eval(ctx);
     final Object? b = right.eval(ctx);
@@ -155,13 +203,19 @@ class BinaryNode extends FormulaNode {
   }
 }
 
+/// Class UnaryNode.
 class UnaryNode extends FormulaNode {
+  /// UnaryNode API.
   UnaryNode(this.op, this.expr);
 
+  /// op API.
   final String op;
+
+  /// expr API.
   final FormulaNode expr;
 
   @override
+  /// eval API.
   Object? eval(FormulaContext ctx) {
     final double? n = _num(expr.eval(ctx));
     if (n == null) {
@@ -171,20 +225,31 @@ class UnaryNode extends FormulaNode {
   }
 }
 
+/// Class CallNode.
 class CallNode extends FormulaNode {
+  /// CallNode API.
   CallNode(this.name, this.args);
 
+  /// name API.
   final String name;
+
+  /// args API.
   final List<FormulaNode> args;
 
   @override
+  /// eval API.
   Object? eval(FormulaContext ctx) => FormulaFunctions.call(name, args, ctx);
 }
 
+/// asFormulaNumber helper.
 double? asFormulaNumber(Object? v) => _num(v);
 
+/// flattenNumbers helper.
 List<double> flattenNumbers(Object? v) {
+  /// out API.
   final List<double> out = <double>[];
+
+  /// walk API.
   void walk(Object? x) {
     if (x is List) {
       for (final Object? i in x) {
@@ -198,12 +263,17 @@ List<double> flattenNumbers(Object? v) {
     }
   }
 
+  /// walk API.
   walk(v);
   return out;
 }
 
+/// flattenValues helper.
 List<Object?> flattenValues(Object? v) {
+  /// out API.
   final List<Object?> out = <Object?>[];
+
+  /// walk API.
   void walk(Object? x) {
     if (x is List) {
       for (final Object? item in x) {
@@ -214,6 +284,7 @@ List<Object?> flattenValues(Object? v) {
     out.add(x);
   }
 
+  /// walk API.
   walk(v);
   return out;
 }
@@ -242,7 +313,10 @@ double? _num(Object? v) {
 String _str(Object? v) => v == null ? '' : v.toString();
 
 double _pow(double a, double b) {
+  /// r API.
   var r = 1.0;
+
+  /// exp API.
   final int exp = b.round();
   if (exp.toDouble() == b && exp >= 0 && exp < 40) {
     for (int i = 0; i < exp; i++) {
@@ -261,7 +335,11 @@ double _ln(double x) {
   if (x <= 0) {
     return double.nan;
   }
+
+  /// y API.
   var y = x;
+
+  /// k API.
   var k = 0;
   while (y > 1.5) {
     y /= 2.718281828459045;
@@ -271,9 +349,17 @@ double _ln(double x) {
     y *= 2.718281828459045;
     k--;
   }
+
+  /// z API.
   final double z = (y - 1) / (y + 1);
+
+  /// z2 API.
   final double z2 = z * z;
+
+  /// term API.
   var term = z;
+
+  /// sum API.
   var sum = 0.0;
   for (int n = 0; n < 12; n++) {
     sum += term / (2 * n + 1);
@@ -283,7 +369,10 @@ double _ln(double x) {
 }
 
 double _exp(double x) {
+  /// sum API.
   var sum = 1.0;
+
+  /// term API.
   var term = 1.0;
   for (int n = 1; n < 20; n++) {
     term *= x / n;
@@ -292,4 +381,5 @@ double _exp(double x) {
   return sum;
 }
 
+/// formulaString helper.
 String formulaString(Object? v) => _str(v);

@@ -3,6 +3,7 @@ import '../word/properties/wml_properties.dart';
 
 /// Shared typeface names, sizes, and script helpers for Word and PDF.
 abstract final class OfficeTypeface {
+  /// families API.
   static const List<String> families = <String>[
     'Calibri',
     'Arial',
@@ -17,6 +18,7 @@ abstract final class OfficeTypeface {
     'Liberation Serif',
   ];
 
+  /// sizesPt API.
   static const List<int> sizesPt = <int>[
     8,
     9,
@@ -36,9 +38,13 @@ abstract final class OfficeTypeface {
     72,
   ];
 
+  /// arabicTheme API.
   static const String arabicTheme = 'Noto Naskh Arabic';
+
+  /// latinTheme API.
   static const String latinTheme = 'Calibri';
 
+  /// isArabicFamily API.
   static bool isArabicFamily(String family) {
     final String lower = family.toLowerCase();
     return lower.contains('arabic') ||
@@ -58,6 +64,7 @@ abstract final class OfficeTypeface {
         lower.isEmpty;
   }
 
+  /// isRtlText API.
   static bool isRtlText(String text) {
     for (final int cp in text.runes) {
       if (isRtlCodePoint(cp)) {
@@ -67,12 +74,14 @@ abstract final class OfficeTypeface {
     return false;
   }
 
+  /// isRtlCodePoint API.
   static bool isRtlCodePoint(int cp) {
     return (cp >= 0x0590 && cp <= 0x08FF) ||
         (cp >= 0xFB1D && cp <= 0xFDFF) ||
         (cp >= 0xFE70 && cp <= 0xFEFF);
   }
 
+  /// paintFamily API.
   static String paintFamily({
     required String text,
     String? runFamily,
@@ -92,10 +101,12 @@ abstract final class OfficeTypeface {
     return latinTheme;
   }
 
+  /// familyForRun API.
   static String familyForRun(WmlRunProps props, int codePoint) {
     return isRtlCodePoint(codePoint) ? props.csFont : props.asciiFont;
   }
 
+  /// documentHasRtl API.
   static bool documentHasRtl(WmlDocument document) {
     for (final WmlParagraph paragraph in document.paragraphs) {
       if (isRtlText(paragraph.text)) {
@@ -105,6 +116,7 @@ abstract final class OfficeTypeface {
     return false;
   }
 
+  /// preferredExportFamily API.
   static String preferredExportFamily(
     WmlDocument document, {
     String? themeFamily,
@@ -122,8 +134,9 @@ abstract final class OfficeTypeface {
         final WmlRunProps props = inline.properties;
         if (isRtlText(inline.text)) {
           hasRtl = true;
-          final String face =
-              !isThemePlaceholder(props.csFont) ? props.csFont : props.asciiFont;
+          final String face = !isThemePlaceholder(props.csFont)
+              ? props.csFont
+              : props.asciiFont;
           if (face.isNotEmpty &&
               (isArabicFamily(face) || !isThemePlaceholder(face))) {
             chosen ??= face;

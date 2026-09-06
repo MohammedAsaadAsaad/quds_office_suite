@@ -2,22 +2,33 @@ import '../../opc/opc_archive.dart';
 import '../../visual/office_visual.dart';
 import '../styles/sml_styles.dart';
 
+/// Enum SmlCellType.
 enum SmlCellType { number, string, boolean, error, formula }
 
+/// Class SmlCellRef.
 class SmlCellRef {
+  /// SmlCellRef API.
   const SmlCellRef(this.col, this.row);
 
+  /// col API.
   final int col;
+
+  /// row API.
   final int row;
 
+  /// parse API.
   factory SmlCellRef.parse(String a1) {
     final Match? match = RegExp(r'^\$?([A-Za-z]+)\$?(\d+)$').firstMatch(a1);
     if (match == null) {
       throw FormatException('Invalid A1 reference: $a1');
     }
-    return SmlCellRef(_colToIndex(match.group(1)!), int.parse(match.group(2)!) - 1);
+    return SmlCellRef(
+      _colToIndex(match.group(1)!),
+      int.parse(match.group(2)!) - 1,
+    );
   }
 
+  /// a1 API.
   String get a1 => '${_indexToCol(col)}${row + 1}';
 
   static int _colToIndex(String letters) {
@@ -40,12 +51,18 @@ class SmlCellRef {
   }
 }
 
+/// Class SmlRange.
 class SmlRange {
+  /// SmlRange API.
   const SmlRange(this.start, this.end);
 
+  /// start API.
   final SmlCellRef start;
+
+  /// end API.
   final SmlCellRef end;
 
+  /// parse API.
   factory SmlRange.parse(String a1) {
     final int colon = a1.indexOf(':');
     if (colon < 0) {
@@ -58,6 +75,7 @@ class SmlRange {
     );
   }
 
+  /// cells API.
   Iterable<SmlCellRef> get cells sync* {
     final int r0 = start.row < end.row ? start.row : end.row;
     final int r1 = start.row > end.row ? start.row : end.row;
@@ -71,7 +89,9 @@ class SmlRange {
   }
 }
 
+/// Class SmlCell.
 class SmlCell {
+  /// SmlCell API.
   SmlCell({
     required this.ref,
     this.type = SmlCellType.number,
@@ -80,12 +100,22 @@ class SmlCell {
     this.styleIndex = 0,
   });
 
+  /// ref API.
   SmlCellRef ref;
+
+  /// type API.
   SmlCellType type;
+
+  /// value API.
   Object? value;
+
+  /// formula API.
   String? formula;
+
+  /// styleIndex API.
   int styleIndex;
 
+  /// asNumber API.
   double? get asNumber {
     final Object? v = value;
     if (v is num) {
@@ -100,8 +130,10 @@ class SmlCell {
     return null;
   }
 
+  /// asString API.
   String get asString => value?.toString() ?? '';
 
+  /// hasContent API.
   bool get hasContent {
     if (formula != null && formula!.isNotEmpty) {
       return true;
@@ -113,18 +145,26 @@ class SmlCell {
   }
 }
 
+/// Class SmlRow.
 class SmlRow {
+  /// SmlRow API.
   SmlRow(this.index, {Map<int, SmlCell>? cells})
-      : cells = cells ?? <int, SmlCell>{};
+    : cells = cells ?? <int, SmlCell>{};
 
+  /// index API.
   final int index;
+
+  /// cells API.
   final Map<int, SmlCell> cells;
 
+  /// cell API.
   SmlCell cell(int col) =>
       cells.putIfAbsent(col, () => SmlCell(ref: SmlCellRef(col, index)));
 }
 
+/// Class SmlWorksheet.
 class SmlWorksheet {
+  /// SmlWorksheet API.
   SmlWorksheet({
     required this.name,
     required this.sheetId,
@@ -135,10 +175,10 @@ class SmlWorksheet {
     List<SmlDrawing>? drawings,
     Map<int, double>? columnWidths,
     Map<int, double>? rowHeights,
-  })  : rows = rows ?? <int, SmlRow>{},
-        drawings = drawings ?? <SmlDrawing>[],
-        columnWidths = columnWidths ?? <int, double>{},
-        rowHeights = rowHeights ?? <int, double>{};
+  }) : rows = rows ?? <int, SmlRow>{},
+       drawings = drawings ?? <SmlDrawing>[],
+       columnWidths = columnWidths ?? <int, double>{},
+       rowHeights = rowHeights ?? <int, double>{};
 
   /// Excel worksheet column count (A … XFD).
   static const int excelColumnCount = 16384;
@@ -152,15 +192,25 @@ class SmlWorksheet {
   /// Default rendered row height in CSS pixels (Excel default 15 pt @ 96 dpi).
   static const double defaultRowHeightPx = 20;
 
+  /// minColumnWidthPx API.
   static const double minColumnWidthPx = 8;
+
+  /// maxColumnWidthPx API.
   static const double maxColumnWidthPx = 800;
+
+  /// minRowHeightPx API.
   static const double minRowHeightPx = 8;
+
+  /// maxRowHeightPx API.
   static const double maxRowHeightPx = 409;
 
   /// OOXML `col/@width` character units matching [defaultColumnWidthPx].
   static const double excelDefaultColumnWidth = 8.43;
 
+  /// name API.
   String name;
+
+  /// sheetId API.
   int sheetId;
 
   /// Excel `sheetView/@rightToLeft`: column A sits on the right.
@@ -171,7 +221,11 @@ class SmlWorksheet {
 
   /// Frozen column count (`pane/@xSplit`): cols `[0, freezeCols)` stay pinned.
   int freezeCols;
+
+  /// rows API.
   final Map<int, SmlRow> rows;
+
+  /// drawings API.
   final List<SmlDrawing> drawings;
 
   /// Custom column widths in CSS pixels, keyed by 0-based column index.
@@ -180,33 +234,43 @@ class SmlWorksheet {
   /// Custom row heights in CSS pixels, keyed by 0-based row index.
   final Map<int, double> rowHeights;
 
+  /// row API.
   SmlRow row(int index) => rows.putIfAbsent(index, () => SmlRow(index));
 
+  /// cell API.
   SmlCell cell(SmlCellRef ref) => row(ref.row).cell(ref.col);
 
+  /// cellA1 API.
   SmlCell cellA1(String a1) => cell(SmlCellRef.parse(a1));
 
+  /// allCells API.
   Iterable<SmlCell> get allCells sync* {
     for (final SmlRow row in rows.values) {
       yield* row.cells.values;
     }
   }
 
+  /// columnWidthFromExcel API.
   static double columnWidthFromExcel(double excelWidth) =>
       excelWidth * defaultColumnWidthPx / excelDefaultColumnWidth;
 
+  /// columnWidthToExcel API.
   static double columnWidthToExcel(double px) =>
       px * excelDefaultColumnWidth / defaultColumnWidthPx;
 
+  /// rowHeightFromExcel API.
   static double rowHeightFromExcel(double points) => points * 96 / 72;
 
+  /// rowHeightToExcel API.
   static double rowHeightToExcel(double px) => px * 72 / 96;
 
-  double columnWidth(int col) =>
-      columnWidths[col] ?? defaultColumnWidthPx;
+  /// columnWidth API.
+  double columnWidth(int col) => columnWidths[col] ?? defaultColumnWidthPx;
 
+  /// rowHeightAt API.
   double rowHeightAt(int row) => rowHeights[row] ?? defaultRowHeightPx;
 
+  /// setColumnWidth API.
   void setColumnWidth(int col, double px) {
     if (col < 0 || col >= excelColumnCount) {
       return;
@@ -219,6 +283,7 @@ class SmlWorksheet {
     }
   }
 
+  /// setRowHeight API.
   void setRowHeight(int row, double px) {
     if (row < 0 || row >= excelRowCount) {
       return;
@@ -265,14 +330,13 @@ class SmlWorksheet {
     return y;
   }
 
+  /// columnAt API.
   int columnAt(double x) {
     if (x <= 0) {
       return 0;
     }
     if (columnWidths.isEmpty) {
-      return (x / defaultColumnWidthPx)
-          .floor()
-          .clamp(0, excelColumnCount - 1);
+      return (x / defaultColumnWidthPx).floor().clamp(0, excelColumnCount - 1);
     }
     var col = (x / defaultColumnWidthPx).floor().clamp(0, excelColumnCount - 1);
     var left = columnLeft(col);
@@ -293,6 +357,7 @@ class SmlWorksheet {
     return col;
   }
 
+  /// hasContentAt API.
   bool hasContentAt(SmlCellRef ref) {
     final SmlRow? row = rows[ref.row];
     if (row == null) {
@@ -322,6 +387,7 @@ class SmlWorksheet {
     return any ? SmlCellRef(maxC, maxR) : const SmlCellRef(0, 0);
   }
 
+  /// firstContentColOnRow API.
   int? firstContentColOnRow(int row) {
     final SmlRow? data = rows[row];
     if (data == null) {
@@ -339,6 +405,7 @@ class SmlWorksheet {
     return minC;
   }
 
+  /// lastContentColOnRow API.
   int? lastContentColOnRow(int row) {
     final SmlRow? data = rows[row];
     if (data == null) {
@@ -356,6 +423,7 @@ class SmlWorksheet {
     return maxC;
   }
 
+  /// firstContentRowOnCol API.
   int? firstContentRowOnCol(int col) {
     int? minR;
     for (final SmlRow row in rows.values) {
@@ -370,6 +438,7 @@ class SmlWorksheet {
     return minR;
   }
 
+  /// lastContentRowOnCol API.
   int? lastContentRowOnCol(int col) {
     int? maxR;
     for (final SmlRow row in rows.values) {
@@ -463,6 +532,7 @@ class SmlWorksheet {
     return makeRef(index);
   }
 
+  /// rowAt API.
   int rowAt(double y) {
     if (y <= 0) {
       return 0;
@@ -611,22 +681,34 @@ class SmlWorksheet {
   }
 }
 
+/// Class SmlWorkbook.
 class SmlWorkbook {
+  /// SmlWorkbook API.
   SmlWorkbook({
     List<SmlWorksheet>? sheets,
     List<String>? sharedStrings,
     this.package,
     this.styles,
-  })  : sheets = sheets ?? <SmlWorksheet>[SmlWorksheet(name: 'Sheet1', sheetId: 1)],
-        sharedStrings = sharedStrings ?? <String>[];
+  }) : sheets =
+           sheets ?? <SmlWorksheet>[SmlWorksheet(name: 'Sheet1', sheetId: 1)],
+       sharedStrings = sharedStrings ?? <String>[];
 
+  /// sheets API.
   List<SmlWorksheet> sheets;
+
+  /// sharedStrings API.
   List<String> sharedStrings;
+
+  /// package API.
   OpcPackage? package;
+
+  /// styles API.
   SmlStyleSheet? styles;
 
+  /// firstSheet API.
   SmlWorksheet get firstSheet => sheets.first;
 
+  /// sheetByName API.
   SmlWorksheet? sheetByName(String name) {
     for (final SmlWorksheet s in sheets) {
       if (s.name == name) {

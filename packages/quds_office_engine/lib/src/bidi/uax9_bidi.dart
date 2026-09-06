@@ -27,6 +27,7 @@ enum BidiClass {
 
 /// One directional run after UAX #9 reordering.
 class BidiRun {
+  /// BidiRun API.
   BidiRun({
     required this.text,
     required this.level,
@@ -35,17 +36,28 @@ class BidiRun {
     required this.visualStart,
   });
 
+  /// text API.
   final String text;
+
+  /// level API.
   final int level;
+
+  /// logicalStart API.
   final int logicalStart;
+
+  /// logicalEnd API.
   final int logicalEnd;
+
+  /// visualStart API.
   final int visualStart;
 
+  /// isRtl API.
   bool get isRtl => level.isOdd;
 }
 
 /// Result of running the Unicode Bidirectional Algorithm on a paragraph.
 class BidiParagraph {
+  /// BidiParagraph API.
   BidiParagraph({
     required this.baseLevel,
     required this.levels,
@@ -55,24 +67,35 @@ class BidiParagraph {
     required this.original,
   });
 
+  /// baseLevel API.
   final int baseLevel;
+
+  /// levels API.
   final List<int> levels;
+
+  /// visualToLogical API.
   final List<int> visualToLogical;
+
+  /// logicalToVisual API.
   final List<int> logicalToVisual;
+
+  /// runs API.
   final List<BidiRun> runs;
+
+  /// original API.
   final String original;
 
+  /// isRtl API.
   bool get isRtl => baseLevel.isOdd;
 }
 
 /// Full UAX #9 implementation for a single paragraph.
 abstract final class Uax9Bidi {
+  /// classify API.
   static BidiClass classify(int codePoint) => _classify(codePoint);
 
-  static BidiParagraph reorder(
-    String text, {
-    int? baseLevel,
-  }) {
+  /// reorder API.
+  static BidiParagraph reorder(String text, {int? baseLevel}) {
     if (text.isEmpty) {
       return BidiParagraph(
         baseLevel: baseLevel ?? 0,
@@ -139,16 +162,16 @@ abstract final class Uax9Bidi {
         case BidiClass.lri:
         case BidiClass.rli:
         case BidiClass.fsi:
-          final bool rtl = t == BidiClass.rle ||
+          final bool rtl =
+              t == BidiClass.rle ||
               t == BidiClass.rlo ||
               t == BidiClass.rli ||
               (t == BidiClass.fsi && _fsiRtl(types, i));
           final int newLevel = rtl
               ? (stack.last.level + 1) | 1
               : (stack.last.level + 2) & ~1;
-          final bool isolate = t == BidiClass.lri ||
-              t == BidiClass.rli ||
-              t == BidiClass.fsi;
+          final bool isolate =
+              t == BidiClass.lri || t == BidiClass.rli || t == BidiClass.fsi;
           if (newLevel <= 125 && overflowIsolate == 0 && overflowEmbed == 0) {
             stack.add(
               _Embed(
@@ -264,7 +287,9 @@ abstract final class Uax9Bidi {
       }
       final BidiClass left = _nonBn(types, i, -1);
       final BidiClass right = _nonBn(types, i, 1);
-      if (types[i] == BidiClass.es && left == BidiClass.en && right == BidiClass.en) {
+      if (types[i] == BidiClass.es &&
+          left == BidiClass.en &&
+          right == BidiClass.en) {
         types[i] = BidiClass.en;
       } else if (types[i] == BidiClass.cs &&
           left == right &&
@@ -460,9 +485,11 @@ abstract final class Uax9Bidi {
     final List<BidiRun> runs = <BidiRun>[];
     int runStart = 0;
     for (int v = 1; v <= visual.length; v++) {
-      final bool boundary = v == visual.length ||
+      final bool boundary =
+          v == visual.length ||
           levels[visual[v]] != levels[visual[runStart]] ||
-          visual[v] != visual[v - 1] + (levels[visual[runStart]].isOdd ? -1 : 1);
+          visual[v] !=
+              visual[v - 1] + (levels[visual[runStart]].isOdd ? -1 : 1);
       if (!boundary) {
         continue;
       }
@@ -484,14 +511,21 @@ abstract final class Uax9Bidi {
   }
 
   static BidiClass _classify(int cp) {
-    if (cp == 0x000A || cp == 0x000D || cp == 0x001C || cp == 0x001D ||
-        cp == 0x001E || cp == 0x0085 || cp == 0x2029) {
+    if (cp == 0x000A ||
+        cp == 0x000D ||
+        cp == 0x001C ||
+        cp == 0x001D ||
+        cp == 0x001E ||
+        cp == 0x0085 ||
+        cp == 0x2029) {
       return BidiClass.b;
     }
     if (cp == 0x0009 || cp == 0x000B || cp == 0x001F) {
       return BidiClass.s;
     }
-    if (cp == 0x0020 || cp == 0x00A0 || cp == 0x1680 ||
+    if (cp == 0x0020 ||
+        cp == 0x00A0 ||
+        cp == 0x1680 ||
         (cp >= 0x2000 && cp <= 0x200A) ||
         cp == 0x2028 ||
         cp == 0x202F ||
@@ -538,7 +572,9 @@ abstract final class Uax9Bidi {
     if (cp >= 0x07C0 && cp <= 0x07FF) return BidiClass.r;
     if (cp >= 0x0030 && cp <= 0x0039) return BidiClass.en;
     if (cp == 0x002B || cp == 0x002D) return BidiClass.es;
-    if (cp == 0x0023 || cp == 0x0024 || cp == 0x0025 ||
+    if (cp == 0x0023 ||
+        cp == 0x0024 ||
+        cp == 0x0025 ||
         (cp >= 0x00A2 && cp <= 0x00A5) ||
         cp == 0x20AC) {
       return BidiClass.et;
@@ -560,7 +596,10 @@ abstract final class Uax9Bidi {
 class _Embed {
   const _Embed(this.level, this.override, this.isolate);
 
+  /// level API.
   final int level;
   final bool override;
+
+  /// isolate API.
   final bool isolate;
 }

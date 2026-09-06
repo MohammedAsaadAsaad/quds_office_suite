@@ -14,16 +14,21 @@ import '../shared_strings.dart';
 import '../styles/sml_styles.dart';
 import 'sheet_drawing_io.dart';
 
+/// Class SheetDeserializer.
 class SheetDeserializer {
+  /// read API.
   SmlWorkbook read(OpcPackage package) {
-    final SharedStringTable sst = package.getPart('/xl/sharedStrings.xml') == null
+    final SharedStringTable sst =
+        package.getPart('/xl/sharedStrings.xml') == null
         ? SharedStringTable()
         : SharedStringTable.parse(
             package.getPart('/xl/sharedStrings.xml')!.readText(),
           );
     SmlStyleSheet? styles;
     if (package.getPart('/xl/styles.xml') != null) {
-      styles = SmlStyleSheet.parse(package.getPart('/xl/styles.xml')!.readText());
+      styles = SmlStyleSheet.parse(
+        package.getPart('/xl/styles.xml')!.readText(),
+      );
     }
     final SmlWorkbook book = SmlWorkbook(
       sheets: <SmlWorksheet>[],
@@ -35,7 +40,9 @@ class SheetDeserializer {
     if (wb == null) {
       return book;
     }
-    final RelationshipCollection rels = package.relationshipsFor('/xl/workbook.xml');
+    final RelationshipCollection rels = package.relationshipsFor(
+      '/xl/workbook.xml',
+    );
     final XmlPullReader reader = XmlPullReader(wb.readText());
     while (reader.next()) {
       if (reader.eventType != XmlEventType.startElement ||
@@ -44,7 +51,10 @@ class SheetDeserializer {
       }
       final String name = reader.getAttribute('name') ?? 'Sheet';
       final int id = int.parse(reader.getAttribute('sheetId') ?? '1');
-      final String? rid = reader.getAttribute('id', namespaceUri: OfficeNamespaces.r);
+      final String? rid = reader.getAttribute(
+        'id',
+        namespaceUri: OfficeNamespaces.r,
+      );
       final SmlWorksheet sheet = SmlWorksheet(name: name, sheetId: id);
       if (rid != null) {
         final PackageRelationship? rel = rels.byId(rid);
@@ -64,6 +74,7 @@ class SheetDeserializer {
     return book;
   }
 
+  /// readBytes API.
   SmlWorkbook readBytes(Uint8List bytes, {String? password}) =>
       read(OpcPackage.openBytes(bytes, password: password));
 
@@ -92,11 +103,17 @@ class SheetDeserializer {
       if (reader.eventType == XmlEventType.startElement &&
           reader.localName == 'col') {
         final int min = int.tryParse(reader.getAttribute('min') ?? '1') ?? 1;
-        final int max = int.tryParse(reader.getAttribute('max') ?? '$min') ?? min;
-        final double? width = double.tryParse(reader.getAttribute('width') ?? '');
+        final int max =
+            int.tryParse(reader.getAttribute('max') ?? '$min') ?? min;
+        final double? width = double.tryParse(
+          reader.getAttribute('width') ?? '',
+        );
         if (width != null) {
           final double px = SmlWorksheet.columnWidthFromExcel(width);
-          final int from = (min - 1).clamp(0, SmlWorksheet.excelColumnCount - 1);
+          final int from = (min - 1).clamp(
+            0,
+            SmlWorksheet.excelColumnCount - 1,
+          );
           final int to = (max - 1).clamp(0, SmlWorksheet.excelColumnCount - 1);
           for (int c = from; c <= to; c++) {
             sheet.columnWidths[c] = px;
@@ -129,7 +146,8 @@ class SheetDeserializer {
           reader.localName == 'f' &&
           current != null) {
         // formula text follows
-      } else if (reader.eventType == XmlEventType.characters && current != null) {
+      } else if (reader.eventType == XmlEventType.characters &&
+          current != null) {
         // assigned below via element-end tracking
       } else if (reader.eventType == XmlEventType.endElement &&
           reader.localName == 'c') {
@@ -171,7 +189,9 @@ class SheetDeserializer {
   }
 }
 
+/// Class SheetSerializer.
 class SheetSerializer {
+  /// writeBytes API.
   Uint8List writeBytes(
     SmlWorkbook book, {
     bool recalculate = true,
@@ -180,11 +200,13 @@ class SheetSerializer {
     return write(book, recalculate: recalculate).save(password: password);
   }
 
+  /// write API.
   OpcPackage write(SmlWorkbook book, {bool recalculate = true}) {
     if (recalculate) {
       FormulaDepGraph(book).recalculate();
     }
-    final OpcPackage package = book.package ?? OpcPackage.create(OpcPackageKind.sheet);
+    final OpcPackage package =
+        book.package ?? OpcPackage.create(OpcPackageKind.sheet);
     final SharedStringTable sst = SharedStringTable();
     for (final SmlWorksheet sheet in book.sheets) {
       for (final SmlCell cell in sheet.allCells) {
@@ -203,21 +225,34 @@ class SheetSerializer {
       package.getPart('/xl/sharedStrings.xml')!.writeText(sst.toXml());
     }
     package.getPart('/xl/workbook.xml')!.writeText(_workbookXml(book));
-    final RelationshipCollection rels = package.relationshipsFor('/xl/workbook.xml');
+    final RelationshipCollection rels = package.relationshipsFor(
+      '/xl/workbook.xml',
+    );
     for (int i = 0; i < book.sheets.length; i++) {
       final String uri = '/xl/worksheets/sheet${i + 1}.xml';
       if (package.getPart(uri) == null) {
-        package.createPart(uri, OfficeContentTypes.sheetWorksheet, utf8.encode(''));
-        rels.add(type: RelationshipTypes.worksheet, target: 'worksheets/sheet${i + 1}.xml');
+        package.createPart(
+          uri,
+          OfficeContentTypes.sheetWorksheet,
+          utf8.encode(''),
+        );
+        rels.add(
+          type: RelationshipTypes.worksheet,
+          target: 'worksheets/sheet${i + 1}.xml',
+        );
       }
       SheetDrawingIo.syncSheet(book.sheets[i], package, uri, i + 1);
-      package.getPart(uri)!.writeText(_sheetXml(book.sheets[i], sst, package, uri));
+      package
+          .getPart(uri)!
+          .writeText(_sheetXml(book.sheets[i], sst, package, uri));
     }
-    if (package.relationshipsFor('/xl/workbook.xml').firstByType(
-          RelationshipTypes.sharedStrings,
-        ) ==
+    if (package
+            .relationshipsFor('/xl/workbook.xml')
+            .firstByType(RelationshipTypes.sharedStrings) ==
         null) {
-      package.relationshipsFor('/xl/workbook.xml').add(
+      package
+          .relationshipsFor('/xl/workbook.xml')
+          .add(
             type: RelationshipTypes.sharedStrings,
             target: 'sharedStrings.xml',
           );
@@ -263,7 +298,10 @@ class SheetSerializer {
     _writeSheetViews(w, sheet);
     _writeCols(w, sheet);
     w.writeStartElement('sheetData');
-    final Set<int> rowKeys = <int>{...sheet.rows.keys, ...sheet.rowHeights.keys};
+    final Set<int> rowKeys = <int>{
+      ...sheet.rows.keys,
+      ...sheet.rowHeights.keys,
+    };
     final List<int> rowIdx = rowKeys.toList()..sort();
     for (final int r in rowIdx) {
       final SmlRow row = sheet.rows[r] ?? SmlRow(r);
@@ -281,9 +319,11 @@ class SheetSerializer {
         w.writeAttribute('r', cell.ref.a1);
         if (cell.formula != null) {
           w.writeStartElement('f');
-          w.writeText(cell.formula!.startsWith('=')
-              ? cell.formula!.substring(1)
-              : cell.formula!);
+          w.writeText(
+            cell.formula!.startsWith('=')
+                ? cell.formula!.substring(1)
+                : cell.formula!,
+          );
           w.writeEndElement();
           w.writeStartElement('v');
           w.writeText(cell.asString);
@@ -309,8 +349,10 @@ class SheetSerializer {
     }
     w.writeEndElement();
     if (sheet.drawings.isNotEmpty) {
-      final String? rid =
-          SheetDrawingIo.drawingRelationshipId(package, sheetUri);
+      final String? rid = SheetDrawingIo.drawingRelationshipId(
+        package,
+        sheetUri,
+      );
       if (rid != null) {
         w.writeEmptyElement(
           'drawing',

@@ -4,12 +4,17 @@ import 'formula_eval.dart';
 
 /// Dependency graph with topological recalculation and cycle detection.
 class FormulaDepGraph {
+  /// FormulaDepGraph API.
   FormulaDepGraph(this.workbook);
 
+  /// workbook API.
   final SmlWorkbook workbook;
   final Map<String, Set<String>> _deps = <String, Set<String>>{};
+
+  /// circular API.
   final Set<String> circular = <String>{};
 
+  /// rebuild API.
   void rebuild() {
     _deps.clear();
     circular.clear();
@@ -90,12 +95,14 @@ class FormulaDepGraph {
     void walk(FormulaNode node) {
       switch (node) {
         case CellNode(:final SmlCellRef ref, :final String? sheetName):
-          final SmlWorksheet target =
-              sheetName == null ? sheet : (workbook.sheetByName(sheetName) ?? sheet);
+          final SmlWorksheet target = sheetName == null
+              ? sheet
+              : (workbook.sheetByName(sheetName) ?? sheet);
           out.add(_key(target, ref));
         case RangeNode(:final SmlRange range, :final String? sheetName):
-          final SmlWorksheet target =
-              sheetName == null ? sheet : (workbook.sheetByName(sheetName) ?? sheet);
+          final SmlWorksheet target = sheetName == null
+              ? sheet
+              : (workbook.sheetByName(sheetName) ?? sheet);
           for (final SmlCellRef ref in range.cells) {
             out.add(_key(target, ref));
           }

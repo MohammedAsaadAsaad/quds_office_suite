@@ -107,7 +107,10 @@ void main() {
     expect(toc.title, 'Contents');
     expect(toc.titleParagraph.text, 'Contents');
     expect(toc.itemParagraphs, isNotEmpty);
-    expect(toc.entries.any((WmlTocEntry e) => e.text.contains('Alpha')), isTrue);
+    expect(
+      toc.entries.any((WmlTocEntry e) => e.text.contains('Alpha')),
+      isTrue,
+    );
   });
 
   test('page-number sync keeps customized TOC paragraphs', () {
@@ -177,8 +180,10 @@ void main() {
       WordSerializer().writeBytes(doc),
     );
     expect(copy.paragraphs.first.properties.bookmarkName, isNotNull);
-    expect(copy.paragraphs.last.inlines.whereType<WmlRun>().first.hyperlink?.anchor,
-        copy.paragraphs.first.properties.bookmarkName);
+    expect(
+      copy.paragraphs.last.inlines.whereType<WmlRun>().first.hyperlink?.anchor,
+      copy.paragraphs.first.properties.bookmarkName,
+    );
     expect(
       copy.paragraphs.last.inlines.whereType<WmlRun>().last.hyperlink?.url,
       'https://example.com',

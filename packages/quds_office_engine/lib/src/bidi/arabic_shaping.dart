@@ -1,8 +1,9 @@
 /// Arabic joining form after contextual analysis.
 enum ArabicJoinForm { isolated, initial, medial, finalForm }
 
-/// One shaped character. Diacritics keep [advance] = 0.
+/// One shaped character. Diacritics keep [advanceFactor] = 0.
 class ShapedChar {
+  /// ShapedChar API.
   const ShapedChar({
     required this.codePoint,
     required this.form,
@@ -10,14 +11,22 @@ class ShapedChar {
     required this.logicalIndex,
   });
 
+  /// codePoint API.
   final int codePoint;
+
+  /// form API.
   final ArabicJoinForm form;
+
+  /// advanceFactor API.
   final double advanceFactor;
+
+  /// logicalIndex API.
   final int logicalIndex;
 }
 
 /// Isolated / initial / medial / final shaping plus obligatory Lam-Alef ligatures.
 abstract final class ArabicShaper {
+  /// shape API.
   static List<ShapedChar> shape(String text) {
     final List<int> cps = text.runes.toList();
     if (cps.isEmpty) {
@@ -36,7 +45,9 @@ abstract final class ArabicShaper {
       final bool joinsPrev = _joinsLeft(joins, i);
       final bool joinsNext = _joinsRight(joins, i);
       if (joins[i] == _Join.right) {
-        forms[i] = joinsPrev ? ArabicJoinForm.finalForm : ArabicJoinForm.isolated;
+        forms[i] = joinsPrev
+            ? ArabicJoinForm.finalForm
+            : ArabicJoinForm.isolated;
       } else {
         if (joinsPrev && joinsNext) {
           forms[i] = ArabicJoinForm.medial;
@@ -73,7 +84,8 @@ abstract final class ArabicShaper {
         }
         if (k < cps.length && _alefLigature(cps[k]) != null) {
           final int lig = _alefLigature(cps[k])!;
-          final bool finalForm = forms[i] == ArabicJoinForm.finalForm ||
+          final bool finalForm =
+              forms[i] == ArabicJoinForm.finalForm ||
               forms[i] == ArabicJoinForm.medial;
           out.add(
             ShapedChar(

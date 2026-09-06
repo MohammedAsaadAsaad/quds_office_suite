@@ -2,6 +2,7 @@ import 'wml_document.dart';
 
 /// Deep copies of Word blocks so cut / paste / undo never share mutable state.
 abstract final class WmlClone {
+  /// block API.
   static WmlBlock block(WmlBlock source) {
     switch (source) {
       case WmlParagraph():
@@ -19,6 +20,7 @@ abstract final class WmlClone {
     }
   }
 
+  /// paragraph API.
   static WmlParagraph paragraph(WmlParagraph source) {
     return WmlParagraph(
       properties: source.properties.copy(),
@@ -26,6 +28,7 @@ abstract final class WmlClone {
     );
   }
 
+  /// slicedParagraph API.
   static WmlParagraph slicedParagraph(WmlParagraph source, int from, int to) {
     final int length = source.text.length;
     final int start = from.clamp(0, length);
@@ -39,12 +42,12 @@ abstract final class WmlClone {
     );
   }
 
+  /// inlines API.
   static List<WmlInline> inlines(List<WmlInline> source) {
-    return <WmlInline>[
-      for (final WmlInline inline in source) _inline(inline),
-    ];
+    return <WmlInline>[for (final WmlInline inline in source) _inline(inline)];
   }
 
+  /// table API.
   static WmlTable table(WmlTable source) {
     return WmlTable(
       grid: List<double>.from(source.grid),
@@ -62,6 +65,7 @@ abstract final class WmlClone {
     );
   }
 
+  /// cellOf API.
   static WmlTableCell cellOf(WmlTableCell cell) {
     return WmlTableCell(
       gridSpan: cell.gridSpan,
@@ -74,9 +78,11 @@ abstract final class WmlClone {
     );
   }
 
+  /// visual API.
   static WmlVisual visual(WmlVisual source) =>
       WmlVisual(visual: source.visual.copy());
 
+  /// frame API.
   static WmlFrame frame(WmlFrame source) {
     return WmlFrame(
       x: source.x,
@@ -93,9 +99,11 @@ abstract final class WmlClone {
     );
   }
 
+  /// equation API.
   static WmlEquation equation(WmlEquation source) =>
       WmlEquation(math: source.math.copy());
 
+  /// toc API.
   static WmlToc toc(WmlToc source) {
     return WmlToc(
       minLevel: source.minLevel,
@@ -118,12 +126,14 @@ abstract final class WmlClone {
     );
   }
 
+  /// paragraphsOf API.
   static List<WmlParagraph> paragraphsOf(WmlBlock block) {
     final List<WmlParagraph> out = <WmlParagraph>[];
     _collectParagraphs(<WmlBlock>[block], out);
     return out;
   }
 
+  /// plainTextOf API.
   static String plainTextOf(List<WmlBlock> blocks) {
     final StringBuffer buffer = StringBuffer();
     for (final WmlBlock block in blocks) {
@@ -137,7 +147,10 @@ abstract final class WmlClone {
     return buffer.toString();
   }
 
-  static void _collectParagraphs(List<WmlBlock> blocks, List<WmlParagraph> out) {
+  static void _collectParagraphs(
+    List<WmlBlock> blocks,
+    List<WmlParagraph> out,
+  ) {
     for (final WmlBlock block in blocks) {
       switch (block) {
         case WmlParagraph():

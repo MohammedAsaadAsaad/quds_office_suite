@@ -6,18 +6,36 @@ import 'sfnt_parser.dart';
 /// A quadratic Bézier path command in font units.
 enum GlyphPathOp { move, line, quad, close }
 
+/// Class GlyphPathCommand.
 class GlyphPathCommand {
-  const GlyphPathCommand(this.op, [this.x = 0, this.y = 0, this.cx = 0, this.cy = 0]);
+  /// GlyphPathCommand API.
+  const GlyphPathCommand(
+    this.op, [
+    this.x = 0,
+    this.y = 0,
+    this.cx = 0,
+    this.cy = 0,
+  ]);
 
+  /// op API.
   final GlyphPathOp op;
+
+  /// x API.
   final double x;
+
+  /// y API.
   final double y;
+
+  /// cx API.
   final double cx;
+
+  /// cy API.
   final double cy;
 }
 
 /// Decoded TrueType `glyf` outline.
 class GlyphOutline {
+  /// GlyphOutline API.
   GlyphOutline({
     required this.glyphId,
     required this.xMin,
@@ -28,23 +46,40 @@ class GlyphOutline {
     required this.componentGlyphIds,
   });
 
+  /// glyphId API.
   final int glyphId;
+
+  /// xMin API.
   final int xMin;
+
+  /// yMin API.
   final int yMin;
+
+  /// xMax API.
   final int xMax;
+
+  /// yMax API.
   final int yMax;
+
+  /// commands API.
   final List<GlyphPathCommand> commands;
+
+  /// componentGlyphIds API.
   final List<int> componentGlyphIds;
 
+  /// isEmpty API.
   bool get isEmpty => commands.isEmpty;
 }
 
 /// Converts TrueType quadratic contours (and composites) to path commands.
 class GlyphOutlineDecoder {
+  /// GlyphOutlineDecoder API.
   GlyphOutlineDecoder(this.font);
 
+  /// font API.
   final SfntFont font;
 
+  /// decode API.
   GlyphOutline decode(int glyphId) {
     if (!font.hasTable('glyf') || glyphId < 0 || glyphId >= font.numGlyphs) {
       return GlyphOutline(
@@ -237,19 +272,23 @@ class GlyphOutlineDecoder {
           commands.add(cmd);
           continue;
         }
-        final double x = xx * (nxx * cmd.x + nxy * cmd.y) +
+        final double x =
+            xx * (nxx * cmd.x + nxy * cmd.y) +
             xy * (nyx * cmd.x + nyy * cmd.y) +
             dx +
             odx;
-        final double y = yx * (nxx * cmd.x + nxy * cmd.y) +
+        final double y =
+            yx * (nxx * cmd.x + nxy * cmd.y) +
             yy * (nyx * cmd.x + nyy * cmd.y) +
             dy +
             ody;
-        final double cx = xx * (nxx * cmd.cx + nxy * cmd.cy) +
+        final double cx =
+            xx * (nxx * cmd.cx + nxy * cmd.cy) +
             xy * (nyx * cmd.cx + nyy * cmd.cy) +
             dx +
             odx;
-        final double cy = yx * (nxx * cmd.cx + nxy * cmd.cy) +
+        final double cy =
+            yx * (nxx * cmd.cx + nxy * cmd.cy) +
             yy * (nyx * cmd.cx + nyy * cmd.cy) +
             dy +
             ody;
@@ -286,7 +325,10 @@ class GlyphOutlineDecoder {
 class _Pt {
   const _Pt(this.x, this.y, this.on);
 
+  /// x API.
   final double x;
+
+  /// y API.
   final double y;
   final bool on;
 }

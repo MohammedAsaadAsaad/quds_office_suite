@@ -4,6 +4,7 @@ import '../opc/zip/deflate_codec.dart';
 
 /// FlateDecode wrapper for PDF content and font streams.
 abstract final class PdfFlate {
+  /// compress API.
   static Uint8List compress(List<int> data) {
     final Uint8List raw = RawDeflate.deflate(data);
     // Wrap raw DEFLATE in a zlib container (CMF/FLG + Adler-32).
@@ -15,9 +16,7 @@ abstract final class PdfFlate {
     if (zlib.length < 6) {
       throw const FormatException('Truncated zlib stream');
     }
-    return RawDeflate.inflate(
-      Uint8List.sublistView(zlib, 2, zlib.length - 4),
-    );
+    return RawDeflate.inflate(Uint8List.sublistView(zlib, 2, zlib.length - 4));
   }
 
   static Uint8List _zlibWrap(Uint8List rawDeflate, List<int> original) {

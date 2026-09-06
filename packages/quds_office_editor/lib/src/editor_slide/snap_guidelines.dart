@@ -3,17 +3,20 @@ import 'dart:ui';
 /// Snap-to-object guides. Only the lines that actually catch the moving
 /// shape are kept for painting — PowerPoint-style, not a full lattice.
 class SnapGuidelines {
+  /// SnapGuidelines API.
   SnapGuidelines({this.threshold = 4});
 
+  /// threshold API.
   final double threshold;
   final List<double> _vertical = <double>[];
   final List<double> _horizontal = <double>[];
   final List<double> _activeVertical = <double>[];
   final List<double> _activeHorizontal = <double>[];
 
-  int get activeGuideCount =>
-      _activeVertical.length + _activeHorizontal.length;
+  /// activeGuideCount API.
+  int get activeGuideCount => _activeVertical.length + _activeHorizontal.length;
 
+  /// clear API.
   void clear() {
     _vertical.clear();
     _horizontal.clear();
@@ -21,6 +24,7 @@ class SnapGuidelines {
     _activeHorizontal.clear();
   }
 
+  /// addTarget API.
   void addTarget(Rect box) {
     _addUnique(_vertical, box.left);
     _addUnique(_vertical, box.center.dx);
@@ -30,21 +34,25 @@ class SnapGuidelines {
     _addUnique(_horizontal, box.bottom);
   }
 
+  /// addSlide API.
   void addSlide(Size size) {
     addTarget(Rect.fromLTWH(0, 0, size.width, size.height));
   }
 
+  /// snap API.
   Offset snap(Rect moving) {
     _activeVertical.clear();
     _activeHorizontal.clear();
-    final double? dx = _bestDelta(
-      <double>[moving.left, moving.center.dx, moving.right],
-      _vertical,
-    );
-    final double? dy = _bestDelta(
-      <double>[moving.top, moving.center.dy, moving.bottom],
-      _horizontal,
-    );
+    final double? dx = _bestDelta(<double>[
+      moving.left,
+      moving.center.dx,
+      moving.right,
+    ], _vertical);
+    final double? dy = _bestDelta(<double>[
+      moving.top,
+      moving.center.dy,
+      moving.bottom,
+    ], _horizontal);
     if (dx != null) {
       _collectActive(
         <double>[moving.left + dx, moving.center.dx + dx, moving.right + dx],
@@ -62,7 +70,12 @@ class SnapGuidelines {
     return Offset(dx ?? 0, dy ?? 0);
   }
 
-  void paint(Canvas canvas, Size size, {Color color = const Color(0xFFFF4FA0)}) {
+  /// paint API.
+  void paint(
+    Canvas canvas,
+    Size size, {
+    Color color = const Color(0xFFFF4FA0),
+  }) {
     final Paint paint = Paint()
       ..color = color
       ..strokeWidth = 1;

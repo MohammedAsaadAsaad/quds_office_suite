@@ -15,7 +15,9 @@ void main() {
     final List<ShapedChar> shaped = ArabicShaper.shape('لَا');
     expect(shaped.any((ShapedChar s) => s.advanceFactor == 0), isTrue);
     expect(
-      shaped.any((ShapedChar s) => s.codePoint == 0xFEFB || s.codePoint == 0xFEFC),
+      shaped.any(
+        (ShapedChar s) => s.codePoint == 0xFEFB || s.codePoint == 0xFEFC,
+      ),
       isTrue,
     );
     final BidiParagraph bidi = Uax9Bidi.reorder('Hello لَا world');
@@ -25,12 +27,12 @@ void main() {
   });
 
   test('deep OLE nesting: sheet inside word packed as oleObject.bin', () {
-    final IsolatedEmbeddedPackage sheet = EmbeddedPart.create(OpcPackageKind.sheet);
+    final IsolatedEmbeddedPackage sheet = EmbeddedPart.create(
+      OpcPackageKind.sheet,
+    );
     final IsolatedEmbeddedPackage inner = IsolatedEmbeddedPackage(
       kind: OpcPackageKind.word,
-      package: WordSerializer().write(
-        WmlDocument.empty(text: 'inner'),
-      ),
+      package: WordSerializer().write(WmlDocument.empty(text: 'inner')),
     );
     final Uint8List innerBin = inner.pack();
     expect(CfbfFile.isCfbf(innerBin), isTrue);
@@ -58,10 +60,15 @@ void main() {
     final Uint8List docx = packed.save();
     final WmlDocument opened = WordDeserializer().readBytes(docx);
     expect(opened.paragraphs.first.text, contains('outer'));
-    final WmlObject ole = opened.paragraphs.first.inlines.whereType<WmlObject>().single;
+    final WmlObject ole = opened.paragraphs.first.inlines
+        .whereType<WmlObject>()
+        .single;
     expect(ole.embedded, isNotNull);
     expect(ole.embedded!.kind, OpcPackageKind.sheet);
-    expect(ole.embedded!.package.getPart('/xl/worksheets/sheet1.xml'), isNotNull);
+    expect(
+      ole.embedded!.package.getPart('/xl/worksheets/sheet1.xml'),
+      isNotNull,
+    );
     final OpcPackage reopened = OpcPackage.openBytes(docx);
     expect(
       reopened.partNames.any((String n) => n.contains('embeddings')),

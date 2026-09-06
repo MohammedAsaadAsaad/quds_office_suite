@@ -55,7 +55,10 @@ void main() {
     expect(docx[0], 0x50);
     final WmlDocument opened = WordDeserializer().readBytes(docx);
     expect(opened.paragraphs.first.text, contains('Quds Office'));
-    expect(opened.paragraphs.first.properties.justification, WmlJustification.center);
+    expect(
+      opened.paragraphs.first.properties.justification,
+      WmlJustification.center,
+    );
     expect(opened.sections.first.blocks.whereType<WmlTable>(), isNotEmpty);
 
     SfntFont? font;

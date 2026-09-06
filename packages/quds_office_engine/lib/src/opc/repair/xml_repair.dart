@@ -2,6 +2,7 @@ import 'dart:convert';
 
 /// Recovers well-formed-enough XML from broken Office part markup.
 abstract final class XmlRepair {
+  /// looksLikeXml API.
   static bool looksLikeXml(List<int> bytes) {
     for (int i = 0; i < bytes.length && i < 256; i++) {
       final int b = bytes[i];
@@ -15,6 +16,7 @@ abstract final class XmlRepair {
     return false;
   }
 
+  /// decode API.
   static String decode(List<int> bytes) {
     final List<int> cleaned = <int>[
       for (final int b in bytes)
@@ -109,6 +111,7 @@ abstract final class XmlRepair {
     return changed ? out.toString() : raw;
   }
 
+  /// needsSanitize API.
   static bool needsSanitize(String raw) {
     return sanitize(raw) != raw;
   }
@@ -127,10 +130,12 @@ abstract final class XmlRepair {
     }
     if (raw.codeUnitAt(start) == 0x23) {
       if (start + 1 < end &&
-          (raw.codeUnitAt(start + 1) == 0x78 || raw.codeUnitAt(start + 1) == 0x58)) {
+          (raw.codeUnitAt(start + 1) == 0x78 ||
+              raw.codeUnitAt(start + 1) == 0x58)) {
         for (int i = start + 2; i < end; i++) {
           final int c = raw.codeUnitAt(i);
-          final bool hex = (c >= 48 && c <= 57) ||
+          final bool hex =
+              (c >= 48 && c <= 57) ||
               (c >= 65 && c <= 70) ||
               (c >= 97 && c <= 102);
           if (!hex) {

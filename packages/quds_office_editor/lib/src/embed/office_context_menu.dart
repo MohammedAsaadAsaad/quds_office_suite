@@ -4,6 +4,7 @@ import 'package:quds_office_engine/quds_office_engine.dart';
 import 'office_controller.dart';
 import 'office_theme.dart';
 
+/// Enum OfficeContextKind.
 enum OfficeContextKind {
   document,
   table,
@@ -19,7 +20,9 @@ enum OfficeContextKind {
   slideCanvas,
 }
 
+/// Class OfficeContextHit.
 class OfficeContextHit {
+  /// OfficeContextHit API.
   const OfficeContextHit({
     required this.kind,
     required this.globalPosition,
@@ -34,20 +37,43 @@ class OfficeContextHit {
     this.shape,
   });
 
+  /// kind API.
   final OfficeContextKind kind;
+
+  /// globalPosition API.
   final Offset globalPosition;
+
+  /// table API.
   final WmlTable? table;
+
+  /// tableRow API.
   final int? tableRow;
+
+  /// tableCol API.
   final int? tableCol;
+
+  /// visual API.
   final OfficeVisual? visual;
+
+  /// commentId API.
   final int? commentId;
+
+  /// link API.
   final WmlHyperlink? link;
+
+  /// equation API.
   final WmlEquation? equation;
+
+  /// cell API.
   final SmlCellRef? cell;
+
+  /// shape API.
   final PmlShape? shape;
 }
 
+/// Class OfficeContextAction.
 class OfficeContextAction {
+  /// OfficeContextAction API.
   const OfficeContextAction({
     required this.id,
     required this.label,
@@ -58,17 +84,31 @@ class OfficeContextAction {
     this.separatorBefore = false,
   });
 
+  /// id API.
   final String id;
+
+  /// label API.
   final String label;
+
+  /// icon API.
   final IconData? icon;
+
+  /// shortcut API.
   final String? shortcut;
+
+  /// enabled API.
   final bool enabled;
+
+  /// danger API.
   final bool danger;
+
+  /// separatorBefore API.
   final bool separatorBefore;
 }
 
 /// Overlay context menu with its own [Material] surface (Column, not a list).
 abstract final class OfficeContextMenu {
+  /// dismiss API.
   static void dismiss(OverlayEntry? entry) {
     if (entry == null || !entry.mounted) {
       return;
@@ -128,6 +168,7 @@ abstract final class OfficeContextMenu {
     return entry;
   }
 
+  /// word API.
   static List<OfficeContextAction> word({
     required OfficeContextHit hit,
     required WordEditorController controller,
@@ -275,8 +316,10 @@ abstract final class OfficeContextMenu {
       );
     }
     if (hit.kind == OfficeContextKind.comment && hit.commentId != null) {
-      final WmlComment? comment =
-          WordComment.byId(controller.document, hit.commentId!);
+      final WmlComment? comment = WordComment.byId(
+        controller.document,
+        hit.commentId!,
+      );
       final bool resolved = comment?.resolved ?? false;
       items.addAll(<OfficeContextAction>[
         OfficeContextAction(
@@ -315,6 +358,7 @@ abstract final class OfficeContextMenu {
     return items;
   }
 
+  /// sheet API.
   static List<OfficeContextAction> sheet({
     required OfficeContextHit hit,
     required SheetEditorController controller,
@@ -381,6 +425,7 @@ abstract final class OfficeContextMenu {
     ];
   }
 
+  /// slide API.
   static List<OfficeContextAction> slide({
     required OfficeContextHit hit,
     required SlideEditorController controller,
@@ -421,20 +466,24 @@ abstract final class OfficeContextMenu {
     ];
   }
 
+  /// slideSorter API.
   static List<OfficeContextAction> slideSorter({
     required SlideEditorController controller,
     required int index,
   }) {
     final OfficeStrings strings = controller.config.strings;
     final bool mutate = controller.config.allowsMutation;
-    final bool hidden = index >= 0 &&
+    final bool hidden =
+        index >= 0 &&
         index < controller.presentation.slides.length &&
         controller.presentation.slides[index].hidden;
     return <OfficeContextAction>[
       OfficeContextAction(
         id: hidden ? 'showSlide' : 'hideSlide',
         label: hidden ? strings.showSlide : strings.hideSlide,
-        icon: hidden ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+        icon: hidden
+            ? Icons.visibility_outlined
+            : Icons.visibility_off_outlined,
         enabled: mutate,
       ),
     ];
@@ -482,14 +531,31 @@ class _MenuPalette {
     );
   }
 
+  /// surface API.
   final Color surface;
+
+  /// border API.
   final Color border;
+
+  /// hover API.
   final Color hover;
+
+  /// text API.
   final Color text;
+
+  /// muted API.
   final Color muted;
+
+  /// danger API.
   final Color danger;
+
+  /// icon API.
   final Color icon;
+
+  /// divider API.
   final Color divider;
+
+  /// disabled API.
   final Color disabled;
 }
 
@@ -503,25 +569,44 @@ class _OfficeContextOverlay extends StatelessWidget {
     required this.onSelect,
   });
 
+  /// globalPosition API.
   final Offset globalPosition;
+
+  /// actions API.
   final List<OfficeContextAction> actions;
+
+  /// theme API.
   final ThemeData theme;
+
+  /// direction API.
   final TextDirection direction;
+
+  /// onDismiss API.
   final VoidCallback onDismiss;
+
+  /// onSelect API.
   final ValueChanged<String> onSelect;
 
   @override
+  /// build API.
   Widget build(BuildContext context) {
     final _MenuPalette palette = _MenuPalette.of(theme);
     final Size screen = MediaQuery.sizeOf(context);
     const double width = 268;
-    final double height = actions.fold<double>(12, (double h, OfficeContextAction a) {
+    final double height = actions.fold<double>(12, (
+      double h,
+      OfficeContextAction a,
+    ) {
       return h + (a.separatorBefore ? 9 : 0) + 36;
     });
-    final double left =
-        globalPosition.dx.clamp(8, (screen.width - width - 8).clamp(8, screen.width));
-    final double top =
-        globalPosition.dy.clamp(8, (screen.height - height - 8).clamp(8, screen.height));
+    final double left = globalPosition.dx.clamp(
+      8,
+      (screen.width - width - 8).clamp(8, screen.width),
+    );
+    final double top = globalPosition.dy.clamp(
+      8,
+      (screen.height - height - 8).clamp(8, screen.height),
+    );
     return Directionality(
       textDirection: direction,
       child: Theme(
@@ -556,7 +641,8 @@ class _OfficeContextOverlay extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: <Widget>[
-                        for (final OfficeContextAction action in actions) ...<Widget>[
+                        for (final OfficeContextAction action
+                            in actions) ...<Widget>[
                           if (action.separatorBefore)
                             Padding(
                               padding: const EdgeInsets.symmetric(vertical: 4),
@@ -591,11 +677,17 @@ class _OfficeContextItem extends StatefulWidget {
     required this.onSelect,
   });
 
+  /// action API.
   final OfficeContextAction action;
+
+  /// palette API.
   final _MenuPalette palette;
+
+  /// onSelect API.
   final ValueChanged<String> onSelect;
 
   @override
+  /// createState API.
   State<_OfficeContextItem> createState() => _OfficeContextItemState();
 }
 
@@ -603,6 +695,7 @@ class _OfficeContextItemState extends State<_OfficeContextItem> {
   var _hot = false;
 
   @override
+  /// build API.
   Widget build(BuildContext context) {
     final OfficeContextAction action = widget.action;
     final _MenuPalette palette = widget.palette;
@@ -623,7 +716,9 @@ class _OfficeContextItemState extends State<_OfficeContextItem> {
         behavior: HitTestBehavior.opaque,
         onTap: action.enabled ? () => widget.onSelect(action.id) : null,
         child: ColoredBox(
-          color: _hot && action.enabled ? palette.hover : const Color(0x00000000),
+          color: _hot && action.enabled
+              ? palette.hover
+              : const Color(0x00000000),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
             child: Row(

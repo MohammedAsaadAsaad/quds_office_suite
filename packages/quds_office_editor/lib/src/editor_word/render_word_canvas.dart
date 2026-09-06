@@ -16,7 +16,9 @@ import 'caret_engine.dart';
 import 'paint_equation.dart';
 import 'paint_run_text.dart';
 
+/// Class WordCanvas.
 class WordCanvas extends LeafRenderObjectWidget {
+  /// WordCanvas API.
   const WordCanvas({
     super.key,
     required this.document,
@@ -67,69 +69,168 @@ class WordCanvas extends LeafRenderObjectWidget {
     this.compact = false,
   });
 
+  /// document API.
   final WmlDocument document;
+
+  /// laidOut API.
   final LaidOutDocument laidOut;
+
+  /// caret API.
   final CaretEngine caret;
+
+  /// viewport API.
   final VirtualViewport? viewport;
+
+  /// config API.
   final OfficeSurfaceConfig config;
+
+  /// hasFocus API.
   final bool hasFocus;
+
+  /// semanticsLabel API.
   final String semanticsLabel;
+
+  /// semanticsValue API.
   final String semanticsValue;
+
+  /// selectedVisual API.
   final WmlVisual? selectedVisual;
+
+  /// selectedEquation API.
   final WmlEquation? selectedEquation;
+
+  /// equationSlot API.
   final int equationSlot;
+
+  /// equationCaret API.
   final int equationCaret;
+
+  /// pictureCropMode API.
   final bool pictureCropMode;
+
+  /// onBeginVisualTransform API.
   final VoidCallback? onBeginVisualTransform;
+
+  /// Function API.
   final void Function(double dx, double dy)? onPreviewVisualMove;
+
+  /// Function API.
   final void Function({required double width, required double height})?
-      onPreviewVisualResize;
+  /// onPreviewVisualResize API.
+  onPreviewVisualResize;
+
+  /// Function API.
   final void Function({
     required double left,
     required double top,
     required double right,
     required double bottom,
-  })? onPreviewVisualCrop;
+  })?
+  /// onPreviewVisualCrop API.
+  onPreviewVisualCrop;
+
+  /// onPreviewVisualRotate API.
   final ValueChanged<double>? onPreviewVisualRotate;
+
+  /// onCommitVisualTransform API.
   final VoidCallback? onCommitVisualTransform;
+
+  /// onChanged API.
   final VoidCallback? onChanged;
+
+  /// onSelectVisual API.
   final ValueChanged<OfficeVisual?>? onSelectVisual;
+
+  /// Function API.
   final void Function(WmlEquation? equation, int? slot, int? caret)?
-      onSelectEquation;
+  /// onSelectEquation API.
+  onSelectEquation;
+
+  /// onActivateVisual API.
   final ValueChanged<OfficeVisual>? onActivateVisual;
+
+  /// onExtendThroughVisual API.
   final ValueChanged<OfficeVisual>? onExtendThroughVisual;
+
+  /// Function API.
   final bool Function(OfficeVisual visual)? isVisualInSelection;
+
+  /// onJumpParagraph API.
   final ValueChanged<int>? onJumpParagraph;
+
+  /// onFollowLink API.
   final ValueChanged<WmlHyperlink>? onFollowLink;
+
+  /// selectedCommentId API.
   final int? selectedCommentId;
+
+  /// onSelectComment API.
   final ValueChanged<int?>? onSelectComment;
+
+  /// onContextMenu API.
   final ValueChanged<OfficeContextHit>? onContextMenu;
+
+  /// Function API.
   final void Function(WmlTable table, int index)? onInsertTableRowAt;
+
+  /// Function API.
   final void Function(WmlTable table, int index)? onInsertTableColumnAt;
+
+  /// onBeginTableResize API.
   final ValueChanged<WmlTable>? onBeginTableResize;
+
+  /// Function API.
   final void Function(WmlTable table, int col, double width)?
-      onPreviewTableColumnWidth;
+  /// onPreviewTableColumnWidth API.
+  onPreviewTableColumnWidth;
+
+  /// Function API.
   final void Function(WmlTable table, int row, double height)?
-      onPreviewTableRowHeight;
+  /// onPreviewTableRowHeight API.
+  onPreviewTableRowHeight;
+
+  /// onCommitTableResize API.
   final ValueChanged<WmlTable>? onCommitTableResize;
+
+  /// selectedTable API.
   final WmlTable? selectedTable;
+
+  /// onSelectTable API.
   final ValueChanged<WmlTable?>? onSelectTable;
   final ({WmlTable table, bool column, int from, int to})? selectedTableBand;
+
+  /// Function API.
   final void Function(
     WmlTable table, {
     required bool column,
     required int from,
     required int to,
-  })? onSelectTableBand;
+  })?
+  /// onSelectTableBand API.
+  onSelectTableBand;
+
+  /// storyParagraphs API.
   final List<WmlParagraph>? storyParagraphs;
+
+  /// editingHeader API.
   final bool editingHeader;
+
+  /// editingFooter API.
   final bool editingFooter;
+
+  /// Function API.
   final void Function(int pageIndex, {required bool footer})?
-      onBeginHeaderFooterEdit;
+  /// onBeginHeaderFooterEdit API.
+  onBeginHeaderFooterEdit;
+
+  /// onEndHeaderFooterEdit API.
   final VoidCallback? onEndHeaderFooterEdit;
+
+  /// compact API.
   final bool compact;
 
   @override
+  /// createRenderObject API.
   RenderWordCanvas createRenderObject(BuildContext context) {
     return RenderWordCanvas(
       document: document,
@@ -182,6 +283,7 @@ class WordCanvas extends LeafRenderObjectWidget {
   }
 
   @override
+  /// updateRenderObject API.
   void updateRenderObject(BuildContext context, RenderWordCanvas renderObject) {
     renderObject
       ..document = document
@@ -236,7 +338,9 @@ class WordCanvas extends LeafRenderObjectWidget {
   }
 }
 
+/// Class RenderWordCanvas.
 class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
+  /// RenderWordCanvas API.
   RenderWordCanvas({
     required this.document,
     required this.laidOut,
@@ -245,7 +349,7 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
     required this.config,
     required this.hasFocus,
     required this.semanticsLabel,
-    required     this.semanticsValue,
+    required this.semanticsValue,
     this.selectedVisual,
     this.selectedEquation,
     this.equationSlot = 0,
@@ -286,67 +390,165 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
     this.compact = false,
   });
 
+  /// document API.
   WmlDocument document;
+
+  /// laidOut API.
   LaidOutDocument laidOut;
+
+  /// caret API.
   CaretEngine caret;
+
+  /// viewport API.
   VirtualViewport viewport;
+
+  /// config API.
   OfficeSurfaceConfig config;
+
+  /// hasFocus API.
   bool hasFocus;
+
+  /// semanticsLabel API.
   String semanticsLabel;
+
+  /// semanticsValue API.
   String semanticsValue;
+
+  /// selectedVisual API.
   WmlVisual? selectedVisual;
+
+  /// selectedEquation API.
   WmlEquation? selectedEquation;
+
+  /// equationSlot API.
   int equationSlot;
+
+  /// equationCaret API.
   int equationCaret;
+
+  /// pictureCropMode API.
   bool pictureCropMode;
+
+  /// onBeginVisualTransform API.
   VoidCallback? onBeginVisualTransform;
+
+  /// Function API.
   void Function(double dx, double dy)? onPreviewVisualMove;
+
+  /// Function API.
   void Function({required double width, required double height})?
-      onPreviewVisualResize;
+  /// onPreviewVisualResize API.
+  onPreviewVisualResize;
+
+  /// Function API.
   void Function({
     required double left,
     required double top,
     required double right,
     required double bottom,
-  })? onPreviewVisualCrop;
+  })?
+  /// onPreviewVisualCrop API.
+  onPreviewVisualCrop;
+
+  /// onPreviewVisualRotate API.
   ValueChanged<double>? onPreviewVisualRotate;
+
+  /// onCommitVisualTransform API.
   VoidCallback? onCommitVisualTransform;
+
+  /// onChanged API.
   VoidCallback? onChanged;
+
+  /// onSelectVisual API.
   ValueChanged<OfficeVisual?>? onSelectVisual;
+
+  /// Function API.
   void Function(WmlEquation? equation, int? slot, int? caret)? onSelectEquation;
+
+  /// onActivateVisual API.
   ValueChanged<OfficeVisual>? onActivateVisual;
+
+  /// onExtendThroughVisual API.
   ValueChanged<OfficeVisual>? onExtendThroughVisual;
+
+  /// Function API.
   bool Function(OfficeVisual visual)? isVisualInSelection;
+
+  /// onJumpParagraph API.
   ValueChanged<int>? onJumpParagraph;
+
+  /// onFollowLink API.
   ValueChanged<WmlHyperlink>? onFollowLink;
+
+  /// selectedCommentId API.
   int? selectedCommentId;
+
+  /// onSelectComment API.
   ValueChanged<int?>? onSelectComment;
+
+  /// onContextMenu API.
   ValueChanged<OfficeContextHit>? onContextMenu;
+
+  /// Function API.
   void Function(WmlTable table, int index)? onInsertTableRowAt;
+
+  /// Function API.
   void Function(WmlTable table, int index)? onInsertTableColumnAt;
+
+  /// onBeginTableResize API.
   ValueChanged<WmlTable>? onBeginTableResize;
+
+  /// Function API.
   void Function(WmlTable table, int col, double width)?
-      onPreviewTableColumnWidth;
+  /// onPreviewTableColumnWidth API.
+  onPreviewTableColumnWidth;
+
+  /// Function API.
   void Function(WmlTable table, int row, double height)?
-      onPreviewTableRowHeight;
+  /// onPreviewTableRowHeight API.
+  onPreviewTableRowHeight;
+
+  /// onCommitTableResize API.
   ValueChanged<WmlTable>? onCommitTableResize;
+
+  /// selectedTable API.
   WmlTable? selectedTable;
+
+  /// onSelectTable API.
   ValueChanged<WmlTable?>? onSelectTable;
+
+  /// selectedTableBand API.
   ({WmlTable table, bool column, int from, int to})? selectedTableBand;
+
+  /// Function API.
   void Function(
     WmlTable table, {
     required bool column,
     required int from,
     required int to,
-  })? onSelectTableBand;
+  })?
+  /// onSelectTableBand API.
+  onSelectTableBand;
+
+  /// storyParagraphs API.
   List<WmlParagraph>? storyParagraphs;
+
+  /// editingHeader API.
   bool editingHeader;
+
+  /// editingFooter API.
   bool editingFooter;
-  void Function(int pageIndex, {required bool footer})?
-      onBeginHeaderFooterEdit;
+
+  /// Function API.
+  void Function(int pageIndex, {required bool footer})? onBeginHeaderFooterEdit;
+
+  /// onEndHeaderFooterEdit API.
   VoidCallback? onEndHeaderFooterEdit;
+
+  /// compact API.
   bool compact;
 
+  /// editingFooter API.
   bool get _editingHeaderFooter => editingHeader || editingFooter;
 
   TapGestureRecognizer? _tap;
@@ -354,6 +556,8 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
   DateTime? _lastTapAt;
   Offset? _lastTapPos;
   var _tapCount = 0;
+
+  /// VisualImageCache API.
   final VisualImageCache _images = VisualImageCache();
   LaidOutDocument? _fittedLayout;
   int? _visualHandle;
@@ -367,30 +571,37 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
   static const double _pointsToPixels = 96 / 72;
   static const double _scrollBar = 14;
 
+  /// theme API.
   OfficeTheme get _theme => config.theme;
 
   double get _viewScale => viewport.scale * _pointsToPixels;
 
   @override
+  /// cursor API.
   MouseCursor get cursor => cursorFor(_hoverLocal);
 
   @override
+  /// onEnter API.
   PointerEnterEventListener? get onEnter => null;
 
   @override
+  /// onExit API.
   PointerExitEventListener? get onExit => (_) {
-        _hoverLocal = null;
-      };
+    _hoverLocal = null;
+  };
 
   @override
+  /// validForMouseTracker API.
   bool get validForMouseTracker => attached;
 
   @override
+  /// hitTestSelf API.
   bool hitTestSelf(Offset position) {
     _hoverLocal = position;
     return true;
   }
 
+  /// cursorFor API.
   MouseCursor cursorFor(Offset? window) {
     if (window == null || !config.allowsSelection) {
       return SystemMouseCursors.basic;
@@ -432,9 +643,7 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
     }
     final WmlHyperlink? link = _linkAt(laidPage, local);
     if (link != null) {
-      return _ctrlFollow
-          ? SystemMouseCursors.click
-          : SystemMouseCursors.text;
+      return _ctrlFollow ? SystemMouseCursors.click : SystemMouseCursors.text;
     }
     if (_equationAt(laidPage, local) != null) {
       return SystemMouseCursors.text;
@@ -480,6 +689,7 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
     };
   }
 
+  /// pad API.
   static bool _boxContains(LaidOutBox box, Offset local, {double pad = 0}) {
     return local.dx >= box.x - pad &&
         local.dx <= box.x + box.width + pad &&
@@ -539,14 +749,9 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
           final int row = i - 1;
           final double height = row < table.table.rows.length
               ? (table.table.rows[row].height ??
-                  (table.rowBoundary(i) - table.rowBoundary(row)))
+                    (table.rowBoundary(i) - table.rowBoundary(row)))
               : 24;
-          return (
-            table: table.table,
-            column: false,
-            index: row,
-            start: height,
-          );
+          return (table: table.table, column: false, index: row, start: height);
         }
       }
     }
@@ -599,6 +804,7 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
   }
 
   @override
+  /// performLayout API.
   void performLayout() {
     final double scale = compact ? 1 : _viewScale;
     final Size content;
@@ -613,7 +819,9 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
         }
       }
       content = Size(
-        constraints.hasBoundedWidth ? constraints.maxWidth : laidOut.pageSize.width,
+        constraints.hasBoundedWidth
+            ? constraints.maxWidth
+            : laidOut.pageSize.width,
         bottom + 8,
       );
     } else {
@@ -633,8 +841,8 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
     size = compact
         ? constraints.constrain(content)
         : (constraints.hasBoundedWidth && constraints.hasBoundedHeight
-            ? constraints.constrain(constraints.biggest)
-            : constraints.constrain(content));
+              ? constraints.constrain(constraints.biggest)
+              : constraints.constrain(content));
     viewport.extent = size;
     if (!compact) {
       _clampViewport();
@@ -665,8 +873,8 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
   Rect get _vTrack =>
       Rect.fromLTWH(size.width - _scrollBar, 0, _scrollBar, size.height);
 
-  double get _maxScrollY =>
-      math.max(0, _contentSize.height - size.height);
+  /// max API.
+  double get _maxScrollY => math.max(0, _contentSize.height - size.height);
 
   Rect get _vThumb {
     final double maxY = _maxScrollY;
@@ -742,9 +950,14 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
     )..layout();
     final double tipW = painter.width + 16;
     final double tipH = painter.height + 10;
-    final double tipX = (_vTrack.left - tipW - 8).clamp(8, size.width - tipW - 8);
-    final double tipY =
-        (_vThumb.center.dy - tipH / 2).clamp(8, size.height - tipH - 8);
+    final double tipX = (_vTrack.left - tipW - 8).clamp(
+      8,
+      size.width - tipW - 8,
+    );
+    final double tipY = (_vThumb.center.dy - tipH / 2).clamp(
+      8,
+      size.height - tipH - 8,
+    );
     final RRect bubble = RRect.fromRectAndRadius(
       Rect.fromLTWH(tipX, tipY, tipW, tipH),
       const Radius.circular(4),
@@ -754,6 +967,7 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
   }
 
   @override
+  /// detach API.
   void detach() {
     _tap?.dispose();
     _pan?.dispose();
@@ -809,6 +1023,7 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
   }
 
   @override
+  /// handleEvent API.
   void handleEvent(PointerEvent event, covariant BoxHitTestEntry entry) {
     if (compact && event is PointerScrollEvent) {
       return;
@@ -1035,8 +1250,7 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
     Offset local, {
     required bool extend,
   }) {
-    final List<LaidOutLine> story =
-        editingFooter ? page.footer : page.header;
+    final List<LaidOutLine> story = editingFooter ? page.footer : page.header;
     LaidOutLine? line = _nearestChromeLine(story, local);
     if (line == null && story.isNotEmpty) {
       line = story.last;
@@ -1080,6 +1294,7 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
     return best;
   }
 
+  /// notify API.
   void _placeCaret(Offset window, {required bool extend, bool notify = true}) {
     _ensurePaintMetrics();
     final (int page, Offset local) = _hitPage(window);
@@ -1175,7 +1390,10 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
     if (handle == null || visual == null) {
       return;
     }
-    final Offset pageDelta = Offset(delta.dx / _viewScale, delta.dy / _viewScale);
+    final Offset pageDelta = Offset(
+      delta.dx / _viewScale,
+      delta.dy / _viewScale,
+    );
     if (pictureCropMode && handle < 8) {
       _cropFromHandle(handle, pageDelta, visual);
       return;
@@ -1302,7 +1520,12 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
       case 7:
         left += dl;
     }
-    onPreviewVisualCrop?.call(left: left, top: top, right: right, bottom: bottom);
+    onPreviewVisualCrop?.call(
+      left: left,
+      top: top,
+      right: right,
+      bottom: bottom,
+    );
   }
 
   LaidOutBox? _selectedVisualBox() {
@@ -1337,11 +1560,7 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
     );
     final int? slot = omml == null
         ? null
-        : PaintEquation.hitSlot(
-            omml,
-            inside,
-            root: equation.math.root,
-          );
+        : PaintEquation.hitSlot(omml, inside, root: equation.math.root);
     final int? caret = omml == null || slot == null
         ? null
         : PaintEquation.hitCaret(
@@ -1585,7 +1804,12 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
           local.dx < table.bounds.left - 1 &&
           local.dy >= table.bounds.top &&
           local.dy <= table.bounds.bottom) {
-        if (!_nearAxisBoundary(table, local.dy, column: false, slop: insertSlop)) {
+        if (!_nearAxisBoundary(
+          table,
+          local.dy,
+          column: false,
+          slop: insertSlop,
+        )) {
           final int row = table.rowIndexAt(local.dy);
           if (row >= 0) {
             return _TableBandHit(
@@ -1601,7 +1825,12 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
           local.dy < table.bounds.top - 1 &&
           local.dx >= table.bounds.left &&
           local.dx <= table.bounds.right) {
-        if (!_nearAxisBoundary(table, local.dx, column: true, slop: insertSlop)) {
+        if (!_nearAxisBoundary(
+          table,
+          local.dx,
+          column: true,
+          slop: insertSlop,
+        )) {
           final int col = table.colIndexAt(local.dx);
           if (col >= 0) {
             return _TableBandHit(
@@ -1676,12 +1905,14 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
       final bool onAxis;
       final double dist;
       if (hit.column) {
-        final bool inTopGutter = local.dy >= table.bounds.top - 26 &&
+        final bool inTopGutter =
+            local.dy >= table.bounds.top - 26 &&
             local.dy <= table.bounds.top + 4;
         onAxis = inTopGutter && (local.dx - hit.axis).abs() <= 6;
         dist = (local.dx - hit.axis).abs();
       } else {
-        final bool inLeftGutter = local.dx >= table.bounds.left - 26 &&
+        final bool inLeftGutter =
+            local.dx >= table.bounds.left - 26 &&
             local.dx <= table.bounds.left + 4;
         onAxis = inLeftGutter && (local.dy - hit.axis).abs() <= 6;
         dist = (local.dy - hit.axis).abs();
@@ -1831,11 +2062,12 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
 
   void _paintTableHandle(Canvas canvas, _TableGeom table) {
     final Rect handle = table.handleRect;
-    final bool selected = selectedTable != null &&
-        identical(selectedTable, table.table);
+    final bool selected =
+        selectedTable != null && identical(selectedTable, table.table);
     canvas.drawRRect(
       RRect.fromRectAndRadius(handle, const Radius.circular(2)),
-      Paint()..color = selected ? const Color(0xFF2E75B6) : const Color(0xFFFFFFFF),
+      Paint()
+        ..color = selected ? const Color(0xFF2E75B6) : const Color(0xFFFFFFFF),
     );
     canvas.drawRRect(
       RRect.fromRectAndRadius(handle, const Radius.circular(2)),
@@ -1898,7 +2130,8 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
     canvas.drawCircle(
       button.center,
       button.width / 2,
-      Paint()..color = active ? const Color(0xFF2E75B6) : const Color(0xFFFFFFFF),
+      Paint()
+        ..color = active ? const Color(0xFF2E75B6) : const Color(0xFFFFFFFF),
     );
     canvas.drawCircle(
       button.center,
@@ -1988,6 +2221,7 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
   }
 
   @override
+  /// describeSemanticsConfiguration API.
   void describeSemanticsConfiguration(SemanticsConfiguration config) {
     super.describeSemanticsConfiguration(config);
     config
@@ -2000,6 +2234,7 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
   }
 
   @override
+  /// paint API.
   void paint(PaintingContext context, Offset offset) {
     _ensurePaintMetrics();
     final Canvas canvas = context.canvas;
@@ -2007,7 +2242,8 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
     canvas.translate(offset.dx, offset.dy);
     canvas.drawRect(
       Offset.zero & size,
-      Paint()..color = compact ? _theme.pageBackground : _theme.canvasBackground,
+      Paint()
+        ..color = compact ? _theme.pageBackground : _theme.canvasBackground,
     );
     if (compact) {
       if (laidOut.pages.isNotEmpty) {
@@ -2034,8 +2270,10 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
               line.paragraphIndex >= 0 &&
               caret.isOnLine(
                 line,
-                lastOfParagraph:
-                    _isLastParagraphLine(laidOut.pages.first, line),
+                lastOfParagraph: _isLastParagraphLine(
+                  laidOut.pages.first,
+                  line,
+                ),
               )) {
             canvas.drawRect(
               _caretPaintRect(line),
@@ -2182,9 +2420,7 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
     }
     final ({WmlTable table, bool column, int from, int to})? band =
         selectedTableBand;
-    if (band != null &&
-        box.table != null &&
-        identical(band.table, box.table)) {
+    if (band != null && box.table != null && identical(band.table, box.table)) {
       return _boxInTableBand(box, band);
     }
     final int? start = box.paragraphIndex;
@@ -2346,8 +2582,9 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
       return;
     }
     final int? commentId = _commentIdAt(laidOut.pages[page], local);
-    final WmlComment? comment =
-        commentId == null ? null : WordComment.byId(document, commentId);
+    final WmlComment? comment = commentId == null
+        ? null
+        : WordComment.byId(document, commentId);
     final WmlHyperlink? link = _linkAt(laidOut.pages[page], local);
     if (comment == null && link == null) {
       return;
@@ -2355,8 +2592,8 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
     final String hint = comment != null
         ? _commentHint(comment)
         : (_ctrlFollow
-            ? link!.displayTarget
-            : '${config.strings.followLinkHint}\n${link!.displayTarget}');
+              ? link!.displayTarget
+              : '${config.strings.followLinkHint}\n${link!.displayTarget}');
     final TextPainter painter = TextPainter(
       text: TextSpan(
         text: hint,
@@ -2408,8 +2645,8 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
       if (visual == null || box.kind == LaidOutBoxKind.tableCell) {
         continue;
       }
-      final bool selected = selectedVisual != null &&
-          identical(visual, selectedVisual!.visual);
+      final bool selected =
+          selectedVisual != null && identical(visual, selectedVisual!.visual);
       final bool inRange =
           selected || (isVisualInSelection?.call(visual) ?? false);
       if (!inRange) {
@@ -2430,7 +2667,11 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
     }
   }
 
-  void _paintFrames(Canvas canvas, LaidOutPage page, {bool paintHandles = true}) {
+  void _paintFrames(
+    Canvas canvas,
+    LaidOutPage page, {
+    bool paintHandles = true,
+  }) {
     for (final LaidOutBox box in page.frames) {
       if (box.kind == LaidOutBoxKind.tocEntry) {
         continue;
@@ -2439,10 +2680,7 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
       if (box.kind == LaidOutBoxKind.frame ||
           box.kind == LaidOutBoxKind.columnSep) {
         if (box.fillColor != null && box.fillColor!.isNotEmpty) {
-          canvas.drawRect(
-            rect,
-            Paint()..color = _colorFromHex(box.fillColor!),
-          );
+          canvas.drawRect(rect, Paint()..color = _colorFromHex(box.fillColor!));
         }
         if (box.strokeColor.isNotEmpty && box.strokeColor != '00000000') {
           canvas.drawRect(
@@ -2456,7 +2694,8 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
         continue;
       }
       if (box.kind == LaidOutBoxKind.equation && box.omml != null) {
-        final bool selected = selectedEquation != null &&
+        final bool selected =
+            selectedEquation != null &&
             identical(box.equation, selectedEquation);
         PaintEquation.paint(
           canvas,
@@ -2481,7 +2720,8 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
           onImageReady: markNeedsPaint,
         );
         if (paintHandles) {
-          final bool selected = selectedVisual != null &&
+          final bool selected =
+              selectedVisual != null &&
               identical(visual, selectedVisual!.visual);
           final bool inRange =
               selected || (isVisualInSelection?.call(visual) ?? false);
@@ -2521,7 +2761,12 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
 
   void _paintHeaderFooterChrome(Canvas canvas, LaidOutPage page) {
     final LaidOutBand band = editingFooter ? page.footerBand : page.headerBand;
-    final Rect rect = Rect.fromLTWH(band.left, band.top, band.width, band.height);
+    final Rect rect = Rect.fromLTWH(
+      band.left,
+      band.top,
+      band.width,
+      band.height,
+    );
     canvas.drawRect(rect, Paint()..color = const Color(0x142E75B6));
     canvas.drawRect(
       rect,
@@ -2546,8 +2791,7 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1,
     );
-    final List<LaidOutLine> story =
-        editingFooter ? page.footer : page.header;
+    final List<LaidOutLine> story = editingFooter ? page.footer : page.header;
     for (final LaidOutLine line in story) {
       if (config.showsCaret &&
           hasFocus &&
@@ -2636,7 +2880,8 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
       _drawOverlay(canvas, line);
       return;
     }
-    final String paragraph = line.sourceText ?? _paragraphTextAt(line.paragraphIndex);
+    final String paragraph =
+        line.sourceText ?? _paragraphTextAt(line.paragraphIndex);
     var start = 0;
     while (start < line.glyphs.length) {
       final LaidOutGlyph first = line.glyphs[start];
@@ -2649,13 +2894,15 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
       if (first.commentIds.isNotEmpty) {
         final double x0 = first.x;
         final double x1 = run.last.x + run.last.advance;
-        final bool active = selectedCommentId != null &&
+        final bool active =
+            selectedCommentId != null &&
             first.commentIds.contains(selectedCommentId);
         canvas.drawRect(
           Rect.fromLTWH(x0, line.y, x1 - x0, line.height),
           Paint()
-            ..color = Color(active ? 0xFFF4B183 : 0xFFFFF2CC)
-                .withValues(alpha: 0.88),
+            ..color = Color(
+              active ? 0xFFF4B183 : 0xFFFFF2CC,
+            ).withValues(alpha: 0.88),
         );
       }
       if (first.highlight != null) {
@@ -2816,13 +3063,25 @@ class _TableInsertHit {
     required this.lineEnd,
   });
 
+  /// table API.
   final WmlTable table;
+
+  /// column API.
   final bool column;
+
+  /// index API.
   final int index;
+
+  /// button API.
   final Rect button;
+
+  /// lineStart API.
   final Offset lineStart;
+
+  /// lineEnd API.
   final Offset lineEnd;
 
+  /// axis API.
   double get axis => column ? lineStart.dx : lineStart.dy;
 }
 
@@ -2834,25 +3093,37 @@ class _TableBandHit {
     required this.highlight,
   });
 
+  /// table API.
   final WmlTable table;
+
+  /// column API.
   final bool column;
+
+  /// index API.
   final int index;
+
+  /// highlight API.
   final Rect highlight;
 }
 
 class _TableGeom {
   _TableGeom(this.table);
 
+  /// table API.
   final WmlTable table;
+
+  /// bounds API.
   Rect bounds = Rect.zero;
   final Map<int, double> _rowTop = <int, double>{};
   final Map<int, double> _rowBottom = <int, double>{};
   final Map<int, double> _colLeft = <int, double>{};
   final Map<int, double> _colRight = <int, double>{};
 
+  /// handleRect API.
   Rect get handleRect =>
       Rect.fromLTWH(bounds.left - 15, bounds.top - 15, 12, 12);
 
+  /// add API.
   void add(LaidOutBox box) {
     final Rect rect = Rect.fromLTWH(box.x, box.y, box.width, box.height);
     bounds = bounds == Rect.zero ? rect : bounds.expandToInclude(rect);
@@ -2864,6 +3135,7 @@ class _TableGeom {
     _colRight[col] = _maxOr(_colRight[col], rect.right);
   }
 
+  /// rowCount API.
   int get rowCount {
     var max = table.rows.length;
     for (final int key in _rowTop.keys) {
@@ -2874,6 +3146,7 @@ class _TableGeom {
     return max;
   }
 
+  /// colCount API.
   int get colCount {
     var max = WordTable.columnCount(table);
     for (final int key in _colLeft.keys) {
@@ -2884,6 +3157,7 @@ class _TableGeom {
     return max;
   }
 
+  /// rowBoundary API.
   double rowBoundary(int index) {
     if (index <= 0) {
       return bounds.top;
@@ -2894,6 +3168,7 @@ class _TableGeom {
     return _rowTop[index] ?? _rowBottom[index - 1] ?? bounds.top;
   }
 
+  /// colBoundary API.
   double colBoundary(int index) {
     if (index <= 0) {
       return bounds.left;
@@ -2904,6 +3179,7 @@ class _TableGeom {
     return _colLeft[index] ?? _colRight[index - 1] ?? bounds.left;
   }
 
+  /// rowIndexAt API.
   int rowIndexAt(double y, {bool clamp = false}) {
     if (rowCount <= 0) {
       return -1;
@@ -2916,9 +3192,12 @@ class _TableGeom {
         return i;
       }
     }
-    return clamp ? rowCount - 1 : (y <= rowBoundary(rowCount) ? rowCount - 1 : -1);
+    return clamp
+        ? rowCount - 1
+        : (y <= rowBoundary(rowCount) ? rowCount - 1 : -1);
   }
 
+  /// colIndexAt API.
   int colIndexAt(double x, {bool clamp = false}) {
     if (colCount <= 0) {
       return -1;
@@ -2931,9 +3210,12 @@ class _TableGeom {
         return i;
       }
     }
-    return clamp ? colCount - 1 : (x <= colBoundary(colCount) ? colCount - 1 : -1);
+    return clamp
+        ? colCount - 1
+        : (x <= colBoundary(colCount) ? colCount - 1 : -1);
   }
 
+  /// rowBand API.
   Rect rowBand(int from, int to) {
     final int a = from < to ? from : to;
     final int b = from > to ? from : to;
@@ -2945,6 +3227,7 @@ class _TableGeom {
     );
   }
 
+  /// colBand API.
   Rect colBand(int from, int to) {
     final int a = from < to ? from : to;
     final int b = from > to ? from : to;

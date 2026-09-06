@@ -47,17 +47,15 @@ void main() {
           PmlSlide(
             id: 256,
             shapes: <PmlShape>[
-              PmlShape(
-                id: 2,
-                name: 'Title',
-                text: 'شريحة معزولة',
-              ),
+              PmlShape(id: 2, name: 'Title', text: 'شريحة معزولة'),
             ],
           ),
         ],
       );
       final Uint8List bytes = SlideSerializer().writeBytes(presentation);
-      final PmlPresentation opened = await OfficeIsolateOpen.presentation(bytes);
+      final PmlPresentation opened = await OfficeIsolateOpen.presentation(
+        bytes,
+      );
       expect(opened.slides, isNotEmpty);
       expect(
         opened.slides.first.shapes.any(

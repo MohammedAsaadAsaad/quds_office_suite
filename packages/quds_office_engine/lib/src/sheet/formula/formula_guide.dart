@@ -12,6 +12,7 @@ enum FormulaFnCategory {
 
 /// Localized documentation for one implemented function.
 class FormulaFnDoc {
+  /// FormulaFnDoc API.
   const FormulaFnDoc({
     required this.name,
     required this.syntax,
@@ -22,32 +23,56 @@ class FormulaFnDoc {
     this.aliases = const <String>[],
   });
 
+  /// name API.
   final String name;
+
+  /// syntax API.
   final String syntax;
+
+  /// category API.
   final FormulaFnCategory category;
+
+  /// en API.
   final String en;
+
+  /// ar API.
   final String ar;
+
+  /// example API.
   final String example;
+
+  /// aliases API.
   final List<String> aliases;
 
+  /// title API.
   String title(bool arabic) => name;
+
+  /// summary API.
   String summary(bool arabic) => arabic ? ar : en;
 }
 
+/// Class FormulaNameQuery.
 class FormulaNameQuery {
+  /// FormulaNameQuery API.
   const FormulaNameQuery({
     required this.start,
     required this.end,
     required this.prefix,
   });
 
+  /// start API.
   final int start;
+
+  /// end API.
   final int end;
+
+  /// prefix API.
   final String prefix;
 }
 
 /// Catalog of every function `FormulaFunctions` evaluates.
 abstract final class FormulaFunctionGuide {
+  /// all API.
   static const List<FormulaFnDoc> all = <FormulaFnDoc>[
     FormulaFnDoc(
       name: 'SUM',
@@ -992,6 +1017,7 @@ abstract final class FormulaFunctionGuide {
     ),
   ];
 
+  /// byName API.
   static FormulaFnDoc? byName(String name) {
     final String key = name.toUpperCase();
     for (final FormulaFnDoc doc in all) {
@@ -1002,6 +1028,7 @@ abstract final class FormulaFunctionGuide {
     return null;
   }
 
+  /// inCategory API.
   static List<FormulaFnDoc> inCategory(FormulaFnCategory category) {
     return <FormulaFnDoc>[
       for (final FormulaFnDoc doc in all)
@@ -1009,6 +1036,7 @@ abstract final class FormulaFunctionGuide {
     ];
   }
 
+  /// search API.
   static List<FormulaFnDoc> search(String prefix, {int limit = 12}) {
     final String p = prefix.trim().toUpperCase();
     if (p.isEmpty) {
@@ -1074,6 +1102,9 @@ abstract final class FormulaFunctionGuide {
         ch == 0x2E;
   }
 
+  /// RegExp API.
   static final RegExp _namePrefix = RegExp(r'^[A-Za-z][A-Za-z0-9.]*$');
+
+  /// RegExp API.
   static final RegExp _cellLike = RegExp(r'^[A-Za-z]+\$?\d+$');
 }

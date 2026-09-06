@@ -15,34 +15,48 @@ import 'office_controller.dart';
 import 'office_direction_keys.dart';
 import 'office_theme.dart';
 
+/// Class OfficeUndoIntent.
 class OfficeUndoIntent extends Intent {
+  /// OfficeUndoIntent API.
   const OfficeUndoIntent();
 }
 
+/// Class OfficeRedoIntent.
 class OfficeRedoIntent extends Intent {
+  /// OfficeRedoIntent API.
   const OfficeRedoIntent();
 }
 
+/// Class OfficeSelectAllIntent.
 class OfficeSelectAllIntent extends Intent {
+  /// OfficeSelectAllIntent API.
   const OfficeSelectAllIntent();
 }
 
+/// Class OfficeCopyIntent.
 class OfficeCopyIntent extends Intent {
+  /// OfficeCopyIntent API.
   const OfficeCopyIntent();
 }
 
+/// Class OfficeCutIntent.
 class OfficeCutIntent extends Intent {
+  /// OfficeCutIntent API.
   const OfficeCutIntent();
 }
 
+/// Class OfficePasteIntent.
 class OfficePasteIntent extends Intent {
+  /// OfficePasteIntent API.
   const OfficePasteIntent([this.mode = OfficePasteMode.keepSource]);
 
+  /// mode API.
   final OfficePasteMode mode;
 }
 
 /// Embeddable Word surface with focus, IME, shortcuts, and chrome slots.
 class QudsWordEditor extends StatefulWidget {
+  /// QudsWordEditor API.
   const QudsWordEditor({
     super.key,
     required this.controller,
@@ -53,16 +67,30 @@ class QudsWordEditor extends StatefulWidget {
     this.onSelectionChanged,
   });
 
+  /// controller API.
   final WordEditorController controller;
+
+  /// config API.
   final OfficeSurfaceConfig? config;
+
+  /// focusNode API.
   final FocusNode? focusNode;
+
+  /// Function API.
   final Widget Function(BuildContext context, WordEditorController controller)?
+  /// toolbarBuilder API.
   toolbarBuilder;
+
+  /// Function API.
   final Widget Function(BuildContext context, WordEditorController controller)?
+  /// statusBarBuilder API.
   statusBarBuilder;
+
+  /// onSelectionChanged API.
   final VoidCallback? onSelectionChanged;
 
   @override
+  /// createState API.
   State<QudsWordEditor> createState() => _QudsWordEditorState();
 }
 
@@ -73,9 +101,11 @@ class _QudsWordEditorState extends State<QudsWordEditor>
   late final Ticker _ticker;
   OverlayEntry? _contextMenu;
 
+  /// controller API.
   WordEditorController get _c => widget.controller;
 
   @override
+  /// initState API.
   void initState() {
     super.initState();
     _ownsFocus = widget.focusNode == null;
@@ -107,6 +137,7 @@ class _QudsWordEditorState extends State<QudsWordEditor>
   }
 
   @override
+  /// didUpdateWidget API.
   void didUpdateWidget(QudsWordEditor oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.config != null && !identical(widget.config, _c.config)) {
@@ -122,6 +153,7 @@ class _QudsWordEditorState extends State<QudsWordEditor>
   }
 
   @override
+  /// dispose API.
   void dispose() {
     _dismissContextMenu();
     _ticker.dispose();
@@ -162,29 +194,13 @@ class _QudsWordEditorState extends State<QudsWordEditor>
       case 'selectAll':
         _c.selectAll();
       case 'insertRowAbove':
-        _c.insertTableRow(
-          after: false,
-          table: hit.table,
-          row: hit.tableRow,
-        );
+        _c.insertTableRow(after: false, table: hit.table, row: hit.tableRow);
       case 'insertRowBelow':
-        _c.insertTableRow(
-          after: true,
-          table: hit.table,
-          row: hit.tableRow,
-        );
+        _c.insertTableRow(after: true, table: hit.table, row: hit.tableRow);
       case 'insertColLeft':
-        _c.insertTableColumn(
-          after: false,
-          table: hit.table,
-          col: hit.tableCol,
-        );
+        _c.insertTableColumn(after: false, table: hit.table, col: hit.tableCol);
       case 'insertColRight':
-        _c.insertTableColumn(
-          after: true,
-          table: hit.table,
-          col: hit.tableCol,
-        );
+        _c.insertTableColumn(after: true, table: hit.table, col: hit.tableCol);
       case 'deleteRow':
         _c.deleteTableRow(table: hit.table, row: hit.tableRow);
       case 'deleteCol':
@@ -373,9 +389,7 @@ class _QudsWordEditorState extends State<QudsWordEditor>
     }
     if (ctrl && event.logicalKey == LogicalKeyboardKey.keyV) {
       _c.pasteFromClipboard(
-        mode: shift
-            ? OfficePasteMode.keepTextOnly
-            : OfficePasteMode.keepSource,
+        mode: shift ? OfficePasteMode.keepTextOnly : OfficePasteMode.keepSource,
       );
       return KeyEventResult.handled;
     }
@@ -426,8 +440,13 @@ class _QudsWordEditorState extends State<QudsWordEditor>
           const OfficePasteIntent(),
       const SingleActivator(LogicalKeyboardKey.keyV, meta: true):
           const OfficePasteIntent(),
-      const SingleActivator(LogicalKeyboardKey.keyV, control: true, shift: true):
-          const OfficePasteIntent(OfficePasteMode.keepTextOnly),
+      const SingleActivator(
+        LogicalKeyboardKey.keyV,
+        control: true,
+        shift: true,
+      ): const OfficePasteIntent(
+        OfficePasteMode.keepTextOnly,
+      ),
       const SingleActivator(LogicalKeyboardKey.keyV, meta: true, shift: true):
           const OfficePasteIntent(OfficePasteMode.keepTextOnly),
       const SingleActivator(LogicalKeyboardKey.keyV, control: true, alt: true):
@@ -459,6 +478,7 @@ class _QudsWordEditorState extends State<QudsWordEditor>
   }
 
   @override
+  /// build API.
   Widget build(BuildContext context) {
     final OfficeSurfaceConfig config = widget.config ?? _c.config;
     return Directionality(
@@ -549,70 +569,71 @@ class _QudsWordEditorState extends State<QudsWordEditor>
                     readOnly: !config.allowsMutation,
                     textField: config.allowsMutation,
                     child: WordCanvas(
-                        document: _c.document,
-                        laidOut: _c.documentLaidOut,
-                        caret: _c.caret,
-                        viewport: _c.viewport,
-                        config: config,
-                        hasFocus: !_c.isEditingComment &&
-                            (_focus.hasFocus || _c.input.isAttached),
-                        semanticsLabel: _c.semanticsLabel,
-                        semanticsValue: _c.semanticsValue,
-                        selectedVisual: _c.selectedVisual,
-                        selectedEquation: _c.selectedEquation,
-                        equationSlot: _c.equationSlot,
-                        equationCaret: _c.equationCaret,
-                        pictureCropMode: _c.pictureCropMode,
-                        onBeginVisualTransform: _c.beginVisualTransform,
-                        onPreviewVisualMove: _c.previewVisualMove,
-                        onPreviewVisualResize: _c.previewVisualResize,
-                        onPreviewVisualCrop: _c.previewVisualCrop,
-                        onPreviewVisualRotate: _c.previewVisualRotate,
-                        onCommitVisualTransform: _c.commitVisualTransform,
-                        isVisualInSelection: _c.isVisualInSelection,
-                        onExtendThroughVisual: _c.extendSelectionThroughVisual,
-                        onSelectVisual: _c.selectVisualFromOffice,
-                        onSelectEquation:
-                            (WmlEquation? equation, int? slot, int? caret) {
-                          _c.selectEquation(
-                            equation,
-                            slot: slot,
-                            caret: caret,
-                          );
-                        },
-                        onActivateVisual: (OfficeVisual visual) {
-                          _c.selectVisualFromOffice(visual);
-                          _c.cycleSelectedVisualKind();
-                        },
-                        onJumpParagraph: _c.jumpToParagraph,
-                        onFollowLink: _c.followLink,
-                        selectedCommentId: _c.selectedCommentId,
-                        onSelectComment: _c.selectComment,
-                        onContextMenu: _showWordContext,
-                        onInsertTableRowAt: _c.insertTableRowAt,
-                        onInsertTableColumnAt: _c.insertTableColumnAt,
-                        onBeginTableResize: _c.beginTableResize,
-                        onPreviewTableColumnWidth: _c.previewTableColumnWidth,
-                        onPreviewTableRowHeight: _c.previewTableRowHeight,
-                        onCommitTableResize: _c.commitTableResize,
-                        selectedTable: _c.selectedTable,
-                        onSelectTable: _c.selectTable,
-                        selectedTableBand: _c.selectedTableBand,
-                        onSelectTableBand: _c.selectTableBand,
-                        storyParagraphs: _c.isEditingHeaderFooter
-                            ? _c.headerFooterParagraphs
-                            : null,
-                        editingHeader: _c.isEditingHeader,
-                        editingFooter: _c.isEditingFooter,
-                        onBeginHeaderFooterEdit: _c.beginHeaderFooterEdit,
-                        onEndHeaderFooterEdit: _c.endHeaderFooterEdit,
-                        onChanged: () {
-                          _focus.requestFocus();
-                          if (config.allowsMutation) {
-                            _c.attachInput();
-                          }
-                          _c.refresh();
-                        },
+                      document: _c.document,
+                      laidOut: _c.documentLaidOut,
+                      caret: _c.caret,
+                      viewport: _c.viewport,
+                      config: config,
+                      hasFocus:
+                          !_c.isEditingComment &&
+                          (_focus.hasFocus || _c.input.isAttached),
+                      semanticsLabel: _c.semanticsLabel,
+                      semanticsValue: _c.semanticsValue,
+                      selectedVisual: _c.selectedVisual,
+                      selectedEquation: _c.selectedEquation,
+                      equationSlot: _c.equationSlot,
+                      equationCaret: _c.equationCaret,
+                      pictureCropMode: _c.pictureCropMode,
+                      onBeginVisualTransform: _c.beginVisualTransform,
+                      onPreviewVisualMove: _c.previewVisualMove,
+                      onPreviewVisualResize: _c.previewVisualResize,
+                      onPreviewVisualCrop: _c.previewVisualCrop,
+                      onPreviewVisualRotate: _c.previewVisualRotate,
+                      onCommitVisualTransform: _c.commitVisualTransform,
+                      isVisualInSelection: _c.isVisualInSelection,
+                      onExtendThroughVisual: _c.extendSelectionThroughVisual,
+                      onSelectVisual: _c.selectVisualFromOffice,
+                      onSelectEquation:
+                          (WmlEquation? equation, int? slot, int? caret) {
+                            _c.selectEquation(
+                              equation,
+                              slot: slot,
+                              caret: caret,
+                            );
+                          },
+                      onActivateVisual: (OfficeVisual visual) {
+                        _c.selectVisualFromOffice(visual);
+                        _c.cycleSelectedVisualKind();
+                      },
+                      onJumpParagraph: _c.jumpToParagraph,
+                      onFollowLink: _c.followLink,
+                      selectedCommentId: _c.selectedCommentId,
+                      onSelectComment: _c.selectComment,
+                      onContextMenu: _showWordContext,
+                      onInsertTableRowAt: _c.insertTableRowAt,
+                      onInsertTableColumnAt: _c.insertTableColumnAt,
+                      onBeginTableResize: _c.beginTableResize,
+                      onPreviewTableColumnWidth: _c.previewTableColumnWidth,
+                      onPreviewTableRowHeight: _c.previewTableRowHeight,
+                      onCommitTableResize: _c.commitTableResize,
+                      selectedTable: _c.selectedTable,
+                      onSelectTable: _c.selectTable,
+                      selectedTableBand: _c.selectedTableBand,
+                      onSelectTableBand: _c.selectTableBand,
+                      storyParagraphs: _c.isEditingHeaderFooter
+                          ? _c.headerFooterParagraphs
+                          : null,
+                      editingHeader: _c.isEditingHeader,
+                      editingFooter: _c.isEditingFooter,
+                      onBeginHeaderFooterEdit: _c.beginHeaderFooterEdit,
+                      onEndHeaderFooterEdit: _c.endHeaderFooterEdit,
+                      onChanged: () {
+                        _focus.requestFocus();
+                        if (config.allowsMutation) {
+                          _c.attachInput();
+                        }
+                        _c.refresh();
+                      },
                     ),
                   ),
                 ),
@@ -629,6 +650,7 @@ class _QudsWordEditorState extends State<QudsWordEditor>
 
 /// Embeddable spreadsheet surface.
 class QudsSheetEditor extends StatefulWidget {
+  /// QudsSheetEditor API.
   const QudsSheetEditor({
     super.key,
     required this.controller,
@@ -640,17 +662,33 @@ class QudsSheetEditor extends StatefulWidget {
     this.frozenCols = 0,
   });
 
+  /// controller API.
   final SheetEditorController controller;
+
+  /// config API.
   final OfficeSurfaceConfig? config;
+
+  /// focusNode API.
   final FocusNode? focusNode;
+
+  /// Function API.
   final Widget Function(BuildContext context, SheetEditorController controller)?
+  /// toolbarBuilder API.
   toolbarBuilder;
+
+  /// Function API.
   final Widget Function(BuildContext context, SheetEditorController controller)?
+  /// statusBarBuilder API.
   statusBarBuilder;
+
+  /// frozenRows API.
   final int frozenRows;
+
+  /// frozenCols API.
   final int frozenCols;
 
   @override
+  /// createState API.
   State<QudsSheetEditor> createState() => _QudsSheetEditorState();
 }
 
@@ -660,9 +698,11 @@ class _QudsSheetEditorState extends State<QudsSheetEditor> {
   Timer? _navRepeat;
   OverlayEntry? _contextMenu;
 
+  /// controller API.
   SheetEditorController get _c => widget.controller;
 
   @override
+  /// initState API.
   void initState() {
     super.initState();
     _ownsFocus = widget.focusNode == null;
@@ -680,6 +720,7 @@ class _QudsSheetEditorState extends State<QudsSheetEditor> {
   }
 
   @override
+  /// didUpdateWidget API.
   void didUpdateWidget(QudsSheetEditor oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.config != null && !identical(widget.config, _c.config)) {
@@ -700,6 +741,7 @@ class _QudsSheetEditorState extends State<QudsSheetEditor> {
   }
 
   @override
+  /// dispose API.
   void dispose() {
     _dismissContextMenu();
     _stopNavRepeat();
@@ -948,8 +990,7 @@ class _QudsSheetEditorState extends State<QudsSheetEditor> {
       );
       return true;
     }
-    if (event.logicalKey == LogicalKeyboardKey.home &&
-        !_c.cellEditor.editing) {
+    if (event.logicalKey == LogicalKeyboardKey.home && !_c.cellEditor.editing) {
       if (HardwareKeyboard.instance.isControlPressed ||
           HardwareKeyboard.instance.isMetaPressed) {
         _c.moveSelectionTo(const SmlCellRef(0, 0), extend: extend);
@@ -961,8 +1002,7 @@ class _QudsSheetEditorState extends State<QudsSheetEditor> {
       }
       return true;
     }
-    if (event.logicalKey == LogicalKeyboardKey.end &&
-        !_c.cellEditor.editing) {
+    if (event.logicalKey == LogicalKeyboardKey.end && !_c.cellEditor.editing) {
       if (HardwareKeyboard.instance.isControlPressed ||
           HardwareKeyboard.instance.isMetaPressed) {
         _c.moveSelectionTo(_c.lastUsedCell(), extend: extend);
@@ -1047,6 +1087,7 @@ class _QudsSheetEditorState extends State<QudsSheetEditor> {
   }
 
   @override
+  /// build API.
   Widget build(BuildContext context) {
     final OfficeSurfaceConfig config = widget.config ?? _c.config;
     final TextDirection direction = _c.sheet.rightToLeft
@@ -1133,7 +1174,9 @@ class _QudsSheetEditorState extends State<QudsSheetEditor> {
                     LogicalKeyboardKey.keyV,
                     control: true,
                     shift: true,
-                  ): const OfficePasteIntent(OfficePasteMode.keepTextOnly),
+                  ): const OfficePasteIntent(
+                    OfficePasteMode.keepTextOnly,
+                  ),
                 },
                 child: Actions(
                   actions: <Type, Action<Intent>>{
@@ -1151,11 +1194,11 @@ class _QudsSheetEditorState extends State<QudsSheetEditor> {
                     ),
                     OfficeSelectAllIntent:
                         CallbackAction<OfficeSelectAllIntent>(
-                      onInvoke: (_) {
-                        _c.selectAll();
-                        return null;
-                      },
-                    ),
+                          onInvoke: (_) {
+                            _c.selectAll();
+                            return null;
+                          },
+                        ),
                     _SheetMoveIntent: CallbackAction<_SheetMoveIntent>(
                       onInvoke: (_SheetMoveIntent i) {
                         _moveSheet(
@@ -1225,8 +1268,10 @@ class _QudsSheetEditorState extends State<QudsSheetEditor> {
                       onPointRef: _c.pointEditRef,
                       functionSuggestions: _c.functionSuggestions,
                       functionSuggestionIndex: _c.functionSuggestionIndex,
-                      functionTooltipArabic:
-                          identical(config.strings, OfficeStrings.arabic),
+                      functionTooltipArabic: identical(
+                        config.strings,
+                        OfficeStrings.arabic,
+                      ),
                       onHighlightFunction: _c.highlightFunctionSuggestion,
                       onApplyFunction: (int index) {
                         _c.applyFunctionSuggestion(index);
@@ -1266,6 +1311,7 @@ class _QudsSheetEditorState extends State<QudsSheetEditor> {
 
 /// Embeddable slide surface.
 class QudsSlideEditor extends StatefulWidget {
+  /// QudsSlideEditor API.
   const QudsSlideEditor({
     super.key,
     required this.controller,
@@ -1275,15 +1321,27 @@ class QudsSlideEditor extends StatefulWidget {
     this.statusBarBuilder,
   });
 
+  /// controller API.
   final SlideEditorController controller;
+
+  /// config API.
   final OfficeSurfaceConfig? config;
+
+  /// focusNode API.
   final FocusNode? focusNode;
+
+  /// Function API.
   final Widget Function(BuildContext context, SlideEditorController controller)?
+  /// toolbarBuilder API.
   toolbarBuilder;
+
+  /// Function API.
   final Widget Function(BuildContext context, SlideEditorController controller)?
+  /// statusBarBuilder API.
   statusBarBuilder;
 
   @override
+  /// createState API.
   State<QudsSlideEditor> createState() => _QudsSlideEditorState();
 }
 
@@ -1292,14 +1350,18 @@ class _QudsSlideEditorState extends State<QudsSlideEditor>
   late final FocusNode _focus;
   late final bool _ownsFocus;
   Ticker? _showTicker;
+
+  /// zero API.
   Duration _lastTick = Duration.zero;
   var _wasPlayingMotion = false;
   OverlayEntry? _showOverlay;
   OverlayEntry? _contextMenu;
 
+  /// controller API.
   SlideEditorController get _c => widget.controller;
 
   @override
+  /// initState API.
   void initState() {
     super.initState();
     _ownsFocus = widget.focusNode == null;
@@ -1318,6 +1380,7 @@ class _QudsSlideEditorState extends State<QudsSlideEditor>
   }
 
   @override
+  /// didUpdateWidget API.
   void didUpdateWidget(QudsSlideEditor oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.config != null && !identical(widget.config, _c.config)) {
@@ -1416,7 +1479,8 @@ class _QudsSlideEditorState extends State<QudsSlideEditor>
             semanticsValue: _c.semanticsValue,
             outgoingSlide: _c.slideShow?.outgoingSlide,
             transitionProgress: _c.slideShow?.transitionProgress ?? 1,
-            playingTransition: _c.slideShow?.playingTransition ??
+            playingTransition:
+                _c.slideShow?.playingTransition ??
                 (_c.slideShow?.currentSlide ?? _c.slide).transition,
             animSamples: _c.showSamples,
             presenting: true,
@@ -1503,6 +1567,7 @@ class _QudsSlideEditorState extends State<QudsSlideEditor>
   }
 
   @override
+  /// dispose API.
   void dispose() {
     _dismissContextMenu();
     _showOverlay?.remove();
@@ -1517,6 +1582,7 @@ class _QudsSlideEditorState extends State<QudsSlideEditor>
   }
 
   @override
+  /// build API.
   Widget build(BuildContext context) {
     final OfficeSurfaceConfig config = widget.config ?? _c.config;
     return Directionality(
@@ -1652,7 +1718,9 @@ class _QudsSlideEditorState extends State<QudsSlideEditor>
                     LogicalKeyboardKey.keyV,
                     control: true,
                     shift: true,
-                  ): const OfficePasteIntent(OfficePasteMode.keepTextOnly),
+                  ): const OfficePasteIntent(
+                    OfficePasteMode.keepTextOnly,
+                  ),
                 },
                 child: Actions(
                   actions: <Type, Action<Intent>>{
@@ -1670,11 +1738,11 @@ class _QudsSlideEditorState extends State<QudsSlideEditor>
                     ),
                     OfficeSelectAllIntent:
                         CallbackAction<OfficeSelectAllIntent>(
-                      onInvoke: (_) {
-                        _c.selectAll();
-                        return null;
-                      },
-                    ),
+                          onInvoke: (_) {
+                            _c.selectAll();
+                            return null;
+                          },
+                        ),
                     OfficeCopyIntent: CallbackAction<OfficeCopyIntent>(
                       onInvoke: (_) {
                         _c.copyToClipboard();
@@ -1724,18 +1792,15 @@ class _QudsSlideEditorState extends State<QudsSlideEditor>
                       editCaret: _c.textEditor.caretIndex,
                       editBase: _c.textEditor.selectionBase,
                       outgoingSlide: _c.slideShow?.outgoingSlide,
-                      transitionProgress:
-                          _c.slideShow?.transitionProgress ?? 1,
+                      transitionProgress: _c.slideShow?.transitionProgress ?? 1,
                       playingTransition: _c.isPlayingMotion
                           ? (_c.slideShow?.playingTransition ??
-                              (_c.slideShow?.currentSlide ?? _c.slide)
-                                  .transition)
+                                (_c.slideShow?.currentSlide ?? _c.slide)
+                                    .transition)
                           : null,
-                      animSamples:
-                          _c.isPlayingMotion ? _c.showSamples : null,
+                      animSamples: _c.isPlayingMotion ? _c.showSamples : null,
                       presenting: _c.isPlayingMotion,
-                      onShowAdvance:
-                          _c.isPresenting ? _c.showNext : _c.endShow,
+                      onShowAdvance: _c.isPresenting ? _c.showNext : _c.endShow,
                       onSelect: _c.selectShape,
                       onSelectTableCell: _c.selectTableCell,
                       selectedTableRow: _c.selectedTableRow,
@@ -1779,6 +1844,7 @@ class _QudsSlideEditorState extends State<QudsSlideEditor>
 
 /// Opens any Office package and hosts the matching editor, with chrome slots.
 class QudsOfficeHost extends StatefulWidget {
+  /// QudsOfficeHost API.
   const QudsOfficeHost({
     super.key,
     this.bytes,
@@ -1793,20 +1859,42 @@ class QudsOfficeHost extends StatefulWidget {
     this.onControllerReady,
   });
 
+  /// bytes API.
   final Uint8List? bytes;
+
+  /// password API.
   final String? password;
+
+  /// kind API.
   final OpcPackageKind? kind;
+
+  /// word API.
   final WordEditorController? word;
+
+  /// sheet API.
   final SheetEditorController? sheet;
+
+  /// slide API.
   final SlideEditorController? slide;
+
+  /// config API.
   final OfficeSurfaceConfig config;
+
+  /// Function API.
   final Widget Function(BuildContext context, OfficeController controller)?
+  /// toolbarBuilder API.
   toolbarBuilder;
+
+  /// Function API.
   final Widget Function(BuildContext context, OfficeController controller)?
+  /// statusBarBuilder API.
   statusBarBuilder;
+
+  /// Function API.
   final void Function(OfficeController controller)? onControllerReady;
 
   @override
+  /// createState API.
   State<QudsOfficeHost> createState() => _QudsOfficeHostState();
 }
 
@@ -1815,6 +1903,7 @@ class _QudsOfficeHostState extends State<QudsOfficeHost> {
   var _owns = false;
 
   @override
+  /// initState API.
   void initState() {
     super.initState();
     _controller = _create();
@@ -1873,6 +1962,7 @@ class _QudsOfficeHostState extends State<QudsOfficeHost> {
   }
 
   @override
+  /// dispose API.
   void dispose() {
     if (_owns) {
       _controller.dispose();
@@ -1881,6 +1971,7 @@ class _QudsOfficeHostState extends State<QudsOfficeHost> {
   }
 
   @override
+  /// build API.
   Widget build(BuildContext context) {
     final OfficeController controller = _controller;
     return switch (controller) {
@@ -1926,19 +2017,31 @@ class _QudsOfficeHostState extends State<QudsOfficeHost> {
 }
 
 class _MoveCaretIntent extends Intent {
+  /// extend API.
   const _MoveCaretIntent(this.delta, {this.extend = false});
+
+  /// delta API.
   final int delta;
+
+  /// extend API.
   final bool extend;
 }
 
 class _MoveParagraphIntent extends Intent {
+  /// extend API.
   const _MoveParagraphIntent(this.delta, {this.extend = false});
+
+  /// delta API.
   final int delta;
+
+  /// extend API.
   final bool extend;
 }
 
 class _DeleteIntent extends Intent {
   const _DeleteIntent({required this.backward});
+
+  /// backward API.
   final bool backward;
 }
 
@@ -1953,9 +2056,17 @@ class _SheetMoveIntent extends Intent {
     this.extend = false,
     this.leaveEdit = false,
   });
+
+  /// dc API.
   final int dc;
+
+  /// dr API.
   final int dr;
+
+  /// extend API.
   final bool extend;
+
+  /// leaveEdit API.
   final bool leaveEdit;
 }
 
@@ -1965,12 +2076,17 @@ class _SheetClearIntent extends Intent {
 
 class _NudgeIntent extends Intent {
   const _NudgeIntent(this.dx, this.dy);
+
+  /// dx API.
   final int dx;
+
+  /// dy API.
   final int dy;
 }
 
 /// Speaker-notes strip painted by a RenderBox (not a TextField / ListView).
 class SpeakerNotesBar extends LeafRenderObjectWidget {
+  /// SpeakerNotesBar API.
   const SpeakerNotesBar({
     super.key,
     required this.label,
@@ -1979,12 +2095,20 @@ class SpeakerNotesBar extends LeafRenderObjectWidget {
     this.fontFamily,
   });
 
+  /// label API.
   final String label;
+
+  /// notes API.
   final String notes;
+
+  /// theme API.
   final OfficeTheme theme;
+
+  /// fontFamily API.
   final String? fontFamily;
 
   @override
+  /// createRenderObject API.
   RenderObject createRenderObject(BuildContext context) {
     return RenderSpeakerNotesBar(
       label: label,
@@ -1995,6 +2119,7 @@ class SpeakerNotesBar extends LeafRenderObjectWidget {
   }
 
   @override
+  /// updateRenderObject API.
   void updateRenderObject(
     BuildContext context,
     RenderSpeakerNotesBar renderObject,
@@ -2007,22 +2132,22 @@ class SpeakerNotesBar extends LeafRenderObjectWidget {
   }
 }
 
+/// Class RenderSpeakerNotesBar.
 class RenderSpeakerNotesBar extends RenderBox {
+  /// RenderSpeakerNotesBar API.
   RenderSpeakerNotesBar({
-    required String label,
-    required String notes,
-    required OfficeTheme theme,
-    String? fontFamily,
-  }) : _label = label,
-       _notes = notes,
-       _theme = theme,
-       _fontFamily = fontFamily;
+    required this._label,
+    required this._notes,
+    required this._theme,
+    this._fontFamily,
+  });
 
   String _label;
   String _notes;
   OfficeTheme _theme;
   String? _fontFamily;
 
+  /// label API.
   set label(String value) {
     if (_label == value) {
       return;
@@ -2031,6 +2156,7 @@ class RenderSpeakerNotesBar extends RenderBox {
     markNeedsPaint();
   }
 
+  /// notes API.
   set notes(String value) {
     if (_notes == value) {
       return;
@@ -2039,6 +2165,7 @@ class RenderSpeakerNotesBar extends RenderBox {
     markNeedsPaint();
   }
 
+  /// theme API.
   set theme(OfficeTheme value) {
     if (_theme == value) {
       return;
@@ -2047,6 +2174,7 @@ class RenderSpeakerNotesBar extends RenderBox {
     markNeedsPaint();
   }
 
+  /// fontFamily API.
   set fontFamily(String? value) {
     if (_fontFamily == value) {
       return;
@@ -2056,11 +2184,13 @@ class RenderSpeakerNotesBar extends RenderBox {
   }
 
   @override
+  /// performLayout API.
   void performLayout() {
     size = constraints.constrain(Size(constraints.maxWidth, 72));
   }
 
   @override
+  /// paint API.
   void paint(PaintingContext context, Offset offset) {
     final Canvas canvas = context.canvas;
     canvas.drawRect(offset & size, Paint()..color = _theme.chromeFill);

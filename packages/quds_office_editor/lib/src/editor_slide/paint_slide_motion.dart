@@ -5,6 +5,7 @@ import 'package:quds_office_engine/quds_office_engine.dart';
 
 /// Canvas compositing for PowerPoint-like slide transitions and shape samples.
 class PaintSlideMotion {
+  /// applyShapeSample API.
   static void applyShapeSample(Canvas canvas, Rect rect, PmlAnimSample sample) {
     if (!sample.visible || sample.opacity <= 0.01) {
       return;
@@ -35,6 +36,7 @@ class PaintSlideMotion {
     }
   }
 
+  /// restoreShapeSample API.
   static void restoreShapeSample(Canvas canvas, PmlAnimSample sample) {
     if (!sample.visible || sample.opacity <= 0.01) {
       return;
@@ -47,6 +49,7 @@ class PaintSlideMotion {
     }
   }
 
+  /// paintTransition API.
   static void paintTransition({
     required Canvas canvas,
     required Size size,
@@ -76,10 +79,11 @@ class PaintSlideMotion {
           canvas.drawRect(
             Offset.zero & size,
             Paint()
-              ..color = (transition.kind == PmlTransitionKind.flash
-                      ? const Color(0xFFFFFFFF)
-                      : const Color(0xFF000000))
-                  .withValues(alpha: p * 2),
+              ..color =
+                  (transition.kind == PmlTransitionKind.flash
+                          ? const Color(0xFFFFFFFF)
+                          : const Color(0xFF000000))
+                      .withValues(alpha: p * 2),
           );
         } else {
           canvas.drawRect(Offset.zero & size, Paint()..color = background);
@@ -115,8 +119,9 @@ class PaintSlideMotion {
         canvas.save();
         final Offset c = Offset(size.width / 2, size.height / 2);
         canvas.translate(c.dx, c.dy);
-        final double s =
-            transition.kind == PmlTransitionKind.newsflash ? 0.4 + 0.6 * p : p;
+        final double s = transition.kind == PmlTransitionKind.newsflash
+            ? 0.4 + 0.6 * p
+            : p;
         canvas.scale(s <= 0.01 ? 0.01 : s);
         if (transition.kind == PmlTransitionKind.newsflash) {
           canvas.rotate((1 - p) * 0.45);
@@ -156,7 +161,8 @@ class PaintSlideMotion {
     void Function(Canvas canvas) incoming,
   ) {
     final Offset delta = _dirDelta(transition.direction, size);
-    final bool incomingMoves = transition.kind != PmlTransitionKind.uncover &&
+    final bool incomingMoves =
+        transition.kind != PmlTransitionKind.uncover &&
         transition.kind != PmlTransitionKind.reveal;
     final bool outgoingMoves = transition.kind != PmlTransitionKind.cover;
     if (outgoingMoves) {
@@ -187,10 +193,10 @@ class PaintSlideMotion {
       PmlTransitionDir.left ||
       PmlTransitionDir.horizontal ||
       PmlTransitionDir.inward ||
-      PmlTransitionDir.outward =>
-        Offset(size.width, 0),
+      PmlTransitionDir.outward => Offset(size.width, 0),
       PmlTransitionDir.right => Offset(-size.width, 0),
-      PmlTransitionDir.up || PmlTransitionDir.vertical => Offset(0, size.height),
+      PmlTransitionDir.up ||
+      PmlTransitionDir.vertical => Offset(0, size.height),
       PmlTransitionDir.down => Offset(0, -size.height),
     };
   }
@@ -216,18 +222,23 @@ class PaintSlideMotion {
         canvas.clipPath(_stripsPath(full, p));
       case PmlTransitionKind.checkerboard:
       case PmlTransitionKind.dissolve:
-        canvas.clipPath(_cellsPath(full, p, dissolve: transition.kind == PmlTransitionKind.dissolve));
+        canvas.clipPath(
+          _cellsPath(
+            full,
+            p,
+            dissolve: transition.kind == PmlTransitionKind.dissolve,
+          ),
+        );
       case PmlTransitionKind.clock:
         canvas.clipPath(_clockPath(full, p));
       case PmlTransitionKind.shapeCircle:
         canvas.clipPath(
-          Path()
-            ..addOval(
-              Rect.fromCircle(
-                center: full.center,
-                radius: full.longestSide * p * 0.75,
-              ),
+          Path()..addOval(
+            Rect.fromCircle(
+              center: full.center,
+              radius: full.longestSide * p * 0.75,
             ),
+          ),
         );
       case PmlTransitionKind.shapeDiamond:
         canvas.clipPath(_diamondPath(full, p));
@@ -240,19 +251,33 @@ class PaintSlideMotion {
 
   static Rect _wipeRect(Rect full, PmlTransitionDir dir, double p) {
     return switch (dir) {
-      PmlTransitionDir.right =>
-        Rect.fromLTWH(full.right - full.width * p, full.top, full.width * p, full.height),
-      PmlTransitionDir.up =>
-        Rect.fromLTWH(full.left, full.top, full.width, full.height * p),
-      PmlTransitionDir.down =>
-        Rect.fromLTWH(full.left, full.bottom - full.height * p, full.width, full.height * p),
+      PmlTransitionDir.right => Rect.fromLTWH(
+        full.right - full.width * p,
+        full.top,
+        full.width * p,
+        full.height,
+      ),
+      PmlTransitionDir.up => Rect.fromLTWH(
+        full.left,
+        full.top,
+        full.width,
+        full.height * p,
+      ),
+      PmlTransitionDir.down => Rect.fromLTWH(
+        full.left,
+        full.bottom - full.height * p,
+        full.width,
+        full.height * p,
+      ),
       _ => Rect.fromLTWH(full.left, full.top, full.width * p, full.height),
     };
   }
 
   static Path _splitPath(Rect full, PmlTransitionDir dir, double p) {
     final Path path = Path();
-    if (dir == PmlTransitionDir.vertical || dir == PmlTransitionDir.up || dir == PmlTransitionDir.down) {
+    if (dir == PmlTransitionDir.vertical ||
+        dir == PmlTransitionDir.up ||
+        dir == PmlTransitionDir.down) {
       final double h = full.height * p / 2;
       path
         ..addRect(Rect.fromLTWH(full.left, full.top, full.width, h))
@@ -269,7 +294,8 @@ class PaintSlideMotion {
   static Path _barsPath(Rect full, PmlSlideTransition t, double p) {
     final Path path = Path();
     const int n = 12;
-    final bool vert = t.direction == PmlTransitionDir.up ||
+    final bool vert =
+        t.direction == PmlTransitionDir.up ||
         t.direction == PmlTransitionDir.down ||
         t.direction == PmlTransitionDir.vertical;
     for (int i = 0; i < n; i++) {
@@ -282,11 +308,15 @@ class PaintSlideMotion {
       if (vert) {
         final double h = full.height / n;
         final double left = flip ? full.right - full.width * local : full.left;
-        path.addRect(Rect.fromLTWH(left, full.top + i * h, full.width * local, h));
+        path.addRect(
+          Rect.fromLTWH(left, full.top + i * h, full.width * local, h),
+        );
       } else {
         final double w = full.width / n;
         final double top = flip ? full.bottom - full.height * local : full.top;
-        path.addRect(Rect.fromLTWH(full.left + i * w, top, w, full.height * local));
+        path.addRect(
+          Rect.fromLTWH(full.left + i * w, top, w, full.height * local),
+        );
       }
     }
     return path;
@@ -298,7 +328,12 @@ class PaintSlideMotion {
     for (int i = 0; i < n; i++) {
       final double y = full.top + i * (full.height / n);
       path.addRect(
-        Rect.fromLTWH(full.left, y, full.width * ((p + i / n) / 2).clamp(0, 1), full.height / n),
+        Rect.fromLTWH(
+          full.left,
+          y,
+          full.width * ((p + i / n) / 2).clamp(0, 1),
+          full.height / n,
+        ),
       );
     }
     return path;
@@ -316,7 +351,14 @@ class PaintSlideMotion {
             ? ((r * 13 + c * 7) % 17) / 17
             : ((r + c) / (rows + cols - 2));
         if (p >= thresh) {
-          path.addRect(Rect.fromLTWH(full.left + c * cw, full.top + r * ch, cw + 0.5, ch + 0.5));
+          path.addRect(
+            Rect.fromLTWH(
+              full.left + c * cw,
+              full.top + r * ch,
+              cw + 0.5,
+              ch + 0.5,
+            ),
+          );
         }
       }
     }
@@ -355,7 +397,11 @@ class PaintSlideMotion {
         Rect.fromCenter(center: full.center, width: full.width * p, height: bh),
       )
       ..addRect(
-        Rect.fromCenter(center: full.center, width: bw, height: full.height * p),
+        Rect.fromCenter(
+          center: full.center,
+          width: bw,
+          height: full.height * p,
+        ),
       );
     return path;
   }

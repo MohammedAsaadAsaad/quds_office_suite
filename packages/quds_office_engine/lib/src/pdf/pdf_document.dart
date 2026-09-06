@@ -13,12 +13,19 @@ import 'pdf_stream.dart';
 
 /// Native PDF 1.7 compiler.
 class PdfDocument {
+  /// PdfDocument API.
   PdfDocument({this.title = 'Quds Office', this.author = ''});
 
+  /// title API.
   final String title;
+
+  /// author API.
   final String author;
+
+  /// pages API.
   final List<PdfPage> pages = <PdfPage>[];
 
+  /// addPage API.
   void addPage(PdfPage page) => pages.add(page);
 
   /// Lays out [document] and emits a PDF with an optional embedded [font].
@@ -26,8 +33,7 @@ class PdfDocument {
     WmlDocument document, {
     SfntFont? font,
     String title = 'Quds Office',
-  }) =>
-      OfficePdfExport.word(document, font: font, title: title);
+  }) => OfficePdfExport.word(document, font: font, title: title);
 
   /// Landscape page per slide from a PPTX archive.
   static Uint8List fromPptx(
@@ -35,30 +41,28 @@ class PdfDocument {
     SfntFont? font,
     String title = 'Quds Office',
     String? password,
-  }) =>
-      OfficePdfExport.fromBytes(
-        bytes,
-        font: font,
-        title: title,
-        password: password,
-      );
+  }) => OfficePdfExport.fromBytes(
+    bytes,
+    font: font,
+    title: title,
+    password: password,
+  );
 
   /// Print-layout PDF for every worksheet in [book].
   static Uint8List fromWorkbook(
     SmlWorkbook book, {
     SfntFont? font,
     String title = 'Quds Office',
-  }) =>
-      OfficePdfExport.workbook(book, font: font, title: title);
+  }) => OfficePdfExport.workbook(book, font: font, title: title);
 
   /// One PDF page per slide from an in-memory deck.
   static Uint8List fromPresentation(
     PmlPresentation deck, {
     SfntFont? font,
     String title = 'Quds Office',
-  }) =>
-      OfficePdfExport.presentation(deck, font: font, title: title);
+  }) => OfficePdfExport.presentation(deck, font: font, title: title);
 
+  /// save API.
   Uint8List save({FontSubset? subset, SfntFont? font}) {
     final List<_PdfObj> objects = <_PdfObj>[];
     int nextId = 1;
@@ -98,13 +102,9 @@ class PdfDocument {
       ),
     );
 
-    final String kids =
-        pageIds.map((int id) => '$id 0 R').join(' ');
+    final String kids = pageIds.map((int id) => '$id 0 R').join(' ');
     objects.add(
-      _PdfObj(
-        pagesId,
-        '<</Type /Pages/Count ${pages.length}/Kids [$kids]>>',
-      ),
+      _PdfObj(pagesId, '<</Type /Pages/Count ${pages.length}/Kids [$kids]>>'),
     );
 
     if (subset != null &&
@@ -136,10 +136,7 @@ class PdfDocument {
       final PdfPage page = pages[i];
       for (int j = 0; j < page.links.length; j++) {
         objects.add(
-          _PdfObj(
-            pageAnnotIds[i][j],
-            _linkDict(page.links[j], page, pageIds),
-          ),
+          _PdfObj(pageAnnotIds[i][j], _linkDict(page.links[j], page, pageIds)),
         );
       }
     }
@@ -153,7 +150,8 @@ class PdfDocument {
             _PdfObj.rawStream(
               id,
               img.bytes,
-              extra: '/Type /XObject/Subtype /Image/Width ${img.width}'
+              extra:
+                  '/Type /XObject/Subtype /Image/Width ${img.width}'
                   '/Height ${img.height}/ColorSpace /DeviceRGB'
                   '/BitsPerComponent 8/Filter /DCTDecode',
             ),
@@ -163,7 +161,8 @@ class PdfDocument {
             _PdfObj.stream(
               id,
               img.bytes,
-              extra: '/Type /XObject/Subtype /Image/Width ${img.width}'
+              extra:
+                  '/Type /XObject/Subtype /Image/Width ${img.width}'
                   '/Height ${img.height}/ColorSpace /DeviceRGB'
                   '/BitsPerComponent 8',
             ),
@@ -197,9 +196,7 @@ class PdfDocument {
       objects.add(_PdfObj.stream(contentIds[i], page.content));
     }
 
-    objects.add(
-      _PdfObj(catalogId, '<</Type /Catalog/Pages $pagesId 0 R>>'),
-    );
+    objects.add(_PdfObj(catalogId, '<</Type /Catalog/Pages $pagesId 0 R>>'));
 
     objects.sort((a, b) => a.id - b.id);
     final BytesBuilder body = BytesBuilder(copy: false);
@@ -282,7 +279,9 @@ class PdfDocument {
   }
 }
 
+/// Class PdfEmbeddedImage.
 class PdfEmbeddedImage {
+  /// PdfEmbeddedImage API.
   const PdfEmbeddedImage({
     required this.name,
     required this.width,
@@ -291,14 +290,25 @@ class PdfEmbeddedImage {
     this.jpeg = false,
   });
 
+  /// name API.
   final String name;
+
+  /// width API.
   final int width;
+
+  /// height API.
   final int height;
+
+  /// bytes API.
   final Uint8List bytes;
+
+  /// jpeg API.
   final bool jpeg;
 }
 
+/// Class PdfLinkAnnot.
 class PdfLinkAnnot {
+  /// PdfLinkAnnot API.
   const PdfLinkAnnot({
     required this.x,
     required this.y,
@@ -310,17 +320,34 @@ class PdfLinkAnnot {
     this.file,
   });
 
+  /// x API.
   final double x;
+
+  /// y API.
   final double y;
+
+  /// width API.
   final double width;
+
+  /// height API.
   final double height;
+
+  /// uri API.
   final String? uri;
+
+  /// destPage API.
   final int? destPage;
+
+  /// destY API.
   final double? destY;
+
+  /// file API.
   final String? file;
 }
 
+/// Class PdfPage.
 class PdfPage {
+  /// PdfPage API.
   PdfPage({
     required this.width,
     required this.height,
@@ -329,35 +356,56 @@ class PdfPage {
     this.links = const <PdfLinkAnnot>[],
   });
 
+  /// width API.
   final double width;
+
+  /// height API.
   final double height;
+
+  /// content API.
   final Uint8List content;
+
+  /// images API.
   final List<PdfEmbeddedImage> images;
+
+  /// links API.
   final List<PdfLinkAnnot> links;
 }
 
 class _PdfObj {
+  /// stream API.
   _PdfObj(this.id, this.dict) : stream = null, extra = '';
 
+  /// stream API.
   _PdfObj.stream(this.id, List<int> data, {this.extra = ''})
-      : dict = '',
-        stream = PdfFlate.compress(data);
+    : dict = '',
+      stream = PdfFlate.compress(data);
 
+  /// rawStream API.
   _PdfObj.rawStream(this.id, List<int> data, {this.extra = ''})
-      : dict = '',
-        stream = data is Uint8List ? data : Uint8List.fromList(data);
+    : dict = '',
+      stream = data is Uint8List ? data : Uint8List.fromList(data);
 
+  /// id API.
   final int id;
+
+  /// dict API.
   final String dict;
+
+  /// stream API.
   final Uint8List? stream;
+
+  /// extra API.
   final String extra;
 
+  /// serialize API.
   Uint8List serialize() {
     if (stream == null) {
       return utf8.encode('$id 0 obj\n$dict\nendobj\n');
     }
-    final String filter =
-        extra.contains('/Filter') ? '' : '/Filter /FlateDecode ';
+    final String filter = extra.contains('/Filter')
+        ? ''
+        : '/Filter /FlateDecode ';
     final String header =
         '$id 0 obj\n<</Length ${stream!.length}$filter$extra>>\nstream\n';
     final BytesBuilder b = BytesBuilder(copy: false);

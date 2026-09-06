@@ -10,6 +10,7 @@ import '../opc/zip/zip_reader.dart';
 import '../xml/namespaces.dart';
 import '../xml/xml_reader.dart';
 
+/// Enum OfficeExtractKind.
 enum OfficeExtractKind {
   word,
   sheet,
@@ -21,7 +22,9 @@ enum OfficeExtractKind {
   unknown,
 }
 
+/// Class OfficeExtractSlide.
 class OfficeExtractSlide {
+  /// OfficeExtractSlide API.
   const OfficeExtractSlide({
     required this.title,
     required this.body,
@@ -29,24 +32,39 @@ class OfficeExtractSlide {
     this.tables = const <List<List<String>>>[],
   });
 
+  /// title API.
   final String title;
+
+  /// body API.
   final List<String> body;
+
+  /// notes API.
   final String notes;
+
+  /// tables API.
   final List<List<List<String>>> tables;
 }
 
+/// Class OfficeExtractSheet.
 class OfficeExtractSheet {
+  /// OfficeExtractSheet API.
   const OfficeExtractSheet({required this.name, required this.rows});
 
+  /// name API.
   final String name;
+
+  /// rows API.
   final List<List<String>> rows;
 
+  /// tsv API.
   String get tsv {
     return rows.map((List<String> r) => r.join('\t')).join('\n');
   }
 }
 
+/// Class OfficeTextExtract.
 class OfficeTextExtract {
+  /// OfficeTextExtract API.
   const OfficeTextExtract({
     required this.kind,
     this.paragraphs = const <String>[],
@@ -56,13 +74,25 @@ class OfficeTextExtract {
     this.clipped = false,
   });
 
+  /// kind API.
   final OfficeExtractKind kind;
+
+  /// paragraphs API.
   final List<String> paragraphs;
+
+  /// tables API.
   final List<List<List<String>>> tables;
+
+  /// slides API.
   final List<OfficeExtractSlide> slides;
+
+  /// sheets API.
   final List<OfficeExtractSheet> sheets;
+
+  /// clipped API.
   final bool clipped;
 
+  /// plainString API.
   String get plainString {
     final StringBuffer buf = StringBuffer();
     for (final String p in paragraphs) {
@@ -101,6 +131,7 @@ class OfficeTextExtract {
 /// not a cheap text source). Callers receive [OfficeExtractKind.pdf] with
 /// empty paragraphs.
 abstract final class OfficeTextExtractor {
+  /// extract API.
   static OfficeTextExtract extract(
     Uint8List bytes, {
     String? name,
@@ -115,12 +146,13 @@ abstract final class OfficeTextExtractor {
       OfficeExtractKind.slide => _pptx(bytes, password: password),
       OfficeExtractKind.opendocumentText ||
       OfficeExtractKind.opendocumentSheet ||
-      OfficeExtractKind.opendocumentPresentation =>
-        _odf(bytes, kind),
-      OfficeExtractKind.pdf => const OfficeTextExtract(kind: OfficeExtractKind.pdf),
+      OfficeExtractKind.opendocumentPresentation => _odf(bytes, kind),
+      OfficeExtractKind.pdf => const OfficeTextExtract(
+        kind: OfficeExtractKind.pdf,
+      ),
       OfficeExtractKind.unknown => const OfficeTextExtract(
-          kind: OfficeExtractKind.unknown,
-        ),
+        kind: OfficeExtractKind.unknown,
+      ),
     };
     if (maxChars == null || maxChars <= 0) {
       return raw;
@@ -208,7 +240,10 @@ abstract final class OfficeTextExtractor {
   }
 
   static OfficeTextExtract _xlsx(Uint8List bytes, {String? password}) {
-    final List<XlsxNamedSheet> all = XlsxGridReader.readAll(bytes, password: password);
+    final List<XlsxNamedSheet> all = XlsxGridReader.readAll(
+      bytes,
+      password: password,
+    );
     return OfficeTextExtract(
       kind: OfficeExtractKind.sheet,
       sheets: <OfficeExtractSheet>[
@@ -221,11 +256,14 @@ abstract final class OfficeTextExtractor {
   static OfficeTextExtract _pptx(Uint8List bytes, {String? password}) {
     final OpcPackage package = OpcPackage.openBytes(bytes, password: password);
     final List<OfficeExtractSlide> slides = <OfficeExtractSlide>[];
-    final List<String> names = package.partNames
-        .where((String n) =>
-            n.startsWith('/ppt/slides/slide') && n.endsWith('.xml'))
-        .toList()
-      ..sort();
+    final List<String> names =
+        package.partNames
+            .where(
+              (String n) =>
+                  n.startsWith('/ppt/slides/slide') && n.endsWith('.xml'),
+            )
+            .toList()
+          ..sort();
     for (final String uri in names) {
       final PackagePart? part = package.getPart(uri);
       if (part == null) {
@@ -236,8 +274,9 @@ abstract final class OfficeTextExtractor {
       final List<List<List<String>>> tables = _drawingTables(xml);
       String notes = '';
       final RelationshipCollection rels = package.relationshipsFor(uri);
-      final PackageRelationship? notesRel =
-          rels.firstByType(RelationshipTypes.notesSlide);
+      final PackageRelationship? notesRel = rels.firstByType(
+        RelationshipTypes.notesSlide,
+      );
       if (notesRel != null) {
         final PackagePart? notesPart = package.getPart(rels.resolve(notesRel));
         if (notesPart != null) {
@@ -290,7 +329,10 @@ abstract final class OfficeTextExtractor {
       return OfficeTextExtract(
         kind: kind,
         sheets: <OfficeExtractSheet>[
-          OfficeExtractSheet(name: 'Sheet1', rows: tables.isEmpty ? const <List<String>>[] : tables.first),
+          OfficeExtractSheet(
+            name: 'Sheet1',
+            rows: tables.isEmpty ? const <List<String>>[] : tables.first,
+          ),
         ],
         tables: tables,
       );
@@ -301,13 +343,19 @@ abstract final class OfficeTextExtractor {
         slides: <OfficeExtractSlide>[
           OfficeExtractSlide(
             title: paragraphs.isEmpty ? '' : paragraphs.first,
-            body: paragraphs.length <= 1 ? const <String>[] : paragraphs.sublist(1),
+            body: paragraphs.length <= 1
+                ? const <String>[]
+                : paragraphs.sublist(1),
             tables: tables,
           ),
         ],
       );
     }
-    return OfficeTextExtract(kind: kind, paragraphs: paragraphs, tables: tables);
+    return OfficeTextExtract(
+      kind: kind,
+      paragraphs: paragraphs,
+      tables: tables,
+    );
   }
 
   static String _odfPlain(XmlPullReader reader) {

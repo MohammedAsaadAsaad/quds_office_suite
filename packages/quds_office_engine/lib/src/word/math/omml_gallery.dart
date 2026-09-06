@@ -3,6 +3,7 @@ import 'omml_linear.dart';
 
 /// Built-in Equation gallery matching the Word Insert → Equation list.
 class OmmlGalleryItem {
+  /// OmmlGalleryItem API.
   const OmmlGalleryItem({
     required this.id,
     required this.en,
@@ -10,20 +11,31 @@ class OmmlGalleryItem {
     required this.linear,
   });
 
+  /// id API.
   final String id;
+
+  /// en API.
   final String en;
+
+  /// ar API.
   final String ar;
+
+  /// linear API.
   final String linear;
 
+  /// build API.
   OmmlEquation build() => OmmlEquation(
-        root: OmmlLinear.parse(linear),
-        display: OmmlDisplay.display,
-      );
+    root: OmmlLinear.parse(linear),
+    display: OmmlDisplay.display,
+  );
 
+  /// title API.
   String title({required bool arabic}) => arabic ? ar : en;
 }
 
+/// Class OmmlGallery.
 abstract final class OmmlGallery {
+  /// items API.
   static const List<OmmlGalleryItem> items = <OmmlGalleryItem>[
     OmmlGalleryItem(
       id: 'blank',
@@ -99,6 +111,7 @@ abstract final class OmmlGallery {
     ),
   ];
 
+  /// byId API.
   static OmmlGalleryItem byId(String id) {
     for (final OmmlGalleryItem item in items) {
       if (item.id == id) {

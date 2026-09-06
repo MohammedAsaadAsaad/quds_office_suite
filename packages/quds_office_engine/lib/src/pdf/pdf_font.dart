@@ -6,6 +6,7 @@ import '../fonts/sfnt_parser.dart';
 
 /// Type 0 / CIDFontType2 + Identity-H + ToUnicode CMap for a subset TTF.
 class PdfCidFont {
+  /// PdfCidFont API.
   PdfCidFont({
     required this.fontFile,
     required this.toUnicodeCmap,
@@ -21,19 +22,43 @@ class PdfCidFont {
     required this.dw,
   });
 
+  /// fontFile API.
   final Uint8List fontFile;
+
+  /// toUnicodeCmap API.
   final String toUnicodeCmap;
+
+  /// baseName API.
   final String baseName;
+
+  /// ascent API.
   final int ascent;
+
+  /// descent API.
   final int descent;
+
+  /// capHeight API.
   final int capHeight;
+
+  /// flags API.
   final int flags;
+
+  /// bbox API.
   final List<int> bbox;
+
+  /// italicAngle API.
   final int italicAngle;
+
+  /// stemV API.
   final int stemV;
+
+  /// widths API.
   final List<int> widths;
+
+  /// dw API.
   final int dw;
 
+  /// build API.
   factory PdfCidFont.build(FontSubset subset, SfntFont source) {
     final SfntFont parsed = SfntFont.parse(subset.bytes);
     final List<int> widths = <int>[
@@ -43,7 +68,9 @@ class PdfCidFont {
     return PdfCidFont(
       fontFile: subset.bytes,
       toUnicodeCmap: _toUnicode(subset.unicodeToNewGlyph),
-      baseName: _sanitize(parsed.familyName.isEmpty ? 'QudsSubset' : parsed.familyName),
+      baseName: _sanitize(
+        parsed.familyName.isEmpty ? 'QudsSubset' : parsed.familyName,
+      ),
       ascent: _toPdfWidth(parsed.ascender, parsed.unitsPerEm),
       descent: _toPdfWidth(parsed.descender, parsed.unitsPerEm),
       capHeight: _toPdfWidth(parsed.capHeight, parsed.unitsPerEm),
@@ -61,10 +88,12 @@ class PdfCidFont {
     );
   }
 
+  /// type0Dict API.
   String type0Dict(int cidId, int toUnicodeId) =>
       '<</Type /Font/Subtype /Type0/BaseFont /$baseName/Encoding /Identity-H'
       '/DescendantFonts [$cidId 0 R]/ToUnicode $toUnicodeId 0 R>>';
 
+  /// cidFontDict API.
   String cidFontDict(int descId) {
     final String w = _widthsArray();
     return '<</Type /Font/Subtype /CIDFontType2/BaseFont /$baseName'
@@ -72,6 +101,7 @@ class PdfCidFont {
         '/FontDescriptor $descId 0 R/DW $dw/W $w/CIDToGIDMap /Identity>>';
   }
 
+  /// descriptorDict API.
   String descriptorDict(int fileId) =>
       '<</Type /FontDescriptor/FontName /$baseName/Flags $flags'
       '/FontBBox [${bbox.join(' ')}]/ItalicAngle $italicAngle'

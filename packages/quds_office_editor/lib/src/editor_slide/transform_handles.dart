@@ -1,25 +1,33 @@
 import 'dart:math' as math;
 import 'dart:ui';
 
+/// Class TransformHandles.
 class TransformHandles {
+  /// TransformHandles API.
   const TransformHandles(this.bounds, {this.rotation = 0});
 
+  /// bounds API.
   final Rect bounds;
+
+  /// rotation API.
   final double rotation;
 
+  /// points API.
   List<Offset> get points => <Offset>[
-        bounds.topLeft,
-        Offset(bounds.center.dx, bounds.top),
-        bounds.topRight,
-        Offset(bounds.right, bounds.center.dy),
-        bounds.bottomRight,
-        Offset(bounds.center.dx, bounds.bottom),
-        bounds.bottomLeft,
-        Offset(bounds.left, bounds.center.dy),
-      ];
+    bounds.topLeft,
+    Offset(bounds.center.dx, bounds.top),
+    bounds.topRight,
+    Offset(bounds.right, bounds.center.dy),
+    bounds.bottomRight,
+    Offset(bounds.center.dx, bounds.bottom),
+    bounds.bottomLeft,
+    Offset(bounds.left, bounds.center.dy),
+  ];
 
+  /// rotateHandle API.
   Offset get rotateHandle => Offset(bounds.center.dx, bounds.top - 18);
 
+  /// hit API.
   int? hit(Offset p, {double radius = 10}) {
     for (int i = 0; i < points.length; i++) {
       if ((points[i] - p).distance <= radius) {
@@ -32,6 +40,7 @@ class TransformHandles {
     return null;
   }
 
+  /// paint API.
   void paint(
     Canvas canvas, {
     Color strokeColor = const Color(0xFF2E75B6),
@@ -64,7 +73,11 @@ class TransformHandles {
       );
     }
     if (showRotate) {
-      canvas.drawLine(Offset(bounds.center.dx, bounds.top), rotateHandle, stroke);
+      canvas.drawLine(
+        Offset(bounds.center.dx, bounds.top),
+        rotateHandle,
+        stroke,
+      );
       canvas.drawCircle(rotateHandle, 4, Paint()..color = strokeColor);
     }
   }

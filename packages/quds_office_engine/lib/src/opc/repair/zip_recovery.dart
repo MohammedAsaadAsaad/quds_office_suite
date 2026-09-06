@@ -23,6 +23,7 @@ abstract final class ZipRecovery {
     return -1;
   }
 
+  /// stripLeadingJunk API.
   static Uint8List stripLeadingJunk(Uint8List bytes) {
     final int start = firstLocalHeader(bytes);
     if (start <= 0) {
@@ -31,13 +32,16 @@ abstract final class ZipRecovery {
     return Uint8List.sublistView(bytes, start);
   }
 
+  /// tryOpen API.
   static ZipReader? tryOpen(Uint8List bytes) {
     return ZipReader.tryOpen(MemoryByteSource(bytes));
   }
 
   /// Rebuilds a ZIP by walking local file headers (used when EOCD is gone).
   static Uint8List? rebuildFromLocalHeaders(Uint8List bytes) {
-    final List<({String name, Uint8List data})> members = scanLocalMembers(bytes);
+    final List<({String name, Uint8List data})> members = scanLocalMembers(
+      bytes,
+    );
     if (members.isEmpty) {
       return null;
     }
@@ -48,12 +52,16 @@ abstract final class ZipRecovery {
     return writer.close();
   }
 
-  static List<({String name, Uint8List data})> scanLocalMembers(Uint8List bytes) {
+  /// scanLocalMembers API.
+  static List<({String name, Uint8List data})> scanLocalMembers(
+    Uint8List bytes,
+  ) {
     final List<({String name, Uint8List data})> out =
         <({String name, Uint8List data})>[];
     var i = 0;
     while (i + 30 <= bytes.length) {
-      final int sig = bytes[i] |
+      final int sig =
+          bytes[i] |
           (bytes[i + 1] << 8) |
           (bytes[i + 2] << 16) |
           (bytes[i + 3] << 24);
@@ -100,8 +108,11 @@ abstract final class ZipRecovery {
         i++;
         continue;
       }
-      final Uint8List payload =
-          Uint8List.sublistView(bytes, dataStart, dataStart + comp);
+      final Uint8List payload = Uint8List.sublistView(
+        bytes,
+        dataStart,
+        dataStart + comp,
+      );
       Uint8List raw;
       try {
         raw = method == zipMethodDeflate

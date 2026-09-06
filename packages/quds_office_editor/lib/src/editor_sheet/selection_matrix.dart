@@ -1,15 +1,24 @@
 import 'package:quds_office_engine/quds_office_engine.dart';
 
+/// Enum SheetSelectionKind.
 enum SheetSelectionKind { cells, rows, columns }
 
+/// Class SelectionMatrix.
 class SelectionMatrix {
+  /// SelectionMatrix API.
   SelectionMatrix({this.anchor = const SmlCellRef(0, 0), SmlCellRef? focus})
-      : focus = focus ?? const SmlCellRef(0, 0);
+    : focus = focus ?? const SmlCellRef(0, 0);
 
+  /// anchor API.
   SmlCellRef anchor;
+
+  /// focus API.
   SmlCellRef focus;
+
+  /// kind API.
   SheetSelectionKind kind = SheetSelectionKind.cells;
 
+  /// range API.
   SmlRange get range {
     if (kind == SheetSelectionKind.rows) {
       final int r0 = anchor.row < focus.row ? anchor.row : focus.row;
@@ -30,6 +39,7 @@ class SelectionMatrix {
     return SmlRange(anchor, focus);
   }
 
+  /// contains API.
   bool contains(SmlCellRef ref) {
     if (kind == SheetSelectionKind.rows) {
       final int r0 = anchor.row < focus.row ? anchor.row : focus.row;
@@ -48,11 +58,13 @@ class SelectionMatrix {
     return ref.row >= r0 && ref.row <= r1 && ref.col >= c0 && ref.col <= c1;
   }
 
+  /// selectCell API.
   void selectCell(SmlCellRef ref) {
     kind = SheetSelectionKind.cells;
     anchor = focus = ref;
   }
 
+  /// extendTo API.
   void extendTo(SmlCellRef ref) {
     if (kind == SheetSelectionKind.rows) {
       extendRowsTo(ref.row);
@@ -65,6 +77,7 @@ class SelectionMatrix {
     focus = ref;
   }
 
+  /// selectRow API.
   void selectRow(int row) {
     kind = SheetSelectionKind.rows;
     final int r = row.clamp(0, SmlWorksheet.excelRowCount - 1);
@@ -72,6 +85,7 @@ class SelectionMatrix {
     focus = SmlCellRef(0, r);
   }
 
+  /// selectColumn API.
   void selectColumn(int col) {
     kind = SheetSelectionKind.columns;
     final int c = col.clamp(0, SmlWorksheet.excelColumnCount - 1);
@@ -95,7 +109,9 @@ class SelectionMatrix {
     focus = SmlCellRef(0, r);
   }
 
+  /// isFullRowSelection API.
   bool get isFullRowSelection => kind == SheetSelectionKind.rows;
 
+  /// isFullColumnSelection API.
   bool get isFullColumnSelection => kind == SheetSelectionKind.columns;
 }

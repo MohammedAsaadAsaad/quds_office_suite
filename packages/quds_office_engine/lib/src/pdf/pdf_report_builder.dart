@@ -14,31 +14,70 @@ import 'pdf_image.dart';
 enum _PdfRole { title, heading, body, caption }
 
 class _PdfBlock {
-  _PdfBlock._(this.kind, {this.text, this.rows, this.cards, this.bytes, this.points, this.height = 0});
+  _PdfBlock._(
+    this.kind, {
+    this.text,
+    this.rows,
+    this.cards,
+    this.bytes,
+    this.points,
+    this.height = 0,
+  });
 
+  /// text API.
   factory _PdfBlock.text(_PdfRole role, String text) =>
       _PdfBlock._('text', text: text)..role = role;
+
+  /// spacer API.
   factory _PdfBlock.spacer(double h) => _PdfBlock._('spacer', height: h);
-  factory _PdfBlock.table(List<List<String>> rows) => _PdfBlock._('table', rows: rows);
+
+  /// table API.
+  factory _PdfBlock.table(List<List<String>> rows) =>
+      _PdfBlock._('table', rows: rows);
+
+  /// kpi API.
   factory _PdfBlock.kpi(List<({String label, String value})> cards) =>
       _PdfBlock._('kpi', cards: cards);
-  factory _PdfBlock.image(Uint8List bytes) => _PdfBlock._('image', bytes: bytes);
+
+  /// image API.
+  factory _PdfBlock.image(Uint8List bytes) =>
+      _PdfBlock._('image', bytes: bytes);
+
+  /// chart API.
   factory _PdfBlock.chart(String kind, List<ChartPoint> points) =>
       _PdfBlock._('chart', text: kind, points: points);
+
+  /// breakPage API.
   factory _PdfBlock.breakPage() => _PdfBlock._('break');
 
+  /// kind API.
   final String kind;
+
+  /// text API.
   final String? text;
+
+  /// rows API.
   final List<List<String>>? rows;
+
+  /// cards API.
   final List<({String label, String value})>? cards;
+
+  /// bytes API.
   final Uint8List? bytes;
+
+  /// points API.
   final List<ChartPoint>? points;
+
+  /// height API.
   double height;
+
+  /// role API.
   _PdfRole role = _PdfRole.body;
 }
 
 /// Block-oriented PDF 1.7 report surface. Branding comes from [theme] only.
 class PdfReportBuilder {
+  /// PdfReportBuilder API.
   PdfReportBuilder({
     OfficeDocumentTheme? theme,
     this.font,
@@ -48,44 +87,89 @@ class PdfReportBuilder {
     this.margin = 48,
     this.header,
     this.footer,
-  })  : theme = theme ?? const OfficeDocumentTheme(),
-        page = page ?? theme?.page ?? OfficePageSize.a4Portrait;
+  }) : theme = theme ?? const OfficeDocumentTheme(),
+       page = page ?? theme?.page ?? OfficePageSize.a4Portrait;
 
+  /// theme API.
   final OfficeDocumentTheme theme;
+
+  /// font API.
   final SfntFont? font;
+
+  /// title API.
   final String title;
+
+  /// author API.
   final String author;
+
+  /// page API.
   final OfficePageSize page;
+
+  /// margin API.
   final double margin;
+
+  /// header API.
   final String? header;
+
+  /// footer API.
   final String? footer;
   final List<_PdfBlock> _blocks = <_PdfBlock>[];
 
+  /// widthPoints API.
   double get _width => page.widthPoints;
+
+  /// heightPoints API.
   double get _height => page.heightPoints;
   double get _contentTop => margin + 22;
   double get _contentBottom => _height - margin - 22;
   double get _contentWidth => _width - margin * 2;
 
-  void titleText(String text) => _blocks.add(_PdfBlock.text(_PdfRole.title, text));
-  void heading(String text) => _blocks.add(_PdfBlock.text(_PdfRole.heading, text));
+  /// titleText API.
+  void titleText(String text) =>
+      _blocks.add(_PdfBlock.text(_PdfRole.title, text));
+
+  /// heading API.
+  void heading(String text) =>
+      _blocks.add(_PdfBlock.text(_PdfRole.heading, text));
+
+  /// body API.
   void body(String text) => _blocks.add(_PdfBlock.text(_PdfRole.body, text));
-  void caption(String text) => _blocks.add(_PdfBlock.text(_PdfRole.caption, text));
+
+  /// caption API.
+  void caption(String text) =>
+      _blocks.add(_PdfBlock.text(_PdfRole.caption, text));
+
+  /// spacer API.
   void spacer({double height = 12}) => _blocks.add(_PdfBlock.spacer(height));
+
+  /// table API.
   void table(List<List<String>> rows, {bool hasHeader = true}) =>
       _blocks.add(_PdfBlock.table(rows));
+
+  /// kpiRow API.
   void kpiRow(List<({String label, String value})> cards) =>
       _blocks.add(_PdfBlock.kpi(cards));
+
+  /// image API.
   void image(Uint8List bytes, {double? maxWidth, double? maxHeight}) =>
       _blocks.add(_PdfBlock.image(bytes));
+
+  /// barChart API.
   void barChart(List<ChartPoint> points) =>
       _blocks.add(_PdfBlock.chart('bar', points));
+
+  /// pieChart API.
   void pieChart(List<ChartPoint> points) =>
       _blocks.add(_PdfBlock.chart('pie', points));
+
+  /// lineChart API.
   void lineChart(List<ChartPoint> points) =>
       _blocks.add(_PdfBlock.chart('line', points));
+
+  /// pageBreak API.
   void pageBreak() => _blocks.add(_PdfBlock.breakPage());
 
+  /// build API.
   Uint8List build() {
     final List<List<_PdfBlock>> pages = <List<_PdfBlock>>[];
     List<_PdfBlock> current = <_PdfBlock>[];
@@ -125,7 +209,14 @@ class PdfReportBuilder {
       _paintChrome(canvas, i + 1, pages.length);
       var cursor = _contentTop;
       for (final _PdfBlock block in pages[i]) {
-        cursor = _paintBlock(canvas, block, cursor, images, () => ++imgSeq, cps);
+        cursor = _paintBlock(
+          canvas,
+          block,
+          cursor,
+          images,
+          () => ++imgSeq,
+          cps,
+        );
         cursor += 8;
       }
       canvas.endText();
@@ -216,13 +307,34 @@ class PdfReportBuilder {
         canvas.endText();
         return yy;
       case 'table':
-        return _paintTable(canvas, block.rows ?? const <List<String>>[], y, cps);
+        return _paintTable(
+          canvas,
+          block.rows ?? const <List<String>>[],
+          y,
+          cps,
+        );
       case 'kpi':
-        return _paintKpi(canvas, block.cards ?? const <({String label, String value})>[], y, cps);
+        return _paintKpi(
+          canvas,
+          block.cards ?? const <({String label, String value})>[],
+          y,
+          cps,
+        );
       case 'image':
-        return _paintImage(canvas, block.bytes ?? Uint8List(0), y, images, nextImg);
+        return _paintImage(
+          canvas,
+          block.bytes ?? Uint8List(0),
+          y,
+          images,
+          nextImg,
+        );
       case 'chart':
-        return _paintChart(canvas, block.text ?? 'bar', block.points ?? const <ChartPoint>[], y);
+        return _paintChart(
+          canvas,
+          block.text ?? 'bar',
+          block.points ?? const <ChartPoint>[],
+          y,
+        );
       default:
         return y;
     }
@@ -237,8 +349,10 @@ class PdfReportBuilder {
     if (rows.isEmpty) {
       return y;
     }
-    final int cols =
-        rows.fold<int>(0, (int a, List<String> r) => a > r.length ? a : r.length);
+    final int cols = rows.fold<int>(
+      0,
+      (int a, List<String> r) => a > r.length ? a : r.length,
+    );
     final double colW = _contentWidth / cols;
     const double rowH = 18;
     var yy = y;
@@ -291,8 +405,24 @@ class PdfReportBuilder {
       canvas.fillRect(x, y, cardW, cardH, theme.palette.surface);
       canvas.fillRect(x, y, cardW, 4, theme.palette.accent);
       canvas.strokeRect(x, y, cardW, cardH, theme.palette.rule);
-      _drawString(canvas, items[i].label, x + 6, y + 20, 8, theme.palette.muted, cps);
-      _drawString(canvas, items[i].value, x + 6, y + 40, 14, theme.palette.primary, cps);
+      _drawString(
+        canvas,
+        items[i].label,
+        x + 6,
+        y + 20,
+        8,
+        theme.palette.muted,
+        cps,
+      );
+      _drawString(
+        canvas,
+        items[i].value,
+        x + 6,
+        y + 40,
+        14,
+        theme.palette.primary,
+        cps,
+      );
       canvas.endText();
     }
     return y + cardH;
@@ -355,7 +485,10 @@ class PdfReportBuilder {
       final double cx = margin + _contentWidth / 2;
       final double cy = y + boxH / 2;
       const double r = 50;
-      final double sum = pts.fold<double>(0, (double a, ChartPoint p) => a + p.value);
+      final double sum = pts.fold<double>(
+        0,
+        (double a, ChartPoint p) => a + p.value,
+      );
       var angle = -math.pi / 2;
       for (int i = 0; i < pts.length; i++) {
         final double sweep = 2 * math.pi * (pts[i].value / sum);
@@ -370,11 +503,17 @@ class PdfReportBuilder {
         angle += sweep;
       }
     } else if (kind == 'line') {
-      final double maxV = pts.fold<double>(0, (double a, ChartPoint p) => math.max(a, p.value));
+      final double maxV = pts.fold<double>(
+        0,
+        (double a, ChartPoint p) => math.max(a, p.value),
+      );
       canvas.setStrokeColor(theme.palette.primary);
       canvas.setLineWidth(1.4);
       for (int i = 0; i < pts.length; i++) {
-        final double x = margin + 16 + i * ((_contentWidth - 32) / math.max(1, pts.length - 1));
+        final double x =
+            margin +
+            16 +
+            i * ((_contentWidth - 32) / math.max(1, pts.length - 1));
         final double yy = y + boxH - 16 - (pts[i].value / maxV) * (boxH - 32);
         if (i == 0) {
           canvas.moveTo(x, yy);
@@ -384,7 +523,10 @@ class PdfReportBuilder {
       }
       canvas.stroke();
     } else {
-      final double maxV = pts.fold<double>(0, (double a, ChartPoint p) => math.max(a, p.value));
+      final double maxV = pts.fold<double>(
+        0,
+        (double a, ChartPoint p) => math.max(a, p.value),
+      );
       final double barW = (_contentWidth - 24) / pts.length;
       for (int i = 0; i < pts.length; i++) {
         final double h = (pts[i].value / maxV) * (boxH - 24);
@@ -451,7 +593,10 @@ class PdfReportBuilder {
 
   double _measureLine(String text, double fontSize) {
     if (font != null) {
-      return FontMetrics(font: font!, fontSizePoints: fontSize).measureText(text);
+      return FontMetrics(
+        font: font!,
+        fontSizePoints: fontSize,
+      ).measureText(text);
     }
     return text.length * fontSize * 0.5;
   }
@@ -467,7 +612,10 @@ class PdfReportBuilder {
   ) {
     if (font != null) {
       var cx = x;
-      final FontMetrics metrics = FontMetrics(font: font!, fontSizePoints: size);
+      final FontMetrics metrics = FontMetrics(
+        font: font!,
+        fontSizePoints: size,
+      );
       for (final int cp in text.runes) {
         cps.add(cp);
         final int gid = font!.glyphIdFor(cp);

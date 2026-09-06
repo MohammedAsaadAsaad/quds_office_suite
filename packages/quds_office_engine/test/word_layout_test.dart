@@ -153,12 +153,7 @@ void main() {
       sections: <WmlSection>[
         WmlSection(
           pageSize: a4,
-          margins: const WmlPageMargins(
-            top: 0,
-            bottom: 0,
-            left: 0,
-            right: 0,
-          ),
+          margins: const WmlPageMargins(top: 0, bottom: 0, left: 0, right: 0),
           blocks: <WmlBlock>[
             for (int i = 0; i < 3; i++)
               WmlVisual(
@@ -221,9 +216,7 @@ void main() {
         WmlSection(
           columnCount: 2,
           blocks: <WmlBlock>[
-            WmlParagraph(
-              inlines: <WmlInline>[WmlRun(text: 'Left column')],
-            ),
+            WmlParagraph(inlines: <WmlInline>[WmlRun(text: 'Left column')]),
             WmlParagraph(
               properties: WmlParagraphProps(columnBreakBefore: true),
               inlines: <WmlInline>[WmlRun(text: 'Right column')],
@@ -253,9 +246,7 @@ void main() {
               height: 80,
               fillColor: '1F4E79',
               blocks: <WmlBlock>[
-                WmlParagraph(
-                  inlines: <WmlInline>[WmlRun(text: 'Callout')],
-                ),
+                WmlParagraph(inlines: <WmlInline>[WmlRun(text: 'Callout')]),
               ],
             ),
             WmlParagraph(
@@ -307,10 +298,7 @@ void main() {
     expect(laid.pages.first.lines.first.paragraphIndex, 0);
     expect(laid.pages.last.lines.first.paragraphIndex, 1);
     expect(laid.pages.last.height, 500);
-    expect(
-      laid.pageStackTop(1, 1),
-      greaterThan(laid.pages.first.height),
-    );
+    expect(laid.pageStackTop(1, 1), greaterThan(laid.pages.first.height));
   });
 
   test('explicit paragraph bidi sets the layout base level', () {

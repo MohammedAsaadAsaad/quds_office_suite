@@ -5,9 +5,9 @@ import '../../opc/content_types.dart';
 import '../../opc/opc_archive.dart';
 import '../../opc/package_part.dart';
 import '../../opc/relationships.dart';
+import '../../visual/office_visual.dart';
 import '../../xml/namespaces.dart';
 import '../../xml/xml_writer.dart';
-import '../../visual/office_visual.dart';
 import '../math/omml_io.dart';
 import '../model/wml_document.dart';
 import '../model/word_toc.dart';
@@ -21,10 +21,12 @@ class WordSerializer {
       <({String id, String target})>[];
   final Set<int> _openComments = <int>{};
 
+  /// writeBytes API.
   Uint8List writeBytes(WmlDocument document, {String? password}) {
     return write(document).save(password: password);
   }
 
+  /// write API.
   OpcPackage write(WmlDocument document) {
     final OpcPackage package =
         document.package ?? OpcPackage.create(OpcPackageKind.word);
@@ -34,7 +36,9 @@ class WordSerializer {
         OfficeContentTypes.wordMain,
         utf8.encode('<w:document xmlns:w="${OfficeNamespaces.w}"/>'),
       );
-      if (package.packageRelationships.firstByType(RelationshipTypes.officeDocument) ==
+      if (package.packageRelationships.firstByType(
+            RelationshipTypes.officeDocument,
+          ) ==
           null) {
         package.packageRelationships.add(
           type: RelationshipTypes.officeDocument,
@@ -46,9 +50,9 @@ class WordSerializer {
     _openComments.clear();
     _syncEmbeddings(document, package);
     final Map<OfficeVisual, String> imageIds = _syncImages(document, package);
-    package.getPart('/word/document.xml')!.writeText(
-      _documentXml(document, imageIds),
-    );
+    package
+        .getPart('/word/document.xml')!
+        .writeText(_documentXml(document, imageIds));
     _syncHyperlinkRels(package);
     _syncComments(document, package);
     document.package = package;
@@ -56,8 +60,9 @@ class WordSerializer {
   }
 
   void _syncHyperlinkRels(OpcPackage package) {
-    final RelationshipCollection rels =
-        package.relationshipsFor('/word/document.xml');
+    final RelationshipCollection rels = package.relationshipsFor(
+      '/word/document.xml',
+    );
     for (final ({String id, String target}) link in _externalLinks) {
       final PackageRelationship? existing = rels.byId(link.id);
       if (existing != null) {
@@ -292,17 +297,22 @@ class WordSerializer {
   void _syncComments(WmlDocument document, OpcPackage package) {
     const String uri = '/word/comments.xml';
     const String extUri = '/word/commentsExtended.xml';
-    final RelationshipCollection rels =
-        package.relationshipsFor('/word/document.xml');
+    final RelationshipCollection rels = package.relationshipsFor(
+      '/word/document.xml',
+    );
     if (document.comments.isEmpty) {
-      package.getPart(uri)?.writeText(
-        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-        '<w:comments xmlns:w="${OfficeNamespaces.w}"/>',
-      );
-      package.getPart(extUri)?.writeText(
-        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-        '<w15:commentsEx xmlns:w15="${OfficeNamespaces.w15}"/>',
-      );
+      package
+          .getPart(uri)
+          ?.writeText(
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            '<w:comments xmlns:w="${OfficeNamespaces.w}"/>',
+          );
+      package
+          .getPart(extUri)
+          ?.writeText(
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            '<w15:commentsEx xmlns:w15="${OfficeNamespaces.w15}"/>',
+          );
       return;
     }
     final Map<OfficeVisual, String> imageIds = WordDrawingIo.syncVisuals(
@@ -379,8 +389,9 @@ class WordSerializer {
         attributes: <String, String>{
           'w15:paraId': comment.id.toRadixString(16).padLeft(8, '0'),
           if (comment.parentId != null)
-            'w15:paraIdParent':
-                comment.parentId!.toRadixString(16).padLeft(8, '0'),
+            'w15:paraIdParent': comment.parentId!
+                .toRadixString(16)
+                .padLeft(8, '0'),
           'w15:done': comment.resolved ? '1' : '0',
         },
       );
@@ -451,7 +462,8 @@ class WordSerializer {
         var end = i + 1;
         while (end < paragraph.inlines.length) {
           final WmlInline next = paragraph.inlines[end];
-          if (next is! WmlRun || next.hyperlink?.displayTarget != link.displayTarget) {
+          if (next is! WmlRun ||
+              next.hyperlink?.displayTarget != link.displayTarget) {
             break;
           }
           end++;

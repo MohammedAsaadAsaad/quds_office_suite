@@ -39,9 +39,7 @@ void main() {
   });
 
   test('professional layout sizes stacked fractions and integrals', () {
-    final OmmlEquation frac = OmmlEquation(
-      root: OmmlLinear.parse('(a+b)/c'),
-    );
+    final OmmlEquation frac = OmmlEquation(root: OmmlLinear.parse('(a+b)/c'));
     final LaidOutOmml stacked = OmmlLayout.layout(frac, fontSize: 16);
     expect(stacked.width, greaterThan(20));
     expect(stacked.height, greaterThan(20));
@@ -57,11 +55,17 @@ void main() {
     final OmmlEquation equation = OmmlGallery.byId('quadratic').build();
     final OmmlFrac? frac = _firstFrac(equation.root);
     expect(frac, isNotNull);
-    expect(OmmlLinear.write(frac!.den).replaceAll('(', '').replaceAll(')', ''), '2a');
+    expect(
+      OmmlLinear.write(frac!.den).replaceAll('(', '').replaceAll(')', ''),
+      '2a',
+    );
 
     final LaidOutOmml box = OmmlLayout.layout(equation, fontSize: 16);
-    final Iterable<LaidOutOmmlText> texts = box.items.whereType<LaidOutOmmlText>();
-    final LaidOutOmmlText eq = texts.firstWhere((LaidOutOmmlText t) => t.text == '=');
+    final Iterable<LaidOutOmmlText> texts = box.items
+        .whereType<LaidOutOmmlText>();
+    final LaidOutOmmlText eq = texts.firstWhere(
+      (LaidOutOmmlText t) => t.text == '=',
+    );
     final LaidOutOmmlRule bar = box.items.whereType<LaidOutOmmlRule>().first;
     expect(bar.x, greaterThan(eq.x + eq.width - 0.5));
     expect(OmmlEdit.cells(equation.root).length, greaterThan(3));
@@ -69,12 +73,10 @@ void main() {
 
   test('reading cells expose owned characters for caret movement', () {
     final OmmlSeq root = OmmlGallery.byId('quadratic').build().root;
-    final OmmlSeq den = OmmlEdit.cells(root).firstWhere(
-      (OmmlSeq cell) {
-        final String plain = OmmlEdit.cellPlain(root, cell);
-        return plain.contains('2') && plain.contains('a');
-      },
-    );
+    final OmmlSeq den = OmmlEdit.cells(root).firstWhere((OmmlSeq cell) {
+      final String plain = OmmlEdit.cellPlain(root, cell);
+      return plain.contains('2') && plain.contains('a');
+    });
     final List<OmmlSeq> order = OmmlEdit.readingCells(root);
     expect(order.length, greaterThan(2));
     final int denSlot = OmmlEdit.slotIndexOf(root, den);

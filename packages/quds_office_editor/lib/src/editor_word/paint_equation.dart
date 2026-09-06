@@ -3,11 +3,19 @@ import 'package:quds_office_engine/quds_office_engine.dart';
 
 /// Paints a laid-out Office Math box onto a Flutter [Canvas].
 abstract final class PaintEquation {
+  /// ink API.
   static const Color ink = Color(0xFF1F4E79);
+
+  /// slot API.
   static const Color slot = Color(0xFFB4C7E7);
+
+  /// slotFill API.
   static const Color slotFill = Color(0xFFE8F1FB);
+
+  /// focus API.
   static const Color focus = Color(0xFF2B579A);
 
+  /// paint API.
   static void paint(
     Canvas canvas,
     Rect box,
@@ -33,9 +41,12 @@ abstract final class PaintEquation {
       );
     }
 
-    final Set<int> cells = root == null ? const <int>{} : OmmlEdit.cellIndexes(root);
-    final LaidOutOmmlSlot? focusSlot =
-        focusedSlot == null ? null : _slotByIndex(omml, focusedSlot);
+    final Set<int> cells = root == null
+        ? const <int>{}
+        : OmmlEdit.cellIndexes(root);
+    final LaidOutOmmlSlot? focusSlot = focusedSlot == null
+        ? null
+        : _slotByIndex(omml, focusedSlot);
     final Rect? focusRect = focusSlot == null
         ? null
         : _cellRect(omml, focusSlot, cells).inflate(1.2);
@@ -53,7 +64,8 @@ abstract final class PaintEquation {
           continue;
         }
         final Rect cell = _cellRect(omml, slot, cells);
-        if (cell.width >= omml.width * 0.88 && cell.height >= omml.height * 0.8) {
+        if (cell.width >= omml.width * 0.88 &&
+            cell.height >= omml.height * 0.8) {
           continue;
         }
         canvas.drawRRect(
@@ -82,7 +94,8 @@ abstract final class PaintEquation {
         case LaidOutOmmlStroke():
           _stroke(canvas, item);
         case LaidOutOmmlSlot():
-          if (item.empty && (focusedSlot == null || item.slotIndex != focusedSlot)) {
+          if (item.empty &&
+              (focusedSlot == null || item.slotIndex != focusedSlot)) {
             canvas.drawRRect(
               RRect.fromRectAndRadius(
                 Rect.fromLTWH(item.x, item.y, item.width, item.height),
@@ -136,8 +149,11 @@ abstract final class PaintEquation {
     }
   }
 
+  /// hitSlot API.
   static int? hitSlot(LaidOutOmml omml, Offset local, {OmmlSeq? root}) {
-    final Set<int> cells = root == null ? const <int>{} : OmmlEdit.cellIndexes(root);
+    final Set<int> cells = root == null
+        ? const <int>{}
+        : OmmlEdit.cellIndexes(root);
     LaidOutOmmlSlot? best;
     var bestArea = double.infinity;
     for (final LaidOutOmmlSlot slot in omml.slots) {
@@ -171,13 +187,16 @@ abstract final class PaintEquation {
     return best?.slotIndex;
   }
 
+  /// hitCaret API.
   static int hitCaret(
     LaidOutOmml omml,
     Offset local, {
     required int slotIndex,
     OmmlSeq? root,
   }) {
-    final Set<int> cells = root == null ? const <int>{} : OmmlEdit.cellIndexes(root);
+    final Set<int> cells = root == null
+        ? const <int>{}
+        : OmmlEdit.cellIndexes(root);
     final LaidOutOmmlSlot? slot = _slotByIndex(omml, slotIndex);
     if (slot == null) {
       return 0;
@@ -197,6 +216,7 @@ abstract final class PaintEquation {
     return index;
   }
 
+  /// caretPosition API.
   static double caretPosition(
     LaidOutOmml omml,
     LaidOutOmmlSlot slot,
@@ -233,7 +253,8 @@ abstract final class PaintEquation {
   ) {
     final Rect raw = Rect.fromLTWH(slot.x, slot.y, slot.width, slot.height);
     final List<LaidOutOmmlText> out = <LaidOutOmmlText>[];
-    for (final LaidOutOmmlText text in omml.items.whereType<LaidOutOmmlText>()) {
+    for (final LaidOutOmmlText text
+        in omml.items.whereType<LaidOutOmmlText>()) {
       final Offset center = Offset(
         text.x + text.width / 2,
         text.y + text.height / 2,
@@ -292,8 +313,12 @@ abstract final class PaintEquation {
     var maxX = -double.infinity;
     var maxY = -double.infinity;
     var found = false;
-    for (final LaidOutOmmlText text in omml.items.whereType<LaidOutOmmlText>()) {
-      final Offset center = Offset(text.x + text.width / 2, text.y + text.height / 2);
+    for (final LaidOutOmmlText text
+        in omml.items.whereType<LaidOutOmmlText>()) {
+      final Offset center = Offset(
+        text.x + text.width / 2,
+        text.y + text.height / 2,
+      );
       if (!raw.inflate(2).contains(center)) {
         continue;
       }
@@ -305,7 +330,12 @@ abstract final class PaintEquation {
         if (cells.isNotEmpty && !cells.contains(other.slotIndex)) {
           continue;
         }
-        final Rect otherRect = Rect.fromLTWH(other.x, other.y, other.width, other.height);
+        final Rect otherRect = Rect.fromLTWH(
+          other.x,
+          other.y,
+          other.width,
+          other.height,
+        );
         if (otherRect.width * otherRect.height < slot.width * slot.height &&
             otherRect.contains(center)) {
           insideSmaller = true;
@@ -347,13 +377,21 @@ abstract final class PaintEquation {
           fontStyle: item.italic ? FontStyle.italic : FontStyle.normal,
           fontWeight: item.bold ? FontWeight.w700 : FontWeight.w400,
           fontFamily: 'Cambria Math',
-          fontFamilyFallback: const <String>['Cambria', 'Calibri', 'Noto Naskh Arabic', 'serif'],
+          fontFamilyFallback: const <String>[
+            'Cambria',
+            'Calibri',
+            'Noto Naskh Arabic',
+            'serif',
+          ],
           height: 1,
         ),
       ),
       textDirection: TextDirection.ltr,
     )..layout();
-    painter.paint(canvas, Offset(item.x, item.y + (item.height - painter.height) / 2));
+    painter.paint(
+      canvas,
+      Offset(item.x, item.y + (item.height - painter.height) / 2),
+    );
   }
 
   static void _stroke(Canvas canvas, LaidOutOmmlStroke item) {

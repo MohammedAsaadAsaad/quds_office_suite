@@ -2,10 +2,13 @@ import '../xml/xml_reader.dart';
 
 /// Shared OOXML text helpers used by the document builders.
 abstract final class OfficeMarkup {
+  /// escape API.
   static String escape(String text) => encodeXmlText(text);
 
+  /// escapeAttr API.
   static String escapeAttr(String text) => encodeXmlAttribute(text);
 
+  /// rgb API.
   static String rgb(String hex) {
     final String h = hex.replaceAll('#', '').toUpperCase();
     if (h.length == 8) {
@@ -20,11 +23,13 @@ abstract final class OfficeMarkup {
     return 'FF000000';
   }
 
+  /// srgb API.
   static String srgb(String hex) {
     final String full = rgb(hex);
     return full.length == 8 ? full.substring(2) : full;
   }
 
+  /// colName API.
   static String colName(int zeroBased) {
     var n = zeroBased;
     final List<int> chars = <int>[];
@@ -35,6 +40,7 @@ abstract final class OfficeMarkup {
     return String.fromCharCodes(chars.reversed);
   }
 
+  /// sheetName API.
   static String sheetName(String name, int fallbackId) {
     var n = name.replaceAll(RegExp(r'[\\/*?:\[\]]'), '_').trim();
     if (n.isEmpty) {
@@ -47,17 +53,25 @@ abstract final class OfficeMarkup {
   }
 }
 
+/// Class ChartPoint.
 class ChartPoint {
+  /// ChartPoint API.
   const ChartPoint({
     required this.label,
     required this.value,
     this.color = '4472C4',
   });
 
+  /// label API.
   final String label;
+
+  /// value API.
   final double value;
+
+  /// color API.
   final String color;
 
+  /// copyWith API.
   ChartPoint copyWith({String? label, double? value, String? color}) {
     return ChartPoint(
       label: label ?? this.label,
@@ -69,13 +83,15 @@ class ChartPoint {
 
 /// Named series used by multi-series line / area / stacked charts.
 class ChartSeries {
-  const ChartSeries({
-    required this.name,
-    required this.points,
-    this.color,
-  });
+  /// ChartSeries API.
+  const ChartSeries({required this.name, required this.points, this.color});
 
+  /// name API.
   final String name;
+
+  /// points API.
   final List<ChartPoint> points;
+
+  /// color API.
   final String? color;
 }

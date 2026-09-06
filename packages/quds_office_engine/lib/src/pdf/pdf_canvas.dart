@@ -4,19 +4,26 @@ import 'dart:typed_data';
 
 /// Vector emitter: cm, BT/ET, Tf, Td, TJ, m/l/c/re/f/S.
 class PdfCanvas {
+  /// PdfCanvas API.
   PdfCanvas(this.pageWidth, this.pageHeight) {
     // Map top-left document space to PDF bottom-left via 1 0 0 -1 0 H cm.
     _buf.writeln('1 0 0 -1 0 ${_n(pageHeight)} cm');
   }
 
+  /// pageWidth API.
   final double pageWidth;
+
+  /// pageHeight API.
   final double pageHeight;
+
+  /// StringBuffer API.
   final StringBuffer _buf = StringBuffer();
   var _inText = false;
   String _color = '';
   double _fontSize = 0;
   String _fontName = '';
 
+  /// beginText API.
   void beginText() {
     if (_inText) {
       return;
@@ -25,6 +32,7 @@ class PdfCanvas {
     _inText = true;
   }
 
+  /// endText API.
   void endText() {
     if (!_inText) {
       return;
@@ -33,6 +41,7 @@ class PdfCanvas {
     _inText = false;
   }
 
+  /// setFillColor API.
   void setFillColor(String hex) {
     if (hex == _color) {
       return;
@@ -45,6 +54,7 @@ class PdfCanvas {
     _buf.writeln('${_n(r)} ${_n(g)} ${_n(b)} rg');
   }
 
+  /// showGlyph API.
   void showGlyph({
     required double x,
     required double y,
@@ -68,10 +78,13 @@ class PdfCanvas {
     }
   }
 
+  /// moveTo API.
   void moveTo(double x, double y) => _buf.writeln('${_n(x)} ${_n(y)} m');
 
+  /// lineTo API.
   void lineTo(double x, double y) => _buf.writeln('${_n(x)} ${_n(y)} l');
 
+  /// curveTo API.
   void curveTo(
     double x1,
     double y1,
@@ -79,16 +92,23 @@ class PdfCanvas {
     double y2,
     double x3,
     double y3,
-  ) =>
-      _buf.writeln('${_n(x1)} ${_n(y1)} ${_n(x2)} ${_n(y2)} ${_n(x3)} ${_n(y3)} c');
 
+    /// writeln API.
+  ) => _buf.writeln(
+    '${_n(x1)} ${_n(y1)} ${_n(x2)} ${_n(y2)} ${_n(x3)} ${_n(y3)} c',
+  );
+
+  /// rect API.
   void rect(double x, double y, double w, double h) =>
       _buf.writeln('${_n(x)} ${_n(y)} ${_n(w)} ${_n(h)} re');
 
+  /// fill API.
   void fill() => _buf.writeln('f');
 
+  /// stroke API.
   void stroke() => _buf.writeln('S');
 
+  /// setStrokeColor API.
   void setStrokeColor(String hex) {
     final int rgb = int.tryParse(hex.replaceAll('#', ''), radix: 16) ?? 0;
     final double r = ((rgb >> 16) & 0xFF) / 255.0;
@@ -97,21 +117,24 @@ class PdfCanvas {
     _buf.writeln('${_n(r)} ${_n(g)} ${_n(b)} RG');
   }
 
+  /// setLineWidth API.
   void setLineWidth(double w) => _buf.writeln('${_n(w)} w');
 
+  /// setDash API.
   void setDash(List<double> pattern, [double phase = 0]) {
-    _buf.writeln(
-      '[${pattern.map(_n).join(' ')}] ${_n(phase)} d',
-    );
+    _buf.writeln('[${pattern.map(_n).join(' ')}] ${_n(phase)} d');
   }
 
+  /// resetDash API.
   void resetDash() => _buf.writeln('[] 0 d');
 
+  /// save API.
   void save() {
     endText();
     _buf.writeln('q');
   }
 
+  /// restore API.
   void restore() {
     endText();
     _buf.writeln('Q');
@@ -120,24 +143,29 @@ class PdfCanvas {
     _fontName = '';
   }
 
+  /// closePath API.
   void closePath() => _buf.writeln('h');
 
+  /// clip API.
   void clip() {
     endText();
     _buf.writeln('W n');
   }
 
+  /// clipRect API.
   void clipRect(double x, double y, double w, double h) {
     endText();
     rect(x, y, w, h);
     clip();
   }
 
+  /// translateScale API.
   void translateScale(double x, double y, double scale) {
     endText();
     _buf.writeln('${_n(scale)} 0 0 ${_n(scale)} ${_n(x)} ${_n(y)} cm');
   }
 
+  /// rotateAround API.
   void rotateAround(double cx, double cy, double degrees) {
     endText();
     final double rad = degrees * math.pi / 180;
@@ -148,6 +176,7 @@ class PdfCanvas {
     _buf.writeln('1 0 0 1 ${_n(-cx)} ${_n(-cy)} cm');
   }
 
+  /// roundedRect API.
   void roundedRect(double x, double y, double w, double h, double radius) {
     final double r = radius.clamp(0, w < h ? w / 2 : h / 2);
     if (r <= 0.2) {
@@ -167,6 +196,7 @@ class PdfCanvas {
     closePath();
   }
 
+  /// ellipse API.
   void ellipse(double x, double y, double w, double h) {
     final double cx = x + w / 2;
     final double cy = y + h / 2;
@@ -182,8 +212,10 @@ class PdfCanvas {
     closePath();
   }
 
+  /// fillAndStroke API.
   void fillAndStroke() => _buf.writeln('B');
 
+  /// fillRect API.
   void fillRect(double x, double y, double w, double h, String hex) {
     endText();
     setFillColor(hex);
@@ -191,6 +223,7 @@ class PdfCanvas {
     fill();
   }
 
+  /// strokeRect API.
   void strokeRect(double x, double y, double w, double h, String hex) {
     endText();
     setStrokeColor(hex);
@@ -207,6 +240,7 @@ class PdfCanvas {
     _buf.writeln('Q');
   }
 
+  /// showLatin API.
   void showLatin({
     required double x,
     required double y,
@@ -228,6 +262,7 @@ class PdfCanvas {
         .replaceAll(')', r'\)');
   }
 
+  /// toStream API.
   Uint8List toStream() => Uint8List.fromList(utf8.encode(_buf.toString()));
 
   void _setFont(String name, double size) {

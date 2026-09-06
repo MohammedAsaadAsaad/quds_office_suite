@@ -17,9 +17,14 @@ import '../anim/pml_motion_io.dart';
 import '../model/pml_presentation.dart';
 import '../shapes/drawingml.dart';
 
+/// Class SlideDeserializer.
 class SlideDeserializer {
+  /// read API.
   PmlPresentation read(OpcPackage package) {
-    final PmlPresentation pres = PmlPresentation(package: package, slides: <PmlSlide>[]);
+    final PmlPresentation pres = PmlPresentation(
+      package: package,
+      slides: <PmlSlide>[],
+    );
     final part = package.getPart('/ppt/presentation.xml');
     if (part == null) {
       return pres;
@@ -55,8 +60,9 @@ class SlideDeserializer {
         pres.slides[i].hidden = _slideIsHidden(slideXml);
         final RelationshipCollection rels = package.relationshipsFor(uri);
         _bindSlideMedia(pres.slides[i], package, rels);
-        final PackageRelationship? notesRel =
-            rels.firstByType(RelationshipTypes.notesSlide);
+        final PackageRelationship? notesRel = rels.firstByType(
+          RelationshipTypes.notesSlide,
+        );
         if (notesRel != null) {
           final notesPart = package.getPart(rels.resolve(notesRel));
           if (notesPart != null) {
@@ -71,6 +77,7 @@ class SlideDeserializer {
     return pres;
   }
 
+  /// readBytes API.
   PmlPresentation readBytes(Uint8List bytes, {String? password}) =>
       read(OpcPackage.openBytes(bytes, password: password));
 
@@ -144,7 +151,8 @@ class SlideDeserializer {
         continue;
       }
       if (rel.type == RelationshipTypes.image) {
-        final PictureAdjust picture = shape.visual?.picture.copy() ?? PictureAdjust();
+        final PictureAdjust picture =
+            shape.visual?.picture.copy() ?? PictureAdjust();
         shape.visual = OfficeVisual(
           kind: shape.visual?.kind ?? OfficeVisualKind.picture,
           title: shape.visual?.title ?? shape.name,
@@ -164,10 +172,13 @@ class SlideDeserializer {
   }
 }
 
+/// Class SlideSerializer.
 class SlideSerializer {
+  /// writeBytes API.
   Uint8List writeBytes(PmlPresentation pres, {String? password}) =>
       write(pres).save(password: password);
 
+  /// write API.
   OpcPackage write(PmlPresentation pres) {
     final OpcPackage package =
         pres.package ?? OpcPackage.create(OpcPackageKind.slide);
@@ -176,16 +187,21 @@ class SlideSerializer {
       final String uri = '/ppt/slides/slide${i + 1}.xml';
       if (package.getPart(uri) == null) {
         package.createPart(uri, OfficeContentTypes.slide, utf8.encode(''));
-        package.relationshipsFor('/ppt/presentation.xml').add(
+        package
+            .relationshipsFor('/ppt/presentation.xml')
+            .add(
               type: RelationshipTypes.slide,
               target: 'slides/slide${i + 1}.xml',
             );
       }
-      final Map<PmlShape, String> embedIds =
-          _syncSlideVisuals(pres.slides[i], package, uri);
-      package.getPart(uri)!.writeText(
-        slideToXml(pres.slides[i], embedIds: embedIds),
+      final Map<PmlShape, String> embedIds = _syncSlideVisuals(
+        pres.slides[i],
+        package,
+        uri,
       );
+      package
+          .getPart(uri)!
+          .writeText(slideToXml(pres.slides[i], embedIds: embedIds));
     }
     pres.package = package;
     return package;
@@ -211,7 +227,11 @@ class SlideSerializer {
         final String xml = _chartXml(visual);
         final PackagePart? existing = package.getPart(uri);
         if (existing == null) {
-          package.createPart(uri, OfficeContentTypes.drawingChart, utf8.encode(xml));
+          package.createPart(
+            uri,
+            OfficeContentTypes.drawingChart,
+            utf8.encode(xml),
+          );
         } else {
           existing.writeText(xml);
         }
@@ -264,30 +284,30 @@ class SlideSerializer {
         : visual.points;
     return switch (visual.kind) {
       OfficeVisualKind.chartPie => DrawingmlCharts.pie(
-          title: title,
-          series: points,
-          rtl: false,
-          display: visual.chart,
-        ),
+        title: title,
+        series: points,
+        rtl: false,
+        display: visual.chart,
+      ),
       OfficeVisualKind.chartLine => DrawingmlCharts.line(
-          title: title,
-          series: <ChartSeries>[ChartSeries(name: title, points: points)],
-          rtl: false,
-          display: visual.chart,
-        ),
+        title: title,
+        series: <ChartSeries>[ChartSeries(name: title, points: points)],
+        rtl: false,
+        display: visual.chart,
+      ),
       OfficeVisualKind.chartBar => DrawingmlCharts.bar(
-          title: title,
-          series: points,
-          rtl: false,
-          display: visual.chart,
-        ),
+        title: title,
+        series: points,
+        rtl: false,
+        display: visual.chart,
+      ),
       _ => DrawingmlCharts.bar(
-          title: title,
-          series: points,
-          rtl: false,
-          horizontal: false,
-          display: visual.chart,
-        ),
+        title: title,
+        series: points,
+        rtl: false,
+        horizontal: false,
+        display: visual.chart,
+      ),
     };
   }
 

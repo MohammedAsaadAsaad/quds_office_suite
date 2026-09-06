@@ -3,6 +3,7 @@ import 'dart:ui';
 
 /// 2D axis-aligned virtualization with an overscan buffer.
 class VirtualViewport {
+  /// VirtualViewport API.
   VirtualViewport({
     this.overscan = 64,
     this.origin = Offset.zero,
@@ -10,25 +11,38 @@ class VirtualViewport {
     this.scale = 1,
   });
 
+  /// overscan API.
   double overscan;
+
+  /// origin API.
   Offset origin;
+
+  /// extent API.
   Size extent;
+
+  /// scale API.
   double scale;
 
+  /// minScale API.
   static const double minScale = 0.25;
+
+  /// maxScale API.
   static const double maxScale = 4;
 
+  /// setScale API.
   void setScale(double value) {
     scale = value.clamp(minScale, maxScale);
   }
 
+  /// visible API.
   Rect get visible => Rect.fromLTWH(
-        origin.dx - overscan,
-        origin.dy - overscan,
-        extent.width + overscan * 2,
-        extent.height + overscan * 2,
-      );
+    origin.dx - overscan,
+    origin.dy - overscan,
+    extent.width + overscan * 2,
+    extent.height + overscan * 2,
+  );
 
+  /// pan API.
   void pan(Offset delta) {
     origin += delta;
   }
@@ -37,12 +51,10 @@ class VirtualViewport {
   void clampTo({required Size content, required Size view, double pad = 0}) {
     final double maxX = math.max(0, content.width - view.width + pad);
     final double maxY = math.max(0, content.height - view.height + pad);
-    origin = Offset(
-      origin.dx.clamp(-pad, maxX),
-      origin.dy.clamp(-pad, maxY),
-    );
+    origin = Offset(origin.dx.clamp(-pad, maxX), origin.dy.clamp(-pad, maxY));
   }
 
+  /// zoomAt API.
   void zoomAt(Offset focal, double factor) {
     origin = Offset(
       focal.dx - (focal.dx - origin.dx) * factor,
@@ -50,6 +62,7 @@ class VirtualViewport {
     );
   }
 
+  /// intersects API.
   bool intersects(Rect box) => visible.overlaps(box);
 
   /// Visible integer range along one axis given [sizes] starting at [start].

@@ -12,9 +12,7 @@ void main() {
       sections: <WmlSection>[
         WmlSection(
           header: <WmlParagraph>[
-            WmlParagraph(
-              inlines: <WmlInline>[WmlRun(text: 'Quds header')],
-            ),
+            WmlParagraph(inlines: <WmlInline>[WmlRun(text: 'Quds header')]),
           ],
           footer: <WmlParagraph>[
             WmlParagraph(
@@ -80,7 +78,11 @@ void main() {
       ],
     );
 
-    final Uint8List pdf = OfficePdfExport.word(doc, font: font, title: 'Word PDF');
+    final Uint8List pdf = OfficePdfExport.word(
+      doc,
+      font: font,
+      title: 'Word PDF',
+    );
     expect(_header(pdf), '%PDF-1.7');
     expect(_pageCount(pdf), 2);
     expect(_ascii(pdf).contains('/Im1'), isTrue);
@@ -209,7 +211,9 @@ void main() {
     expect(slideStream, contains('cm'));
     expect(slideStream, contains('0 -1'));
     if (font != null) {
-      for (final Match m in RegExp(r'\[<([0-9a-fA-F]+)>\] TJ').allMatches(slideStream)) {
+      for (final Match m in RegExp(
+        r'\[<([0-9a-fA-F]+)>\] TJ',
+      ).allMatches(slideStream)) {
         expect(
           int.parse(m.group(1)!, radix: 16),
           lessThan(512),
@@ -241,9 +245,7 @@ void main() {
         slides: <PmlSlide>[
           PmlSlide(
             id: 256,
-            shapes: <PmlShape>[
-              PmlShape(id: 2, name: 'T', text: 'Deck'),
-            ],
+            shapes: <PmlShape>[PmlShape(id: 2, name: 'T', text: 'Deck')],
           ),
         ],
       ),
@@ -348,18 +350,16 @@ void main() {
                 ),
               ],
             ),
-            WmlParagraph(
-              inlines: <WmlInline>[WmlRun(text: 'Intro heading')],
-            )..properties.headingLevel = 1
+            WmlParagraph(inlines: <WmlInline>[WmlRun(text: 'Intro heading')])
+              ..properties.headingLevel = 1
               ..properties.styleId = 'Heading1'
               ..properties.bookmarkName = '_Heading1_Intro',
             WmlParagraph(
               properties: WmlParagraphProps(pageBreakBefore: true),
               inlines: <WmlInline>[WmlRun(text: 'After the break')],
             ),
-            WmlParagraph(
-              inlines: <WmlInline>[WmlRun(text: 'Second heading')],
-            )..properties.headingLevel = 2
+            WmlParagraph(inlines: <WmlInline>[WmlRun(text: 'Second heading')])
+              ..properties.headingLevel = 2
               ..properties.styleId = 'Heading2'
               ..properties.bookmarkName = '_Heading2_Second',
           ],
@@ -379,7 +379,8 @@ void main() {
   });
 }
 
-SfntFont? _tryFont() => _tryPath('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf');
+SfntFont? _tryFont() =>
+    _tryPath('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf');
 
 SfntFont? _tryNoto() =>
     _tryPath('/usr/share/fonts/truetype/noto/NotoNaskhArabic-Regular.ttf');

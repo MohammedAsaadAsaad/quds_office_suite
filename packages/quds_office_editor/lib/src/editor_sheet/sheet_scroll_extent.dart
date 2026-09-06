@@ -7,11 +7,19 @@ import 'selection_matrix.dart';
 
 /// Scrollable sheet size follows the last filled cell or the selection.
 abstract final class SheetScrollExtent {
+  /// minCols API.
   static const int minCols = 10;
+
+  /// minRows API.
   static const int minRows = 22;
+
+  /// padCols API.
   static const int padCols = 4;
+
+  /// padRows API.
   static const int padRows = 8;
 
+  /// lastCol API.
   static int lastCol(SmlWorksheet sheet, SelectionMatrix selection) {
     var last = 0;
     var any = false;
@@ -30,7 +38,9 @@ abstract final class SheetScrollExtent {
     }
     for (final SmlDrawing drawing in sheet.drawings) {
       final double right =
-          sheet.columnLeft(drawing.col) + drawing.offsetX + drawing.visual.width;
+          sheet.columnLeft(drawing.col) +
+          drawing.offsetX +
+          drawing.visual.width;
       last = math.max(last, sheet.columnAt(right));
     }
     last = math.max(last, sheet.freezeCols);
@@ -38,6 +48,7 @@ abstract final class SheetScrollExtent {
     return padded.clamp(minCols - 1, SmlWorksheet.excelColumnCount - 1);
   }
 
+  /// lastRow API.
   static int lastRow(SmlWorksheet sheet, SelectionMatrix selection) {
     var last = 0;
     var any = false;
@@ -64,6 +75,7 @@ abstract final class SheetScrollExtent {
     return padded.clamp(minRows - 1, SmlWorksheet.excelRowCount - 1);
   }
 
+  /// contentSize API.
   static Size contentSize({
     required SmlWorksheet sheet,
     required SelectionMatrix selection,

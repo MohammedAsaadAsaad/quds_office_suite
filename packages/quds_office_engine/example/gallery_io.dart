@@ -24,7 +24,8 @@ class GallerySink {
     written.add(relativePath);
 
     final String stem = relativePath.replaceFirst(RegExp(r'\.[^.]+$'), '');
-    final Uint8List pdf = pdfBytes ??
+    final Uint8List pdf =
+        pdfBytes ??
         OfficePdfExport.fromBytes(
           bytes,
           font: font,
@@ -50,7 +51,9 @@ class GallerySink {
   void writeManifest() {
     final StringBuffer buf = StringBuffer()
       ..writeln('Quds Office Engine gallery')
-      ..writeln('font: ${font == null ? 'Helvetica fallback' : 'embedded SFNT subset'}')
+      ..writeln(
+        'font: ${font == null ? 'Helvetica fallback' : 'embedded SFNT subset'}',
+      )
       ..writeln();
     for (final String name in written) {
       final File file = File('${root.path}/$name');

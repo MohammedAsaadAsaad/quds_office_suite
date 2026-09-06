@@ -1,19 +1,28 @@
 /// UAX #29 grapheme-cluster segmentation used for caret hit-testing.
 class GraphemeCluster {
+  /// GraphemeCluster API.
   const GraphemeCluster({
     required this.start,
     required this.end,
     required this.text,
   });
 
+  /// start API.
   final int start;
+
+  /// end API.
   final int end;
+
+  /// text API.
   final String text;
 
+  /// length API.
   int get length => end - start;
 }
 
+/// Class GraphemeClusters.
 abstract final class GraphemeClusters {
+  /// segment API.
   static List<GraphemeCluster> segment(String text) {
     if (text.isEmpty) {
       return const <GraphemeCluster>[];

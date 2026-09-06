@@ -2,13 +2,22 @@ import 'package:flutter/services.dart';
 
 /// Hover-within-3px table divider detection.
 class TableResizer {
+  /// TableResizer API.
   TableResizer({required this.columnXs, this.tolerance = 3});
 
+  /// columnXs API.
   final List<double> columnXs;
+
+  /// tolerance API.
   final double tolerance;
+
+  /// hoverColumn API.
   int? hoverColumn;
+
+  /// dragStart API.
   double? dragStart;
 
+  /// cursorFor API.
   MouseCursor cursorFor(double x) {
     hoverColumn = _near(x);
     return hoverColumn == null
@@ -16,6 +25,7 @@ class TableResizer {
         : SystemMouseCursors.resizeColumn;
   }
 
+  /// applyDrag API.
   double applyDrag(double x) {
     if (hoverColumn == null) {
       return 0;

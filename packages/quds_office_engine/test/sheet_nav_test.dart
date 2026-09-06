@@ -29,10 +29,7 @@ void main() {
   });
 
   test('Ctrl-arrow stays on the current row or column', () {
-    final SmlWorksheet sheet = sheetWith(<String, Object>{
-      'B2': 1,
-      'D4': 9,
-    });
+    final SmlWorksheet sheet = sheetWith(<String, Object>{'B2': 1, 'D4': 9});
 
     expect(sheet.sameOccupancy(SmlCellRef.parse('A1'), -1, 0).a1, 'A1');
     expect(sheet.sameOccupancy(SmlCellRef.parse('A1'), 0, -1).a1, 'A1');

@@ -4,7 +4,6 @@ build/
 coverage/
 doc/api/
 test/
-analysis_options.yaml
 example/.dart_tool/
 example/build/
 example/**/ephemeral/

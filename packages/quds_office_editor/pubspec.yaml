@@ -6,7 +6,6 @@ version: 0.1.0
 homepage: https://github.com/MohammedAsaadAsaad/quds_office_suite
 repository: https://github.com/MohammedAsaadAsaad/quds_office_suite
 issue_tracker: https://github.com/MohammedAsaadAsaad/quds_office_suite/issues
-documentation: https://pub.dev/documentation/quds_office_editor/latest/
 resolution: workspace
 
 topics:
@@ -15,6 +14,14 @@ topics:
   - editor
   - word
   - excel
+
+platforms:
+  android:
+  ios:
+  linux:
+  macos:
+  web:
+  windows:
 
 screenshots:
   - description: "Word canvas — paginated pages, BiDi caret, and custom chrome."

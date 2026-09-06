@@ -4,6 +4,7 @@ import 'uax9_bidi.dart';
 
 /// A laid-out line of shaped visual glyphs.
 class BrokenLine {
+  /// BrokenLine API.
   BrokenLine({
     required this.glyphs,
     required this.width,
@@ -12,15 +13,25 @@ class BrokenLine {
     required this.justificationRatio,
   });
 
+  /// glyphs API.
   final List<ShapedGlyph> glyphs;
+
+  /// width API.
   final double width;
+
+  /// logicalStart API.
   final int logicalStart;
+
+  /// logicalEnd API.
   final int logicalEnd;
+
+  /// justificationRatio API.
   final double justificationRatio;
 }
 
 /// Shaped visual glyph with document metrics in points.
 class ShapedGlyph {
+  /// ShapedGlyph API.
   const ShapedGlyph({
     required this.codePoint,
     required this.glyphId,
@@ -30,21 +41,34 @@ class ShapedGlyph {
     this.isSpace = false,
   });
 
+  /// codePoint API.
   final int codePoint;
+
+  /// glyphId API.
   final int glyphId;
+
+  /// advance API.
   final double advance;
+
+  /// logicalIndex API.
   final int logicalIndex;
+
+  /// level API.
   final int level;
+
+  /// isSpace API.
   final bool isSpace;
 }
 
 /// Width provider used by the breaker (typically [FontMetrics.characterWidth]).
 typedef GlyphWidthFn = double Function(int codePoint);
 
+/// Typedef GlyphIdFn.
 typedef GlyphIdFn = int Function(int codePoint);
 
 /// UAX #14 opportunities + Knuth–Plass least-demerits wrapping.
 abstract final class LineBreaker {
+  /// breakLines API.
   static List<BrokenLine> breakLines({
     required String text,
     required double maxWidth,
@@ -157,7 +181,11 @@ abstract final class LineBreaker {
       offsets.add(utf16);
     }
     final List<ShapedGlyph> logical = <ShapedGlyph>[];
-    for (int logicalCpIndex = 0; logicalCpIndex < cps.length; logicalCpIndex++) {
+    for (
+      int logicalCpIndex = 0;
+      logicalCpIndex < cps.length;
+      logicalCpIndex++
+    ) {
       final int cp = cps[logicalCpIndex];
       final int logicalIndex = offsets[logicalCpIndex];
       if (_isTashkeel(cp)) {
@@ -225,7 +253,10 @@ abstract final class LineBreaker {
       legal.add(n);
     }
 
-    final List<double> demerits = List<double>.filled(legal.length, double.infinity);
+    final List<double> demerits = List<double>.filled(
+      legal.length,
+      double.infinity,
+    );
     final List<int> pred = List<int>.filled(legal.length, 0);
     demerits[0] = 0;
     for (int j = 1; j < legal.length; j++) {
@@ -303,11 +334,13 @@ abstract final class LineBreaker {
   static bool _isTashkeel(int cp) =>
       (cp >= 0x064B && cp <= 0x065F) || cp == 0x0670;
 
+  /// cp API.
   static int _identityGlyph(int cp) => cp;
 }
 
 /// Hit-test a visual X offset on [line] and return the logical UTF-16 index.
 int visualXToLogical(BrokenLine line, double x) {
+  /// cursor API.
   var cursor = 0.0;
   for (final ShapedGlyph g in line.glyphs) {
     final double mid = cursor + g.advance / 2;
@@ -321,6 +354,7 @@ int visualXToLogical(BrokenLine line, double x) {
 
 /// Maps a logical index to a visual caret X on [line].
 double logicalToVisualX(BrokenLine line, int logicalIndex) {
+  /// cursor API.
   var cursor = 0.0;
   for (final ShapedGlyph g in line.glyphs) {
     if (g.logicalIndex == logicalIndex) {

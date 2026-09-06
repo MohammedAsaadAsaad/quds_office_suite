@@ -5,33 +5,53 @@ import '../editor_word/caret_engine.dart';
 
 /// Floating IME session synchronized with an in-place edit string.
 class InlineCellEditor {
-  InlineCellEditor({required this.onCommit, this.onChanged, this.commitOnNewline = true});
+  /// InlineCellEditor API.
+  InlineCellEditor({
+    required this.onCommit,
+    this.onChanged,
+    this.commitOnNewline = true,
+  });
 
+  /// Function API.
   final void Function(String text) onCommit;
+
+  /// Function API.
   final void Function()? onChanged;
+
+  /// commitOnNewline API.
   final bool commitOnNewline;
+
+  /// bridge API.
   late final OfficeInputBridge bridge = OfficeInputBridge(
     onValue: _onValue,
     onAction: _onAction,
   );
+
+  /// formulaBar API.
   String formulaBar = '';
+
+  /// editing API.
   var editing = false;
+
+  /// caretIndex API.
   var caretIndex = 0;
+
+  /// selectionBase API.
   var selectionBase = 0;
 
+  /// selectionStart API.
   int get selectionStart =>
       selectionBase < caretIndex ? selectionBase : caretIndex;
 
+  /// selectionEnd API.
   int get selectionEnd =>
       selectionBase > caretIndex ? selectionBase : caretIndex;
 
+  /// hasSelection API.
   bool get hasSelection => selectionStart != selectionEnd;
 
-  void begin(
-    String initial, {
-    int? caret,
-    bool multiline = false,
-  }) {
+  /// begin API.
+  void begin(String initial, {int? caret, bool multiline = false}) {
     editing = true;
     formulaBar = initial;
     caretIndex = (caret ?? initial.length).clamp(0, initial.length);
@@ -49,6 +69,7 @@ class InlineCellEditor {
     onChanged?.call();
   }
 
+  /// end API.
   void end() {
     if (!editing) {
       return;
@@ -58,6 +79,7 @@ class InlineCellEditor {
     bridge.detach();
   }
 
+  /// setCaret API.
   void setCaret(int index, {bool extend = false}) {
     caretIndex = index.clamp(0, formulaBar.length);
     if (!extend) {
@@ -67,10 +89,12 @@ class InlineCellEditor {
     onChanged?.call();
   }
 
+  /// moveCaret API.
   void moveCaret(int delta, {bool extend = false}) {
     setCaret(caretIndex + delta, extend: extend);
   }
 
+  /// selectAll API.
   void selectAll() {
     if (!editing) {
       return;
@@ -81,6 +105,7 @@ class InlineCellEditor {
     onChanged?.call();
   }
 
+  /// selectWord API.
   void selectWord(int index) {
     if (!editing) {
       return;
@@ -95,6 +120,7 @@ class InlineCellEditor {
     onChanged?.call();
   }
 
+  /// selectParagraph API.
   void selectParagraph(int index) {
     if (!editing) {
       return;
@@ -109,6 +135,7 @@ class InlineCellEditor {
     onChanged?.call();
   }
 
+  /// deleteBackward API.
   void deleteBackward() {
     if (!editing) {
       return;
@@ -123,6 +150,7 @@ class InlineCellEditor {
     replaceRange(caretIndex - 1, caretIndex, '');
   }
 
+  /// deleteForward API.
   void deleteForward() {
     if (!editing) {
       return;
@@ -137,6 +165,7 @@ class InlineCellEditor {
     replaceRange(caretIndex, caretIndex + 1, '');
   }
 
+  /// replaceRange API.
   void replaceRange(int start, int end, String insert) {
     if (!editing) {
       return;

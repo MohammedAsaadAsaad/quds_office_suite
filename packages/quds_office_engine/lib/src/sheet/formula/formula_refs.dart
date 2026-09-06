@@ -4,6 +4,7 @@ import 'formula_eval.dart';
 
 /// A cell or range reference inside a formula, with source offsets.
 class FormulaRefSpan {
+  /// FormulaRefSpan API.
   const FormulaRefSpan({
     required this.start,
     required this.end,
@@ -12,12 +13,22 @@ class FormulaRefSpan {
     this.sheetName,
   });
 
+  /// start API.
   final int start;
+
+  /// end API.
   final int end;
+
+  /// lexeme API.
   final String lexeme;
+
+  /// range API.
   final SmlRange range;
+
+  /// sheetName API.
   final String? sheetName;
 
+  /// onSheet API.
   bool onSheet(String name) {
     if (sheetName == null || sheetName!.isEmpty) {
       return true;
@@ -27,10 +38,18 @@ class FormulaRefSpan {
 
   /// Stable key so `A1` and `$A$1` share a highlight color.
   String get colorKey {
-    final int c0 = range.start.col < range.end.col ? range.start.col : range.end.col;
-    final int c1 = range.start.col > range.end.col ? range.start.col : range.end.col;
-    final int r0 = range.start.row < range.end.row ? range.start.row : range.end.row;
-    final int r1 = range.start.row > range.end.row ? range.start.row : range.end.row;
+    final int c0 = range.start.col < range.end.col
+        ? range.start.col
+        : range.end.col;
+    final int c1 = range.start.col > range.end.col
+        ? range.start.col
+        : range.end.col;
+    final int r0 = range.start.row < range.end.row
+        ? range.start.row
+        : range.end.row;
+    final int r1 = range.start.row > range.end.row
+        ? range.start.row
+        : range.end.row;
     final String sheet = (sheetName ?? '').toLowerCase();
     return '$sheet!$c0,$r0:$c1,$r1';
   }
@@ -38,6 +57,7 @@ class FormulaRefSpan {
 
 /// Finds A1 / range tokens in a formula while it is being typed.
 abstract final class FormulaRefScanner {
+  /// scan API.
   static List<FormulaRefSpan> scan(String formula) {
     final String trimmed = formula.trimLeft();
     if (!trimmed.startsWith('=')) {
@@ -53,7 +73,9 @@ abstract final class FormulaRefScanner {
         spans.add(
           FormulaRefSpan(
             start: token.start,
-            end: token.end > token.start ? token.end : token.start + token.lexeme.length,
+            end: token.end > token.start
+                ? token.end
+                : token.start + token.lexeme.length,
             lexeme: token.lexeme,
             range: _rangeOf(token.lexeme),
             sheetName: _sheetName(token.lexeme),

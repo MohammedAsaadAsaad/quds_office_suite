@@ -7,6 +7,7 @@ import 'cfbf_writer.dart';
 
 /// Well-known OLE CLSIDs for Office embeddings.
 abstract final class OleClsids {
+  /// word API.
   static final Uint8List word = _clsid(0x00020906, 0x0000, 0x0000, <int>[
     0xC0,
     0x00,
@@ -17,6 +18,8 @@ abstract final class OleClsids {
     0x00,
     0x46,
   ]);
+
+  /// excel API.
   static final Uint8List excel = _clsid(0x00020820, 0x0000, 0x0000, <int>[
     0xC0,
     0x00,
@@ -27,6 +30,8 @@ abstract final class OleClsids {
     0x00,
     0x46,
   ]);
+
+  /// powerPoint API.
   static final Uint8List powerPoint = _clsid(0x64818D10, 0x4F9B, 0x11CF, <int>[
     0x86,
     0xEA,
@@ -61,6 +66,7 @@ abstract final class OleClsids {
 /// relationships, and content types, then call [pack] to rebuild the binary
 /// that a parent document stores under `word/embeddings/` or `xl/embeddings/`.
 class IsolatedEmbeddedPackage {
+  /// IsolatedEmbeddedPackage API.
   IsolatedEmbeddedPackage({
     required this.package,
     required this.kind,
@@ -69,12 +75,22 @@ class IsolatedEmbeddedPackage {
     this.progId,
   });
 
+  /// package API.
   final OpcPackage package;
+
+  /// kind API.
   final OpcPackageKind kind;
+
+  /// displayName API.
   final String? displayName;
+
+  /// thumbnail API.
   final Uint8List? thumbnail;
+
+  /// progId API.
   final String? progId;
 
+  /// resolvedDisplayName API.
   String get resolvedDisplayName =>
       displayName ??
       switch (kind) {
@@ -84,6 +100,7 @@ class IsolatedEmbeddedPackage {
         OpcPackageKind.unknown => 'Package',
       };
 
+  /// resolvedProgId API.
   String get resolvedProgId =>
       progId ??
       switch (kind) {
@@ -93,6 +110,7 @@ class IsolatedEmbeddedPackage {
         OpcPackageKind.unknown => 'Package',
       };
 
+  /// clsid API.
   Uint8List get clsid => switch (kind) {
     OpcPackageKind.word => OleClsids.word,
     OpcPackageKind.sheet => OleClsids.excel,
@@ -267,9 +285,13 @@ abstract final class EmbeddedPart {
 class _CompObj {
   _CompObj({this.userType, this.progId});
 
+  /// userType API.
   final String? userType;
+
+  /// progId API.
   final String? progId;
 
+  /// parse API.
   factory _CompObj.parse(Uint8List bytes) {
     String? userType;
     String? progId;
@@ -306,6 +328,7 @@ class _CompObj {
     return _CompObj(userType: userType, progId: progId);
   }
 
+  /// toBytes API.
   Uint8List toBytes() {
     final Uint8List user = _cString(userType ?? 'Package');
     final Uint8List prog = _cString(progId ?? 'Package');

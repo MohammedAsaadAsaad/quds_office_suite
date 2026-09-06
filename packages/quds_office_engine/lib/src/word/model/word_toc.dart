@@ -6,13 +6,21 @@ import 'word_link.dart';
 
 /// Heading styles and live TOC field maintenance.
 abstract final class WordToc {
+  /// RegExp API.
   static final RegExp _headingStyle = RegExp(
     r'^(?:Heading|heading|عنوان)\s*(\d)$',
   );
+
+  /// RegExp API.
   static final RegExp _tocStyle = RegExp(r'^(?:TOC|toc)(\d)$');
+
+  /// RegExp API.
   static final RegExp _tocRange = RegExp(r'\\o\s+"(\d+)\s*-\s*(\d+)"');
+
+  /// RegExp API.
   static final RegExp _trailingPage = RegExp(r'\s+(\d+)\s*$');
 
+  /// headingLevelOf API.
   static int? headingLevelOf(WmlParagraph paragraph) {
     final int? stored = paragraph.properties.headingLevel;
     if (stored != null && stored >= 1 && stored <= 9) {
@@ -21,6 +29,7 @@ abstract final class WordToc {
     return headingLevelFromStyle(paragraph.properties.styleId);
   }
 
+  /// headingLevelFromStyle API.
   static int? headingLevelFromStyle(String? styleId) {
     if (styleId == null || styleId.isEmpty) {
       return null;
@@ -33,6 +42,7 @@ abstract final class WordToc {
     return level < 1 || level > 9 ? null : level;
   }
 
+  /// tocLevelFromStyle API.
   static int? tocLevelFromStyle(String? styleId) {
     if (styleId == null || styleId.isEmpty) {
       return null;
@@ -44,21 +54,25 @@ abstract final class WordToc {
     return int.parse(match.group(1)!);
   }
 
+  /// isTocHeadingStyle API.
   static bool isTocHeadingStyle(String? styleId) {
     final String id = (styleId ?? '').trim().toLowerCase();
     return id == 'tocheading' || id == 'toc heading';
   }
 
+  /// isFieldParagraph API.
   static bool isFieldParagraph(WmlParagraph paragraph) {
     return isTocHeadingStyle(paragraph.properties.styleId) ||
         tocLevelFromStyle(paragraph.properties.styleId) != null;
   }
 
+  /// ownsParagraph API.
   static bool ownsParagraph(WmlToc toc, WmlParagraph paragraph) {
     return identical(toc.titleParagraph, paragraph) ||
         toc.itemParagraphs.contains(paragraph);
   }
 
+  /// isInsideToc API.
   static bool isInsideToc(WmlDocument document, WmlParagraph paragraph) {
     for (final WmlToc toc in tocs(document)) {
       if (ownsParagraph(toc, paragraph)) {
@@ -68,6 +82,7 @@ abstract final class WordToc {
     return false;
   }
 
+  /// isTocInstruction API.
   static bool isTocInstruction(String? instruction) {
     if (instruction == null) {
       return false;
@@ -88,33 +103,23 @@ abstract final class WordToc {
     return (min, max);
   }
 
+  /// runLook API.
   static WmlRunProps runLook(int level) {
     return switch (level) {
-      1 => WmlRunProps(
-          bold: true,
-          fontSizeHalfPoints: 32,
-          color: '1F4E79',
-        ),
-      2 => WmlRunProps(
-          bold: true,
-          fontSizeHalfPoints: 26,
-          color: '2E75B6',
-        ),
-      3 => WmlRunProps(
-          bold: true,
-          fontSizeHalfPoints: 24,
-          color: '2E75B6',
-        ),
+      1 => WmlRunProps(bold: true, fontSizeHalfPoints: 32, color: '1F4E79'),
+      2 => WmlRunProps(bold: true, fontSizeHalfPoints: 26, color: '2E75B6'),
+      3 => WmlRunProps(bold: true, fontSizeHalfPoints: 24, color: '2E75B6'),
       4 => WmlRunProps(
-          bold: true,
-          italic: true,
-          fontSizeHalfPoints: 22,
-          color: '404040',
-        ),
+        bold: true,
+        italic: true,
+        fontSizeHalfPoints: 22,
+        color: '404040',
+      ),
       _ => WmlRunProps(fontSizeHalfPoints: 22, color: '000000'),
     };
   }
 
+  /// applyHeading API.
   static void applyHeading(WmlParagraph paragraph, int level) {
     final int clamped = level.clamp(0, 9);
     paragraph.properties.headingLevel = clamped == 0 ? null : clamped;
@@ -167,6 +172,7 @@ abstract final class WordToc {
     return paragraph.text.trim().isNotEmpty;
   }
 
+  /// headings API.
   static List<WmlHeadingRef> headings(
     WmlDocument document, {
     int minLevel = 1,
@@ -195,6 +201,7 @@ abstract final class WordToc {
     return found;
   }
 
+  /// tocs API.
   static Iterable<WmlToc> tocs(WmlDocument document) sync* {
     for (final WmlSection section in document.sections) {
       for (final WmlBlock block in section.blocks) {
@@ -205,6 +212,7 @@ abstract final class WordToc {
     }
   }
 
+  /// refreshAll API.
   static void refreshAll(WmlDocument document) {
     for (final WmlToc toc in tocs(document)) {
       refresh(toc, document);
@@ -266,6 +274,7 @@ abstract final class WordToc {
     }
   }
 
+  /// ensureBody API.
   static void ensureBody(WmlToc toc) {
     if (toc.itemParagraphs.isEmpty && toc.entries.isNotEmpty) {
       toc.itemParagraphs.addAll(<WmlParagraph>[
@@ -274,6 +283,7 @@ abstract final class WordToc {
     }
   }
 
+  /// refresh API.
   static void refresh(WmlToc toc, WmlDocument document) {
     final String titleText = toc.titleParagraph.text.trim();
     if (titleText.isNotEmpty) {
@@ -302,8 +312,11 @@ abstract final class WordToc {
             level: headingLevelOf(heading)!,
             headingParagraphIndex: 0,
             pageNumber:
-                previousPages[(heading.text.trim(), headingLevelOf(heading)!)] ??
-                    1,
+                previousPages[(
+                  heading.text.trim(),
+                  headingLevelOf(heading)!,
+                )] ??
+                1,
           ),
       ]);
     toc.itemParagraphs
@@ -313,7 +326,8 @@ abstract final class WordToc {
           entryParagraph(
             toc.entries[i],
             link: WmlHyperlink(
-              anchor: headingParas[i].properties.bookmarkName ??
+              anchor:
+                  headingParas[i].properties.bookmarkName ??
                   headingParas[i].text.trim(),
             ),
           ),
@@ -324,12 +338,12 @@ abstract final class WordToc {
     }
   }
 
+  /// syncPageNumbers API.
   static bool syncPageNumbers(WmlDocument document, LaidOutDocument laidOut) {
     final Map<int, int> pages = <int, int>{};
     for (final LaidOutPage page in laidOut.pages) {
       for (final LaidOutLine line in page.lines) {
-        if (line.paragraphIndex < 0 ||
-            pages.containsKey(line.paragraphIndex)) {
+        if (line.paragraphIndex < 0 || pages.containsKey(line.paragraphIndex)) {
           continue;
         }
         pages[line.paragraphIndex] = page.index + 1;
@@ -348,12 +362,11 @@ abstract final class WordToc {
     return changed;
   }
 
+  /// titleParagraph API.
   static WmlParagraph titleParagraph(WmlToc toc) => toc.titleParagraph;
 
-  static WmlParagraph entryParagraph(
-    WmlTocEntry entry, {
-    WmlHyperlink? link,
-  }) {
+  /// entryParagraph API.
+  static WmlParagraph entryParagraph(WmlTocEntry entry, {WmlHyperlink? link}) {
     return WmlParagraph(
       properties: WmlParagraphProps(
         styleId: 'TOC${entry.level}',
@@ -364,16 +377,14 @@ abstract final class WordToc {
       inlines: <WmlInline>[
         WmlRun(
           text: entry.text,
-          properties: WmlRunProps(
-            fontSizeHalfPoints: 22,
-            color: '2E75B6',
-          ),
+          properties: WmlRunProps(fontSizeHalfPoints: 22, color: '2E75B6'),
           hyperlink: link,
         ),
       ],
     );
   }
 
+  /// absorbResult API.
   static void absorbResult(WmlToc toc, WmlParagraph paragraph) {
     if (isTocHeadingStyle(paragraph.properties.styleId)) {
       final String text = paragraph.text.trim();
@@ -393,13 +404,15 @@ abstract final class WordToc {
       return;
     }
     final RegExpMatch? page = _trailingPage.firstMatch(raw);
-    final String text =
-        page == null ? raw : raw.substring(0, page.start).trim();
+    final String text = page == null
+        ? raw
+        : raw.substring(0, page.start).trim();
     if (text.isEmpty) {
       return;
     }
     _keepPrefix(paragraph, text);
-    final int level = tocLevelFromStyle(paragraph.properties.styleId) ??
+    final int level =
+        tocLevelFromStyle(paragraph.properties.styleId) ??
         ((paragraph.properties.indent.left / 18).round() + 1).clamp(1, 9);
     toc.entries.add(
       WmlTocEntry(
@@ -430,14 +443,21 @@ abstract final class WordToc {
   }
 }
 
+/// Class WmlHeadingRef.
 class WmlHeadingRef {
+  /// WmlHeadingRef API.
   const WmlHeadingRef({
     required this.index,
     required this.level,
     required this.text,
   });
 
+  /// index API.
   final int index;
+
+  /// level API.
   final int level;
+
+  /// text API.
   final String text;
 }

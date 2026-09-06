@@ -14,8 +14,10 @@ import '../zip/zip_writer.dart';
 import 'xml_repair.dart';
 import 'zip_recovery.dart';
 
+/// Enum OfficeIssueSeverity.
 enum OfficeIssueSeverity { info, warning, error, fatal }
 
+/// Enum OfficeIssueCode.
 enum OfficeIssueCode {
   emptyFile,
   unknownFormat,
@@ -34,7 +36,9 @@ enum OfficeIssueCode {
   missingSharedStrings,
 }
 
+/// Class OfficeIssue.
 class OfficeIssue {
+  /// OfficeIssue API.
   const OfficeIssue({
     required this.code,
     required this.severity,
@@ -43,10 +47,19 @@ class OfficeIssue {
     this.repairable = false,
   });
 
+  /// code API.
   final OfficeIssueCode code;
+
+  /// severity API.
   final OfficeIssueSeverity severity;
+
+  /// message API.
   final String message;
+
+  /// partUri API.
   final String? partUri;
+
+  /// repairable API.
   final bool repairable;
 
   @override
@@ -60,33 +73,46 @@ class OfficeIssue {
   }
 
   @override
+  /// hashCode API.
   int get hashCode => Object.hash(code, severity, message, partUri, repairable);
 }
 
+/// Class OfficeDiagnosis.
 class OfficeDiagnosis {
+  /// OfficeDiagnosis API.
   OfficeDiagnosis({
     required this.kind,
     required this.encrypted,
     required this.issues,
   });
 
+  /// kind API.
   final OpcPackageKind kind;
+
+  /// encrypted API.
   final bool encrypted;
+
+  /// issues API.
   final List<OfficeIssue> issues;
 
+  /// canOpen API.
   bool get canOpen =>
       !issues.any((OfficeIssue i) => i.severity == OfficeIssueSeverity.fatal);
 
+  /// needsRepair API.
   bool get needsRepair => issues.any(
-        (OfficeIssue i) =>
-            i.severity == OfficeIssueSeverity.error ||
-            i.severity == OfficeIssueSeverity.warning,
-      );
+    (OfficeIssue i) =>
+        i.severity == OfficeIssueSeverity.error ||
+        i.severity == OfficeIssueSeverity.warning,
+  );
 
+  /// canRepair API.
   bool get canRepair => issues.any((OfficeIssue i) => i.repairable);
 }
 
+/// Class OfficeRepairResult.
 class OfficeRepairResult {
+  /// OfficeRepairResult API.
   OfficeRepairResult({
     required this.diagnosis,
     required this.repaired,
@@ -95,21 +121,38 @@ class OfficeRepairResult {
     this.package,
   });
 
+  /// diagnosis API.
   final OfficeDiagnosis diagnosis;
+
+  /// repaired API.
   final List<OfficeIssue> repaired;
+
+  /// remaining API.
   final List<OfficeIssue> remaining;
+
+  /// bytes API.
   final Uint8List? bytes;
+
+  /// package API.
   final OpcPackage? package;
 
+  /// succeeded API.
   bool get succeeded => package != null && bytes != null;
 }
 
+/// Class OfficeRepairException.
 class OfficeRepairException implements Exception {
+  /// OfficeRepairException API.
   OfficeRepairException(this.result);
+
+  /// result API.
   final OfficeRepairResult result;
   @override
+  /// toString API.
   String toString() {
-    final String msgs = result.remaining.map((OfficeIssue i) => i.message).join('; ');
+    final String msgs = result.remaining
+        .map((OfficeIssue i) => i.message)
+        .join('; ');
     return 'OfficeRepairException: $msgs';
   }
 }
@@ -117,10 +160,12 @@ class OfficeRepairException implements Exception {
 /// Diagnoses why an Office file will not open and rebuilds a clean package
 /// when the damage is recoverable.
 abstract final class OfficeRepair {
+  /// diagnose API.
   static OfficeDiagnosis diagnose(Uint8List bytes, {String? password}) {
     return _run(bytes, password: password, apply: false).diagnosis;
   }
 
+  /// repair API.
   static OfficeRepairResult repair(Uint8List bytes, {String? password}) {
     return _run(bytes, password: password, apply: true);
   }
@@ -274,7 +319,8 @@ abstract final class OfficeRepair {
           const OfficeIssue(
             code: OfficeIssueCode.missingZipDirectory,
             severity: OfficeIssueSeverity.fatal,
-            message: 'ZIP central directory is missing and local headers '
+            message:
+                'ZIP central directory is missing and local headers '
                 'could not be recovered',
           ),
         );
@@ -340,7 +386,11 @@ abstract final class OfficeRepair {
 
     if (!apply) {
       return OfficeRepairResult(
-        diagnosis: OfficeDiagnosis(kind: kind, encrypted: false, issues: issues),
+        diagnosis: OfficeDiagnosis(
+          kind: kind,
+          encrypted: false,
+          issues: issues,
+        ),
         repaired: const <OfficeIssue>[],
         remaining: issues,
       );
@@ -606,14 +656,12 @@ abstract final class OfficeRepair {
       }
       final String? rid =
           reader.getAttribute('id', namespaceUri: OfficeNamespaces.r) ??
-              reader.getAttribute('id');
+          reader.getAttribute('id');
       if (rid == null) {
         continue;
       }
       final PackageRelationship? rel = rels.byId(rid);
-      final String target = rel == null
-          ? 'worksheets/sheet1.xml'
-          : rel.target;
+      final String target = rel == null ? 'worksheets/sheet1.xml' : rel.target;
       final String zipName = OpcUris.toZipName(
         OpcUris.resolve('/xl/workbook.xml', target),
       );

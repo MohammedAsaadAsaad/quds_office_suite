@@ -26,9 +26,7 @@ void main() {
           WmlSection(
             blocks: <WmlBlock>[
               for (int i = 0; i < 60; i++)
-                WmlParagraph(
-                  inlines: <WmlInline>[WmlRun(text: 'فقرة $i')],
-                ),
+                WmlParagraph(inlines: <WmlInline>[WmlRun(text: 'فقرة $i')]),
             ],
           ),
         ],

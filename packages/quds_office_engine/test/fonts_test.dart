@@ -22,17 +22,23 @@ void main() {
     final FontMetrics metrics = FontMetrics(font: font, fontSizePoints: 12);
     expect(metrics.ascender, greaterThan(0));
     expect(metrics.characterWidth(0x41), greaterThan(2));
-    expect(metrics.measureText('AAA'), closeTo(metrics.characterWidth(0x41) * 3, 0.01));
+    expect(
+      metrics.measureText('AAA'),
+      closeTo(metrics.characterWidth(0x41) * 3, 0.01),
+    );
 
-    final GlyphOutline outline =
-        GlyphOutlineDecoder(font).decode(font.glyphIdFor(0x41));
+    final GlyphOutline outline = GlyphOutlineDecoder(
+      font,
+    ).decode(font.glyphIdFor(0x41));
     expect(outline.commands, isNotEmpty);
     expect(
       outline.commands.any((GlyphPathCommand c) => c.op == GlyphPathOp.move),
       isTrue,
     );
 
-    final FontSubset subset = FontSubsetter(font).subset(<int>[0x20, 0x41, 0x42]);
+    final FontSubset subset = FontSubsetter(
+      font,
+    ).subset(<int>[0x20, 0x41, 0x42]);
     expect(subset.numGlyphs, lessThan(font.numGlyphs));
     expect(subset.bytes.length, lessThan(bytes.length));
     final SfntFont parsed = SfntFont.parse(subset.bytes);

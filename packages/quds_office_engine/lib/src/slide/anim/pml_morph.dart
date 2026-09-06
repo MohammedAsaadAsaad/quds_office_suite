@@ -1,13 +1,20 @@
 import '../model/pml_presentation.dart';
 
+/// Enum PmlMorphRole.
 enum PmlMorphRole { keep, enter, exit }
 
+/// Class PmlMorphPair.
 class PmlMorphPair {
+  /// PmlMorphPair API.
   const PmlMorphPair({this.from, this.to});
 
+  /// from API.
   final PmlShape? from;
+
+  /// to API.
   final PmlShape? to;
 
+  /// role API.
   PmlMorphRole get role {
     if (from != null && to != null) {
       return PmlMorphRole.keep;
@@ -18,6 +25,7 @@ class PmlMorphPair {
 
 /// Interpolated shape drawn during a Morph transition.
 class PmlMorphFrame {
+  /// PmlMorphFrame API.
   const PmlMorphFrame({
     required this.shape,
     required this.transform,
@@ -31,15 +39,34 @@ class PmlMorphFrame {
     required this.role,
   });
 
+  /// shape API.
   final PmlShape shape;
+
+  /// transform API.
   final PmlTransform transform;
+
+  /// fillColor API.
   final String fillColor;
+
+  /// text API.
   final String text;
+
+  /// textColor API.
   final String textColor;
+
+  /// fontSizePt API.
   final double fontSizePt;
+
+  /// opacity API.
   final double opacity;
+
+  /// path API.
   final List<PmlPathPoint> path;
+
+  /// preset API.
   final PmlShapePreset preset;
+
+  /// role API.
   final PmlMorphRole role;
 }
 
@@ -48,11 +75,13 @@ class PmlMorphFrame {
 /// Pairing prefers a unique name, then a unique id, then unique
 /// (preset + text). Other slides and other unmatched shapes are ignored.
 class PmlMorph {
+  /// ease API.
   static double ease(double t) {
     final double x = t.clamp(0.0, 1.0);
     return x * x * (3 - 2 * x);
   }
 
+  /// pair API.
   static List<PmlMorphPair> pair(PmlSlide outgoing, PmlSlide incoming) {
     final List<PmlShape> left = List<PmlShape>.of(outgoing.shapes);
     final List<PmlShape> right = List<PmlShape>.of(incoming.shapes);
@@ -64,7 +93,10 @@ class PmlMorph {
       right.remove(b);
     }
 
-    void matchBy(String Function(PmlShape shape) keyOf, {bool skipEmpty = false}) {
+    void matchBy(
+      String Function(PmlShape shape) keyOf, {
+      bool skipEmpty = false,
+    }) {
       final Map<String, List<PmlShape>> byLeft = _group(left, keyOf);
       final Map<String, List<PmlShape>> byRight = _group(right, keyOf);
       for (final MapEntry<String, List<PmlShape>> entry in byLeft.entries) {
@@ -91,6 +123,7 @@ class PmlMorph {
     return pairs;
   }
 
+  /// keepIds API.
   static Set<int> keepIds(List<PmlMorphPair> pairs, {required bool outgoing}) {
     return <int>{
       for (final PmlMorphPair pair in pairs)
@@ -99,6 +132,7 @@ class PmlMorph {
     };
   }
 
+  /// frames API.
   static List<PmlMorphFrame> frames(
     PmlSlide outgoing,
     PmlSlide incoming,
@@ -211,15 +245,14 @@ class PmlMorph {
     }
     return <PmlPathPoint>[
       for (int i = 0; i < a.length; i++)
-        PmlPathPoint(
-          _lerpInt(a[i].x, b[i].x, t),
-          _lerpInt(a[i].y, b[i].y, t),
-        ),
+        PmlPathPoint(_lerpInt(a[i].x, b[i].x, t), _lerpInt(a[i].y, b[i].y, t)),
     ];
   }
 
+  /// round API.
   static int _lerpInt(int a, int b, double t) => (a + (b - a) * t).round();
 
+  /// t API.
   static double _lerpDouble(double a, double b, double t) => a + (b - a) * t;
 
   static int _lerpRot(int a, int b, double t) {
@@ -240,11 +273,16 @@ class PmlMorph {
     final int r = _lerpInt((a >> 16) & 0xFF, (b >> 16) & 0xFF, t);
     final int g = _lerpInt((a >> 8) & 0xFF, (b >> 8) & 0xFF, t);
     final int bl = _lerpInt(a & 0xFF, b & 0xFF, t);
-    return ((r << 16) | (g << 8) | bl).toRadixString(16).padLeft(6, '0').toUpperCase();
+    return ((r << 16) | (g << 8) | bl)
+        .toRadixString(16)
+        .padLeft(6, '0')
+        .toUpperCase();
   }
 
   static int _rgb(String hex) {
-    final String h = hex.length >= 6 ? hex.substring(hex.length - 6) : hex.padLeft(6, '0');
+    final String h = hex.length >= 6
+        ? hex.substring(hex.length - 6)
+        : hex.padLeft(6, '0');
     return int.tryParse(h, radix: 16) ?? 0x4472C4;
   }
 }

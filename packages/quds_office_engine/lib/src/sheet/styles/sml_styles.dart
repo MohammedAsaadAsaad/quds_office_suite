@@ -2,15 +2,18 @@ import '../../xml/xml_reader.dart';
 
 /// Parsed `styles.xml` subset: numFmts + cellXfs.
 class SmlStyleSheet {
-  SmlStyleSheet({
-    Map<int, String>? numFmts,
-    List<int>? cellXfsNumFmt,
-  })  : numFmts = numFmts ?? Map<int, String>.from(_builtIn),
-        cellXfsNumFmt = cellXfsNumFmt ?? <int>[0];
+  /// SmlStyleSheet API.
+  SmlStyleSheet({Map<int, String>? numFmts, List<int>? cellXfsNumFmt})
+    : numFmts = numFmts ?? Map<int, String>.from(_builtIn),
+      cellXfsNumFmt = cellXfsNumFmt ?? <int>[0];
 
+  /// numFmts API.
   final Map<int, String> numFmts;
+
+  /// cellXfsNumFmt API.
   final List<int> cellXfsNumFmt;
 
+  /// parse API.
   factory SmlStyleSheet.parse(String xml) {
     final SmlStyleSheet sheet = SmlStyleSheet();
     final XmlPullReader reader = XmlPullReader(xml);
@@ -22,12 +25,15 @@ class SmlStyleSheet {
         final int id = int.parse(reader.getAttribute('numFmtId') ?? '0');
         sheet.numFmts[id] = reader.getAttribute('formatCode') ?? 'General';
       } else if (reader.localName == 'xf') {
-        sheet.cellXfsNumFmt.add(int.parse(reader.getAttribute('numFmtId') ?? '0'));
+        sheet.cellXfsNumFmt.add(
+          int.parse(reader.getAttribute('numFmtId') ?? '0'),
+        );
       }
     }
     return sheet;
   }
 
+  /// format API.
   String format(Object? value, int styleIndex) {
     final int numFmtId = styleIndex >= 0 && styleIndex < cellXfsNumFmt.length
         ? cellXfsNumFmt[styleIndex]
@@ -45,26 +51,43 @@ String applyNumberFormat(Object? value, String code) {
   if (code == 'General' || code == '@') {
     return value.toString();
   }
-  final double? n = value is num ? value.toDouble() : double.tryParse(value.toString());
+
+  /// n API.
+  final double? n = value is num
+      ? value.toDouble()
+      : double.tryParse(value.toString());
   if (n == null) {
     return value.toString();
   }
+
+  /// negativeRed API.
   final bool negativeRed = code.contains('[Red]');
+
+  /// clean API.
   final String clean = code.replaceAll('[Red]', '').split(';').first;
+
+  /// out API.
   String out;
   if (clean.contains('%')) {
     out = '${(n * 100).toStringAsFixed(2)}%';
-  } else if (clean.contains('\$') || clean.contains('¥') || clean.contains('€')) {
+  } else if (clean.contains('\$') ||
+      clean.contains('¥') ||
+      clean.contains('€')) {
     out = n.toStringAsFixed(2);
     if (clean.contains('\$')) {
       out = '\$$out';
     }
   } else if (RegExp(r'0\.0+').hasMatch(clean)) {
-    final int digits = RegExp(r'0\.(0+)').firstMatch(clean)?.group(1)?.length ?? 2;
+    final int digits =
+        RegExp(r'0\.(0+)').firstMatch(clean)?.group(1)?.length ?? 2;
     out = n.toStringAsFixed(digits);
-  } else if (clean.contains('yyyy') || clean.contains('mm') || clean.contains('dd')) {
-    final DateTime dt =
-        DateTime.fromMillisecondsSinceEpoch((n * 86400000).round(), isUtc: true);
+  } else if (clean.contains('yyyy') ||
+      clean.contains('mm') ||
+      clean.contains('dd')) {
+    final DateTime dt = DateTime.fromMillisecondsSinceEpoch(
+      (n * 86400000).round(),
+      isUtc: true,
+    );
     out =
         '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
   } else {

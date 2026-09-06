@@ -5,6 +5,7 @@ import 'package_part.dart';
 
 /// Parsed `[Content_Types].xml` (Defaults + Overrides).
 class ContentTypes {
+  /// ContentTypes API.
   ContentTypes({Map<String, String>? defaults, Map<String, String>? overrides})
     : defaults = defaults ?? <String, String>{},
       overrides = overrides ?? <String, String>{};
@@ -15,6 +16,7 @@ class ContentTypes {
   /// Absolute OPC part name → MIME type.
   final Map<String, String> overrides;
 
+  /// standard API.
   factory ContentTypes.standard() {
     return ContentTypes(
       defaults: <String, String>{
@@ -32,6 +34,7 @@ class ContentTypes {
     );
   }
 
+  /// parse API.
   factory ContentTypes.parse(String xml) {
     final ContentTypes types = ContentTypes();
     final XmlPullReader reader = XmlPullReader(xml);
@@ -56,6 +59,7 @@ class ContentTypes {
     return types;
   }
 
+  /// contentTypeFor API.
   String contentTypeFor(String partUri) {
     final String uri = OpcUris.normalize(partUri);
     final String? overrideType = overrides[uri];
@@ -70,18 +74,22 @@ class ContentTypes {
     return defaults[ext] ?? 'application/octet-stream';
   }
 
+  /// setOverride API.
   void setOverride(String partUri, String contentType) {
     overrides[OpcUris.normalize(partUri)] = contentType;
   }
 
+  /// removeOverride API.
   void removeOverride(String partUri) {
     overrides.remove(OpcUris.normalize(partUri));
   }
 
+  /// setDefault API.
   void setDefault(String extension, String contentType) {
     defaults[extension.toLowerCase()] = contentType;
   }
 
+  /// toXml API.
   String toXml() {
     final XmlWriter writer = XmlWriter();
     writer.writeStartDocument();
@@ -110,62 +118,119 @@ class ContentTypes {
 
 /// Well-known OPC / Office content types.
 abstract final class OfficeContentTypes {
+  /// relationships API.
   static const String relationships =
       'application/vnd.openxmlformats-package.relationships+xml';
+
+  /// coreProperties API.
   static const String coreProperties =
       'application/vnd.openxmlformats-package.core-properties+xml';
+
+  /// wordMain API.
   static const String wordMain =
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml';
+
+  /// wordTemplate API.
   static const String wordTemplate =
       'application/vnd.openxmlformats-officedocument.wordprocessingml.template.main+xml';
+
+  /// sheetMain API.
   static const String sheetMain =
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml';
+
+  /// sheetWorksheet API.
   static const String sheetWorksheet =
       'application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml';
+
+  /// sheetSharedStrings API.
   static const String sheetSharedStrings =
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml';
+
+  /// sheetStyles API.
   static const String sheetStyles =
       'application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml';
+
+  /// slideMain API.
   static const String slideMain =
       'application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml';
+
+  /// slide API.
   static const String slide =
       'application/vnd.openxmlformats-officedocument.presentationml.slide+xml';
+
+  /// slideLayout API.
   static const String slideLayout =
       'application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml';
+
+  /// slideMaster API.
   static const String slideMaster =
       'application/vnd.openxmlformats-officedocument.presentationml.slideMaster+xml';
+
+  /// oleObject API.
   static const String oleObject =
       'application/vnd.openxmlformats-officedocument.oleObject';
+
+  /// extendedProperties API.
   static const String extendedProperties =
       'application/vnd.openxmlformats-officedocument.extended-properties+xml';
+
+  /// wordStyles API.
   static const String wordStyles =
       'application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml';
+
+  /// wordSettings API.
   static const String wordSettings =
       'application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml';
+
+  /// wordNumbering API.
   static const String wordNumbering =
       'application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml';
+
+  /// wordComments API.
   static const String wordComments =
       'application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml';
+
+  /// wordCommentsExtended API.
   static const String wordCommentsExtended =
       'application/vnd.ms-word.commentsExtended+xml';
+
+  /// drawingChart API.
   static const String drawingChart =
       'application/vnd.openxmlformats-officedocument.drawingml.chart+xml';
+
+  /// theme API.
   static const String theme =
       'application/vnd.openxmlformats-officedocument.theme+xml';
+
+  /// slidePresProps API.
   static const String slidePresProps =
       'application/vnd.openxmlformats-officedocument.presentationml.presProps+xml';
+
+  /// slideViewProps API.
   static const String slideViewProps =
       'application/vnd.openxmlformats-officedocument.presentationml.viewProps+xml';
+
+  /// slideTableStyles API.
   static const String slideTableStyles =
       'application/vnd.openxmlformats-officedocument.presentationml.tableStyles+xml';
+
+  /// notesSlide API.
   static const String notesSlide =
       'application/vnd.openxmlformats-officedocument.presentationml.notesSlide+xml';
+
+  /// notesMaster API.
   static const String notesMaster =
       'application/vnd.openxmlformats-officedocument.presentationml.notesMaster+xml';
+
+  /// wordHeader API.
   static const String wordHeader =
       'application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml';
+
+  /// wordFooter API.
   static const String wordFooter =
       'application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml';
+
+  /// spreadsheetDrawing API.
   static const String spreadsheetDrawing =
       'application/vnd.openxmlformats-officedocument.drawing+xml';
 }

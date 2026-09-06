@@ -12,15 +12,21 @@ import 'image_fit.dart';
 import 'office_document_theme.dart';
 import 'office_markup.dart';
 
+/// Class DocxHyperlink.
 class DocxHyperlink {
+  /// DocxHyperlink API.
   const DocxHyperlink({required this.text, required this.url});
 
+  /// text API.
   final String text;
+
+  /// url API.
   final String url;
 }
 
 /// Extracts plain paragraphs, tables, and hyperlinks from a `.docx` package.
 abstract final class DocxPlainReader {
+  /// paragraphs API.
   static String paragraphs(Uint8List bytes, {String? password}) {
     return read(bytes, password: password).paragraphs.join('\n');
   }
@@ -29,10 +35,9 @@ abstract final class DocxPlainReader {
     List<String> paragraphs,
     List<List<List<String>>> tables,
     List<DocxHyperlink> hyperlinks,
-  }) read(
-    Uint8List bytes, {
-    String? password,
-  }) {
+  })
+  /// read API.
+  read(Uint8List bytes, {String? password}) {
     final OpcPackage package = OpcPackage.openBytes(bytes, password: password);
     final PackagePart? part = package.getPart('/word/document.xml');
     if (part == null) {
@@ -43,8 +48,12 @@ abstract final class DocxPlainReader {
       );
     }
     final Map<String, String> linkTargets = <String, String>{};
-    final RelationshipCollection rels = package.relationshipsFor('/word/document.xml');
-    for (final PackageRelationship rel in rels.byType(RelationshipTypes.hyperlink)) {
+    final RelationshipCollection rels = package.relationshipsFor(
+      '/word/document.xml',
+    );
+    for (final PackageRelationship rel in rels.byType(
+      RelationshipTypes.hyperlink,
+    )) {
       linkTargets[rel.id] = rel.target;
     }
     final List<String> paragraphs = <String>[];
@@ -58,8 +67,10 @@ abstract final class DocxPlainReader {
       if (reader.localName == 'tbl') {
         tables.add(_readTable(reader));
       } else if (reader.localName == 'p') {
-        final ({String text, List<DocxHyperlink> links}) para =
-            _readParagraph(reader, linkTargets);
+        final ({String text, List<DocxHyperlink> links}) para = _readParagraph(
+          reader,
+          linkTargets,
+        );
         if (para.text.trim().isNotEmpty) {
           paragraphs.add(para.text);
         }
@@ -105,7 +116,8 @@ abstract final class DocxPlainReader {
     while (reader.next() && reader.depth >= depth) {
       if (reader.eventType == XmlEventType.startElement &&
           reader.localName == 'hyperlink') {
-        linkRid = reader.getAttribute('id', namespaceUri: OfficeNamespaces.r) ??
+        linkRid =
+            reader.getAttribute('id', namespaceUri: OfficeNamespaces.r) ??
             reader.getAttribute('id');
         linkText.clear();
       } else if (reader.eventType == XmlEventType.characters) {
@@ -131,32 +143,52 @@ abstract final class DocxPlainReader {
   }
 }
 
+/// Class DocxHeaderFooter.
 class DocxHeaderFooter {
-  const DocxHeaderFooter({this.left, this.center, this.right, this.pageNumber = false, this.date = false});
+  /// DocxHeaderFooter API.
+  const DocxHeaderFooter({
+    this.left,
+    this.center,
+    this.right,
+    this.pageNumber = false,
+    this.date = false,
+  });
 
+  /// left API.
   final String? left;
+
+  /// center API.
   final String? center;
+
+  /// right API.
   final String? right;
+
+  /// pageNumber API.
   final bool pageNumber;
+
+  /// date API.
   final bool date;
 }
 
 /// Fluent Word builder: headings, lists, RTL tables, images, charts, comments.
 class DocxDocumentBuilder {
-  DocxDocumentBuilder({
-    bool? rtl,
-    OfficeDocumentTheme? theme,
-  })  : theme = theme ?? OfficeDocumentTheme.light(rtl: rtl ?? false),
-        rtl = rtl ?? theme?.rtl ?? false;
+  /// DocxDocumentBuilder API.
+  DocxDocumentBuilder({bool? rtl, OfficeDocumentTheme? theme})
+    : theme = theme ?? OfficeDocumentTheme.light(rtl: rtl ?? false),
+      rtl = rtl ?? theme?.rtl ?? false;
 
+  /// rtl API.
   final bool rtl;
+
+  /// theme API.
   final OfficeDocumentTheme theme;
   final List<String> _body = <String>[];
   final List<({String name, Uint8List bytes, String mime})> _images =
       <({String name, Uint8List bytes, String mime})>[];
   final List<({int id, String xml})> _charts = <({int id, String xml})>[];
   final List<String> _comments = <String>[];
-  final List<({String id, String url})> _hyperlinks = <({String id, String url})>[];
+  final List<({String id, String url})> _hyperlinks =
+      <({String id, String url})>[];
   DocxHeaderFooter? _header;
   DocxHeaderFooter? _footer;
   var _imageSeq = 0;
@@ -166,8 +198,10 @@ class DocxDocumentBuilder {
   var _bookmarkSeq = 0;
   var _linkSeq = 0;
 
+  /// palette API.
   OfficePalette get _colors => theme.palette;
 
+  /// heading API.
   void heading(String text, {int level = 1}) {
     final int size = switch (level) {
       1 => 32,
@@ -188,6 +222,7 @@ class DocxDocumentBuilder {
     );
   }
 
+  /// paragraph API.
   void paragraph(
     String text, {
     bool bold = false,
@@ -208,6 +243,7 @@ class DocxDocumentBuilder {
     );
   }
 
+  /// note API.
   void note(String text) {
     _body.add(
       _paragraphXml(
@@ -220,6 +256,7 @@ class DocxDocumentBuilder {
     );
   }
 
+  /// caption API.
   void caption(String text) {
     _body.add(
       _paragraphXml(
@@ -233,6 +270,7 @@ class DocxDocumentBuilder {
     );
   }
 
+  /// spacer API.
   void spacer({int heightTwips = 240}) {
     _body.add(
       '<w:p><w:pPr><w:spacing w:before="0" w:after="$heightTwips"/>'
@@ -240,6 +278,7 @@ class DocxDocumentBuilder {
     );
   }
 
+  /// hyperlink API.
   void hyperlink(String text, String url) {
     _linkSeq += 1;
     final String id = 'rIdLink$_linkSeq';
@@ -252,6 +291,7 @@ class DocxDocumentBuilder {
     );
   }
 
+  /// bookmark API.
   void bookmark(String name) {
     _bookmarkSeq += 1;
     final String safe = name.replaceAll(RegExp(r'[^A-Za-z0-9_\-]'), '_');
@@ -261,6 +301,7 @@ class DocxDocumentBuilder {
     );
   }
 
+  /// header API.
   void header({
     String? left,
     String? center,
@@ -277,6 +318,7 @@ class DocxDocumentBuilder {
     );
   }
 
+  /// footer API.
   void footer({
     String? left,
     String? center,
@@ -293,15 +335,18 @@ class DocxDocumentBuilder {
     );
   }
 
+  /// bulletList API.
   void bulletList(List<String> items) {
     _list(items, numId: 1);
   }
 
+  /// numberedList API.
   void numberedList(List<String> items, {int start = 1}) {
     _numInstance += 1;
     _list(items, numId: _numInstance, start: start);
   }
 
+  /// table API.
   void table(
     List<List<String>> rows, {
     bool hasHeader = true,
@@ -313,8 +358,10 @@ class DocxDocumentBuilder {
     if (rows.isEmpty) {
       return;
     }
-    final int colCount =
-        rows.fold<int>(0, (int a, List<String> r) => a > r.length ? a : r.length);
+    final int colCount = rows.fold<int>(
+      0,
+      (int a, List<String> r) => a > r.length ? a : r.length,
+    );
     if (colCount == 0) {
       return;
     }
@@ -365,10 +412,12 @@ class DocxDocumentBuilder {
     _body.add(buf.toString());
   }
 
+  /// pageBreak API.
   void pageBreak() {
     _body.add('<w:p><w:r><w:br w:type="page"/></w:r></w:p>');
   }
 
+  /// horizontalRule API.
   void horizontalRule({String? colorHex}) {
     final String color = colorHex ?? _colors.rule;
     _body.add(
@@ -379,6 +428,7 @@ class DocxDocumentBuilder {
     );
   }
 
+  /// image API.
   void image(
     Uint8List bytes, {
     String name = 'image.png',
@@ -426,6 +476,7 @@ class DocxDocumentBuilder {
     }
   }
 
+  /// pieChart API.
   void pieChart({
     required String title,
     required List<ChartPoint> series,
@@ -446,6 +497,7 @@ class DocxDocumentBuilder {
     );
   }
 
+  /// barChart API.
   void barChart({
     required String title,
     required List<ChartPoint> series,
@@ -468,6 +520,7 @@ class DocxDocumentBuilder {
     );
   }
 
+  /// lineChart API.
   void lineChart({
     required String title,
     required List<ChartSeries> series,
@@ -490,6 +543,7 @@ class DocxDocumentBuilder {
     );
   }
 
+  /// stackedBarChart API.
   void stackedBarChart({
     required String title,
     required List<ChartSeries> series,
@@ -512,6 +566,7 @@ class DocxDocumentBuilder {
     );
   }
 
+  /// build API.
   Uint8List build({String? password}) {
     final OpcPackage package = OpcPackage.empty();
     package.packageRelationships.add(
@@ -538,18 +593,36 @@ class DocxDocumentBuilder {
       OfficeContentTypes.wordNumbering,
       utf8.encode(_numberingXml()),
     );
-    final RelationshipCollection rels = package.relationshipsFor('/word/document.xml');
+    final RelationshipCollection rels = package.relationshipsFor(
+      '/word/document.xml',
+    );
     rels
-      ..add(type: RelationshipTypes.styles, target: 'styles.xml', id: 'rIdStyles')
-      ..add(type: RelationshipTypes.settings, target: 'settings.xml', id: 'rIdSettings')
-      ..add(type: RelationshipTypes.numbering, target: 'numbering.xml', id: 'rIdNumbering');
+      ..add(
+        type: RelationshipTypes.styles,
+        target: 'styles.xml',
+        id: 'rIdStyles',
+      )
+      ..add(
+        type: RelationshipTypes.settings,
+        target: 'settings.xml',
+        id: 'rIdSettings',
+      )
+      ..add(
+        type: RelationshipTypes.numbering,
+        target: 'numbering.xml',
+        id: 'rIdNumbering',
+      );
     if (_header != null) {
       package.createPart(
         '/word/header1.xml',
         OfficeContentTypes.wordHeader,
         utf8.encode(_hfXml(_header!, isHeader: true)),
       );
-      rels.add(type: RelationshipTypes.header, target: 'header1.xml', id: 'rIdHeader');
+      rels.add(
+        type: RelationshipTypes.header,
+        target: 'header1.xml',
+        id: 'rIdHeader',
+      );
     }
     if (_footer != null) {
       package.createPart(
@@ -557,7 +630,11 @@ class DocxDocumentBuilder {
         OfficeContentTypes.wordFooter,
         utf8.encode(_hfXml(_footer!, isHeader: false)),
       );
-      rels.add(type: RelationshipTypes.footer, target: 'footer1.xml', id: 'rIdFooter');
+      rels.add(
+        type: RelationshipTypes.footer,
+        target: 'footer1.xml',
+        id: 'rIdFooter',
+      );
     }
     if (_comments.isNotEmpty) {
       package.createPart(
@@ -565,7 +642,11 @@ class DocxDocumentBuilder {
         OfficeContentTypes.wordComments,
         utf8.encode(_commentsXml()),
       );
-      rels.add(type: RelationshipTypes.comments, target: 'comments.xml', id: 'rIdComments');
+      rels.add(
+        type: RelationshipTypes.comments,
+        target: 'comments.xml',
+        id: 'rIdComments',
+      );
     }
     for (final ({String id, String url}) link in _hyperlinks) {
       rels.add(
@@ -601,6 +682,7 @@ class DocxDocumentBuilder {
 
   final Map<int, int> _listStarts = <int, int>{};
 
+  /// start API.
   void _list(List<String> items, {required int numId, int start = 1}) {
     if (start != 1) {
       _listStarts[numId] = start;
@@ -703,9 +785,7 @@ class DocxDocumentBuilder {
   }) {
     final StringBuffer comments = StringBuffer();
     for (final int id in commentIds) {
-      comments.write(
-        '<w:commentRangeStart w:id="$id"/>',
-      );
+      comments.write('<w:commentRangeStart w:id="$id"/>');
     }
     final StringBuffer ends = StringBuffer();
     for (final int id in commentIds) {
@@ -752,7 +832,12 @@ class DocxDocumentBuilder {
 
   String _hfXml(DocxHeaderFooter spec, {required bool isHeader}) {
     final String tag = isHeader ? 'hdr' : 'ftr';
-    String slot(String? text, String align, {bool page = false, bool date = false}) {
+    String slot(
+      String? text,
+      String align, {
+      bool page = false,
+      bool date = false,
+    }) {
       final StringBuffer runs = StringBuffer();
       if (text != null && text.isNotEmpty) {
         runs.write(
@@ -830,7 +915,9 @@ class DocxDocumentBuilder {
         '<w:lvl w:ilvl="0"><w:start w:val="$start"/><w:numFmt w:val="decimal"/>'
         '<w:lvlText w:val="%1."/><w:lvlJc w:val="left"/></w:lvl></w:abstractNum>',
       );
-      nums.write('<w:num w:numId="$id"><w:abstractNumId w:val="$absId"/></w:num>');
+      nums.write(
+        '<w:num w:numId="$id"><w:abstractNumId w:val="$absId"/></w:num>',
+      );
     }
     return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
         '<w:numbering xmlns:w="${OfficeNamespaces.w}">'

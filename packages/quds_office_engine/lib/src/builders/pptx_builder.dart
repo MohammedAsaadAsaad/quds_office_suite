@@ -10,7 +10,9 @@ import 'image_fit.dart';
 import 'office_document_theme.dart';
 import 'office_markup.dart';
 
+/// Class PptxPalette.
 class PptxPalette {
+  /// PptxPalette API.
   const PptxPalette({
     this.primary = '2E75B6',
     this.accent = '548235',
@@ -18,6 +20,7 @@ class PptxPalette {
     this.gold = 'C9A227',
   });
 
+  /// fromTheme API.
   factory PptxPalette.fromTheme(OfficeDocumentTheme theme) {
     return PptxPalette(
       primary: theme.palette.primary,
@@ -27,14 +30,22 @@ class PptxPalette {
     );
   }
 
+  /// primary API.
   final String primary;
+
+  /// accent API.
   final String accent;
+
+  /// muted API.
   final String muted;
+
+  /// gold API.
   final String gold;
 }
 
 /// Fluent PowerPoint builder: geometric layouts, charts, notes, contain-fit images.
 class PptxDeckBuilder {
+  /// PptxDeckBuilder API.
   PptxDeckBuilder({
     bool? rtl,
     PptxPalette? palette,
@@ -43,23 +54,36 @@ class PptxDeckBuilder {
     this.slideHeight = 6858000,
     this.showSlideNumber = false,
     this.footerBar,
-  })  : theme = theme ??
-            OfficeDocumentTheme.light(
-              rtl: rtl ?? false,
-              page: OfficePageSize.widescreen,
-            ),
-        palette = palette ??
-            (theme != null
-                ? PptxPalette.fromTheme(theme)
-                : const PptxPalette()),
-        rtl = rtl ?? theme?.rtl ?? false;
+  }) : theme =
+           theme ??
+           OfficeDocumentTheme.light(
+             rtl: rtl ?? false,
+             page: OfficePageSize.widescreen,
+           ),
+       palette =
+           palette ??
+           (theme != null ? PptxPalette.fromTheme(theme) : const PptxPalette()),
+       rtl = rtl ?? theme?.rtl ?? false;
 
+  /// rtl API.
   final bool rtl;
+
+  /// palette API.
   final PptxPalette palette;
+
+  /// theme API.
   final OfficeDocumentTheme theme;
+
+  /// slideWidth API.
   final int slideWidth;
+
+  /// slideHeight API.
   final int slideHeight;
+
+  /// showSlideNumber API.
   final bool showSlideNumber;
+
+  /// footerBar API.
   final String? footerBar;
   final List<_SlideDraft> _slides = <_SlideDraft>[];
   final List<({String name, Uint8List bytes})> _images =
@@ -69,17 +93,25 @@ class PptxDeckBuilder {
   var _chartSeq = 0;
   var _shapeId = 2;
 
+  /// palette API.
   OfficePalette get _colors => theme.palette;
 
+  /// addTitleSlide API.
   void addTitleSlide({
     required String title,
     String? subtitle,
     String? footer,
     String? notes,
   }) {
-    addCoverSlide(title: title, subtitle: subtitle, footer: footer, notes: notes);
+    addCoverSlide(
+      title: title,
+      subtitle: subtitle,
+      footer: footer,
+      notes: notes,
+    );
   }
 
+  /// addCoverSlide API.
   void addCoverSlide({
     required String title,
     String? kicker,
@@ -120,7 +152,9 @@ class PptxDeckBuilder {
           800000,
           subtitle,
           sizePt: 20,
-          color: palette == const PptxPalette() ? 'D6E3F0' : _colors.primaryLight,
+          color: palette == const PptxPalette()
+              ? 'D6E3F0'
+              : _colors.primaryLight,
         ),
       if (footer != null && footer.isNotEmpty)
         _textBox(
@@ -136,6 +170,7 @@ class PptxDeckBuilder {
     _slides.add(_SlideDraft(shapes: shapes, notes: notes));
   }
 
+  /// addSectionSlide API.
   void addSectionSlide({
     required String title,
     String? kicker,
@@ -183,15 +218,22 @@ class PptxDeckBuilder {
     );
   }
 
+  /// addClosingSlide API.
   void addClosingSlide({
     required String title,
     String? subtitle,
     String? footer,
     String? notes,
   }) {
-    addCoverSlide(title: title, subtitle: subtitle, footer: footer, notes: notes);
+    addCoverSlide(
+      title: title,
+      subtitle: subtitle,
+      footer: footer,
+      notes: notes,
+    );
   }
 
+  /// addQuoteSlide API.
   void addQuoteSlide({
     required String quote,
     String? attribution,
@@ -228,6 +270,7 @@ class PptxDeckBuilder {
     );
   }
 
+  /// addKpiSlide API.
   void addKpiSlide({
     required String title,
     required List<({String label, String value})> cards,
@@ -235,7 +278,9 @@ class PptxDeckBuilder {
   }) {
     final List<({String label, String value})> items = cards.take(8).toList();
     final int count = items.isEmpty ? 1 : items.length;
-    final int cols = count <= 2 ? count : (count <= 4 ? 2 : (count <= 6 ? 3 : 4));
+    final int cols = count <= 2
+        ? count
+        : (count <= 4 ? 2 : (count <= 6 ? 3 : 4));
     final int rows = (count + cols - 1) ~/ cols;
     const int left = 500000;
     const int top = 1300000;
@@ -282,6 +327,7 @@ class PptxDeckBuilder {
     _slides.add(_SlideDraft(shapes: shapes, notes: notes));
   }
 
+  /// addTitleBodySlide API.
   void addTitleBodySlide({
     required String title,
     required List<String> bullets,
@@ -295,6 +341,7 @@ class PptxDeckBuilder {
     );
   }
 
+  /// addImageSlide API.
   void addImageSlide({
     required String title,
     required Uint8List pngBytes,
@@ -340,6 +387,7 @@ class PptxDeckBuilder {
     );
   }
 
+  /// addSplitMediaSlide API.
   void addSplitMediaSlide({
     required String title,
     required List<String> bullets,
@@ -356,7 +404,8 @@ class PptxDeckBuilder {
     final int colW = slideWidth ~/ 2 - 700000;
     const int imgBoxY = 1300000;
     const int imgBoxCy = 4800000;
-    final ImageSize size = ImageFit.readSize(imageBytes) ?? const ImageSize(4, 3);
+    final ImageSize size =
+        ImageFit.readSize(imageBytes) ?? const ImageSize(4, 3);
     final ({int cx, int cy}) fitted = ImageFit.containEmu(
       srcWidthPx: size.widthPx,
       srcHeightPx: size.heightPx,
@@ -378,6 +427,7 @@ class PptxDeckBuilder {
     );
   }
 
+  /// addSplitChartSlide API.
   void addSplitChartSlide({
     required String title,
     required List<String> bullets,
@@ -409,6 +459,7 @@ class PptxDeckBuilder {
     );
   }
 
+  /// addTableSlide API.
   void addTableSlide({
     required String title,
     required List<List<String>> rows,
@@ -417,12 +468,16 @@ class PptxDeckBuilder {
   }) {
     _slides.add(
       _SlideDraft(
-        shapes: <String>[_header(title), _table(rows, hasHeader: hasHeader)],
+        shapes: <String>[
+          _header(title),
+          _table(rows, hasHeader: hasHeader),
+        ],
         notes: notes,
       ),
     );
   }
 
+  /// addTwoColumnSlide API.
   void addTwoColumnSlide({
     required String title,
     required List<String> left,
@@ -432,6 +487,7 @@ class PptxDeckBuilder {
     addTwoColumnTextSlide(title: title, left: left, right: right, notes: notes);
   }
 
+  /// addTwoColumnTextSlide API.
   void addTwoColumnTextSlide({
     required String title,
     required List<String> left,
@@ -448,9 +504,25 @@ class PptxDeckBuilder {
         shapes: <String>[
           _header(title),
           if (leftTitle != null && leftTitle.isNotEmpty)
-            _textBox(leftX, 1100000, cx, 400000, leftTitle, sizePt: 16, bold: true),
+            _textBox(
+              leftX,
+              1100000,
+              cx,
+              400000,
+              leftTitle,
+              sizePt: 16,
+              bold: true,
+            ),
           if (rightTitle != null && rightTitle.isNotEmpty)
-            _textBox(rightX, 1100000, cx, 400000, rightTitle, sizePt: 16, bold: true),
+            _textBox(
+              rightX,
+              1100000,
+              cx,
+              400000,
+              rightTitle,
+              sizePt: 16,
+              bold: true,
+            ),
           ..._bullets(
             left,
             x: leftX,
@@ -469,6 +541,7 @@ class PptxDeckBuilder {
     );
   }
 
+  /// addPieChartSlide API.
   void addPieChartSlide({
     required String title,
     required List<ChartPoint> series,
@@ -487,6 +560,7 @@ class PptxDeckBuilder {
     );
   }
 
+  /// addBarChartSlide API.
   void addBarChartSlide({
     required String title,
     required List<ChartPoint> series,
@@ -507,6 +581,7 @@ class PptxDeckBuilder {
     );
   }
 
+  /// addLineChartSlide API.
   void addLineChartSlide({
     required String title,
     required List<ChartSeries> series,
@@ -527,6 +602,7 @@ class PptxDeckBuilder {
     );
   }
 
+  /// build API.
   Uint8List build({String? password}) {
     if (_slides.isEmpty) {
       addTitleSlide(title: 'Presentation');
@@ -595,17 +671,30 @@ class PptxDeckBuilder {
       );
     }
 
-    final RelationshipCollection presRels =
-        package.relationshipsFor('/ppt/presentation.xml');
+    final RelationshipCollection presRels = package.relationshipsFor(
+      '/ppt/presentation.xml',
+    );
     presRels
       ..add(
         type: RelationshipTypes.slideMaster,
         target: 'slideMasters/slideMaster1.xml',
         id: 'rIdMaster',
       )
-      ..add(type: RelationshipTypes.theme, target: 'theme/theme1.xml', id: 'rIdTheme')
-      ..add(type: RelationshipTypes.presProps, target: 'presProps.xml', id: 'rIdPresProps')
-      ..add(type: RelationshipTypes.viewProps, target: 'viewProps.xml', id: 'rIdViewProps')
+      ..add(
+        type: RelationshipTypes.theme,
+        target: 'theme/theme1.xml',
+        id: 'rIdTheme',
+      )
+      ..add(
+        type: RelationshipTypes.presProps,
+        target: 'presProps.xml',
+        id: 'rIdPresProps',
+      )
+      ..add(
+        type: RelationshipTypes.viewProps,
+        target: 'viewProps.xml',
+        id: 'rIdViewProps',
+      )
       ..add(
         type: RelationshipTypes.tableStyles,
         target: 'tableStyles.xml',
@@ -617,7 +706,9 @@ class PptxDeckBuilder {
         target: 'notesMasters/notesMaster1.xml',
         id: 'rIdNotesMaster',
       );
-      package.relationshipsFor('/ppt/notesMasters/notesMaster1.xml').add(
+      package
+          .relationshipsFor('/ppt/notesMasters/notesMaster1.xml')
+          .add(
             type: RelationshipTypes.theme,
             target: '../theme/theme1.xml',
             id: 'rId1',
@@ -630,8 +721,14 @@ class PptxDeckBuilder {
         target: '../slideLayouts/slideLayout1.xml',
         id: 'rId1',
       )
-      ..add(type: RelationshipTypes.theme, target: '../theme/theme1.xml', id: 'rId2');
-    package.relationshipsFor('/ppt/slideLayouts/slideLayout1.xml').add(
+      ..add(
+        type: RelationshipTypes.theme,
+        target: '../theme/theme1.xml',
+        id: 'rId2',
+      );
+    package
+        .relationshipsFor('/ppt/slideLayouts/slideLayout1.xml')
+        .add(
           type: RelationshipTypes.slideMaster,
           target: '../slideMasters/slideMaster1.xml',
           id: 'rId1',
@@ -650,8 +747,9 @@ class PptxDeckBuilder {
         target: 'slides/slide$n.xml',
         id: 'rIdSlide$n',
       );
-      final RelationshipCollection slideRels =
-          package.relationshipsFor('/ppt/slides/slide$n.xml');
+      final RelationshipCollection slideRels = package.relationshipsFor(
+        '/ppt/slides/slide$n.xml',
+      );
       slideRels.add(
         type: RelationshipTypes.slideLayout,
         target: '../slideLayouts/slideLayout1.xml',
@@ -732,47 +830,47 @@ class PptxDeckBuilder {
   ) {
     return switch (kind) {
       ChartKind.pie => DrawingmlCharts.pie(
-          title: title,
-          series: points,
-          rtl: rtl,
-          theme: theme,
-        ),
+        title: title,
+        series: points,
+        rtl: rtl,
+        theme: theme,
+      ),
       ChartKind.donut => DrawingmlCharts.donut(
-          title: title,
-          series: points,
-          rtl: rtl,
-          theme: theme,
-        ),
+        title: title,
+        series: points,
+        rtl: rtl,
+        theme: theme,
+      ),
       ChartKind.bar => DrawingmlCharts.bar(
-          title: title,
-          series: points,
-          rtl: rtl,
-          theme: theme,
-        ),
+        title: title,
+        series: points,
+        rtl: rtl,
+        theme: theme,
+      ),
       ChartKind.line => DrawingmlCharts.line(
-          title: title,
-          series: series.isEmpty
-              ? <ChartSeries>[ChartSeries(name: title, points: points)]
-              : series,
-          rtl: rtl,
-          theme: theme,
-        ),
+        title: title,
+        series: series.isEmpty
+            ? <ChartSeries>[ChartSeries(name: title, points: points)]
+            : series,
+        rtl: rtl,
+        theme: theme,
+      ),
       ChartKind.area => DrawingmlCharts.area(
-          title: title,
-          series: series.isEmpty
-              ? <ChartSeries>[ChartSeries(name: title, points: points)]
-              : series,
-          rtl: rtl,
-          theme: theme,
-        ),
+        title: title,
+        series: series.isEmpty
+            ? <ChartSeries>[ChartSeries(name: title, points: points)]
+            : series,
+        rtl: rtl,
+        theme: theme,
+      ),
       ChartKind.stackedBar => DrawingmlCharts.stackedBar(
-          title: title,
-          series: series.isEmpty
-              ? <ChartSeries>[ChartSeries(name: title, points: points)]
-              : series,
-          rtl: rtl,
-          theme: theme,
-        ),
+        title: title,
+        series: series.isEmpty
+            ? <ChartSeries>[ChartSeries(name: title, points: points)]
+            : series,
+        rtl: rtl,
+        theme: theme,
+      ),
     };
   }
 
@@ -819,7 +917,8 @@ class PptxDeckBuilder {
   }) {
     final int width = cx == 0 ? slideWidth - 1000000 : cx;
     final StringBuffer paras = StringBuffer();
-    for (final String item in items.where((String s) => s.trim().isNotEmpty).take(12)) {
+    for (final String item
+        in items.where((String s) => s.trim().isNotEmpty).take(12)) {
       paras.write(_para('• ${item.trim()}', 18, false, '222222'));
     }
     return <String>[_textBoxRaw(x, y, width, 5000000, paras.toString())];
@@ -847,7 +946,13 @@ class PptxDeckBuilder {
     bool italic = false,
     String color = '222222',
   }) {
-    return _textBoxRaw(x, y, cx, cy, _para(text, sizePt, bold, color, italic: italic));
+    return _textBoxRaw(
+      x,
+      y,
+      cx,
+      cy,
+      _para(text, sizePt, bold, color, italic: italic),
+    );
   }
 
   String _textBoxRaw(int x, int y, int cx, int cy, String paragraphs) {
@@ -908,8 +1013,10 @@ class PptxDeckBuilder {
     if (rows.isEmpty) {
       return '';
     }
-    final int cols =
-        rows.fold<int>(0, (int a, List<String> r) => a > r.length ? a : r.length);
+    final int cols = rows.fold<int>(
+      0,
+      (int a, List<String> r) => a > r.length ? a : r.length,
+    );
     final int tableW = slideWidth - 1000000;
     final int colW = cols == 0 ? tableW : tableW ~/ cols;
     final StringBuffer grid = StringBuffer('<a:tblGrid>');
@@ -1072,11 +1179,18 @@ class _SlideDraft {
     List<int>? imageIds,
     List<int>? chartIds,
     this.notes,
-  })  : imageIds = imageIds ?? const <int>[],
-        chartIds = chartIds ?? const <int>[];
+  }) : imageIds = imageIds ?? const <int>[],
+       chartIds = chartIds ?? const <int>[];
 
+  /// shapes API.
   final List<String> shapes;
+
+  /// imageIds API.
   final List<int> imageIds;
+
+  /// chartIds API.
   final List<int> chartIds;
+
+  /// notes API.
   final String? notes;
 }

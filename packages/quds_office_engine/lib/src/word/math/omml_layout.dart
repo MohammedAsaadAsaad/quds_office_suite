@@ -4,7 +4,9 @@ import 'omml_document.dart';
 import 'omml_edit.dart';
 import 'omml_linear.dart';
 
+/// Class LaidOutOmmlItem.
 sealed class LaidOutOmmlItem {
+  /// LaidOutOmmlItem API.
   LaidOutOmmlItem({
     required this.x,
     required this.y,
@@ -12,13 +14,22 @@ sealed class LaidOutOmmlItem {
     required this.height,
   });
 
+  /// x API.
   double x;
+
+  /// y API.
   double y;
+
+  /// width API.
   double width;
+
+  /// height API.
   double height;
 }
 
+/// Class LaidOutOmmlText.
 class LaidOutOmmlText extends LaidOutOmmlItem {
+  /// LaidOutOmmlText API.
   LaidOutOmmlText({
     required super.x,
     required super.y,
@@ -30,13 +41,22 @@ class LaidOutOmmlText extends LaidOutOmmlItem {
     this.bold = false,
   });
 
+  /// text API.
   final String text;
+
+  /// fontSize API.
   final double fontSize;
+
+  /// italic API.
   final bool italic;
+
+  /// bold API.
   final bool bold;
 }
 
+/// Class LaidOutOmmlRule.
 class LaidOutOmmlRule extends LaidOutOmmlItem {
+  /// LaidOutOmmlRule API.
   LaidOutOmmlRule({
     required super.x,
     required super.y,
@@ -45,7 +65,9 @@ class LaidOutOmmlRule extends LaidOutOmmlItem {
   });
 }
 
+/// Class LaidOutOmmlStroke.
 class LaidOutOmmlStroke extends LaidOutOmmlItem {
+  /// LaidOutOmmlStroke API.
   LaidOutOmmlStroke({
     required super.x,
     required super.y,
@@ -54,12 +76,16 @@ class LaidOutOmmlStroke extends LaidOutOmmlItem {
     required this.kind,
   });
 
+  /// kind API.
   final OmmlStrokeKind kind;
 }
 
+/// Enum OmmlStrokeKind.
 enum OmmlStrokeKind { radical, parenLeft, parenRight, braceLeft, braceRight }
 
+/// Class LaidOutOmmlSlot.
 class LaidOutOmmlSlot extends LaidOutOmmlItem {
+  /// LaidOutOmmlSlot API.
   LaidOutOmmlSlot({
     required super.x,
     required super.y,
@@ -69,11 +95,16 @@ class LaidOutOmmlSlot extends LaidOutOmmlItem {
     required this.empty,
   });
 
+  /// slotIndex API.
   final int slotIndex;
+
+  /// empty API.
   final bool empty;
 }
 
+/// Class LaidOutOmml.
 class LaidOutOmml {
+  /// LaidOutOmml API.
   LaidOutOmml({
     required this.width,
     required this.height,
@@ -82,15 +113,25 @@ class LaidOutOmml {
     required this.slots,
   });
 
+  /// width API.
   final double width;
+
+  /// height API.
   final double height;
+
+  /// baseline API.
   final double baseline;
+
+  /// items API.
   final List<LaidOutOmmlItem> items;
+
+  /// slots API.
   final List<LaidOutOmmlSlot> slots;
 }
 
 /// Professional / linear box layout for an [OmmlEquation].
 abstract final class OmmlLayout {
+  /// layout API.
   static LaidOutOmml layout(OmmlEquation equation, {double fontSize = 16}) {
     if (equation.view == OmmlView.linear) {
       final String text = equation.linearText.isNotEmpty
@@ -101,11 +142,14 @@ abstract final class OmmlLayout {
     final _Env env = _Env(fontSize: fontSize);
     final _Box box = env.seq(equation.root);
     env.flush(box, 0, 0);
-    final ({double width, double height, double left, double top}) bounds =
-        env.bounds();
+    final ({double width, double height, double left, double top}) bounds = env
+        .bounds();
     return LaidOutOmml(
       width: math.max(36, math.max(box.width + 16, bounds.width + 14)),
-      height: math.max(fontSize * 1.6, math.max(box.height + 12, bounds.height + 12)),
+      height: math.max(
+        fontSize * 1.6,
+        math.max(box.height + 12, bounds.height + 12),
+      ),
       baseline: box.ascent + 6,
       items: env.items,
       slots: env.slotItems,
@@ -113,7 +157,7 @@ abstract final class OmmlLayout {
   }
 
   static LaidOutOmml _linear(String text, double fontSize) {
-      final String shown = text.isEmpty ? ' ' : text;
+    final String shown = text.isEmpty ? ' ' : text;
     final double width = ommlMeasure(shown, fontSize) + 16;
     final double height = fontSize * 1.6;
     return LaidOutOmml(
@@ -161,19 +205,32 @@ class _Box {
     required this.paint,
   });
 
+  /// width API.
   final double width;
+
+  /// ascent API.
   final double ascent;
+
+  /// descent API.
   final double descent;
+
+  /// Function API.
   final void Function(double x, double y) paint;
 
+  /// height API.
   double get height => ascent + descent;
 }
 
 class _Env {
   _Env({required this.fontSize});
 
+  /// fontSize API.
   final double fontSize;
+
+  /// items API.
   final List<LaidOutOmmlItem> items = <LaidOutOmmlItem>[];
+
+  /// slotItems API.
   final List<LaidOutOmmlSlot> slotItems = <LaidOutOmmlSlot>[];
   final List<OmmlSeq> _allSlots = <OmmlSeq>[];
   var _indexed = false;
@@ -193,6 +250,7 @@ class _Env {
     return i < 0 ? 0 : i;
   }
 
+  /// seq API.
   _Box seq(OmmlSeq node) {
     _ensureSlots(node);
     if (node.children.isEmpty) {
@@ -262,7 +320,10 @@ class _Env {
     if (_isOperator(prev) || _isOperator(next)) {
       return fontSize * 0.28;
     }
-    if (prev is OmmlFrac || next is OmmlFrac || prev is OmmlRad || next is OmmlRad) {
+    if (prev is OmmlFrac ||
+        next is OmmlFrac ||
+        prev is OmmlRad ||
+        next is OmmlRad) {
       return fontSize * 0.22;
     }
     if (prev is OmmlDelim || next is OmmlDelim) {
@@ -279,6 +340,7 @@ class _Env {
     return ops.contains(node.text);
   }
 
+  /// nodeBox API.
   _Box nodeBox(OmmlNode node) {
     switch (node) {
       case OmmlSeq():
@@ -308,6 +370,7 @@ class _Env {
     }
   }
 
+  /// textBox API.
   _Box textBox(OmmlText node) {
     final String text = node.text.isEmpty ? ' ' : node.text;
     final double size = fontSize;
@@ -334,8 +397,11 @@ class _Env {
     );
   }
 
+  /// fracBox API.
   _Box fracBox(OmmlFrac node) {
-    final _Env child = _Env(fontSize: fontSize * 0.85).._allSlots.addAll(_allSlots).._indexed = true;
+    final _Env child = _Env(fontSize: fontSize * 0.85)
+      .._allSlots.addAll(_allSlots)
+      .._indexed = true;
     final _Box num = child.seq(node.num);
     final _Box den = child.seq(node.den);
     if (node.type == OmmlFracType.linear || node.type == OmmlFracType.skewed) {
@@ -365,7 +431,9 @@ class _Env {
     }
     final double pad = fontSize * 0.35;
     final double width = math.max(num.width, den.width) + pad * 2;
-    final double gap = node.type == OmmlFracType.noBar ? fontSize * 0.18 : fontSize * 0.22;
+    final double gap = node.type == OmmlFracType.noBar
+        ? fontSize * 0.18
+        : fontSize * 0.22;
     final double axis = fontSize * 0.28;
     final double ascent = num.height + gap + axis;
     final double descent = den.height + gap - axis;
@@ -385,19 +453,19 @@ class _Env {
             ),
           );
         }
-        den.paint(
-          x + (width - den.width) / 2,
-          y + num.height + gap * 2 + 1,
-        );
+        den.paint(x + (width - den.width) / 2, y + num.height + gap * 2 + 1);
         items.addAll(child.items);
         slotItems.addAll(child.slotItems);
       },
     );
   }
 
+  /// scriptBox API.
   _Box scriptBox(OmmlScript node) {
     final _Box base = seq(node.base);
-    final _Env small = _Env(fontSize: fontSize * 0.62).._allSlots.addAll(_allSlots).._indexed = true;
+    final _Env small = _Env(fontSize: fontSize * 0.62)
+      .._allSlots.addAll(_allSlots)
+      .._indexed = true;
     final _Box? sub = node.sub == null ? null : small.seq(node.sub!);
     final _Box? sup = node.sup == null ? null : small.seq(node.sup!);
     final double scriptW = math.max(sub?.width ?? 0, sup?.width ?? 0);
@@ -424,15 +492,18 @@ class _Env {
     );
   }
 
+  /// radBox API.
   _Box radBox(OmmlRad node) {
-    final _Env child = _Env(fontSize: fontSize).._allSlots.addAll(_allSlots).._indexed = true;
+    final _Env child = _Env(fontSize: fontSize)
+      .._allSlots.addAll(_allSlots)
+      .._indexed = true;
     final _Box e = child.seq(node.e);
     final _Env? degEnv = node.deg == null
         ? null
         : (_Env(fontSize: fontSize * 0.5)
-          .._allSlots.addAll(_allSlots)
-          .._indexed = true);
-    final _Box? deg = degEnv == null ? null : degEnv.seq(node.deg!);
+            .._allSlots.addAll(_allSlots)
+            .._indexed = true);
+    final _Box? deg = degEnv?.seq(node.deg!);
     final double tick = fontSize * 0.85;
     final double pad = fontSize * 0.28;
     final double width = (deg?.width ?? 0) + tick + e.width + pad;
@@ -466,14 +537,24 @@ class _Env {
     );
   }
 
+  /// naryBox API.
   _Box naryBox(OmmlNary node) {
     final double opSize = fontSize * 1.55;
     final double opW = opSize * 0.7;
-    final _Env small = _Env(fontSize: fontSize * 0.55).._allSlots.addAll(_allSlots).._indexed = true;
-    final _Box? sub = node.sub == null || node.hideSub ? null : small.seq(node.sub!);
-    final _Box? sup = node.sup == null || node.hideSup ? null : small.seq(node.sup!);
+    final _Env small = _Env(fontSize: fontSize * 0.55)
+      .._allSlots.addAll(_allSlots)
+      .._indexed = true;
+    final _Box? sub = node.sub == null || node.hideSub
+        ? null
+        : small.seq(node.sub!);
+    final _Box? sup = node.sup == null || node.hideSup
+        ? null
+        : small.seq(node.sup!);
     final _Box e = seq(node.e);
-    final double midW = math.max(opW, math.max(sub?.width ?? 0, sup?.width ?? 0));
+    final double midW = math.max(
+      opW,
+      math.max(sub?.width ?? 0, sup?.width ?? 0),
+    );
     final double extraA = (sup?.height ?? 0) + 2;
     final double extraD = (sub?.height ?? 0) + 2;
     return _Box(
@@ -505,6 +586,7 @@ class _Env {
     );
   }
 
+  /// delimBox API.
   _Box delimBox(OmmlDelim node) {
     final _Box inner = seq(node.e);
     final double delimW = fontSize * 0.42;
@@ -545,9 +627,12 @@ class _Env {
     );
   }
 
+  /// matrixBox API.
   _Box matrixBox(OmmlMatrix node) {
     final List<List<_Box>> cells = <List<_Box>>[];
-    final _Env child = _Env(fontSize: fontSize * 0.9).._allSlots.addAll(_allSlots).._indexed = true;
+    final _Env child = _Env(fontSize: fontSize * 0.9)
+      .._allSlots.addAll(_allSlots)
+      .._indexed = true;
     var cols = 0;
     for (final List<OmmlSeq> row in node.rows) {
       cols = math.max(cols, row.length);
@@ -564,7 +649,8 @@ class _Env {
       rowH.add(h);
     }
     final double width = colW.fold<double>(0, (double a, double b) => a + b);
-    final double height = rowH.fold<double>(0, (double a, double b) => a + b) + 4;
+    final double height =
+        rowH.fold<double>(0, (double a, double b) => a + b) + 4;
     return _Box(
       width: width,
       ascent: height * 0.55,
@@ -585,6 +671,7 @@ class _Env {
     );
   }
 
+  /// accBox API.
   _Box accBox(OmmlAcc node) {
     final _Box e = seq(node.e);
     return _Box(
@@ -607,6 +694,7 @@ class _Env {
     );
   }
 
+  /// funcBox API.
   _Box funcBox(OmmlFunc node) {
     final _Box name = textBox(
       OmmlText(text: node.name, italic: false, normal: true),
@@ -623,9 +711,12 @@ class _Env {
     );
   }
 
+  /// limBox API.
   _Box limBox(OmmlLimLow node) {
     final _Box e = seq(node.e);
-    final _Env small = _Env(fontSize: fontSize * 0.55).._allSlots.addAll(_allSlots).._indexed = true;
+    final _Env small = _Env(fontSize: fontSize * 0.55)
+      .._allSlots.addAll(_allSlots)
+      .._indexed = true;
     final _Box lim = small.seq(node.lim);
     final double width = math.max(e.width, lim.width);
     return _Box(
@@ -641,6 +732,7 @@ class _Env {
     );
   }
 
+  /// barBox API.
   _Box barBox(OmmlBar node) {
     final _Box e = seq(node.e);
     return _Box(
@@ -649,9 +741,7 @@ class _Env {
       descent: e.descent + (node.posTop ? 0 : 3),
       paint: (double x, double y) {
         if (node.posTop) {
-          items.add(
-            LaidOutOmmlRule(x: x, y: y, width: e.width, height: 1.1),
-          );
+          items.add(LaidOutOmmlRule(x: x, y: y, width: e.width, height: 1.1));
           e.paint(x, y + 3);
         } else {
           e.paint(x, y);
@@ -668,8 +758,10 @@ class _Env {
     );
   }
 
+  /// flush API.
   void flush(_Box box, double x, double y) => box.paint(x + 8, y + 6);
 
+  /// bounds API.
   ({double width, double height, double left, double top}) bounds() {
     if (items.isEmpty) {
       return (width: 0, height: 0, left: 0, top: 0);
@@ -693,7 +785,9 @@ class _Env {
   }
 }
 
+/// ommlMeasure helper.
 double ommlMeasure(String text, double fontSize) {
+  /// w API.
   var w = 0.0;
   for (final int cp in text.runes) {
     w += _ommlAdvance(cp, fontSize);

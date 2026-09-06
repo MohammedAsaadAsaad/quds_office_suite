@@ -4,6 +4,7 @@ import '../io/byte_source.dart';
 
 /// Parsed TrueType / OpenType SFNT font.
 class SfntFont {
+  /// SfntFont API.
   SfntFont({
     required this.bytes,
     required this.tables,
@@ -26,26 +27,64 @@ class SfntFont {
     this.familyName = '',
   });
 
+  /// bytes API.
   final Uint8List bytes;
+
+  /// tables API.
   final Map<String, SfntTableRecord> tables;
+
+  /// unitsPerEm API.
   final int unitsPerEm;
+
+  /// indexToLocFormat API.
   final int indexToLocFormat;
+
+  /// numGlyphs API.
   final int numGlyphs;
+
+  /// numberOfHMetrics API.
   final int numberOfHMetrics;
+
+  /// ascender API.
   final int ascender;
+
+  /// descender API.
   final int descender;
+
+  /// lineGap API.
   final int lineGap;
+
+  /// capHeight API.
   final int capHeight;
+
+  /// xMin API.
   final int xMin;
+
+  /// yMin API.
   final int yMin;
+
+  /// xMax API.
   final int xMax;
+
+  /// yMax API.
   final int yMax;
+
+  /// advanceWidths API.
   final List<int> advanceWidths;
+
+  /// leftSideBearings API.
   final List<int> leftSideBearings;
+
+  /// glyphOffsets API.
   final List<int> glyphOffsets;
+
+  /// cmap API.
   final CmapTable cmap;
+
+  /// familyName API.
   final String familyName;
 
+  /// parse API.
   factory SfntFont.parse(Uint8List bytes) {
     if (bytes.length < 12) {
       throw const SfntException('SFNT header is truncated');
@@ -178,6 +217,7 @@ class SfntFont {
     );
   }
 
+  /// tableBytes API.
   Uint8List tableBytes(String tag) {
     final SfntTableRecord? rec = tables[tag];
     if (rec == null) {
@@ -186,10 +226,13 @@ class SfntFont {
     return Uint8List.sublistView(bytes, rec.offset, rec.offset + rec.length);
   }
 
+  /// hasTable API.
   bool hasTable(String tag) => tables.containsKey(tag);
 
+  /// glyphIdFor API.
   int glyphIdFor(int codePoint) => cmap.glyphId(codePoint);
 
+  /// advanceWidth API.
   int advanceWidth(int glyphId) {
     if (glyphId < 0 || glyphId >= advanceWidths.length) {
       return 0;
@@ -245,6 +288,7 @@ class SfntFont {
 
 /// Table directory entry.
 class SfntTableRecord {
+  /// SfntTableRecord API.
   const SfntTableRecord({
     required this.tag,
     required this.checksum,
@@ -252,22 +296,32 @@ class SfntTableRecord {
     required this.length,
   });
 
+  /// tag API.
   final String tag;
+
+  /// checksum API.
   final int checksum;
+
+  /// offset API.
   final int offset;
+
+  /// length API.
   final int length;
 }
 
 /// Character-to-glyph map supporting cmap format 4 and 12.
 class CmapTable {
+  /// CmapTable API.
   CmapTable(this._map);
 
   final Map<int, int> _map;
 
+  /// parse API.
   factory CmapTable.parse(ByteCursor cmap) {
     cmap.u16be(); // version
     final int numTables = cmap.u16be();
-    final List<({int score, int offset})> tables = <({int score, int offset})>[];
+    final List<({int score, int offset})> tables =
+        <({int score, int offset})>[];
     for (int i = 0; i < numTables; i++) {
       final int platform = cmap.u16be();
       final int encoding = cmap.u16be();
@@ -319,8 +373,10 @@ class CmapTable {
     return false;
   }
 
+  /// glyphId API.
   int glyphId(int codePoint) => _map[codePoint] ?? 0;
 
+  /// mappings API.
   Iterable<MapEntry<int, int>> get mappings => _map.entries;
 
   static int _score(int platform, int encoding) {
@@ -407,10 +463,13 @@ class CmapTable {
 
 /// Thrown when an SFNT font is corrupt or missing required tables.
 class SfntException implements Exception {
+  /// SfntException API.
   const SfntException(this.message);
 
+  /// message API.
   final String message;
 
   @override
+  /// toString API.
   String toString() => 'SfntException: $message';
 }

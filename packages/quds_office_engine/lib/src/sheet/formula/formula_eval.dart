@@ -4,9 +4,10 @@ import 'formula_ast.dart';
 
 /// Tokenizes an Excel formula (leading `=` optional).
 class FormulaLexer {
+  /// FormulaLexer API.
   FormulaLexer(String source)
-      : _src = source.startsWith('=') ? source.substring(1) : source,
-        _base = source.startsWith('=') ? 1 : 0;
+    : _src = source.startsWith('=') ? source.substring(1) : source,
+      _base = source.startsWith('=') ? 1 : 0;
 
   final String _src;
   final int _base;
@@ -14,6 +15,7 @@ class FormulaLexer {
 
   int get _raw => _base + _i;
 
+  /// tokenize API.
   List<FormulaToken> tokenize() {
     final List<FormulaToken> tokens = <FormulaToken>[];
     while (!_done) {
@@ -33,15 +35,21 @@ class FormulaLexer {
       } else if (ch == 0x28) {
         final int start = _raw;
         _i++;
-        tokens.add(FormulaToken(FormulaTokenKind.lparen, '(', start: start, end: _raw));
+        tokens.add(
+          FormulaToken(FormulaTokenKind.lparen, '(', start: start, end: _raw),
+        );
       } else if (ch == 0x29) {
         final int start = _raw;
         _i++;
-        tokens.add(FormulaToken(FormulaTokenKind.rparen, ')', start: start, end: _raw));
+        tokens.add(
+          FormulaToken(FormulaTokenKind.rparen, ')', start: start, end: _raw),
+        );
       } else if (ch == 0x2C || ch == 0x3B) {
         final int start = _raw;
         _i++;
-        tokens.add(FormulaToken(FormulaTokenKind.comma, ',', start: start, end: _raw));
+        tokens.add(
+          FormulaToken(FormulaTokenKind.comma, ',', start: start, end: _raw),
+        );
       } else {
         tokens.add(_operator());
       }
@@ -50,6 +58,7 @@ class FormulaLexer {
     return tokens;
   }
 
+  /// length API.
   bool get _done => _i >= _src.length;
 
   void _skipWs() {
@@ -72,18 +81,26 @@ class FormulaLexer {
     if (!_done) {
       _i++;
     }
-    return FormulaToken(FormulaTokenKind.string, value, start: rawStart, end: _raw);
+    return FormulaToken(
+      FormulaTokenKind.string,
+      value,
+      start: rawStart,
+      end: _raw,
+    );
   }
 
   FormulaToken _number() {
     final int start = _i;
     final int rawStart = _raw;
-    while (!_done && (_isDigit(_src.codeUnitAt(_i)) || _src.codeUnitAt(_i) == 0x2E)) {
+    while (!_done &&
+        (_isDigit(_src.codeUnitAt(_i)) || _src.codeUnitAt(_i) == 0x2E)) {
       _i++;
     }
-    if (!_done && (_src.codeUnitAt(_i) == 0x65 || _src.codeUnitAt(_i) == 0x45)) {
+    if (!_done &&
+        (_src.codeUnitAt(_i) == 0x65 || _src.codeUnitAt(_i) == 0x45)) {
       _i++;
-      if (!_done && (_src.codeUnitAt(_i) == 0x2B || _src.codeUnitAt(_i) == 0x2D)) {
+      if (!_done &&
+          (_src.codeUnitAt(_i) == 0x2B || _src.codeUnitAt(_i) == 0x2D)) {
         _i++;
       }
       while (!_done && _isDigit(_src.codeUnitAt(_i))) {
@@ -151,13 +168,24 @@ class FormulaLexer {
     return _src.substring(start, _i);
   }
 
+  /// start API.
   FormulaToken _classifyRef(String lex, {int start = 0, int end = 0}) {
     final String upper = lex.toUpperCase();
     if (upper == 'TRUE') {
-      return FormulaToken(FormulaTokenKind.boolTrue, 'TRUE', start: start, end: end);
+      return FormulaToken(
+        FormulaTokenKind.boolTrue,
+        'TRUE',
+        start: start,
+        end: end,
+      );
     }
     if (upper == 'FALSE') {
-      return FormulaToken(FormulaTokenKind.boolFalse, 'FALSE', start: start, end: end);
+      return FormulaToken(
+        FormulaTokenKind.boolFalse,
+        'FALSE',
+        start: start,
+        end: end,
+      );
     }
     if (_rangePattern.hasMatch(lex)) {
       return FormulaToken(FormulaTokenKind.range, lex, start: start, end: end);
@@ -174,7 +202,12 @@ class FormulaLexer {
       final String two = _src.substring(_i, _i + 2);
       if (two == '<=' || two == '>=' || two == '<>') {
         _i += 2;
-        return FormulaToken(FormulaTokenKind.op, two, start: rawStart, end: _raw);
+        return FormulaToken(
+          FormulaTokenKind.op,
+          two,
+          start: rawStart,
+          end: _raw,
+        );
       }
     }
     final String one = _src[_i];
@@ -182,12 +215,17 @@ class FormulaLexer {
     return FormulaToken(FormulaTokenKind.op, one, start: rawStart, end: _raw);
   }
 
+  /// RegExp API.
   static final RegExp _cellPattern = RegExp(
     r"^((?:'[^']+'|[^!]+)!)?\$?[A-Za-z]+\$?\d+$",
   );
+
+  /// RegExp API.
   static final RegExp _rangePattern = RegExp(
     r"^((?:'[^']+'|[^!]+)!)?\$?[A-Za-z]+\$?\d+:\$?[A-Za-z]+\$?\d+$",
   );
+
+  /// RegExp API.
   static final RegExp _unicodeLetter = RegExp(r'\p{L}', unicode: true);
 
   static bool _isDigit(int ch) => ch >= 0x30 && ch <= 0x39;
@@ -209,11 +247,13 @@ class FormulaLexer {
 
 /// Pratt / recursive-descent parser.
 class FormulaParser {
+  /// FormulaParser API.
   FormulaParser(this._tokens);
 
   final List<FormulaToken> _tokens;
   int _i = 0;
 
+  /// parse API.
   FormulaNode parse() => _expr(0);
 
   FormulaToken get _cur => _tokens[_i];
@@ -350,9 +390,11 @@ class FormulaParser {
   }
 }
 
+/// parseFormula helper.
 FormulaNode parseFormula(String source) =>
     FormulaParser(FormulaLexer(source).tokenize()).parse();
 
+/// evaluateFormula helper.
 Object? evaluateFormula(String source, FormulaContext ctx) {
   try {
     return parseFormula(source).eval(ctx);
@@ -361,11 +403,18 @@ Object? evaluateFormula(String source, FormulaContext ctx) {
   }
 }
 
+/// Class FormulaEvaluator.
 class FormulaEvaluator {
+  /// evaluate API.
   static Object? evaluate(String source, FormulaContext ctx) =>
       evaluateFormula(source, ctx);
 
-  static Object? evaluateCell(SmlWorkbook book, SmlWorksheet sheet, SmlCell cell) {
+  /// evaluateCell API.
+  static Object? evaluateCell(
+    SmlWorkbook book,
+    SmlWorksheet sheet,
+    SmlCell cell,
+  ) {
     if (cell.formula == null || cell.formula!.isEmpty) {
       return cell.value;
     }
@@ -420,6 +469,7 @@ class FormulaEvaluator {
     cell.value = text;
   }
 
+  /// recalculate API.
   static List<String> recalculate(SmlWorkbook book) =>
       FormulaDepGraph(book).recalculate();
 }

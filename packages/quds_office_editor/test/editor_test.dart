@@ -92,50 +92,53 @@ void main() {
     );
   });
 
-  test('script runs stay in their own paint group and sit off the baseline', () {
-    LaidOutGlyph glyph(WmlVertAlign align, {double x = 0}) {
-      return LaidOutGlyph(
-        glyph: const ShapedGlyph(
-          codePoint: 0x32,
-          glyphId: 1,
-          advance: 6,
-          logicalIndex: 0,
-          level: 0,
-        ),
-        x: x,
-        y: 20,
-        color: '000000',
-        fontSize: align == WmlVertAlign.baseline ? 11 : 7.15,
-        bold: false,
-        underline: WmlUnderline.none,
-        vertAlign: align,
-      );
-    }
+  test(
+    'script runs stay in their own paint group and sit off the baseline',
+    () {
+      LaidOutGlyph glyph(WmlVertAlign align, {double x = 0}) {
+        return LaidOutGlyph(
+          glyph: const ShapedGlyph(
+            codePoint: 0x32,
+            glyphId: 1,
+            advance: 6,
+            logicalIndex: 0,
+            level: 0,
+          ),
+          x: x,
+          y: 20,
+          color: '000000',
+          fontSize: align == WmlVertAlign.baseline ? 11 : 7.15,
+          bold: false,
+          underline: WmlUnderline.none,
+          vertAlign: align,
+        );
+      }
 
-    expect(
-      PaintRunText.samePaintRun(
-        glyph(WmlVertAlign.baseline),
-        glyph(WmlVertAlign.superscript),
-      ),
-      isFalse,
-    );
-    expect(
-      WmlVertAlign.subscript.paintTop(
-        lineY: 72,
-        lineHeight: 14,
-        fontSize: 7.15,
-      ),
-      closeTo(72 + (14 - 7.15), 0.01),
-    );
-    expect(
-      WmlVertAlign.superscript.paintTop(
-        lineY: 72,
-        lineHeight: 14,
-        fontSize: 7.15,
-      ),
-      72,
-    );
-  });
+      expect(
+        PaintRunText.samePaintRun(
+          glyph(WmlVertAlign.baseline),
+          glyph(WmlVertAlign.superscript),
+        ),
+        isFalse,
+      );
+      expect(
+        WmlVertAlign.subscript.paintTop(
+          lineY: 72,
+          lineHeight: 14,
+          fontSize: 7.15,
+        ),
+        closeTo(72 + (14 - 7.15), 0.01),
+      );
+      expect(
+        WmlVertAlign.superscript.paintTop(
+          lineY: 72,
+          lineHeight: 14,
+          fontSize: 7.15,
+        ),
+        72,
+      );
+    },
+  );
 
   test('caret selects a word and a paragraph', () {
     const String text = 'Hello field team — مرحبا بالفريق';
@@ -293,9 +296,7 @@ void main() {
         sections: <WmlSection>[
           WmlSection(
             blocks: <WmlBlock>[
-              WmlParagraph(
-                inlines: <WmlInline>[WmlRun(text: 'Hello')],
-              ),
+              WmlParagraph(inlines: <WmlInline>[WmlRun(text: 'Hello')]),
               WmlVisual(
                 visual: OfficeVisual(
                   kind: OfficeVisualKind.chartColumn,
@@ -348,10 +349,7 @@ void main() {
       render.cursorFor(toWindow(box.x + box.width / 2, box.y + box.height / 2)),
       SystemMouseCursors.move,
     );
-    expect(
-      render.cursorFor(const Offset(8, 8)),
-      SystemMouseCursors.basic,
-    );
+    expect(render.cursorFor(const Offset(8, 8)), SystemMouseCursors.basic);
   });
 
   testWidgets('word canvas click hits the second table cell', (
@@ -479,9 +477,7 @@ void main() {
                   cells: <WmlTableCell>[
                     WmlTableCell(
                       blocks: <WmlBlock>[
-                        WmlParagraph(
-                          inlines: <WmlInline>[WmlRun(text: 'NEI')],
-                        ),
+                        WmlParagraph(inlines: <WmlInline>[WmlRun(text: 'NEI')]),
                       ],
                     ),
                     WmlTableCell(
@@ -592,10 +588,7 @@ void main() {
     );
     await tester.pump();
     expect(selection.isFullRowSelection, isTrue);
-    expect(
-      selection.contains(SmlCellRef(12, selection.focus.row)),
-      isTrue,
-    );
+    expect(selection.contains(SmlCellRef(12, selection.focus.row)), isTrue);
   });
 
   testWidgets('rtl sheet places column A on the right', (
@@ -937,10 +930,11 @@ void main() {
     word.applyEquationStructure(OmmlStructure.squareRoot);
     expect(
       word.selectedEquation!.math.root.children
-          .whereType<OmmlRad>()
-          .isNotEmpty ||
-          OmmlEdit.slots(word.selectedEquation!.math.root)
-              .any((OmmlSeq slot) => slot.children.whereType<OmmlRad>().isNotEmpty),
+              .whereType<OmmlRad>()
+              .isNotEmpty ||
+          OmmlEdit.slots(word.selectedEquation!.math.root).any(
+            (OmmlSeq slot) => slot.children.whereType<OmmlRad>().isNotEmpty,
+          ),
       isTrue,
     );
     word.setEquationView(OmmlView.linear);
@@ -969,9 +963,13 @@ void main() {
     expect(opened.selectedEquation, isNotNull);
     opened.insertEquationText('Q');
     expect(OmmlLinear.write(opened.selectedEquation!.math.root), contains('Q'));
-    expect(opened.laidOut.pages.first.frames.any(
-      (LaidOutBox box) => box.kind == LaidOutBoxKind.equation && box.omml != null,
-    ), isTrue);
+    expect(
+      opened.laidOut.pages.first.frames.any(
+        (LaidOutBox box) =>
+            box.kind == LaidOutBoxKind.equation && box.omml != null,
+      ),
+      isTrue,
+    );
   });
 
   test('equation arrows move by character and cross cells at the edges', () {
@@ -1167,16 +1165,26 @@ void main() {
         .whereType<WmlRun>()
         .toList();
     expect(
-      runs.where((WmlRun run) => run.properties.bold).map((WmlRun run) => run.text).join(),
+      runs
+          .where((WmlRun run) => run.properties.bold)
+          .map((WmlRun run) => run.text)
+          .join(),
       'bilingual',
     );
     expect(
-      runs.where((WmlRun run) => !run.properties.bold).map((WmlRun run) => run.text).join(),
+      runs
+          .where((WmlRun run) => !run.properties.bold)
+          .map((WmlRun run) => run.text)
+          .join(),
       'Keep this  note',
     );
     expect(word.document.paragraphs.first.text, 'Document body');
     expect(
-      word.document.paragraphs.first.inlines.whereType<WmlRun>().first.properties.bold,
+      word.document.paragraphs.first.inlines
+          .whereType<WmlRun>()
+          .first
+          .properties
+          .bold,
       isFalse,
     );
   });
@@ -1238,8 +1246,9 @@ void main() {
       SystemMouseCursors.text,
     );
     final WmlToc toc = WordToc.tocs(word.document).single;
-    final int titleIndex =
-        word.document.paragraphs.toList().indexOf(toc.titleParagraph);
+    final int titleIndex = word.document.paragraphs.toList().indexOf(
+      toc.titleParagraph,
+    );
     expect(titleIndex, greaterThanOrEqualTo(0));
     word.caret.paragraphIndex = titleIndex;
     word.caret.selectParagraph(toc.titleParagraph.text);

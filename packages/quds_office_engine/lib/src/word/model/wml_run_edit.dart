@@ -3,6 +3,7 @@ import 'wml_document.dart';
 
 /// Split and format [WmlRun] spans inside a paragraph.
 abstract final class WmlRunEdit {
+  /// propsAt API.
   static WmlRunProps propsAt(WmlParagraph paragraph, int index) {
     var offset = 0;
     WmlRunProps last = WmlRunProps();
@@ -20,6 +21,7 @@ abstract final class WmlRunEdit {
     return last;
   }
 
+  /// splitAt API.
   static void splitAt(WmlParagraph paragraph, int index) {
     var offset = 0;
     for (int i = 0; i < paragraph.inlines.length; i++) {
@@ -50,6 +52,7 @@ abstract final class WmlRunEdit {
     }
   }
 
+  /// applyRange API.
   static void applyRange(
     WmlParagraph paragraph,
     int start,
@@ -88,6 +91,7 @@ abstract final class WmlRunEdit {
     coalesce(paragraph);
   }
 
+  /// replaceRange API.
   static void replaceRange(
     WmlParagraph paragraph,
     int start,
@@ -102,7 +106,10 @@ abstract final class WmlRunEdit {
     final int length = paragraph.text.length;
     start = start.clamp(0, length);
     end = end.clamp(0, length);
-    final WmlRunProps props = propsAt(paragraph, start == length ? start - 1 : start);
+    final WmlRunProps props = propsAt(
+      paragraph,
+      start == length ? start - 1 : start,
+    );
     final List<int> commentIds = _commentIdsAt(
       paragraph,
       start == length ? start - 1 : start,
@@ -167,11 +174,8 @@ abstract final class WmlRunEdit {
     coalesce(paragraph);
   }
 
-  static List<WmlRun> extractRuns(
-    WmlParagraph paragraph,
-    int start,
-    int end,
-  ) {
+  /// extractRuns API.
+  static List<WmlRun> extractRuns(WmlParagraph paragraph, int start, int end) {
     if (start > end) {
       final int swap = start;
       start = end;
@@ -207,11 +211,8 @@ abstract final class WmlRunEdit {
     return out;
   }
 
-  static void insertRuns(
-    WmlParagraph paragraph,
-    int index,
-    List<WmlRun> runs,
-  ) {
+  /// insertRuns API.
+  static void insertRuns(WmlParagraph paragraph, int index, List<WmlRun> runs) {
     if (runs.isEmpty) {
       return;
     }
@@ -244,6 +245,7 @@ abstract final class WmlRunEdit {
     coalesce(paragraph);
   }
 
+  /// coalesce API.
   static void coalesce(WmlParagraph paragraph) {
     if (paragraph.inlines.length < 2) {
       return;

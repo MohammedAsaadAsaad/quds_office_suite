@@ -4,9 +4,9 @@ import '../../opc/ole/embedded_part.dart';
 import '../../opc/opc_archive.dart';
 import '../../opc/package_part.dart';
 import '../../opc/relationships.dart';
+import '../../visual/office_visual.dart';
 import '../../xml/namespaces.dart';
 import '../../xml/xml_reader.dart';
-import '../../visual/office_visual.dart';
 import '../math/omml_document.dart';
 import '../math/omml_io.dart';
 import '../model/wml_document.dart';
@@ -25,6 +25,7 @@ class WordDeserializer {
   String? _docUri;
   WmlSection? _pendingParagraphSectPr;
 
+  /// read API.
   WmlDocument read(OpcPackage package) {
     final PackageRelationship? office = package.packageRelationships
         .firstByType(RelationshipTypes.officeDocument);
@@ -50,15 +51,11 @@ class WordDeserializer {
       }
       if (reader.localName == 'p' &&
           reader.namespaceUri == OfficeNamespaces.w) {
-        _addParagraph(
-          section.blocks,
-          _readParagraph(reader, package, docUri),
-        );
+        _addParagraph(section.blocks, _readParagraph(reader, package, docUri));
         section = _flushParagraphSectPr(document, section);
       } else if ((reader.localName == 'oMathPara' ||
               reader.localName == 'oMath') &&
-          (reader.namespaceUri == OfficeNamespaces.m ||
-              reader.prefix == 'm')) {
+          (reader.namespaceUri == OfficeNamespaces.m || reader.prefix == 'm')) {
         final OmmlEquation? math = OmmlIo.readFrom(reader);
         if (math != null) {
           section.blocks.add(WmlEquation(math: math));
@@ -87,6 +84,7 @@ class WordDeserializer {
     return document;
   }
 
+  /// readBytes API.
   WmlDocument readBytes(Uint8List bytes, {String? password}) =>
       read(OpcPackage.openBytes(bytes, password: password));
 
@@ -173,11 +171,7 @@ class WordDeserializer {
     }
   }
 
-  bool _takeDrawing(
-    XmlPullReader reader,
-    OpcPackage package,
-    String docUri,
-  ) {
+  bool _takeDrawing(XmlPullReader reader, OpcPackage package, String docUri) {
     if (reader.localName != 'drawing') {
       return false;
     }
@@ -406,8 +400,7 @@ class WordDeserializer {
             'val',
             namespaceUri: OfficeNamespaces.w,
           );
-          props.headingLevel ??=
-              WordToc.headingLevelFromStyle(props.styleId);
+          props.headingLevel ??= WordToc.headingLevelFromStyle(props.styleId);
         case 'outlineLvl':
           final String? raw = reader.getAttribute(
             'val',
@@ -511,8 +504,7 @@ class WordDeserializer {
     if (rid == null || rid.isEmpty) {
       return null;
     }
-    final PackageRelationship? rel =
-        package.relationshipsFor(docUri).byId(rid);
+    final PackageRelationship? rel = package.relationshipsFor(docUri).byId(rid);
     if (rel == null || rel.target.isEmpty) {
       return null;
     }
@@ -540,7 +532,8 @@ class WordDeserializer {
         final bool tocHeading = WordToc.isTocHeadingStyle(
           block.properties.styleId,
         );
-        final bool stillToc = tocInstr ||
+        final bool stillToc =
+            tocInstr ||
             tocStyle ||
             tocHeading ||
             block.properties.fieldBegin ||
@@ -813,10 +806,7 @@ class WordDeserializer {
           cell.fillColor = fill;
         }
       } else if (reader.localName == 'p') {
-        _addParagraph(
-          cell.blocks,
-          _readParagraph(reader, package, docUri),
-        );
+        _addParagraph(cell.blocks, _readParagraph(reader, package, docUri));
       } else if (reader.localName == 'oMathPara' ||
           reader.localName == 'oMath') {
         final OmmlEquation? math = OmmlIo.readFrom(reader);
@@ -1111,6 +1101,7 @@ class WordDeserializer {
     return RegExp(r'(^|[^A-Z])PAGE([^A-Z]|$)').hasMatch(upper);
   }
 
+  /// RegExp API.
   static final RegExp _cachedPageResult = RegExp(r'^\s*\d+\s*$');
 
   WmlObject? _readObject(
@@ -1198,11 +1189,7 @@ class WordDeserializer {
     return twipsToPoints(int.parse(raw));
   }
 
-  void _readComments(
-    WmlDocument document,
-    OpcPackage package,
-    String docUri,
-  ) {
+  void _readComments(WmlDocument document, OpcPackage package, String docUri) {
     final PackageRelationship? rel = package
         .relationshipsFor(docUri)
         .firstByType(RelationshipTypes.comments);
@@ -1221,25 +1208,19 @@ class WordDeserializer {
           reader.localName != 'comment') {
         continue;
       }
-      final int id = int.tryParse(
+      final int id =
+          int.tryParse(
             reader.getAttribute('id', namespaceUri: OfficeNamespaces.w) ?? '',
           ) ??
           document.comments.length;
-      final String author = reader.getAttribute(
-            'author',
-            namespaceUri: OfficeNamespaces.w,
-          ) ??
+      final String author =
+          reader.getAttribute('author', namespaceUri: OfficeNamespaces.w) ??
           'Quds Office';
-      final String initials = reader.getAttribute(
-            'initials',
-            namespaceUri: OfficeNamespaces.w,
-          ) ??
+      final String initials =
+          reader.getAttribute('initials', namespaceUri: OfficeNamespaces.w) ??
           '';
-      final String dateIso = reader.getAttribute(
-            'date',
-            namespaceUri: OfficeNamespaces.w,
-          ) ??
-          '';
+      final String dateIso =
+          reader.getAttribute('date', namespaceUri: OfficeNamespaces.w) ?? '';
       final List<WmlParagraph> paragraphs = <WmlParagraph>[];
       final List<WmlVisual> visuals = <WmlVisual>[];
       final StringBuffer fallback = StringBuffer();
@@ -1271,9 +1252,7 @@ class WordDeserializer {
           initials: initials,
           dateIso: dateIso,
           text: fallback.toString(),
-          paragraphs: paragraphs.isEmpty
-              ? null
-              : paragraphs,
+          paragraphs: paragraphs.isEmpty ? null : paragraphs,
           visuals: visuals,
         ),
       );
@@ -1303,21 +1282,18 @@ class WordDeserializer {
           reader.localName != 'commentEx') {
         continue;
       }
-      final String paraId = reader.getAttribute(
-            'paraId',
-            namespaceUri: OfficeNamespaces.w15,
-          ) ??
+      final String paraId =
+          reader.getAttribute('paraId', namespaceUri: OfficeNamespaces.w15) ??
           reader.getAttribute('paraId') ??
           '';
-      final String? parent = reader.getAttribute(
+      final String? parent =
+          reader.getAttribute(
             'paraIdParent',
             namespaceUri: OfficeNamespaces.w15,
           ) ??
           reader.getAttribute('paraIdParent');
-      final String done = reader.getAttribute(
-            'done',
-            namespaceUri: OfficeNamespaces.w15,
-          ) ??
+      final String done =
+          reader.getAttribute('done', namespaceUri: OfficeNamespaces.w15) ??
           reader.getAttribute('done') ??
           '0';
       final int? id = int.tryParse(paraId, radix: 16);
@@ -1343,15 +1319,23 @@ class _NumberingLevel {
     required this.start,
   });
 
+  /// fmt API.
   final String fmt;
+
+  /// text API.
   final String text;
+
+  /// start API.
   final int start;
 
+  /// isBullet API.
   bool get isBullet =>
       fmt == 'bullet' || (text.isNotEmpty && text.codeUnitAt(0) >= 0xF000);
 
+  /// bulletLabel API.
   String bulletLabel() => '• ';
 
+  /// decimalLabel API.
   String decimalLabel(int value) {
     if (text.contains('%1')) {
       return '${text.replaceAll('%1', '$value')} ';

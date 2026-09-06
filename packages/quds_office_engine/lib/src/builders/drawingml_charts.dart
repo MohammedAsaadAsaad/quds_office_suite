@@ -3,10 +3,12 @@ import '../visual/office_visual.dart';
 import 'office_document_theme.dart';
 import 'office_markup.dart';
 
+/// Enum ChartKind.
 enum ChartKind { pie, donut, bar, line, area, stackedBar }
 
 /// DrawingML chart parts shared by Word and PowerPoint.
 abstract final class DrawingmlCharts {
+  /// pie API.
   static String pie({
     required String title,
     required List<ChartPoint> series,
@@ -26,6 +28,7 @@ abstract final class DrawingmlCharts {
     );
   }
 
+  /// donut API.
   static String donut({
     required String title,
     required List<ChartPoint> series,
@@ -47,6 +50,7 @@ abstract final class DrawingmlCharts {
     );
   }
 
+  /// bar API.
   static String bar({
     required String title,
     required List<ChartPoint> series,
@@ -68,6 +72,7 @@ abstract final class DrawingmlCharts {
     );
   }
 
+  /// line API.
   static String line({
     required String title,
     required List<ChartSeries> series,
@@ -89,6 +94,7 @@ abstract final class DrawingmlCharts {
     );
   }
 
+  /// area API.
   static String area({
     required String title,
     required List<ChartSeries> series,
@@ -108,6 +114,7 @@ abstract final class DrawingmlCharts {
     );
   }
 
+  /// stackedBar API.
   static String stackedBar({
     required String title,
     required List<ChartSeries> series,
@@ -129,6 +136,7 @@ abstract final class DrawingmlCharts {
     );
   }
 
+  /// singleSeries API.
   static String singleSeries({
     required String title,
     required List<ChartPoint> points,
@@ -165,6 +173,7 @@ abstract final class DrawingmlCharts {
     );
   }
 
+  /// multiSeries API.
   static String multiSeries({
     required String title,
     required List<ChartSeries> series,
@@ -197,15 +206,15 @@ abstract final class DrawingmlCharts {
       final Map<String, double> byLabel = <String, double>{
         for (final ChartPoint p in pts) p.label: p.value,
       };
-      rows.add(
-        (
-          name: s.name.trim().isEmpty ? 'Series ${i + 1}' : s.name.trim(),
-          color: OfficeMarkup.srgb(s.color ?? theme?.colorAt(i) ?? pts.first.color),
-          values: <double>[
-            for (final String cat in categories) byLabel[cat] ?? 0,
-          ],
+      rows.add((
+        name: s.name.trim().isEmpty ? 'Series ${i + 1}' : s.name.trim(),
+        color: OfficeMarkup.srgb(
+          s.color ?? theme?.colorAt(i) ?? pts.first.color,
         ),
-      );
+        values: <double>[
+          for (final String cat in categories) byLabel[cat] ?? 0,
+        ],
+      ));
     }
     if (rows.isEmpty || categories.isEmpty) {
       return _emptyChart();
@@ -286,8 +295,9 @@ abstract final class DrawingmlCharts {
       for (int i = 0; i < n; i++) {
         final double v = i < row.values.length ? row.values[i] : 0;
         vals.write('<c:pt idx="$i"><c:v>$v</c:v></c:pt>');
-        final String color =
-            i < pointColors.length ? pointColors[i] : row.color;
+        final String color = i < pointColors.length
+            ? pointColors[i]
+            : row.color;
         if (kind == ChartKind.pie || kind == ChartKind.donut) {
           pts.write(
             '<c:dPt><c:idx val="$i"/><c:bubble3D val="0"/>'
@@ -306,14 +316,14 @@ abstract final class DrawingmlCharts {
       vals.write('</c:numLit>');
       final String marker = markers
           ? '<c:marker><c:symbol val="circle"/><c:size val="7"/>'
-              '<c:spPr><a:solidFill><a:srgbClr val="${row.color}"/></a:solidFill>'
-              '</c:spPr></c:marker>'
+                '<c:spPr><a:solidFill><a:srgbClr val="${row.color}"/></a:solidFill>'
+                '</c:spPr></c:marker>'
           : '<c:marker><c:symbol val="none"/></c:marker>';
       final String lineFill =
           '<c:spPr><a:ln w="19050"><a:solidFill><a:srgbClr val="${row.color}"/>'
           '</a:solidFill></a:ln>'
           '${kind == ChartKind.area ? '<a:solidFill><a:srgbClr val="${row.color}">'
-              '<a:alpha val="40000"/></a:srgbClr></a:solidFill>' : ''}'
+                    '<a:alpha val="40000"/></a:srgbClr></a:solidFill>' : ''}'
           '</c:spPr>';
       serXml.write(
         '<c:ser><c:idx val="$s"/><c:order val="$s"/>'
@@ -328,16 +338,17 @@ abstract final class DrawingmlCharts {
     final bool showTitle = view.showTitle && title.trim().isNotEmpty;
     final String titleXml = showTitle
         ? '<c:title><c:tx><c:rich><a:bodyPr/><a:lstStyle/>'
-            '<a:p><a:pPr algn="$algn"${rtl ? ' rtl="1"' : ''}/><a:r>'
-            '<a:rPr lang="$lang" sz="1400" b="1">'
-            '<a:solidFill><a:srgbClr val="${OfficeMarkup.srgb(titleColor)}"/></a:solidFill>'
-            '<a:cs typeface="Arial"/></a:rPr>'
-            '<a:t>${OfficeMarkup.escape(title)}</a:t></a:r></a:p>'
-            '</c:rich></c:tx><c:overlay val="0"/></c:title>'
+              '<a:p><a:pPr algn="$algn"${rtl ? ' rtl="1"' : ''}/><a:r>'
+              '<a:rPr lang="$lang" sz="1400" b="1">'
+              '<a:solidFill><a:srgbClr val="${OfficeMarkup.srgb(titleColor)}"/></a:solidFill>'
+              '<a:cs typeface="Arial"/></a:rPr>'
+              '<a:t>${OfficeMarkup.escape(title)}</a:t></a:r></a:p>'
+              '</c:rich></c:tx><c:overlay val="0"/></c:title>'
         : '';
 
     final int showVal = view.showDataLabels && !view.showPercent ? 1 : 0;
-    final int showPct = view.showPercent ||
+    final int showPct =
+        view.showPercent ||
             (view.showDataLabels &&
                 (kind == ChartKind.pie || kind == ChartKind.donut))
         ? 1

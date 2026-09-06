@@ -27,6 +27,7 @@ class OpcPackage {
     Map<String, PackagePart>? parts,
   }) : _parts = parts ?? <String, PackagePart>{};
 
+  /// contentTypes API.
   final ContentTypes contentTypes;
   final RelationshipCollection _packageRelationships;
   final ZipReader? _source;
@@ -35,6 +36,7 @@ class OpcPackage {
       <String, RelationshipCollection>{};
   final Set<String> _deleted = <String>{};
 
+  /// empty API.
   factory OpcPackage.empty() {
     return OpcPackage._(
       contentTypes: ContentTypes.standard(),
@@ -42,10 +44,12 @@ class OpcPackage {
     );
   }
 
+  /// openBytes API.
   factory OpcPackage.openBytes(Uint8List bytes, {String? password}) {
     return OpcPackage.open(MemoryByteSource(bytes), password: password);
   }
 
+  /// open API.
   factory OpcPackage.open(ByteSource source, {String? password}) {
     ByteSource zipSource = source;
     if (source.length >= 8 && CfbfFile.isCfbf(source.view(0, 8))) {
@@ -188,12 +192,16 @@ class OpcPackage {
   /// Byte length of the original ZIP, or `0` when the package is in-memory only.
   int get sourceLength => _source?.byteLength ?? 0;
 
+  /// packageRelationships API.
   RelationshipCollection get packageRelationships => _packageRelationships;
 
+  /// partNames API.
   Iterable<String> get partNames => _parts.keys;
 
+  /// parts API.
   Iterable<PackagePart> get parts => _parts.values;
 
+  /// kind API.
   OpcPackageKind get kind {
     final PackageRelationship? office = _packageRelationships.firstByType(
       RelationshipTypes.officeDocument,
@@ -224,6 +232,7 @@ class OpcPackage {
     return OpcPackageKind.unknown;
   }
 
+  /// getPart API.
   PackagePart? getPart(String uri) {
     final String n = OpcUris.normalize(uri);
     final PackagePart? existing = _parts[n];
@@ -234,6 +243,7 @@ class OpcPackage {
     return null;
   }
 
+  /// createPart API.
   PackagePart createPart(String uri, String contentType, [List<int>? bytes]) {
     final String n = OpcUris.normalize(uri);
     if (_parts.containsKey(n)) {
@@ -252,6 +262,7 @@ class OpcPackage {
     return part;
   }
 
+  /// deletePart API.
   bool deletePart(String uri) {
     final String n = OpcUris.normalize(uri);
     final bool removed = _parts.remove(n) != null;
@@ -263,6 +274,7 @@ class OpcPackage {
     return removed;
   }
 
+  /// relationshipsFor API.
   RelationshipCollection relationshipsFor(String partUri) {
     final String n = OpcUris.normalize(partUri);
     return _partRels.putIfAbsent(
@@ -271,10 +283,12 @@ class OpcPackage {
     );
   }
 
+  /// attachRelationships API.
   void attachRelationships(String partUri, RelationshipCollection rels) {
     _partRels[OpcUris.normalize(partUri)] = rels;
   }
 
+  /// markDirty API.
   void markDirty(PackagePart part) {
     _parts[part.uri] = part;
   }

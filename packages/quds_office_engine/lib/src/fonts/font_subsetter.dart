@@ -6,6 +6,7 @@ import 'sfnt_parser.dart';
 
 /// Result of subsetting a TrueType font to the glyphs actually used.
 class FontSubset {
+  /// FontSubset API.
   FontSubset({
     required this.bytes,
     required this.oldToNewGlyph,
@@ -13,18 +14,28 @@ class FontSubset {
     required this.numGlyphs,
   });
 
+  /// bytes API.
   final Uint8List bytes;
+
+  /// oldToNewGlyph API.
   final Map<int, int> oldToNewGlyph;
+
+  /// unicodeToNewGlyph API.
   final Map<int, int> unicodeToNewGlyph;
+
+  /// numGlyphs API.
   final int numGlyphs;
 }
 
 /// Builds a minimal TrueType containing only the requested code points.
 class FontSubsetter {
+  /// FontSubsetter API.
   FontSubsetter(this.font);
 
+  /// font API.
   final SfntFont font;
 
+  /// subset API.
   FontSubset subset(Iterable<int> codePoints) {
     final Set<int> wanted = <int>{0};
     final Map<int, int> unicodeToOld = <int, int>{};
@@ -56,8 +67,9 @@ class FontSubsetter {
         e.key: oldToNew[e.value] ?? 0,
     };
 
-    final Uint8List? glyfSrc =
-        font.hasTable('glyf') ? font.tableBytes('glyf') : null;
+    final Uint8List? glyfSrc = font.hasTable('glyf')
+        ? font.tableBytes('glyf')
+        : null;
     final BytesBuilder glyfOut = BytesBuilder(copy: false);
     final List<int> loca = <int>[0];
     for (final int oldId in oldIds) {
@@ -183,10 +195,11 @@ class FontSubsetter {
   }
 
   static Uint8List _buildCmap(Map<int, int> unicodeToNew) {
-    final List<MapEntry<int, int>> bmp = unicodeToNew.entries
-        .where((MapEntry<int, int> e) => e.key <= 0xFFFF)
-        .toList()
-      ..sort((MapEntry<int, int> a, MapEntry<int, int> b) => a.key - b.key);
+    final List<MapEntry<int, int>> bmp =
+        unicodeToNew.entries
+            .where((MapEntry<int, int> e) => e.key <= 0xFFFF)
+            .toList()
+          ..sort((MapEntry<int, int> a, MapEntry<int, int> b) => a.key - b.key);
     final List<_Seg> segs = <_Seg>[];
     if (bmp.isNotEmpty) {
       int start = bmp.first.key;
@@ -311,7 +324,8 @@ class FontSubsetter {
   static int _checksum(Uint8List data) {
     var sum = 0;
     for (int i = 0; i + 3 < data.length; i += 4) {
-      sum = (sum +
+      sum =
+          (sum +
               ((data[i] << 24) |
                   (data[i + 1] << 16) |
                   (data[i + 2] << 8) |
@@ -343,7 +357,12 @@ class FontSubsetter {
 class _Seg {
   const _Seg(this.start, this.end, this.startGid);
 
+  /// start API.
   final int start;
+
+  /// end API.
   final int end;
+
+  /// startGid API.
   final int startGid;
 }

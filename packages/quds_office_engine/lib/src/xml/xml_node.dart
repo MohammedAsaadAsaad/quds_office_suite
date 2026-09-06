@@ -3,17 +3,22 @@ import 'xml_writer.dart';
 
 /// Lightweight mutable XML node.
 sealed class XmlNode {
+  /// XmlNode API.
   XmlNode({this.parent});
 
+  /// parent API.
   XmlElement? parent;
 
+  /// copy API.
   XmlNode copy();
 
+  /// writeTo API.
   void writeTo(XmlWriter writer);
 }
 
 /// Attribute on an [XmlElement].
 class XmlAttribute {
+  /// XmlAttribute API.
   XmlAttribute({
     required this.localName,
     required this.value,
@@ -21,13 +26,22 @@ class XmlAttribute {
     this.namespaceUri = '',
   });
 
+  /// localName API.
   String localName;
+
+  /// value API.
   String value;
+
+  /// prefix API.
   String prefix;
+
+  /// namespaceUri API.
   String namespaceUri;
 
+  /// qualifiedName API.
   String get qualifiedName => prefix.isEmpty ? localName : '$prefix:$localName';
 
+  /// copy API.
   XmlAttribute copy() => XmlAttribute(
     localName: localName,
     value: value,
@@ -38,6 +52,7 @@ class XmlAttribute {
 
 /// Element node with attributes and ordered children.
 class XmlElement extends XmlNode {
+  /// XmlElement API.
   XmlElement({
     required this.localName,
     this.prefix = '',
@@ -48,14 +63,25 @@ class XmlElement extends XmlNode {
   }) : attributes = attributes ?? <XmlAttribute>[],
        children = children ?? <XmlNode>[];
 
+  /// localName API.
   String localName;
+
+  /// prefix API.
   String prefix;
+
+  /// namespaceUri API.
   String namespaceUri;
+
+  /// attributes API.
   final List<XmlAttribute> attributes;
+
+  /// children API.
   final List<XmlNode> children;
 
+  /// qualifiedName API.
   String get qualifiedName => prefix.isEmpty ? localName : '$prefix:$localName';
 
+  /// getAttribute API.
   String? getAttribute(String localName, {String? namespaceUri}) {
     for (final XmlAttribute attr in attributes) {
       if (attr.localName != localName) {
@@ -68,6 +94,7 @@ class XmlElement extends XmlNode {
     return null;
   }
 
+  /// setAttribute API.
   void setAttribute(
     String localName,
     String value, {
@@ -97,6 +124,7 @@ class XmlElement extends XmlNode {
     );
   }
 
+  /// removeAttribute API.
   void removeAttribute(String localName, {String? namespaceUri}) {
     attributes.removeWhere((XmlAttribute attr) {
       if (attr.localName != localName) {
@@ -106,11 +134,13 @@ class XmlElement extends XmlNode {
     });
   }
 
+  /// addChild API.
   void addChild(XmlNode node) {
     node.parent = this;
     children.add(node);
   }
 
+  /// addText API.
   void addText(String text) {
     if (text.isEmpty) {
       return;
@@ -118,6 +148,7 @@ class XmlElement extends XmlNode {
     addChild(XmlText(text));
   }
 
+  /// childElements API.
   Iterable<XmlElement> get childElements sync* {
     for (final XmlNode child in children) {
       if (child is XmlElement) {
@@ -126,6 +157,7 @@ class XmlElement extends XmlNode {
     }
   }
 
+  /// firstChild API.
   XmlElement? firstChild(String localName, {String? namespaceUri}) {
     for (final XmlElement child in childElements) {
       if (child.localName != localName) {
@@ -138,6 +170,7 @@ class XmlElement extends XmlNode {
     return null;
   }
 
+  /// childrenNamed API.
   List<XmlElement> childrenNamed(String localName, {String? namespaceUri}) {
     return childElements
         .where((XmlElement e) {
@@ -149,12 +182,14 @@ class XmlElement extends XmlNode {
         .toList(growable: false);
   }
 
+  /// text API.
   String get text {
     final StringBuffer buffer = StringBuffer();
     _collectText(this, buffer);
     return buffer.toString();
   }
 
+  /// text API.
   set text(String value) {
     children
       ..clear()
@@ -162,6 +197,7 @@ class XmlElement extends XmlNode {
   }
 
   @override
+  /// copy API.
   XmlElement copy() {
     final XmlElement clone = XmlElement(
       localName: localName,
@@ -178,6 +214,7 @@ class XmlElement extends XmlNode {
   }
 
   @override
+  /// writeTo API.
   void writeTo(XmlWriter writer) {
     writer.writeStartElement(localName, prefix: prefix.isEmpty ? null : prefix);
     for (final XmlAttribute attr in attributes) {
@@ -211,50 +248,67 @@ class XmlElement extends XmlNode {
 
 /// Character data node.
 class XmlText extends XmlNode {
+  /// XmlText API.
   XmlText(this.text, {super.parent});
 
+  /// text API.
   String text;
 
   @override
+  /// copy API.
   XmlText copy() => XmlText(text);
 
   @override
+  /// writeTo API.
   void writeTo(XmlWriter writer) => writer.writeText(text);
 }
 
 /// CDATA node.
 class XmlCdata extends XmlNode {
+  /// XmlCdata API.
   XmlCdata(this.text, {super.parent});
 
+  /// text API.
   String text;
 
   @override
+  /// copy API.
   XmlCdata copy() => XmlCdata(text);
 
   @override
+  /// writeTo API.
   void writeTo(XmlWriter writer) => writer.writeCdata(text);
 }
 
 /// Comment node.
 class XmlComment extends XmlNode {
+  /// XmlComment API.
   XmlComment(this.text, {super.parent});
 
+  /// text API.
   String text;
 
   @override
+  /// copy API.
   XmlComment copy() => XmlComment(text);
 
   @override
+  /// writeTo API.
   void writeTo(XmlWriter writer) => writer.writeComment(text);
 }
 
 /// Document wrapper holding an optional XML declaration and a root element.
 class XmlDocument {
+  /// XmlDocument API.
   XmlDocument({this.root, this.standalone = true});
 
+  /// root API.
   XmlElement? root;
+
+  /// standalone API.
   bool standalone;
 
+  /// parse API.
   factory XmlDocument.parse(String xml) {
     final XmlPullReader reader = XmlPullReader(xml);
     final XmlDocument doc = XmlDocument();
@@ -317,6 +371,7 @@ class XmlDocument {
     return doc;
   }
 
+  /// toXmlString API.
   String toXmlString({bool declaration = true}) {
     final XmlWriter writer = XmlWriter();
     if (declaration) {

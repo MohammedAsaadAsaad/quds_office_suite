@@ -12,6 +12,7 @@ import '../ole/cfbf_writer.dart';
 
 /// File-level Office password encryption (MS-OFFCRYPTO Agile + Standard).
 abstract final class OfficeCrypto {
+  /// isEncrypted API.
   static bool isEncrypted(Uint8List bytes) {
     if (!CfbfFile.isCfbf(bytes)) {
       return false;
@@ -38,6 +39,7 @@ abstract final class OfficeCrypto {
     return decrypt(bytes, password);
   }
 
+  /// decrypt API.
   static Uint8List decrypt(Uint8List bytes, String password) {
     if (!CfbfFile.isCfbf(bytes)) {
       throw const OfficePasswordException('Not an encrypted Office package');
@@ -46,7 +48,9 @@ abstract final class OfficeCrypto {
     final Uint8List? info = file.readStream('EncryptionInfo');
     final Uint8List? pack = file.readStream('EncryptedPackage');
     if (info == null || pack == null) {
-      throw const OfficePasswordException('Missing EncryptionInfo/EncryptedPackage');
+      throw const OfficePasswordException(
+        'Missing EncryptionInfo/EncryptedPackage',
+      );
     }
     if (info.length < 8) {
       throw const OfficePasswordException('Truncated EncryptionInfo');
@@ -59,7 +63,9 @@ abstract final class OfficeCrypto {
     if (minor == 2 || minor == 3) {
       return _Standard.decrypt(info, pack, password);
     }
-    throw OfficePasswordException('Unsupported encryption version $major.$minor');
+    throw OfficePasswordException(
+      'Unsupported encryption version $major.$minor',
+    );
   }
 
   /// Wraps a clear OPC ZIP in an Agile-encrypted CFBF (Office 2013+ default).
@@ -75,19 +81,27 @@ abstract final class OfficeCrypto {
   }
 }
 
+/// Class OfficePasswordException.
 class OfficePasswordException implements Exception {
+  /// OfficePasswordException API.
   const OfficePasswordException(this.message);
+
+  /// message API.
   final String message;
   @override
+  /// toString API.
   String toString() => 'OfficePasswordException: $message';
 }
 
+/// Class OfficePasswordRequiredException.
 class OfficePasswordRequiredException extends OfficePasswordException {
+  /// OfficePasswordRequiredException API.
   const OfficePasswordRequiredException()
-      : super('This Office file is password-protected');
+    : super('This Office file is password-protected');
 }
 
 abstract final class _Hash {
+  /// digest API.
   static List<int> digest(String name, List<int> data) {
     return switch (name.toUpperCase().replaceAll('-', '')) {
       'SHA1' => sha1.convert(data).bytes,
@@ -98,6 +112,7 @@ abstract final class _Hash {
     };
   }
 
+  /// hmacDigest API.
   static List<int> hmacDigest(String name, List<int> key, List<int> data) {
     final Hash h = switch (name.toUpperCase().replaceAll('-', '')) {
       'SHA1' => sha1,
@@ -111,6 +126,7 @@ abstract final class _Hash {
 }
 
 Uint8List _utf16le(String text) {
+  /// out API.
   final Uint8List out = Uint8List(text.length * 2);
   for (int i = 0; i < text.length; i++) {
     final int c = text.codeUnitAt(i);
@@ -121,6 +137,7 @@ Uint8List _utf16le(String text) {
 }
 
 Uint8List _fit(List<int> data, int size) {
+  /// out API.
   final Uint8List out = Uint8List(size);
   if (data.length >= size) {
     out.setRange(0, size, data);
@@ -140,8 +157,13 @@ Uint8List _u32(int value) {
 }
 
 Uint8List _concat(List<List<int>> parts) {
+  /// n API.
   final int n = parts.fold<int>(0, (int a, List<int> b) => a + b.length);
+
+  /// out API.
   final Uint8List out = Uint8List(n);
+
+  /// o API.
   var o = 0;
   for (final List<int> p in parts) {
     out.setRange(o, o + p.length, p);
@@ -154,6 +176,8 @@ bool _equal(List<int> a, List<int> b) {
   if (a.length != b.length) {
     return false;
   }
+
+  /// diff API.
   var diff = 0;
   for (int i = 0; i < a.length; i++) {
     diff |= a[i] ^ b[i];
@@ -164,29 +188,72 @@ bool _equal(List<int> a, List<int> b) {
 final Random _rng = Random.secure();
 
 Uint8List _random(int n) {
-  return Uint8List.fromList(<int>[for (int i = 0; i < n; i++) _rng.nextInt(256)]);
+  return Uint8List.fromList(<int>[
+    for (int i = 0; i < n; i++) _rng.nextInt(256),
+  ]);
 }
 
 abstract final class _Agile {
   static const List<int> _verifierInputKey = <int>[
-    0xFE, 0xA7, 0xD2, 0x76, 0x3B, 0x4B, 0x9E, 0x79,
+    0xFE,
+    0xA7,
+    0xD2,
+    0x76,
+    0x3B,
+    0x4B,
+    0x9E,
+    0x79,
   ];
   static const List<int> _verifierValueKey = <int>[
-    0xD7, 0xAA, 0x0F, 0x6D, 0x30, 0x61, 0x34, 0x4E,
+    0xD7,
+    0xAA,
+    0x0F,
+    0x6D,
+    0x30,
+    0x61,
+    0x34,
+    0x4E,
   ];
   static const List<int> _secretKeyBlock = <int>[
-    0x14, 0x6E, 0x0B, 0xE7, 0xAC, 0xCA, 0xD1, 0xD6,
+    0x14,
+    0x6E,
+    0x0B,
+    0xE7,
+    0xAC,
+    0xCA,
+    0xD1,
+    0xD6,
   ];
   static const List<int> _hmacKeyBlock = <int>[
-    0x5F, 0xB2, 0xAD, 0x01, 0x0C, 0xB9, 0xE1, 0xF6,
+    0x5F,
+    0xB2,
+    0xAD,
+    0x01,
+    0x0C,
+    0xB9,
+    0xE1,
+    0xF6,
   ];
   static const List<int> _hmacValueBlock = <int>[
-    0xA0, 0x67, 0x7F, 0x02, 0xB2, 0x2C, 0x84, 0x33,
+    0xA0,
+    0x67,
+    0x7F,
+    0x02,
+    0xB2,
+    0x2C,
+    0x84,
+    0x33,
   ];
 
+  /// decrypt API.
   static Uint8List decrypt(Uint8List info, Uint8List pack, String password) {
     final _AgileParams p = _parse(info);
-    final Uint8List hn = _spin(p.hashName, p.encryptedSalt, password, p.spinCount);
+    final Uint8List hn = _spin(
+      p.hashName,
+      p.encryptedSalt,
+      password,
+      p.spinCount,
+    );
     final Uint8List verifierIn = _cryptValue(
       p,
       hn,
@@ -212,7 +279,12 @@ abstract final class _Agile {
     return _decryptPackage(p, secret, pack);
   }
 
-  static Uint8List encrypt(Uint8List clear, String password, {required int spinCount}) {
+  /// encrypt API.
+  static Uint8List encrypt(
+    Uint8List clear,
+    String password, {
+    required int spinCount,
+  }) {
     const String hashName = 'SHA512';
     const int hashSize = 64;
     const int keyBits = 256;
@@ -295,23 +367,43 @@ abstract final class _Agile {
     return writer.build();
   }
 
-  static Uint8List _spin(String hash, Uint8List salt, String password, int spins) {
-    List<int> h = _Hash.digest(hash, _concat(<List<int>>[salt, _utf16le(password)]));
+  static Uint8List _spin(
+    String hash,
+    Uint8List salt,
+    String password,
+    int spins,
+  ) {
+    List<int> h = _Hash.digest(
+      hash,
+      _concat(<List<int>>[salt, _utf16le(password)]),
+    );
     for (int i = 0; i < spins; i++) {
       h = _Hash.digest(hash, _concat(<List<int>>[_u32(i), h]));
     }
     return Uint8List.fromList(h);
   }
 
-  static Uint8List _deriveKey(_AgileParams p, Uint8List hn, List<int> blockKey) {
+  static Uint8List _deriveKey(
+    _AgileParams p,
+    Uint8List hn,
+    List<int> blockKey,
+  ) {
     return _fit(
       _Hash.digest(p.hashName, _concat(<List<int>>[hn, blockKey])),
       p.keyBytes,
     );
   }
 
-  static Uint8List _iv(String hash, Uint8List salt, List<int> blockKey, int block) {
-    return _fit(_Hash.digest(hash, _concat(<List<int>>[salt, blockKey])), block);
+  static Uint8List _iv(
+    String hash,
+    Uint8List salt,
+    List<int> blockKey,
+    int block,
+  ) {
+    return _fit(
+      _Hash.digest(hash, _concat(<List<int>>[salt, blockKey])),
+      block,
+    );
   }
 
   static Uint8List _cryptValue(
@@ -322,14 +414,23 @@ abstract final class _Agile {
     required bool decrypt,
   }) {
     final Uint8List key = _deriveKey(p, hn, blockKey);
-    final Uint8List iv = _iv(p.hashName, p.encryptedSalt, blockKey, p.blockSize);
+    final Uint8List iv = _iv(
+      p.hashName,
+      p.encryptedSalt,
+      blockKey,
+      p.blockSize,
+    );
     if (decrypt) {
       return Aes.cbcDecrypt(key, iv, data, unpad: true);
     }
     return Aes.cbcEncrypt(key, iv, data);
   }
 
-  static Uint8List _decryptPackage(_AgileParams p, Uint8List secret, Uint8List pack) {
+  static Uint8List _decryptPackage(
+    _AgileParams p,
+    Uint8List secret,
+    Uint8List pack,
+  ) {
     if (pack.length < 8) {
       throw const OfficePasswordException('Truncated EncryptedPackage');
     }
@@ -340,8 +441,11 @@ abstract final class _Agile {
     var i = 0;
     while (remaining > 0 && offset < pack.length) {
       final int clearChunk = remaining < 4096 ? remaining : 4096;
-      final int encChunk = ((clearChunk + p.blockSize - 1) ~/ p.blockSize) * p.blockSize;
-      final int take = offset + encChunk <= pack.length ? encChunk : pack.length - offset;
+      final int encChunk =
+          ((clearChunk + p.blockSize - 1) ~/ p.blockSize) * p.blockSize;
+      final int take = offset + encChunk <= pack.length
+          ? encChunk
+          : pack.length - offset;
       final Uint8List iv = _iv(p.hashName, p.keyDataSalt, _u32(i), p.blockSize);
       final Uint8List dec = Aes.cbcDecrypt(
         secret,
@@ -362,7 +466,11 @@ abstract final class _Agile {
     return result;
   }
 
-  static Uint8List _encryptPackage(_AgileParams p, Uint8List secret, Uint8List clear) {
+  static Uint8List _encryptPackage(
+    _AgileParams p,
+    Uint8List secret,
+    Uint8List clear,
+  ) {
     final BytesBuilder out = BytesBuilder(copy: false);
     final ByteData len = ByteData(8)..setUint64(0, clear.length, Endian.little);
     out.add(len.buffer.asUint8List());
@@ -371,7 +479,9 @@ abstract final class _Agile {
       final int end = o + 4096 < clear.length ? o + 4096 : clear.length;
       final Uint8List chunk = Uint8List.sublistView(clear, o, end);
       final Uint8List iv = _iv(p.hashName, p.keyDataSalt, _u32(i), p.blockSize);
-      out.add(Aes.cbcEncrypt(secret, iv, chunk, pad: chunk.length % p.blockSize != 0));
+      out.add(
+        Aes.cbcEncrypt(secret, iv, chunk, pad: chunk.length % p.blockSize != 0),
+      );
       i++;
     }
     return out.toBytes();
@@ -427,10 +537,14 @@ abstract final class _Agile {
           base64.decode(reader.getAttribute('saltValue') ?? ''),
         );
         encVerifier = Uint8List.fromList(
-          base64.decode(reader.getAttribute('encryptedVerifierHashInput') ?? ''),
+          base64.decode(
+            reader.getAttribute('encryptedVerifierHashInput') ?? '',
+          ),
         );
         encVerifierHash = Uint8List.fromList(
-          base64.decode(reader.getAttribute('encryptedVerifierHashValue') ?? ''),
+          base64.decode(
+            reader.getAttribute('encryptedVerifierHashValue') ?? '',
+          ),
         );
         encKey = Uint8List.fromList(
           base64.decode(reader.getAttribute('encryptedKeyValue') ?? ''),
@@ -503,24 +617,51 @@ class _AgileParams {
     required this.encryptedHmacValue,
   });
 
+  /// hashName API.
   final String hashName;
+
+  /// hashSize API.
   final int hashSize;
+
+  /// keyBits API.
   final int keyBits;
+
+  /// blockSize API.
   final int blockSize;
+
+  /// saltSize API.
   final int saltSize;
+
+  /// spinCount API.
   final int spinCount;
+
+  /// keyDataSalt API.
   final Uint8List keyDataSalt;
+
+  /// encryptedSalt API.
   final Uint8List encryptedSalt;
+
+  /// encryptedVerifierHashInput API.
   final Uint8List encryptedVerifierHashInput;
+
+  /// encryptedVerifierHashValue API.
   final Uint8List encryptedVerifierHashValue;
+
+  /// encryptedKeyValue API.
   final Uint8List encryptedKeyValue;
+
+  /// encryptedHmacKey API.
   final Uint8List encryptedHmacKey;
+
+  /// encryptedHmacValue API.
   final Uint8List encryptedHmacValue;
 
+  /// keyBytes API.
   int get keyBytes => keyBits ~/ 8;
 }
 
 abstract final class _Standard {
+  /// decrypt API.
   static Uint8List decrypt(Uint8List info, Uint8List pack, String password) {
     final ByteCursor c = ByteCursor(info);
     c.skip(4);
@@ -551,14 +692,21 @@ abstract final class _Standard {
     final int encHashLen = ((hashSize + 15) ~/ 16) * 16;
     final Uint8List encHash = c.bytes(encHashLen.clamp(0, c.remaining));
 
-    List<int> h = sha1.convert(_concat(<List<int>>[salt, _utf16le(password)])).bytes;
+    List<int> h = sha1
+        .convert(_concat(<List<int>>[salt, _utf16le(password)]))
+        .bytes;
     for (int i = 0; i < 50000; i++) {
       h = sha1.convert(_concat(<List<int>>[_u32(i), h])).bytes;
     }
     h = sha1.convert(_concat(<List<int>>[h, _u32(0)])).bytes;
     final Uint8List key = _fit(h, keyBits ~/ 8);
     final Uint8List iv = Uint8List(16);
-    final Uint8List verifier = Aes.cbcDecrypt(key, iv, encVerifier, unpad: false);
+    final Uint8List verifier = Aes.cbcDecrypt(
+      key,
+      iv,
+      encVerifier,
+      unpad: false,
+    );
     final Uint8List hash = Aes.cbcDecrypt(key, iv, encHash, unpad: false);
     final List<int> expected = sha1.convert(verifier).bytes;
     if (!_equal(expected, hash.sublist(0, hashSize.clamp(0, hash.length)))) {

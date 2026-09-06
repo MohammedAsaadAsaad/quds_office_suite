@@ -304,7 +304,9 @@ void main() {
     expect(controller.selection.focus.col, 0);
   });
 
-  testWidgets('sheet arrow keys move between cells', (WidgetTester tester) async {
+  testWidgets('sheet arrow keys move between cells', (
+    WidgetTester tester,
+  ) async {
     final SheetEditorController controller = SheetEditorController();
     await tester.pumpWidget(
       Directionality(
@@ -316,7 +318,9 @@ void main() {
         ),
       ),
     );
-    await tester.tapAt(tester.getTopLeft(find.byType(SheetGrid)) + const Offset(60, 58));
+    await tester.tapAt(
+      tester.getTopLeft(find.byType(SheetGrid)) + const Offset(60, 58),
+    );
     await tester.pump();
     expect(controller.selection.focus.a1, 'A1');
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
@@ -431,9 +435,7 @@ void main() {
         slides: <PmlSlide>[
           PmlSlide(
             id: 256,
-            shapes: <PmlShape>[
-              PmlShape(id: 2, name: 'Title', text: 'Hello'),
-            ],
+            shapes: <PmlShape>[PmlShape(id: 2, name: 'Title', text: 'Hello')],
           ),
         ],
       ),
@@ -461,9 +463,7 @@ void main() {
       shapes: <PmlShape>[PmlShape(id: 2, name: 'C', text: 'C')],
     );
     final SlideEditorController controller = SlideEditorController(
-      presentation: PmlPresentation(
-        slides: <PmlSlide>[first, second, third],
-      ),
+      presentation: PmlPresentation(slides: <PmlSlide>[first, second, third]),
     );
     controller.setActiveSlide(0);
     controller.reorderSlide(0, 2);
@@ -742,7 +742,11 @@ void main() {
     final SheetEditorController controller = SheetEditorController(
       workbook: SmlWorkbook(
         sheets: <SmlWorksheet>[
-          SmlWorksheet(name: 'Sheet1', sheetId: 1, drawings: <SmlDrawing>[drawing]),
+          SmlWorksheet(
+            name: 'Sheet1',
+            sheetId: 1,
+            drawings: <SmlDrawing>[drawing],
+          ),
         ],
       ),
     );
@@ -796,7 +800,9 @@ void main() {
         sourceToA1: 'B2',
       ),
     );
-    final SheetEditorController controller = SheetEditorController(workbook: book);
+    final SheetEditorController controller = SheetEditorController(
+      workbook: book,
+    );
     expect(controller.sheet.drawings.first.visual.points[0].value, 10);
     expect(controller.sheet.drawings.first.visual.points[1].value, 20);
     sheet.cell(const SmlCellRef(1, 1)).value = 0;
@@ -851,10 +857,7 @@ void main() {
     );
     await tester.pump();
     expect(controller.selectedDrawingIndex, 0);
-    expect(
-      drawing.col > 0 || drawing.offsetX > 8,
-      isTrue,
-    );
+    expect(drawing.col > 0 || drawing.offsetX > 8, isTrue);
   });
 
   test('sheet controller clears the selected cell', () {
@@ -883,9 +886,7 @@ void main() {
   test('sheet cell display evaluates formulas and edits in place', () {
     final SheetEditorController controller = SheetEditorController(
       workbook: SmlWorkbook(
-        sheets: <SmlWorksheet>[
-          SmlWorksheet(name: 'Sheet1', sheetId: 1),
-        ],
+        sheets: <SmlWorksheet>[SmlWorksheet(name: 'Sheet1', sheetId: 1)],
       ),
     );
     controller.sheet.cell(const SmlCellRef(0, 0)).value = 2;
@@ -934,13 +935,16 @@ void main() {
     controller.selection.selectCell(const SmlCellRef(2, 0));
     controller.beginCellEdit();
     expect(controller.cellDisplayText(sum), '=A1+B1');
-    final List<(FormulaRefSpan, Color)> highlights =
-        FormulaRefStyle.colored(controller.cellEditor.formulaBar);
+    final List<(FormulaRefSpan, Color)> highlights = FormulaRefStyle.colored(
+      controller.cellEditor.formulaBar,
+    );
     expect(highlights, hasLength(2));
     expect(highlights[0].$2, FormulaRefStyle.palette[0]);
     expect(highlights[1].$2, FormulaRefStyle.palette[1]);
     expect(
-      FormulaRefStyle.colored('=A1+A1').map(((FormulaRefSpan, Color) e) => e.$2),
+      FormulaRefStyle.colored(
+        '=A1+A1',
+      ).map(((FormulaRefSpan, Color) e) => e.$2),
       everyElement(FormulaRefStyle.palette[0]),
     );
     controller.cancelCellEdit();
@@ -951,8 +955,10 @@ void main() {
     final SheetEditorController controller = SheetEditorController();
     controller.selection.selectCell(const SmlCellRef(0, 0));
     controller.beginCellEdit(initial: '=SU', replace: true);
-    expect(controller.functionSuggestions.map((FormulaFnDoc d) => d.name),
-        contains('SUM'));
+    expect(
+      controller.functionSuggestions.map((FormulaFnDoc d) => d.name),
+      contains('SUM'),
+    );
     expect(controller.highlightedFunction, isNotNull);
     controller.deleteEditBackward();
     expect(controller.cellEditor.formulaBar, '=S');
@@ -1131,7 +1137,10 @@ void main() {
     controller.selectAll();
     await controller.cutToClipboard();
     expect(controller.document.sections.first.blocks.length, 1);
-    expect(controller.document.sections.first.blocks.first, isA<WmlParagraph>());
+    expect(
+      controller.document.sections.first.blocks.first,
+      isA<WmlParagraph>(),
+    );
     expect(
       controller.document.sections.first.blocks.whereType<WmlTable>(),
       isEmpty,
@@ -1398,7 +1407,9 @@ void main() {
       isEmpty,
     );
     expect(
-      controller.document.sections.first.blocks.whereType<WmlParagraph>().length,
+      controller.document.sections.first.blocks
+          .whereType<WmlParagraph>()
+          .length,
       2,
     );
     expect(controller.document.paragraphs.first.text, 'Before');
@@ -1545,11 +1556,7 @@ void main() {
       kind: OfficeVisualKind.picture,
       imageBytes: PngBytes.studioCard(),
     );
-    final PmlShape shape = PmlShape(
-      id: 2,
-      name: 'Photo',
-      visual: picture,
-    );
+    final PmlShape shape = PmlShape(id: 2, name: 'Photo', visual: picture);
     final SlideEditorController controller = SlideEditorController(
       presentation: PmlPresentation(
         slides: <PmlSlide>[
@@ -1570,70 +1577,76 @@ void main() {
     expect(picture.picture.rotationDeg, 0);
   });
 
-  test('slide controller applies transitions, animations, and slideshow clicks', () {
-    final PmlShape shape = PmlShape(id: 2, name: 'Box', text: 'A');
-    final SlideEditorController controller = SlideEditorController(
-      presentation: PmlPresentation(
-        slides: <PmlSlide>[
-          PmlSlide(id: 256, shapes: <PmlShape>[shape]),
-          PmlSlide(
-            id: 257,
-            shapes: <PmlShape>[PmlShape(id: 2, name: 'Next', text: 'B')],
-          ),
-        ],
-      ),
-    );
-    controller.setSlideTransition(
-      const PmlSlideTransition(kind: PmlTransitionKind.wipe),
-      applyToAll: true,
-    );
-    expect(controller.presentation.slides[1].transition.kind, PmlTransitionKind.wipe);
-    controller.selectShape(shape);
-    controller.addShapeAnimation(PmlAnimPreset.fade);
-    expect(controller.slide.animations, hasLength(1));
-    controller.startShow(from: 0);
-    expect(controller.isPresenting, isTrue);
-    expect(controller.showSamples[2]?.visible, isFalse);
-    controller.showNext();
-    controller.tickShow(600);
-    expect(controller.showSamples[2]?.visible, isTrue);
-    controller.showNext();
-    expect(controller.slideShow?.isTransitioning, isTrue);
-    controller.endShow();
-    expect(controller.isPresenting, isFalse);
-    controller.setActiveSlide(0);
-    controller.selectShape(shape);
-    controller.addShapeAnimation(PmlAnimPreset.peekIn);
-    controller.updateShapeAnimation(
-      controller.selectedAnimationIndex!,
-      direction: PmlTransitionDir.up,
-      durationMs: 1200,
-      delayMs: 250,
-    );
-    expect(controller.selectedAnimation!.direction, PmlTransitionDir.up);
-    expect(controller.selectedAnimation!.durationMs, 1200);
-    controller.previewAnimations();
-    expect(controller.isPreviewing, isTrue);
-    expect(controller.isPresenting, isFalse);
-    controller.tickShow(80);
-    expect(controller.slideShow?.slideIndex, 0);
-    for (int i = 0; i < 80; i++) {
-      controller.tickShow(32);
-      if (!controller.isPreviewing) {
-        break;
+  test(
+    'slide controller applies transitions, animations, and slideshow clicks',
+    () {
+      final PmlShape shape = PmlShape(id: 2, name: 'Box', text: 'A');
+      final SlideEditorController controller = SlideEditorController(
+        presentation: PmlPresentation(
+          slides: <PmlSlide>[
+            PmlSlide(id: 256, shapes: <PmlShape>[shape]),
+            PmlSlide(
+              id: 257,
+              shapes: <PmlShape>[PmlShape(id: 2, name: 'Next', text: 'B')],
+            ),
+          ],
+        ),
+      );
+      controller.setSlideTransition(
+        const PmlSlideTransition(kind: PmlTransitionKind.wipe),
+        applyToAll: true,
+      );
+      expect(
+        controller.presentation.slides[1].transition.kind,
+        PmlTransitionKind.wipe,
+      );
+      controller.selectShape(shape);
+      controller.addShapeAnimation(PmlAnimPreset.fade);
+      expect(controller.slide.animations, hasLength(1));
+      controller.startShow(from: 0);
+      expect(controller.isPresenting, isTrue);
+      expect(controller.showSamples[2]?.visible, isFalse);
+      controller.showNext();
+      controller.tickShow(600);
+      expect(controller.showSamples[2]?.visible, isTrue);
+      controller.showNext();
+      expect(controller.slideShow?.isTransitioning, isTrue);
+      controller.endShow();
+      expect(controller.isPresenting, isFalse);
+      controller.setActiveSlide(0);
+      controller.selectShape(shape);
+      controller.addShapeAnimation(PmlAnimPreset.peekIn);
+      controller.updateShapeAnimation(
+        controller.selectedAnimationIndex!,
+        direction: PmlTransitionDir.up,
+        durationMs: 1200,
+        delayMs: 250,
+      );
+      expect(controller.selectedAnimation!.direction, PmlTransitionDir.up);
+      expect(controller.selectedAnimation!.durationMs, 1200);
+      controller.previewAnimations();
+      expect(controller.isPreviewing, isTrue);
+      expect(controller.isPresenting, isFalse);
+      controller.tickShow(80);
+      expect(controller.slideShow?.slideIndex, 0);
+      for (int i = 0; i < 80; i++) {
+        controller.tickShow(32);
+        if (!controller.isPreviewing) {
+          break;
+        }
       }
-    }
-    expect(controller.isPreviewing, isFalse);
-    controller.previewAnimations();
-    expect(controller.isPreviewing, isTrue);
-    for (int i = 0; i < 80; i++) {
-      controller.tickShow(32);
-      if (!controller.isPreviewing) {
-        break;
+      expect(controller.isPreviewing, isFalse);
+      controller.previewAnimations();
+      expect(controller.isPreviewing, isTrue);
+      for (int i = 0; i < 80; i++) {
+        controller.tickShow(32);
+        if (!controller.isPreviewing) {
+          break;
+        }
       }
-    }
-    expect(controller.isPreviewing, isFalse);
-  });
+      expect(controller.isPreviewing, isFalse);
+    },
+  );
 
   test('theme copyWith and Arabic strings stay typed', () {
     final OfficeTheme branded = OfficeTheme.light.copyWith(
@@ -1751,7 +1764,12 @@ void main() {
                 id: 2,
                 name: 'Title',
                 text: 'A',
-                transform: const PmlTransform(x: 0, y: 0, cx: 1000000, cy: 1000000),
+                transform: const PmlTransform(
+                  x: 0,
+                  y: 0,
+                  cx: 1000000,
+                  cy: 1000000,
+                ),
               ),
             ],
           ),
@@ -1896,7 +1914,8 @@ void main() {
     expect(word.isInTable, isTrue);
     expect(word.tableAtCaret?.row, 0);
     word.insertTableRow(after: true);
-    final WmlTable table = word.document.sections.first.blocks.first as WmlTable;
+    final WmlTable table =
+        word.document.sections.first.blocks.first as WmlTable;
     expect(table.rows.length, 3);
     word.undo();
     expect(table.rows.length, 2);
@@ -1961,11 +1980,17 @@ void main() {
     expect(word.moveTableCell(forward: true), isTrue);
     expect(word.tableAtCaret?.row, 0);
     expect(word.tableAtCaret?.col, 1);
-    expect(word.document.paragraphs.toList()[word.caret.paragraphIndex].text, 'B1');
+    expect(
+      word.document.paragraphs.toList()[word.caret.paragraphIndex].text,
+      'B1',
+    );
     expect(word.moveTableCell(forward: true), isTrue);
     expect(word.tableAtCaret?.row, 1);
     expect(word.tableAtCaret?.col, 0);
-    expect(word.document.paragraphs.toList()[word.caret.paragraphIndex].text, 'A2');
+    expect(
+      word.document.paragraphs.toList()[word.caret.paragraphIndex].text,
+      'A2',
+    );
     expect(word.moveTableCell(forward: false), isTrue);
     expect(word.tableAtCaret?.row, 0);
     expect(word.tableAtCaret?.col, 1);
@@ -2006,12 +2031,7 @@ void main() {
     final WmlTable table = WmlTable(
       grid: <double>[80, 80],
       rows: <WmlTableRow>[
-        WmlTableRow(
-          cells: <WmlTableCell>[
-            WmlTableCell(),
-            WmlTableCell(),
-          ],
-        ),
+        WmlTableRow(cells: <WmlTableCell>[WmlTableCell(), WmlTableCell()]),
       ],
     );
     final List<OfficeContextAction> actions = OfficeContextMenu.word(
@@ -2046,24 +2066,17 @@ void main() {
   test('slide sorter hide and show actions toggle hidden with undo', () {
     final SlideEditorController slides = SlideEditorController(
       presentation: PmlPresentation(
-        slides: <PmlSlide>[
-          PmlSlide(id: 256),
-          PmlSlide(id: 257),
-        ],
+        slides: <PmlSlide>[PmlSlide(id: 256), PmlSlide(id: 257)],
       ),
     );
     expect(
-      OfficeContextMenu.slideSorter(controller: slides, index: 0)
-          .single
-          .id,
+      OfficeContextMenu.slideSorter(controller: slides, index: 0).single.id,
       'hideSlide',
     );
     slides.setSlideHidden(0, true);
     expect(slides.presentation.slides.first.hidden, isTrue);
     expect(
-      OfficeContextMenu.slideSorter(controller: slides, index: 0)
-          .single
-          .id,
+      OfficeContextMenu.slideSorter(controller: slides, index: 0).single.id,
       'showSlide',
     );
     slides.undo();

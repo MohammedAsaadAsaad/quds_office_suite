@@ -5,6 +5,7 @@ import 'office_visual.dart';
 
 /// Builds chart points from a worksheet range, evaluating formulas.
 abstract final class SheetChartData {
+  /// fromRange API.
   static List<ChartPoint> fromRange({
     required SmlWorkbook book,
     required SmlWorksheet sheet,
@@ -22,7 +23,8 @@ abstract final class SheetChartData {
           ChartPoint(
             label: _columnLabel(sheet, c, r0),
             value: _number(book, sheet, SmlCellRef(c, r0)) ?? 0,
-            color: VisualPalette.fills[points.length % VisualPalette.fills.length],
+            color:
+                VisualPalette.fills[points.length % VisualPalette.fills.length],
           ),
         );
       }
@@ -32,7 +34,8 @@ abstract final class SheetChartData {
           ChartPoint(
             label: _rowLabel(sheet, c0, r),
             value: _number(book, sheet, SmlCellRef(c0, r)) ?? 0,
-            color: VisualPalette.fills[points.length % VisualPalette.fills.length],
+            color:
+                VisualPalette.fills[points.length % VisualPalette.fills.length],
           ),
         );
       }
@@ -56,7 +59,8 @@ abstract final class SheetChartData {
           ChartPoint(
             label: label,
             value: value ?? 0,
-            color: VisualPalette.fills[points.length % VisualPalette.fills.length],
+            color:
+                VisualPalette.fills[points.length % VisualPalette.fills.length],
           ),
         );
       }
@@ -64,6 +68,7 @@ abstract final class SheetChartData {
     return points;
   }
 
+  /// refreshDrawing API.
   static void refreshDrawing(
     SmlWorkbook book,
     SmlWorksheet sheet,
@@ -97,23 +102,21 @@ abstract final class SheetChartData {
       ..addAll(merged);
   }
 
+  /// refreshSheet API.
   static void refreshSheet(SmlWorkbook book, SmlWorksheet sheet) {
     for (final SmlDrawing drawing in sheet.drawings) {
       refreshDrawing(book, sheet, drawing);
     }
   }
 
+  /// refreshWorkbook API.
   static void refreshWorkbook(SmlWorkbook book) {
     for (final SmlWorksheet sheet in book.sheets) {
       refreshSheet(book, sheet);
     }
   }
 
-  static double? _number(
-    SmlWorkbook book,
-    SmlWorksheet sheet,
-    SmlCellRef ref,
-  ) {
+  static double? _number(SmlWorkbook book, SmlWorksheet sheet, SmlCellRef ref) {
     final SmlCell cell = sheet.cell(ref);
     if (cell.formula != null && cell.formula!.isNotEmpty) {
       final Object? value = FormulaEvaluator.evaluateCell(book, sheet, cell);

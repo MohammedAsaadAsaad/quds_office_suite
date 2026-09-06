@@ -3,6 +3,7 @@
 /// This is a pure-Dart brand token set. It is intentionally separate from the
 /// Flutter editor chrome theme (`OfficeTheme` in `quds_office_editor`).
 class OfficePalette {
+  /// OfficePalette API.
   const OfficePalette({
     this.primary = '2E75B6',
     this.primaryLight = 'D6E3F0',
@@ -16,33 +17,51 @@ class OfficePalette {
     this.rule = '808080',
   });
 
+  /// primary API.
   final String primary;
+
+  /// primaryLight API.
   final String primaryLight;
+
+  /// accent API.
   final String accent;
+
+  /// muted API.
   final String muted;
+
+  /// highlight API.
   final String highlight;
+
+  /// surface API.
   final String surface;
+
+  /// onPrimary API.
   final String onPrimary;
+
+  /// tableHeader API.
   final String tableHeader;
+
+  /// tableBand API.
   final String tableBand;
+
+  /// rule API.
   final String rule;
 
+  /// chartCycle API.
   List<String> get chartCycle => <String>[
-        primary,
-        accent,
-        highlight,
-        'C45C12',
-        '5B2C6F',
-        tableHeader,
-      ];
+    primary,
+    accent,
+    highlight,
+    'C45C12',
+    '5B2C6F',
+    tableHeader,
+  ];
 }
 
 /// Page extents used by document builders (EMU) and PDF (points).
 class OfficePageSize {
-  const OfficePageSize({
-    required this.widthEmu,
-    required this.heightEmu,
-  });
+  /// OfficePageSize API.
+  const OfficePageSize({required this.widthEmu, required this.heightEmu});
 
   /// A4 portrait: 11906 × 16838 twips → EMU (twip × 635).
   static const OfficePageSize a4Portrait = OfficePageSize(
@@ -50,6 +69,7 @@ class OfficePageSize {
     heightEmu: 10692130,
   );
 
+  /// a4Landscape API.
   static const OfficePageSize a4Landscape = OfficePageSize(
     widthEmu: 10692130,
     heightEmu: 7560310,
@@ -61,22 +81,28 @@ class OfficePageSize {
     heightEmu: 6858000,
   );
 
+  /// widthEmu API.
   final int widthEmu;
+
+  /// heightEmu API.
   final int heightEmu;
 
   /// PDF / typographic points (1 pt = 12 700 EMU).
   double get widthPoints => widthEmu / 12700;
 
+  /// heightPoints API.
   double get heightPoints => heightEmu / 12700;
 
   /// Word `w:pgSz` twips (1 twip = 635 EMU).
   int get widthTwips => widthEmu ~/ 635;
 
+  /// heightTwips API.
   int get heightTwips => heightEmu ~/ 635;
 }
 
 /// Word `w:pgMar` in twips. Defaults match a typical 0.79" office margin.
 class OfficePageMargins {
+  /// OfficePageMargins API.
   const OfficePageMargins({
     this.topTwips = 1134,
     this.rightTwips = 1134,
@@ -96,19 +122,34 @@ class OfficePageMargins {
     footerTwips: 0,
   );
 
+  /// topTwips API.
   final int topTwips;
+
+  /// rightTwips API.
   final int rightTwips;
+
+  /// bottomTwips API.
   final int bottomTwips;
+
+  /// leftTwips API.
   final int leftTwips;
+
+  /// headerTwips API.
   final int headerTwips;
+
+  /// footerTwips API.
   final int footerTwips;
 
+  /// horizontalTwips API.
   int get horizontalTwips => leftTwips + rightTwips;
+
+  /// verticalTwips API.
   int get verticalTwips => topTwips + bottomTwips;
 }
 
 /// Product-agnostic document theme injected into fluent builders.
 class OfficeDocumentTheme {
+  /// OfficeDocumentTheme API.
   const OfficeDocumentTheme({
     this.palette = const OfficePalette(),
     this.fontFamily = 'Arial',
@@ -117,12 +158,22 @@ class OfficeDocumentTheme {
     this.margins = const OfficePageMargins(),
   });
 
+  /// palette API.
   final OfficePalette palette;
+
+  /// fontFamily API.
   final String fontFamily;
+
+  /// rtl API.
   final bool rtl;
+
+  /// page API.
   final OfficePageSize page;
+
+  /// margins API.
   final OfficePageMargins margins;
 
+  /// light API.
   factory OfficeDocumentTheme.light({
     bool rtl = false,
     OfficePageSize page = OfficePageSize.a4Portrait,
@@ -137,6 +188,7 @@ class OfficeDocumentTheme {
     );
   }
 
+  /// dark API.
   factory OfficeDocumentTheme.dark({
     bool rtl = false,
     OfficePageSize page = OfficePageSize.a4Portrait,
@@ -163,6 +215,7 @@ class OfficeDocumentTheme {
     );
   }
 
+  /// custom API.
   factory OfficeDocumentTheme.custom({
     OfficePalette palette = const OfficePalette(),
     bool rtl = false,
@@ -179,6 +232,7 @@ class OfficeDocumentTheme {
     );
   }
 
+  /// colorAt API.
   String colorAt(int index) {
     final List<String> cycle = palette.chartCycle;
     if (cycle.isEmpty) {

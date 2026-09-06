@@ -3,6 +3,7 @@ import 'wml_run_edit.dart';
 
 /// Review comments attached to text runs.
 abstract final class WordComment {
+  /// idsAt API.
   static List<int> idsAt(WmlParagraph paragraph, int index) {
     var offset = 0;
     List<int> last = const <int>[];
@@ -20,6 +21,7 @@ abstract final class WordComment {
     return List<int>.from(last);
   }
 
+  /// byId API.
   static WmlComment? byId(WmlDocument document, int id) {
     for (final WmlComment comment in document.comments) {
       if (comment.id == id) {
@@ -29,6 +31,7 @@ abstract final class WordComment {
     return null;
   }
 
+  /// nextId API.
   static int nextId(WmlDocument document) {
     var maxId = -1;
     for (final WmlComment comment in document.comments) {
@@ -68,12 +71,8 @@ abstract final class WordComment {
     return null;
   }
 
-  static void applyRange(
-    WmlParagraph paragraph,
-    int start,
-    int end,
-    int id,
-  ) {
+  /// applyRange API.
+  static void applyRange(WmlParagraph paragraph, int start, int end, int id) {
     final int length = paragraph.text.length;
     start = start.clamp(0, length);
     end = end.clamp(0, length);
@@ -108,6 +107,7 @@ abstract final class WordComment {
     WmlRunEdit.coalesce(paragraph);
   }
 
+  /// applyDocumentRange API.
   static void applyDocumentRange(
     WmlDocument document, {
     required int startPara,
@@ -129,6 +129,7 @@ abstract final class WordComment {
     }
   }
 
+  /// roots API.
   static List<WmlComment> roots(WmlDocument document) {
     return <WmlComment>[
       for (final WmlComment comment in document.comments)
@@ -136,6 +137,7 @@ abstract final class WordComment {
     ];
   }
 
+  /// repliesOf API.
   static List<WmlComment> repliesOf(WmlDocument document, int id) {
     return <WmlComment>[
       for (final WmlComment comment in document.comments)
@@ -143,6 +145,7 @@ abstract final class WordComment {
     ];
   }
 
+  /// threadRootId API.
   static int threadRootId(WmlDocument document, int id) {
     WmlComment? current = byId(document, id);
     final Set<int> seen = <int>{};
@@ -154,6 +157,7 @@ abstract final class WordComment {
     return current?.id ?? id;
   }
 
+  /// removeId API.
   static void removeId(WmlDocument document, int id) {
     final List<int> drop = <int>[id];
     if (byId(document, id)?.parentId == null) {

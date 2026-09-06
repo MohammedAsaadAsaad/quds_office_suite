@@ -17,6 +17,7 @@ const int zipMethodDeflate = 8;
 
 /// Central-directory entry describing one ZIP member.
 class ZipEntry {
+  /// ZipEntry API.
   ZipEntry({
     required this.fileName,
     required this.compressionMethod,
@@ -28,15 +29,31 @@ class ZipEntry {
     this.comment = '',
   });
 
+  /// fileName API.
   final String fileName;
+
+  /// compressionMethod API.
   final int compressionMethod;
+
+  /// crc32 API.
   final int crc32;
+
+  /// compressedSize API.
   final int compressedSize;
+
+  /// uncompressedSize API.
   final int uncompressedSize;
+
+  /// localHeaderOffset API.
   final int localHeaderOffset;
+
+  /// generalPurposeFlag API.
   final int generalPurposeFlag;
+
+  /// comment API.
   final String comment;
 
+  /// isDirectory API.
   bool get isDirectory => fileName.endsWith('/');
 }
 
@@ -48,6 +65,7 @@ class ZipReader {
   final ByteSource _source;
   final Map<String, ZipEntry> _entries;
 
+  /// open API.
   factory ZipReader.open(ByteSource source) {
     if (source.length < 22) {
       throw const ZipException('Buffer is too small to be a ZIP archive');
@@ -63,9 +81,11 @@ class ZipReader {
     return ZipReader._(source, entries);
   }
 
+  /// fromBytes API.
   factory ZipReader.fromBytes(Uint8List bytes) =>
       ZipReader.open(MemoryByteSource(bytes));
 
+  /// tryOpen API.
   static ZipReader? tryOpen(ByteSource source) {
     try {
       return ZipReader.open(source);
@@ -74,14 +94,18 @@ class ZipReader {
     }
   }
 
+  /// byteLength API.
   int get byteLength => _source.length;
 
+  /// fileNames API.
   Iterable<String> get fileNames => _entries.keys;
 
+  /// entries API.
   Iterable<ZipEntry> get entries => _entries.values;
 
   ZipEntry? operator [](String name) => _entries[name];
 
+  /// contains API.
   bool contains(String name) => _entries.containsKey(name);
 
   /// Inflates [name] into a newly allocated buffer.
@@ -134,10 +158,9 @@ class ZipReader {
     }
     final _LocalLocation loc = _localData(entry);
     final int avail = _source.length - loc.offset;
-    final int take =
-        loc.compressedSize > 0 && loc.compressedSize <= avail
-            ? loc.compressedSize
-            : (avail < 0 ? 0 : avail);
+    final int take = loc.compressedSize > 0 && loc.compressedSize <= avail
+        ? loc.compressedSize
+        : (avail < 0 ? 0 : avail);
     final Uint8List payload = take == 0
         ? Uint8List(0)
         : _source.view(loc.offset, take);
@@ -391,7 +414,10 @@ class ZipReader {
 class _LocalLocation {
   const _LocalLocation({required this.offset, required this.compressedSize});
 
+  /// offset API.
   final int offset;
+
+  /// compressedSize API.
   final int compressedSize;
 }
 
@@ -402,8 +428,13 @@ class _Eocd {
     required this.centralDirectorySize,
   });
 
+  /// entryCount API.
   final int entryCount;
+
+  /// centralDirectoryOffset API.
   final int centralDirectoryOffset;
+
+  /// centralDirectorySize API.
   final int centralDirectorySize;
 }
 
@@ -414,17 +445,25 @@ class _Zip64Sizes {
     this.localHeaderOffset,
   });
 
+  /// compressedSize API.
   final int? compressedSize;
+
+  /// uncompressedSize API.
   final int? uncompressedSize;
+
+  /// localHeaderOffset API.
   final int? localHeaderOffset;
 }
 
 /// Thrown when a ZIP archive is corrupt or uses an unsupported feature.
 class ZipException implements Exception {
+  /// ZipException API.
   const ZipException(this.message);
 
+  /// message API.
   final String message;
 
   @override
+  /// toString API.
   String toString() => 'ZipException: $message';
 }

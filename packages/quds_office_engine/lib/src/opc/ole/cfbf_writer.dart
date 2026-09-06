@@ -5,6 +5,7 @@ import 'cfbf_reader.dart';
 
 /// Builds a version-3 (512-byte sector) Compound File Binary.
 class CfbfWriter {
+  /// CfbfWriter API.
   CfbfWriter({this.clsid});
 
   /// Root-storage CLSID (16 bytes). Defaults to all zeros.
@@ -29,6 +30,7 @@ class CfbfWriter {
     parent.children[name] = _Node.stream(name, Uint8List.fromList(data));
   }
 
+  /// build API.
   Uint8List build() {
     final List<_DirDraft> drafts = <_DirDraft>[
       _DirDraft(
@@ -212,6 +214,7 @@ class CfbfWriter {
     return sink.takeBytes();
   }
 
+  /// storage API.
   final _Node _virtualRoot = _Node.storage('Root Entry');
 
   _Node _ensureStorage(String path) {
@@ -404,18 +407,27 @@ class CfbfWriter {
 }
 
 class _Node {
+  /// storage API.
   _Node.storage(this.name)
     : kind = CfbfObjectType.storage,
       data = null,
       children = <String, _Node>{};
 
+  /// stream API.
   _Node.stream(this.name, this.data)
     : kind = CfbfObjectType.stream,
       children = <String, _Node>{};
 
+  /// name API.
   final String name;
+
+  /// kind API.
   final CfbfObjectType kind;
+
+  /// data API.
   final Uint8List? data;
+
+  /// children API.
   final Map<String, _Node> children;
 }
 
@@ -427,22 +439,48 @@ class _DirDraft {
     required this.clsid,
   });
 
+  /// name API.
   final String name;
+
+  /// type API.
   final CfbfObjectType type;
+
+  /// data API.
   final Uint8List? data;
+
+  /// clsid API.
   final Uint8List clsid;
+
+  /// left API.
   int left = cfbfNoStream;
+
+  /// right API.
   int right = cfbfNoStream;
+
+  /// child API.
   int child = cfbfNoStream;
+
+  /// black API.
   bool black = true;
+
+  /// startSector API.
   int startSector = cfbfEndOfChain;
+
+  /// streamSize API.
   int streamSize = 0;
+
+  /// regularSectorCount API.
   int regularSectorCount = 0;
 }
 
 int _cfbfNameCompare(String a, String b) {
+  /// au API.
   final String au = a.toUpperCase();
+
+  /// bu API.
   final String bu = b.toUpperCase();
+
+  /// minLen API.
   final int minLen = au.length < bu.length ? au.length : bu.length;
   for (int i = 0; i < minLen; i++) {
     final int d = au.codeUnitAt(i) - bu.codeUnitAt(i);

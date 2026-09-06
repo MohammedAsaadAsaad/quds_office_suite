@@ -9,6 +9,7 @@ import 'pdf_image.dart';
 
 /// Paints [OfficeVisual] charts, diagrams, and pictures onto a PDF page.
 abstract final class OfficePdfVisuals {
+  /// paint API.
   static void paint(
     PdfCanvas canvas,
     double x,
@@ -17,8 +18,14 @@ abstract final class OfficePdfVisuals {
     double height,
     OfficeVisual visual,
     List<PdfEmbeddedImage> images, {
-    required void Function(String text, double x, double y, double size, String color)
-        drawText,
+    required void Function(
+      String text,
+      double x,
+      double y,
+      double size,
+      String color,
+    )
+    drawText,
     String Function()? nextImageName,
   }) {
     switch (visual.kind) {
@@ -202,7 +209,10 @@ abstract final class OfficePdfVisuals {
     final double cx = x + w * 0.38;
     final double cy = y + h * 0.58;
     final double r = math.min(w, h) * 0.28;
-    final double sum = pts.fold<double>(0, (double a, ChartPoint p) => a + p.value);
+    final double sum = pts.fold<double>(
+      0,
+      (double a, ChartPoint p) => a + p.value,
+    );
     var angle = -math.pi / 2;
     for (int i = 0; i < pts.length; i++) {
       final double sweep = 2 * math.pi * (pts[i].value / sum);
@@ -248,7 +258,8 @@ abstract final class OfficePdfVisuals {
     canvas.setLineWidth(1.4);
     for (int i = 0; i < pts.length; i++) {
       final double px =
-          plot.x + (pts.length == 1 ? plot.w / 2 : i * (plot.w / (pts.length - 1)));
+          plot.x +
+          (pts.length == 1 ? plot.w / 2 : i * (plot.w / (pts.length - 1)));
       final double py = plot.y + plot.h - (pts[i].value / maxV) * plot.h;
       if (i == 0) {
         canvas.moveTo(px, py);

@@ -2,10 +2,12 @@ import '../properties/wml_properties.dart';
 import 'wml_clone.dart';
 import 'wml_document.dart';
 
+/// Enum WordTableAutoFit.
 enum WordTableAutoFit { contents, window, fixed }
 
 /// Locate and mutate Word tables (insert / delete rows and columns).
 abstract final class WordTable {
+  /// emptyCell API.
   static WmlTableCell emptyCell() {
     return WmlTableCell(
       blocks: <WmlBlock>[
@@ -14,6 +16,7 @@ abstract final class WordTable {
     );
   }
 
+  /// emptyCellLike API.
   static WmlTableCell emptyCellLike(WmlTableCell? source) {
     if (source == null) {
       return emptyCell();
@@ -48,8 +51,10 @@ abstract final class WordTable {
     WmlParagraph paragraph,
   ) {
     for (final WmlSection section in document.sections) {
-      final ({WmlTable table, int row, int col})? found =
-          _locateInBlocks(section.blocks, paragraph);
+      final ({WmlTable table, int row, int col})? found = _locateInBlocks(
+        section.blocks,
+        paragraph,
+      );
       if (found != null) {
         return found;
       }
@@ -74,8 +79,10 @@ abstract final class WordTable {
   ) {
     for (final WmlBlock block in blocks) {
       if (block is WmlFrame) {
-        final ({WmlTable table, int row, int col})? nested =
-            _locateInBlocks(block.blocks, paragraph);
+        final ({WmlTable table, int row, int col})? nested = _locateInBlocks(
+          block.blocks,
+          paragraph,
+        );
         if (nested != null) {
           return nested;
         }
@@ -107,9 +114,10 @@ abstract final class WordTable {
     return false;
   }
 
-  static int spanOf(WmlTableCell cell) =>
-      cell.gridSpan < 1 ? 1 : cell.gridSpan;
+  /// spanOf API.
+  static int spanOf(WmlTableCell cell) => cell.gridSpan < 1 ? 1 : cell.gridSpan;
 
+  /// gridStart API.
   static int gridStart(WmlTableRow row, int cellIndex) {
     var col = 0;
     for (int i = 0; i < cellIndex && i < row.cells.length; i++) {
@@ -118,6 +126,7 @@ abstract final class WordTable {
     return col;
   }
 
+  /// cellIndexAtGrid API.
   static int? cellIndexAtGrid(WmlTableRow row, int gridCol) {
     var col = 0;
     for (int i = 0; i < row.cells.length; i++) {
@@ -130,6 +139,7 @@ abstract final class WordTable {
     return null;
   }
 
+  /// columnCount API.
   static int columnCount(WmlTable table) {
     var max = table.grid.length;
     for (final WmlTableRow row in table.rows) {
@@ -171,12 +181,7 @@ abstract final class WordTable {
     final int a1 = a0 + spanOf(row0.cells[colA]) - 1;
     final int b0 = gridStart(row1, colB);
     final int b1 = b0 + spanOf(row1.cells[colB]) - 1;
-    return (
-      r0: r0,
-      g0: a0 < b0 ? a0 : b0,
-      r1: r1,
-      g1: a1 > b1 ? a1 : b1,
-    );
+    return (r0: r0, g0: a0 < b0 ? a0 : b0, r1: r1, g1: a1 > b1 ? a1 : b1);
   }
 
   static bool _coversExactly(WmlTableRow row, int g0, int g1) {
@@ -212,6 +217,7 @@ abstract final class WordTable {
     return count;
   }
 
+  /// canMerge API.
   static bool canMerge(WmlTable table, int r0, int g0, int r1, int g1) {
     if (r1 < r0 || g1 < g0) {
       return false;
@@ -238,6 +244,7 @@ abstract final class WordTable {
     }
   }
 
+  /// merge API.
   static void merge(WmlTable table, int r0, int g0, int r1, int g1) {
     if (!canMerge(table, r0, g0, r1, g1)) {
       return;
@@ -283,6 +290,7 @@ abstract final class WordTable {
     }
   }
 
+  /// canUnmerge API.
   static bool canUnmerge(WmlTable table, int row, int col) {
     if (row < 0 || row >= table.rows.length) {
       return false;
@@ -316,6 +324,7 @@ abstract final class WordTable {
     return (row: r0, col: c0);
   }
 
+  /// unmerge API.
   static void unmerge(WmlTable table, int row, int col) {
     if (!canUnmerge(table, row, col)) {
       return;
@@ -352,6 +361,7 @@ abstract final class WordTable {
     }
   }
 
+  /// gridWidth API.
   static double gridWidth(WmlTable table) {
     var total = 0.0;
     for (final double width in table.grid) {
@@ -360,6 +370,7 @@ abstract final class WordTable {
     return total;
   }
 
+  /// insertRow API.
   static void insertRow(WmlTable table, int index) {
     final int cols = columnCount(table);
     if (cols <= 0) {
@@ -368,8 +379,9 @@ abstract final class WordTable {
     final int width = cols <= 0 ? 1 : cols;
     final int at = index.clamp(0, table.rows.length);
     final int source = at > 0 ? at - 1 : 0;
-    final WmlTableRow? like =
-        table.rows.isEmpty ? null : table.rows[source.clamp(0, table.rows.length - 1)];
+    final WmlTableRow? like = table.rows.isEmpty
+        ? null
+        : table.rows[source.clamp(0, table.rows.length - 1)];
     table.rows.insert(
       at,
       WmlTableRow(
@@ -384,6 +396,7 @@ abstract final class WordTable {
     );
   }
 
+  /// insertColumn API.
   static void insertColumn(WmlTable table, int index) {
     final int cols = columnCount(table);
     final int at = index.clamp(0, cols);
@@ -401,14 +414,14 @@ abstract final class WordTable {
       while (row.cells.length < cols) {
         row.cells.add(emptyCell());
       }
-      final WmlTableCell? like =
-          row.cells.isEmpty
-              ? null
-              : row.cells[source.clamp(0, row.cells.length - 1)];
+      final WmlTableCell? like = row.cells.isEmpty
+          ? null
+          : row.cells[source.clamp(0, row.cells.length - 1)];
       row.cells.insert(at.clamp(0, row.cells.length), emptyCellLike(like));
     }
   }
 
+  /// autoFit API.
   static void autoFit(
     WmlTable table,
     WordTableAutoFit mode, {
@@ -424,6 +437,7 @@ abstract final class WordTable {
     }
   }
 
+  /// autoFitContents API.
   static void autoFitContents(WmlTable table) {
     final int cols = columnCount(table);
     if (cols <= 0) {
@@ -459,6 +473,7 @@ abstract final class WordTable {
     }
   }
 
+  /// autoFitWindow API.
   static void autoFitWindow(WmlTable table, double contentWidth) {
     final int cols = columnCount(table);
     if (cols <= 0 || contentWidth <= 0) {
@@ -478,6 +493,7 @@ abstract final class WordTable {
     autoFitFixed(table);
   }
 
+  /// autoFitFixed API.
   static void autoFitFixed(WmlTable table) {
     final int cols = columnCount(table);
     while (table.grid.length < cols) {
@@ -490,12 +506,14 @@ abstract final class WordTable {
     }
   }
 
+  /// constrainToWidth API.
   static void constrainToWidth(WmlTable table, double maxWidth) {
     if (gridWidth(table) > maxWidth + 0.5) {
       autoFitWindow(table, maxWidth);
     }
   }
 
+  /// deleteRow API.
   static void deleteRow(WmlTable table, int index) {
     if (table.rows.length <= 1 || index < 0 || index >= table.rows.length) {
       return;
@@ -503,6 +521,7 @@ abstract final class WordTable {
     table.rows.removeAt(index);
   }
 
+  /// deleteColumn API.
   static void deleteColumn(WmlTable table, int index) {
     final int cols = columnCount(table);
     if (cols <= 1 || index < 0 || index >= cols) {
@@ -518,8 +537,10 @@ abstract final class WordTable {
     }
   }
 
+  /// snapshot API.
   static WmlTable snapshot(WmlTable table) => WmlClone.table(table);
 
+  /// restore API.
   static void restore(WmlTable table, WmlTable snap) {
     table.grid
       ..clear()

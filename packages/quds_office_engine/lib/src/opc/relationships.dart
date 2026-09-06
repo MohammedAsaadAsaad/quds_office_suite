@@ -8,6 +8,7 @@ enum RelationshipTargetMode { internal, external }
 
 /// One `<Relationship>` row.
 class PackageRelationship {
+  /// PackageRelationship API.
   PackageRelationship({
     required this.id,
     required this.type,
@@ -15,11 +16,19 @@ class PackageRelationship {
     this.targetMode = RelationshipTargetMode.internal,
   });
 
+  /// id API.
   final String id;
+
+  /// type API.
   final String type;
+
+  /// target API.
   final String target;
+
+  /// targetMode API.
   final RelationshipTargetMode targetMode;
 
+  /// copyWith API.
   PackageRelationship copyWith({
     String? id,
     String? type,
@@ -37,24 +46,31 @@ class PackageRelationship {
 
 /// `.rels` collection with a monotonic `rId` allocator.
 class RelationshipCollection {
+  /// RelationshipCollection API.
   RelationshipCollection({
     required this.sourcePartUri,
     List<PackageRelationship>? items,
   }) : _items = items ?? <PackageRelationship>[];
 
+  /// sourcePartUri API.
   final String sourcePartUri;
   final List<PackageRelationship> _items;
   int _nextId = 1;
 
+  /// items API.
   List<PackageRelationship> get items =>
       List<PackageRelationship>.unmodifiable(_items);
 
+  /// isNotEmpty API.
   bool get isNotEmpty => _items.isNotEmpty;
 
+  /// isEmpty API.
   bool get isEmpty => _items.isEmpty;
 
+  /// length API.
   int get length => _items.length;
 
+  /// parse API.
   factory RelationshipCollection.parse(String xml, String sourcePartUri) {
     final RelationshipCollection collection = RelationshipCollection(
       sourcePartUri: OpcUris.normalize(sourcePartUri),
@@ -87,6 +103,7 @@ class RelationshipCollection {
     return collection;
   }
 
+  /// allocateId API.
   String allocateId() {
     while (_hasId('rId$_nextId')) {
       _nextId++;
@@ -96,6 +113,7 @@ class RelationshipCollection {
     return id;
   }
 
+  /// add API.
   PackageRelationship add({
     required String type,
     required String target,
@@ -116,6 +134,7 @@ class RelationshipCollection {
     return rel;
   }
 
+  /// removeById API.
   bool removeById(String id) {
     final int index = _items.indexWhere((PackageRelationship r) => r.id == id);
     if (index < 0) {
@@ -125,6 +144,7 @@ class RelationshipCollection {
     return true;
   }
 
+  /// byId API.
   PackageRelationship? byId(String id) {
     for (final PackageRelationship rel in _items) {
       if (rel.id == id) {
@@ -134,6 +154,7 @@ class RelationshipCollection {
     return null;
   }
 
+  /// firstByType API.
   PackageRelationship? firstByType(String type) {
     for (final PackageRelationship rel in _items) {
       if (rel.type == type) {
@@ -143,6 +164,7 @@ class RelationshipCollection {
     return null;
   }
 
+  /// byType API.
   Iterable<PackageRelationship> byType(String type) {
     return _items.where((PackageRelationship r) => r.type == type);
   }
@@ -155,6 +177,7 @@ class RelationshipCollection {
     return OpcUris.resolve(sourcePartUri, relationship.target);
   }
 
+  /// toXml API.
   String toXml() {
     final XmlWriter writer = XmlWriter();
     writer.writeStartDocument();

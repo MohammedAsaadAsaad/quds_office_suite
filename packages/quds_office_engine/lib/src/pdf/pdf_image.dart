@@ -4,6 +4,7 @@ import '../opc/zip/deflate_codec.dart';
 
 /// Decoded raster ready for a PDF image XObject.
 class PdfRaster {
+  /// PdfRaster API.
   const PdfRaster({
     required this.width,
     required this.height,
@@ -11,20 +12,30 @@ class PdfRaster {
     this.jpegBytes,
   });
 
+  /// width API.
   final int width;
+
+  /// height API.
   final int height;
+
+  /// rgb API.
   final Uint8List rgb;
+
+  /// jpegBytes API.
   final Uint8List? jpegBytes;
 
+  /// isJpeg API.
   bool get isJpeg => jpegBytes != null;
 }
 
 /// PNG (IHDR/IDAT) and JPEG embedding helpers. No Flutter / `dart:ui`.
 abstract final class PdfImageCodec {
+  /// decode API.
   static PdfRaster? decode(Uint8List bytes) {
     return decodePng(bytes) ?? decodeJpeg(bytes);
   }
 
+  /// decodeJpeg API.
   static PdfRaster? decodeJpeg(Uint8List bytes) {
     if (bytes.length < 4 || bytes[0] != 0xFF || bytes[1] != 0xD8) {
       return null;
@@ -60,6 +71,7 @@ abstract final class PdfImageCodec {
     );
   }
 
+  /// decodePng API.
   static PdfRaster? decodePng(Uint8List bytes) {
     if (bytes.length < 33 ||
         bytes[0] != 0x89 ||
@@ -77,7 +89,9 @@ abstract final class PdfImageCodec {
     List<int>? palette;
     while (offset + 12 <= bytes.length) {
       final int len = _u32(bytes, offset);
-      final String type = String.fromCharCodes(bytes.sublist(offset + 4, offset + 8));
+      final String type = String.fromCharCodes(
+        bytes.sublist(offset + 4, offset + 8),
+      );
       final int dataAt = offset + 8;
       if (dataAt + len + 4 > bytes.length) {
         break;
@@ -137,13 +151,15 @@ abstract final class PdfImageCodec {
         final int a = x >= channels ? row[x - channels] : 0;
         final int b = prev[x];
         final int c = x >= channels ? prev[x - channels] : 0;
-        row[x] = (cur + switch (filter) {
-              1 => a,
-              2 => b,
-              3 => (a + b) >> 1,
-              4 => _paeth(a, b, c),
-              _ => 0,
-            }) &
+        row[x] =
+            (cur +
+                switch (filter) {
+                  1 => a,
+                  2 => b,
+                  3 => (a + b) >> 1,
+                  4 => _paeth(a, b, c),
+                  _ => 0,
+                }) &
             0xFF;
       }
       for (int x = 0; x < width; x++) {

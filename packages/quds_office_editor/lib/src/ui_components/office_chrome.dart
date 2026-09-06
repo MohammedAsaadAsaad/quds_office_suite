@@ -4,6 +4,7 @@ import '../embed/office_theme.dart';
 
 /// Vector chrome painted by the host RenderBoxes (not Material widgets).
 class OfficeChrome {
+  /// paintRuler API.
   static void paintRuler(
     Canvas canvas,
     Size size, {
@@ -29,6 +30,7 @@ class OfficeChrome {
     }
   }
 
+  /// paintFormulaBar API.
   static void paintFormulaBar(
     Canvas canvas,
     Size size,
@@ -36,7 +38,8 @@ class OfficeChrome {
     OfficeTheme theme = OfficeTheme.light,
     String? fontFamily,
     bool rtl = false,
-    List<(int start, int end, Color color)> highlights = const <(int, int, Color)>[],
+    List<(int start, int end, Color color)> highlights =
+        const <(int, int, Color)>[],
   }) {
     canvas.drawRect(
       Rect.fromLTWH(0, 0, size.width, 28),
@@ -85,6 +88,7 @@ class OfficeChrome {
     canvas.drawParagraph(p, const Offset(8, 6));
   }
 
+  /// paintSheetHeader API.
   static void paintSheetHeader(
     Canvas canvas, {
     required Rect rect,
@@ -104,7 +108,11 @@ class OfficeChrome {
         ..style = PaintingStyle.stroke,
     );
     final ParagraphBuilder b = ParagraphBuilder(
-      ParagraphStyle(fontSize: 10, fontFamily: fontFamily, textAlign: TextAlign.center),
+      ParagraphStyle(
+        fontSize: 10,
+        fontFamily: fontFamily,
+        textAlign: TextAlign.center,
+      ),
     );
     b.pushStyle(TextStyle(color: theme.headerText, fontSize: 10));
     b.addText(label);

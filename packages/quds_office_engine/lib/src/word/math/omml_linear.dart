@@ -2,6 +2,7 @@ import 'omml_document.dart';
 
 /// UnicodeMath-style linear format used by Word's Linear / Professional toggle.
 abstract final class OmmlLinear {
+  /// parse API.
   static OmmlSeq parse(String source) {
     final _Parser parser = _Parser(source.trim());
     final OmmlSeq seq = parser.parseExpr();
@@ -12,8 +13,10 @@ abstract final class OmmlLinear {
     return seq;
   }
 
+  /// write API.
   static String write(OmmlSeq root) => _Writer().seq(root);
 
+  /// collectCodepoints API.
   static void collectCodepoints(OmmlSeq root, Set<int> cps) {
     for (final int cp in write(root).runes) {
       cps.add(cp);
@@ -24,17 +27,21 @@ abstract final class OmmlLinear {
 class _Parser {
   _Parser(this.source);
 
+  /// source API.
   final String source;
   int _i = 0;
 
+  /// done API.
   bool get done => _i >= source.length;
 
+  /// skipSpaces API.
   void skipSpaces() {
     while (_i < source.length && _isSpace(source.codeUnitAt(_i))) {
       _i++;
     }
   }
 
+  /// peek API.
   String peek() {
     skipSpaces();
     if (_i >= source.length) {
@@ -43,6 +50,7 @@ class _Parser {
     return source.substring(_i, _i + 1);
   }
 
+  /// take API.
   String take() {
     skipSpaces();
     if (_i >= source.length) {
@@ -53,6 +61,7 @@ class _Parser {
     return ch;
   }
 
+  /// eat API.
   bool eat(String expected) {
     skipSpaces();
     if (source.startsWith(expected, _i)) {
@@ -62,6 +71,7 @@ class _Parser {
     return false;
   }
 
+  /// parseExpr API.
   OmmlSeq parseExpr() {
     final OmmlSeq seq = OmmlSeq();
     skipSpaces();
@@ -81,6 +91,7 @@ class _Parser {
     return seq;
   }
 
+  /// parseAddend API.
   OmmlSeq parseAddend() {
     OmmlSeq left = parseUnary();
     while (peek() == '/') {
@@ -116,6 +127,7 @@ class _Parser {
     return seq;
   }
 
+  /// parseUnary API.
   OmmlSeq parseUnary() {
     skipSpaces();
     if (eat('√') || eat('sqrt')) {
@@ -155,8 +167,9 @@ class _Parser {
     return parseScript();
   }
 
+  /// parseScript API.
   OmmlSeq parseScript() {
-    OmmlSeq base = parseAtom();
+    final OmmlSeq base = parseAtom();
     OmmlSeq? sub;
     OmmlSeq? sup;
     if (eat('_')) {
@@ -182,6 +195,7 @@ class _Parser {
     );
   }
 
+  /// parseAtom API.
   OmmlSeq parseAtom() {
     skipSpaces();
     if (done) {
@@ -200,9 +214,7 @@ class _Parser {
       final OmmlSeq inner = parseExpr();
       eat('|');
       return OmmlSeq(
-        children: <OmmlNode>[
-          OmmlDelim(begChr: '|', endChr: '|', e: inner),
-        ],
+        children: <OmmlNode>[OmmlDelim(begChr: '|', endChr: '|', e: inner)],
       );
     }
     if (eat('\\')) {
@@ -211,12 +223,18 @@ class _Parser {
     final String? func = _tryFunction();
     if (func != null) {
       final OmmlSeq arg = peek() == '(' ? parseAtom() : _groupedOrAtom();
-      return OmmlSeq(children: <OmmlNode>[OmmlFunc(name: func, e: arg)]);
+      return OmmlSeq(
+        children: <OmmlNode>[OmmlFunc(name: func, e: arg)],
+      );
     }
     if (_isDigit(peek())) {
       return OmmlSeq(
         children: <OmmlNode>[
-          OmmlText(text: _takeWhile(_isDigitOrDot), italic: false, normal: true),
+          OmmlText(
+            text: _takeWhile(_isDigitOrDot),
+            italic: false,
+            normal: true,
+          ),
         ],
       );
     }
@@ -224,7 +242,11 @@ class _Parser {
     if (ident.isNotEmpty) {
       return OmmlSeq(
         children: <OmmlNode>[
-          OmmlText(text: ident, italic: _isMathItalic(ident), normal: !_isMathItalic(ident)),
+          OmmlText(
+            text: ident,
+            italic: _isMathItalic(ident),
+            normal: !_isMathItalic(ident),
+          ),
         ],
       );
     }
@@ -346,17 +368,22 @@ class _Parser {
         if (name == 'lim') {
           return OmmlSeq(children: <OmmlNode>[OmmlLimLow(lim: arg)]);
         }
-        return OmmlSeq(children: <OmmlNode>[OmmlFunc(name: name, e: arg)]);
+        return OmmlSeq(
+          children: <OmmlNode>[OmmlFunc(name: name, e: arg)],
+        );
       default:
         return OmmlSeq(
-          children: <OmmlNode>[OmmlText(text: name, italic: false, normal: true)],
+          children: <OmmlNode>[
+            OmmlText(text: name, italic: false, normal: true),
+          ],
         );
     }
   }
 
+  /// italic API.
   OmmlSeq _sym(String text, {bool italic = true}) => OmmlSeq(
-        children: <OmmlNode>[OmmlText(text: text, italic: italic, normal: !italic)],
-      );
+    children: <OmmlNode>[OmmlText(text: text, italic: italic, normal: !italic)],
+  );
 
   String? _tryNary() {
     skipSpaces();
@@ -377,11 +404,19 @@ class _Parser {
 
   String? _tryFunction() {
     skipSpaces();
-    const List<String> names = <String>['sin', 'cos', 'tan', 'log', 'ln', 'lim'];
+    const List<String> names = <String>[
+      'sin',
+      'cos',
+      'tan',
+      'log',
+      'ln',
+      'lim',
+    ];
     for (final String name in names) {
       if (source.startsWith(name, _i)) {
         final int after = _i + name.length;
-        if (after >= source.length || !_isAsciiLetter(source.substring(after, after + 1))) {
+        if (after >= source.length ||
+            !_isAsciiLetter(source.substring(after, after + 1))) {
           _i = after;
           return name;
         }
@@ -409,6 +444,7 @@ class _Parser {
     return '';
   }
 
+  /// Function API.
   String _takeWhile(bool Function(String ch) pred) {
     final StringBuffer buf = StringBuffer();
     while (!done) {
@@ -422,11 +458,13 @@ class _Parser {
     return buf.toString();
   }
 
+  /// cu API.
   static bool _isSpace(int cu) => cu == 0x20 || cu == 0x09 || cu == 0x0A;
 
   static bool _isDigit(String ch) =>
       ch.isNotEmpty && ch.codeUnitAt(0) >= 0x30 && ch.codeUnitAt(0) <= 0x39;
 
+  /// ch API.
   static bool _isDigitOrDot(String ch) => _isDigit(ch) || ch == '.';
 
   static bool _isAsciiLetter(String ch) {
@@ -480,6 +518,7 @@ class _Parser {
 }
 
 class _Writer {
+  /// seq API.
   String seq(OmmlSeq node) {
     final StringBuffer buf = StringBuffer();
     for (final OmmlNode child in node.children) {
@@ -488,6 +527,7 @@ class _Writer {
     return buf.toString();
   }
 
+  /// nodeWrite API.
   String nodeWrite(OmmlNode node) {
     switch (node) {
       case OmmlSeq():

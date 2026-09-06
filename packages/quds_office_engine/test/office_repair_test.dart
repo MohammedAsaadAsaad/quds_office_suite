@@ -34,13 +34,18 @@ void main() {
       final OfficeDiagnosis junk = OfficeRepair.diagnose(
         Uint8List.fromList(utf8.encode('this is not an office file')),
       );
-      expect(junk.issues.any((OfficeIssue i) => i.code == OfficeIssueCode.unknownFormat), isTrue);
+      expect(
+        junk.issues.any(
+          (OfficeIssue i) => i.code == OfficeIssueCode.unknownFormat,
+        ),
+        isTrue,
+      );
     });
 
     test('strips leading junk so a Word package opens', () {
-      final Uint8List valid = WordSerializer().write(
-        WmlDocument.empty(text: 'Recovered'),
-      ).save();
+      final Uint8List valid = WordSerializer()
+          .write(WmlDocument.empty(text: 'Recovered'))
+          .save();
       final Uint8List damaged = Uint8List.fromList(<int>[
         ...utf8.encode('EMAIL HEADER\r\n\r\n'),
         ...valid,
@@ -50,7 +55,9 @@ void main() {
 
       final OfficeDiagnosis diagnosis = OfficeRepair.diagnose(damaged);
       expect(
-        diagnosis.issues.any((OfficeIssue i) => i.code == OfficeIssueCode.leadingJunk),
+        diagnosis.issues.any(
+          (OfficeIssue i) => i.code == OfficeIssueCode.leadingJunk,
+        ),
         isTrue,
       );
       expect(diagnosis.canRepair, isTrue);
@@ -68,9 +75,16 @@ void main() {
     test('rebuilds a ZIP whose end-of-central-directory was truncated', () {
       final Uint8List valid = OpcPackage.create(OpcPackageKind.word).save();
       expect(valid.length > 40, isTrue);
-      final Uint8List truncated = Uint8List.sublistView(valid, 0, valid.length - 22);
+      final Uint8List truncated = Uint8List.sublistView(
+        valid,
+        0,
+        valid.length - 22,
+      );
 
-      expect(() => OpcPackage.openBytes(truncated), throwsA(isA<ZipException>()));
+      expect(
+        () => OpcPackage.openBytes(truncated),
+        throwsA(isA<ZipException>()),
+      );
 
       final OfficeDiagnosis diagnosis = OfficeRepair.diagnose(truncated);
       expect(
@@ -117,11 +131,13 @@ void main() {
 
     test('sanitizes broken document XML so the Word model can load', () {
       final OpcPackage package = OpcPackage.create(OpcPackageKind.word);
-      package.getPart('/word/document.xml')!.writeText(
-        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-        '<w:document xmlns:w="${OfficeNamespaces.w}">'
-        '<w:body><w:p><w:r><w:t>Broken</w:t></w:r></w:body></w:document>',
-      );
+      package
+          .getPart('/word/document.xml')!
+          .writeText(
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            '<w:document xmlns:w="${OfficeNamespaces.w}">'
+            '<w:body><w:p><w:r><w:t>Broken</w:t></w:r></w:body></w:document>',
+          );
       final Uint8List bytes = package.save();
 
       expect(
@@ -131,7 +147,9 @@ void main() {
 
       final OfficeDiagnosis diagnosis = OfficeRepair.diagnose(bytes);
       expect(
-        diagnosis.issues.any((OfficeIssue i) => i.code == OfficeIssueCode.brokenXml),
+        diagnosis.issues.any(
+          (OfficeIssue i) => i.code == OfficeIssueCode.brokenXml,
+        ),
         isTrue,
       );
 
@@ -183,7 +201,10 @@ void main() {
       );
       final OfficeRepairResult result = OfficeRepair.repair(bytes);
       expect(result.succeeded, isTrue);
-      expect(result.package!.getPart('/word/document.xml')!.readBytes().contains(0), isFalse);
+      expect(
+        result.package!.getPart('/word/document.xml')!.readBytes().contains(0),
+        isFalse,
+      );
     });
 
     test('recreates a missing worksheet referenced by the workbook', () {

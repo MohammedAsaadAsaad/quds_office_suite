@@ -16,7 +16,9 @@ import 'paint_slide_motion.dart';
 import 'snap_guidelines.dart';
 import 'transform_handles.dart';
 
+/// Class SlideStage.
 class SlideStage extends LeafRenderObjectWidget {
+  /// SlideStage API.
   const SlideStage({
     super.key,
     required this.slide,
@@ -50,37 +52,95 @@ class SlideStage extends LeafRenderObjectWidget {
     this.onContextMenu,
   });
 
+  /// slide API.
   final PmlSlide slide;
+
+  /// selected API.
   final PmlShape? selected;
+
+  /// config API.
   final OfficeSurfaceConfig config;
+
+  /// hasFocus API.
   final bool hasFocus;
+
+  /// semanticsLabel API.
   final String semanticsLabel;
+
+  /// semanticsValue API.
   final String semanticsValue;
+
+  /// viewport API.
   final VirtualViewport? viewport;
+
+  /// editing API.
   final bool editing;
+
+  /// editCaret API.
   final int editCaret;
+
+  /// editBase API.
   final int editBase;
+
+  /// onChanged API.
   final VoidCallback? onChanged;
+
+  /// onSelect API.
   final ValueChanged<PmlShape?>? onSelect;
+
+  /// Function API.
   final void Function(PmlShape shape, int row, int col)? onSelectTableCell;
+
+  /// Function API.
   final void Function(PmlShape shape, PmlTransform next)? onTransform;
+
+  /// selectedTableRow API.
   final int selectedTableRow;
+
+  /// selectedTableCol API.
   final int selectedTableCol;
+
+  /// onActivate API.
   final VoidCallback? onActivate;
+
+  /// Function API.
   final void Function(int index, {bool extend})? onPlaceCaret;
+
+  /// onSelectWord API.
   final ValueChanged<int>? onSelectWord;
+
+  /// onSelectParagraph API.
   final ValueChanged<int>? onSelectParagraph;
+
+  /// onCommitEdit API.
   final VoidCallback? onCommitEdit;
+
+  /// outgoingSlide API.
   final PmlSlide? outgoingSlide;
+
+  /// transitionProgress API.
   final double transitionProgress;
+
+  /// playingTransition API.
   final PmlSlideTransition? playingTransition;
+
+  /// animSamples API.
   final Map<int, PmlAnimSample>? animSamples;
+
+  /// presenting API.
   final bool presenting;
+
+  /// preview API.
   final bool preview;
+
+  /// onShowAdvance API.
   final VoidCallback? onShowAdvance;
+
+  /// onContextMenu API.
   final ValueChanged<OfficeContextHit>? onContextMenu;
 
   @override
+  /// createRenderObject API.
   RenderSlideStage createRenderObject(BuildContext context) {
     return RenderSlideStage(
       slide: slide,
@@ -116,6 +176,7 @@ class SlideStage extends LeafRenderObjectWidget {
   }
 
   @override
+  /// updateRenderObject API.
   void updateRenderObject(BuildContext context, RenderSlideStage renderObject) {
     renderObject
       ..slide = slide
@@ -155,7 +216,9 @@ class SlideStage extends LeafRenderObjectWidget {
 
 enum _SlideDrag { none, pan, move, resize, rotate, select }
 
+/// Class RenderSlideStage.
 class RenderSlideStage extends RenderBox implements MouseTrackerAnnotation {
+  /// RenderSlideStage API.
   RenderSlideStage({
     required this.slide,
     this.selected,
@@ -188,50 +251,119 @@ class RenderSlideStage extends RenderBox implements MouseTrackerAnnotation {
     this.onContextMenu,
   });
 
+  /// slide API.
   PmlSlide slide;
+
+  /// selected API.
   PmlShape? selected;
+
+  /// config API.
   OfficeSurfaceConfig config;
+
+  /// hasFocus API.
   bool hasFocus;
+
+  /// semanticsLabel API.
   String semanticsLabel;
+
+  /// semanticsValue API.
   String semanticsValue;
+
+  /// viewport API.
   VirtualViewport viewport;
+
+  /// editing API.
   bool editing;
+
+  /// editCaret API.
   int editCaret;
+
+  /// editBase API.
   int editBase;
+
+  /// selectedTableRow API.
   int selectedTableRow;
+
+  /// selectedTableCol API.
   int selectedTableCol;
+
+  /// onChanged API.
   VoidCallback? onChanged;
+
+  /// onSelect API.
   ValueChanged<PmlShape?>? onSelect;
+
+  /// Function API.
   void Function(PmlShape shape, int row, int col)? onSelectTableCell;
+
+  /// Function API.
   void Function(PmlShape shape, PmlTransform next)? onTransform;
+
+  /// onActivate API.
   VoidCallback? onActivate;
+
+  /// Function API.
   void Function(int index, {bool extend})? onPlaceCaret;
+
+  /// onSelectWord API.
   ValueChanged<int>? onSelectWord;
+
+  /// onSelectParagraph API.
   ValueChanged<int>? onSelectParagraph;
+
+  /// onCommitEdit API.
   VoidCallback? onCommitEdit;
+
+  /// outgoingSlide API.
   PmlSlide? outgoingSlide;
+
+  /// transitionProgress API.
   double transitionProgress;
+
+  /// playingTransition API.
   PmlSlideTransition? playingTransition;
+
+  /// animSamples API.
   Map<int, PmlAnimSample>? animSamples;
+
+  /// presenting API.
   bool presenting;
+
+  /// preview API.
   bool preview;
+
+  /// onShowAdvance API.
   VoidCallback? onShowAdvance;
+
+  /// onContextMenu API.
   ValueChanged<OfficeContextHit>? onContextMenu;
   DateTime? _lastTapAt;
   Offset? _lastTapPos;
   var _tapCount = 0;
   Offset? _hoverLocal;
+
+  /// pan API.
   Offset pan = Offset.zero;
+
+  /// snaps API.
   final SnapGuidelines snaps = SnapGuidelines();
+
+  /// none API.
   _SlideDrag _drag = _SlideDrag.none;
   int? _handle;
+
+  /// zero API.
   Offset _lastSlide = Offset.zero;
   PmlTransform? _startTx;
   var _paintRotateCursor = false;
+
+  /// VisualImageCache API.
   final VisualImageCache _images = VisualImageCache();
 
+  /// theme API.
   OfficeTheme get _theme => config.theme;
 
+  /// Size API.
   static const Size _slideSize = Size(720, 405);
 
   double get _fitScale {
@@ -261,24 +393,29 @@ class RenderSlideStage extends RenderBox implements MouseTrackerAnnotation {
   }
 
   @override
+  /// cursor API.
   MouseCursor get cursor => _cursorFor(_hoverLocal);
 
   @override
+  /// onEnter API.
   PointerEnterEventListener? get onEnter => null;
 
   @override
+  /// onExit API.
   PointerExitEventListener? get onExit => (_) {
-        _hoverLocal = null;
-        if (_paintRotateCursor) {
-          _paintRotateCursor = false;
-          markNeedsPaint();
-        }
-      };
+    _hoverLocal = null;
+    if (_paintRotateCursor) {
+      _paintRotateCursor = false;
+      markNeedsPaint();
+    }
+  };
 
   @override
+  /// validForMouseTracker API.
   bool get validForMouseTracker => attached;
 
   @override
+  /// hitTestSelf API.
   bool hitTestSelf(Offset position) {
     if (preview) {
       return false;
@@ -288,6 +425,7 @@ class RenderSlideStage extends RenderBox implements MouseTrackerAnnotation {
   }
 
   @override
+  /// performLayout API.
   void performLayout() {
     size = constraints.biggest;
     if (size.isInfinite) {
@@ -309,10 +447,14 @@ class RenderSlideStage extends RenderBox implements MouseTrackerAnnotation {
 
   void _clampPan() {
     pan = Offset(
-      pan.dx.clamp(-_maxPan(_slideSize.width * _fitScale, size.width),
-          _maxPan(_slideSize.width * _fitScale, size.width)),
-      pan.dy.clamp(-_maxPan(_slideSize.height * _fitScale, size.height),
-          _maxPan(_slideSize.height * _fitScale, size.height)),
+      pan.dx.clamp(
+        -_maxPan(_slideSize.width * _fitScale, size.width),
+        _maxPan(_slideSize.width * _fitScale, size.width),
+      ),
+      pan.dy.clamp(
+        -_maxPan(_slideSize.height * _fitScale, size.height),
+        _maxPan(_slideSize.height * _fitScale, size.height),
+      ),
     );
   }
 
@@ -390,7 +532,7 @@ class RenderSlideStage extends RenderBox implements MouseTrackerAnnotation {
         return _cursorForHandle(handle);
       }
     }
-    for (final PmlShape shape in this.slide.shapes.reversed) {
+    for (final PmlShape shape in slide.shapes.reversed) {
       if (_shapeContains(shape, at)) {
         if (editing && identical(shape, selected) && shape.visual == null) {
           return SystemMouseCursors.text;
@@ -415,6 +557,7 @@ class RenderSlideStage extends RenderBox implements MouseTrackerAnnotation {
   }
 
   @override
+  /// handleEvent API.
   void handleEvent(PointerEvent event, covariant BoxHitTestEntry entry) {
     if (preview) {
       return;
@@ -512,9 +655,7 @@ class RenderSlideStage extends RenderBox implements MouseTrackerAnnotation {
             } else {
               onSelect?.call(shape);
             }
-            if (taps >= 2 &&
-                config.allowsMutation &&
-                shape.visual == null) {
+            if (taps >= 2 && config.allowsMutation && shape.visual == null) {
               final int index = _hitTextIndex(shape, local);
               onActivate?.call();
               onPlaceCaret?.call(index);
@@ -694,15 +835,16 @@ class RenderSlideStage extends RenderBox implements MouseTrackerAnnotation {
         cell?.row ?? selectedTableRow,
         cell?.col ?? selectedTableCol,
       );
-      final ({double x, double y, double width, double height}) box =
-          shape.table!.cellBounds(
-        x: r.left,
-        y: r.top,
-        width: r.width,
-        height: r.height,
-        row: cell?.row ?? selectedTableRow,
-        col: cell?.col ?? selectedTableCol,
-      );
+      final ({double x, double y, double width, double height}) box = shape
+          .table!
+          .cellBounds(
+            x: r.left,
+            y: r.top,
+            width: r.width,
+            height: r.height,
+            row: cell?.row ?? selectedTableRow,
+            col: cell?.col ?? selectedTableCol,
+          );
       final TextPainter painter = PaintRunText.plain(
         text: target.text,
         fontSize: 13,
@@ -717,8 +859,12 @@ class RenderSlideStage extends RenderBox implements MouseTrackerAnnotation {
         target.text.length,
       );
     }
-    final TextPainter painter = _shapePainter(shape, shape.text, r, _textColor(shape))
-      ..layout(maxWidth: r.width - 16);
+    final TextPainter painter = _shapePainter(
+      shape,
+      shape.text,
+      r,
+      _textColor(shape),
+    )..layout(maxWidth: r.width - 16);
     return PaintRunText.hitIndex(
       painter,
       Offset(local.dx - r.left - 8, local.dy - r.top - 8),
@@ -782,16 +928,21 @@ class RenderSlideStage extends RenderBox implements MouseTrackerAnnotation {
     for (int row = 0; row < table.rowCount; row++) {
       for (int col = 0; col < table.colCount; col++) {
         final PmlTableCell cell = table.cellAt(row, col);
-        final ({double x, double y, double width, double height}) box =
-            table.cellBounds(
-          x: r.left,
-          y: r.top,
-          width: r.width,
-          height: r.height,
-          row: row,
-          col: col,
+        final ({double x, double y, double width, double height}) box = table
+            .cellBounds(
+              x: r.left,
+              y: r.top,
+              width: r.width,
+              height: r.height,
+              row: row,
+              col: col,
+            );
+        final Rect cellRect = Rect.fromLTWH(
+          box.x,
+          box.y,
+          box.width,
+          box.height,
         );
-        final Rect cellRect = Rect.fromLTWH(box.x, box.y, box.width, box.height);
         canvas.drawRect(
           cellRect,
           Paint()..color = _hexColor(cell.fillColor, const Color(0xFFFFFFFF)),
@@ -803,9 +954,8 @@ class RenderSlideStage extends RenderBox implements MouseTrackerAnnotation {
             ..style = PaintingStyle.stroke
             ..strokeWidth = 0.8,
         );
-        final bool active = isSelected &&
-            row == selectedTableRow &&
-            col == selectedTableCol;
+        final bool active =
+            isSelected && row == selectedTableRow && col == selectedTableCol;
         if (active) {
           canvas.drawRect(
             cellRect.deflate(1),
@@ -900,7 +1050,12 @@ class RenderSlideStage extends RenderBox implements MouseTrackerAnnotation {
     canvas.restore();
   }
 
-  void _paintMorph(Canvas canvas, PmlSlide outgoing, PmlSlide incoming, double progress) {
+  void _paintMorph(
+    Canvas canvas,
+    PmlSlide outgoing,
+    PmlSlide incoming,
+    double progress,
+  ) {
     final double p = progress.clamp(0.0, 1.0);
     final List<PmlMorphPair> pairs = PmlMorph.pair(outgoing, incoming);
     _paintSlideBody(
@@ -1025,7 +1180,8 @@ class RenderSlideStage extends RenderBox implements MouseTrackerAnnotation {
           r,
           Paint()
             ..color = Color(
-              0xFF000000 | (int.tryParse(shape.fillColor, radix: 16) ?? 0x4472C4),
+              0xFF000000 |
+                  (int.tryParse(shape.fillColor, radix: 16) ?? 0x4472C4),
             ),
         );
         _paintShapeText(canvas, shape, r);
@@ -1070,19 +1226,39 @@ class RenderSlideStage extends RenderBox implements MouseTrackerAnnotation {
     Rect r = _shapeRect(shape);
     switch (handle) {
       case 0:
-        r = Rect.fromLTRB(r.left + delta.dx, r.top + delta.dy, r.right, r.bottom);
+        r = Rect.fromLTRB(
+          r.left + delta.dx,
+          r.top + delta.dy,
+          r.right,
+          r.bottom,
+        );
       case 1:
         r = Rect.fromLTRB(r.left, r.top + delta.dy, r.right, r.bottom);
       case 2:
-        r = Rect.fromLTRB(r.left, r.top + delta.dy, r.right + delta.dx, r.bottom);
+        r = Rect.fromLTRB(
+          r.left,
+          r.top + delta.dy,
+          r.right + delta.dx,
+          r.bottom,
+        );
       case 3:
         r = Rect.fromLTRB(r.left, r.top, r.right + delta.dx, r.bottom);
       case 4:
-        r = Rect.fromLTRB(r.left, r.top, r.right + delta.dx, r.bottom + delta.dy);
+        r = Rect.fromLTRB(
+          r.left,
+          r.top,
+          r.right + delta.dx,
+          r.bottom + delta.dy,
+        );
       case 5:
         r = Rect.fromLTRB(r.left, r.top, r.right, r.bottom + delta.dy);
       case 6:
-        r = Rect.fromLTRB(r.left + delta.dx, r.top, r.right, r.bottom + delta.dy);
+        r = Rect.fromLTRB(
+          r.left + delta.dx,
+          r.top,
+          r.right,
+          r.bottom + delta.dy,
+        );
       case 7:
         r = Rect.fromLTRB(r.left + delta.dx, r.top, r.right, r.bottom);
       default:
@@ -1094,6 +1270,7 @@ class RenderSlideStage extends RenderBox implements MouseTrackerAnnotation {
   }
 
   @override
+  /// describeSemanticsConfiguration API.
   void describeSemanticsConfiguration(SemanticsConfiguration config) {
     super.describeSemanticsConfiguration(config);
     config
@@ -1105,6 +1282,7 @@ class RenderSlideStage extends RenderBox implements MouseTrackerAnnotation {
   }
 
   @override
+  /// paint API.
   void paint(PaintingContext context, Offset offset) {
     final Canvas canvas = context.canvas;
     canvas.save();
@@ -1133,7 +1311,8 @@ class RenderSlideStage extends RenderBox implements MouseTrackerAnnotation {
           transition: trans,
           progress: transitionProgress,
           background: _theme.slideBackground,
-          paintOutgoing: (Canvas c) => _paintSlideBody(c, outgoing, samples: null),
+          paintOutgoing: (Canvas c) =>
+              _paintSlideBody(c, outgoing, samples: null),
           paintIncoming: (Canvas c) =>
               _paintSlideBody(c, slide, samples: animSamples),
         );

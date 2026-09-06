@@ -5,6 +5,7 @@ import 'xml_reader.dart';
 /// Writes compact Office-compatible XML (no pretty-print). Namespace
 /// prefixes are emitted exactly as the caller specifies.
 class XmlWriter {
+  /// XmlWriter API.
   XmlWriter({StringSink? sink}) : _sink = sink ?? StringBuffer();
 
   final StringSink _sink;
@@ -12,6 +13,7 @@ class XmlWriter {
   bool _inStartTag = false;
   bool _declarationWritten = false;
 
+  /// writeStartDocument API.
   void writeStartDocument({
     String version = '1.0',
     String encoding = 'UTF-8',
@@ -31,6 +33,7 @@ class XmlWriter {
     _declarationWritten = true;
   }
 
+  /// writeProcessingInstruction API.
   void writeProcessingInstruction(String target, String data) {
     _closeStartTag();
     _sink
@@ -44,6 +47,7 @@ class XmlWriter {
     _sink.write('?>');
   }
 
+  /// writeComment API.
   void writeComment(String text) {
     _closeStartTag();
     if (text.contains('--')) {
@@ -55,6 +59,7 @@ class XmlWriter {
       ..write('-->');
   }
 
+  /// writeStartElement API.
   void writeStartElement(
     String localName, {
     String? prefix,
@@ -73,6 +78,7 @@ class XmlWriter {
     }
   }
 
+  /// writeEmptyElement API.
   void writeEmptyElement(
     String localName, {
     String? prefix,
@@ -86,6 +92,7 @@ class XmlWriter {
     writeEndElement();
   }
 
+  /// writeAttribute API.
   void writeAttribute(String name, String value) {
     if (!_inStartTag) {
       throw StateError('Attributes can only be written on an open start tag');
@@ -98,6 +105,7 @@ class XmlWriter {
       ..write('"');
   }
 
+  /// writeNamespace API.
   void writeNamespace(String prefix, String uri) {
     if (prefix.isEmpty) {
       writeAttribute('xmlns', uri);
@@ -106,11 +114,13 @@ class XmlWriter {
     }
   }
 
+  /// writeText API.
   void writeText(String text) {
     _closeStartTag();
     _sink.write(encodeXmlText(text));
   }
 
+  /// writeCdata API.
   void writeCdata(String text) {
     _closeStartTag();
     if (text.contains(']]>')) {
@@ -122,11 +132,13 @@ class XmlWriter {
       ..write(']]>');
   }
 
+  /// writeRaw API.
   void writeRaw(String xml) {
     _closeStartTag();
     _sink.write(xml);
   }
 
+  /// writeEndElement API.
   void writeEndElement() {
     if (_stack.isEmpty) {
       throw StateError('No open element to close');
@@ -143,18 +155,21 @@ class XmlWriter {
       ..write('>');
   }
 
+  /// writeEndDocument API.
   void writeEndDocument() {
     while (_stack.isNotEmpty) {
       writeEndElement();
     }
   }
 
+  /// toXml API.
   String toXml() {
     writeEndDocument();
     return _sink.toString();
   }
 
   @override
+  /// toString API.
   String toString() => _sink.toString();
 
   void _closeStartTag() {
@@ -175,6 +190,9 @@ class XmlWriter {
 class _OpenElement {
   _OpenElement({required this.qname, this.namespaceUri});
 
+  /// qname API.
   final String qname;
+
+  /// namespaceUri API.
   final String? namespaceUri;
 }

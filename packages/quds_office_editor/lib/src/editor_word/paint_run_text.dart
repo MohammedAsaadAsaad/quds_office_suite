@@ -8,6 +8,7 @@ import 'package:quds_office_engine/quds_office_engine.dart';
 /// logical letters plus the run's bidi direction, or the line is drawn
 /// reversed and unjoined.
 abstract final class PaintRunText {
+  /// fontFallbacks API.
   static const List<String> fontFallbacks = <String>[
     'Noto Naskh Arabic',
     'Noto Sans Arabic',
@@ -18,6 +19,7 @@ abstract final class PaintRunText {
     'Arial',
   ];
 
+  /// latinFallbacks API.
   static const List<String> latinFallbacks = <String>[
     'Calibri',
     'Carlito',
@@ -29,6 +31,7 @@ abstract final class PaintRunText {
     'serif',
   ];
 
+  /// familyFor API.
   static String familyFor({
     required String text,
     String? runFamily,
@@ -41,6 +44,7 @@ abstract final class PaintRunText {
     );
   }
 
+  /// fallbacksFor API.
   static List<String> fallbacksFor(String text, {String? runFamily}) {
     final List<String> base = looksRtl(text) ? fontFallbacks : latinFallbacks;
     if (runFamily == null || runFamily.isEmpty) {
@@ -52,10 +56,13 @@ abstract final class PaintRunText {
     ];
   }
 
+  /// isRtlLevel API.
   static bool isRtlLevel(int level) => level.isOdd;
 
+  /// looksRtl API.
   static bool looksRtl(String text) => OfficeTypeface.isRtlText(text);
 
+  /// directionFor API.
   static TextDirection directionFor({
     required int bidiLevel,
     String text = '',
@@ -66,6 +73,7 @@ abstract final class PaintRunText {
     return TextDirection.ltr;
   }
 
+  /// logicalSlice API.
   static String logicalSlice(String paragraph, Iterable<int> logicalIndices) {
     if (paragraph.isEmpty) {
       return '';
@@ -97,6 +105,7 @@ abstract final class PaintRunText {
     return paragraph.substring(start, end);
   }
 
+  /// samePaintRun API.
   static bool samePaintRun(LaidOutGlyph a, LaidOutGlyph b) {
     return a.color == b.color &&
         a.fontSize == b.fontSize &&
@@ -179,6 +188,7 @@ abstract final class PaintRunText {
     }
   }
 
+  /// painterFor API.
   static TextPainter painterFor({
     required String text,
     required LaidOutGlyph first,
@@ -209,6 +219,7 @@ abstract final class PaintRunText {
     );
   }
 
+  /// runText API.
   static String runText(String paragraph, List<LaidOutGlyph> run) {
     if (paragraph.isEmpty || run.isEmpty) {
       return '';
@@ -264,6 +275,7 @@ abstract final class PaintRunText {
     }
   }
 
+  /// plain API.
   static TextPainter plain({
     required String text,
     required double fontSize,
@@ -291,6 +303,7 @@ abstract final class PaintRunText {
     );
   }
 
+  /// hitIndex API.
   static int hitIndex(TextPainter painter, Offset local, int textLength) {
     if (textLength <= 0) {
       return 0;
@@ -298,10 +311,9 @@ abstract final class PaintRunText {
     return painter.getPositionForOffset(local).offset.clamp(0, textLength);
   }
 
+  /// caretDx API.
   static double caretDx(TextPainter painter, int index) {
-    return painter
-        .getOffsetForCaret(TextPosition(offset: index), Rect.zero)
-        .dx;
+    return painter.getOffsetForCaret(TextPosition(offset: index), Rect.zero).dx;
   }
 
   static bool _isMark(int cu) {

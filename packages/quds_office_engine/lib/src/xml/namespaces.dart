@@ -1,11 +1,18 @@
 /// ECMA-376 / OPC namespace URIs used across Word, Excel, PowerPoint, and DrawingML.
 abstract final class OfficeNamespaces {
+  /// contentTypes API.
   static const String contentTypes =
       'http://schemas.openxmlformats.org/package/2006/content-types';
+
+  /// relationships API.
   static const String relationships =
       'http://schemas.openxmlformats.org/package/2006/relationships';
+
+  /// officeRelationships API.
   static const String officeRelationships =
       'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+
+  /// officeRelationshipsOfficeDocument API.
   static const String officeRelationshipsOfficeDocument =
       'http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument';
 
@@ -79,16 +86,27 @@ abstract final class OfficeNamespaces {
 
   /// Dublin Core.
   static const String dc = 'http://purl.org/dc/elements/1.1/';
+
+  /// dcterms API.
   static const String dcterms = 'http://purl.org/dc/terms/';
+
+  /// coreProperties API.
   static const String coreProperties =
       'http://schemas.openxmlformats.org/package/2006/metadata/core-properties';
+
+  /// extendedProperties API.
   static const String extendedProperties =
       'http://schemas.openxmlformats.org/officeDocument/2006/extended-properties';
+
+  /// customProperties API.
   static const String customProperties =
       'http://schemas.openxmlformats.org/officeDocument/2006/custom-properties';
+
+  /// docPropsVt API.
   static const String docPropsVt =
       'http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes';
 
+  /// prefixToUri API.
   static const Map<String, String> prefixToUri = <String, String>{
     'w': w,
     'r': r,
@@ -112,6 +130,7 @@ abstract final class OfficeNamespaces {
     'vt': docPropsVt,
   };
 
+  /// uriToPrefix API.
   static const Map<String, String> uriToPrefix = <String, String>{
     w: 'w',
     r: 'r',
@@ -137,69 +156,128 @@ abstract final class OfficeNamespaces {
     relationships: '',
   };
 
+  /// prefixFor API.
   static String? prefixFor(String namespaceUri) => uriToPrefix[namespaceUri];
 
+  /// uriFor API.
   static String? uriFor(String prefix) => prefixToUri[prefix];
 }
 
 /// OPC relationship type URIs used when allocating `.rels` entries.
 abstract final class RelationshipTypes {
+  /// officeDocument API.
   static const String officeDocument =
       'http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument';
+
+  /// coreProperties API.
   static const String coreProperties =
       'http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties';
+
+  /// extendedProperties API.
   static const String extendedProperties =
       'http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties';
+
+  /// customProperties API.
   static const String customProperties =
       'http://schemas.openxmlformats.org/officeDocument/2006/relationships/custom-properties';
+
+  /// styles API.
   static const String styles =
       'http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles';
+
+  /// fontTable API.
   static const String fontTable =
       'http://schemas.openxmlformats.org/officeDocument/2006/relationships/fontTable';
+
+  /// numbering API.
   static const String numbering =
       'http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering';
+
+  /// settings API.
   static const String settings =
       'http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings';
+
+  /// image API.
   static const String image =
       'http://schemas.openxmlformats.org/officeDocument/2006/relationships/image';
+
+  /// hyperlink API.
   static const String hyperlink =
       'http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink';
+
+  /// oleObject API.
   static const String oleObject =
       'http://schemas.openxmlformats.org/officeDocument/2006/relationships/oleObject';
+
+  /// package API.
   static const String package =
       'http://schemas.openxmlformats.org/officeDocument/2006/relationships/package';
+
+  /// sharedStrings API.
   static const String sharedStrings =
       'http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings';
+
+  /// worksheet API.
   static const String worksheet =
       'http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet';
+
+  /// theme API.
   static const String theme =
       'http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme';
+
+  /// slide API.
   static const String slide =
       'http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide';
+
+  /// slideLayout API.
   static const String slideLayout =
       'http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout';
+
+  /// slideMaster API.
   static const String slideMaster =
       'http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster';
+
+  /// chart API.
   static const String chart =
       'http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart';
+
+  /// comments API.
   static const String comments =
       'http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments';
+
+  /// commentsExtended API.
   static const String commentsExtended =
       'http://schemas.microsoft.com/office/2011/relationships/commentsExtended';
+
+  /// presProps API.
   static const String presProps =
       'http://schemas.openxmlformats.org/officeDocument/2006/relationships/presProps';
+
+  /// viewProps API.
   static const String viewProps =
       'http://schemas.openxmlformats.org/officeDocument/2006/relationships/viewProps';
+
+  /// tableStyles API.
   static const String tableStyles =
       'http://schemas.openxmlformats.org/officeDocument/2006/relationships/tableStyles';
+
+  /// notesSlide API.
   static const String notesSlide =
       'http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesSlide';
+
+  /// notesMaster API.
   static const String notesMaster =
       'http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesMaster';
+
+  /// header API.
   static const String header =
       'http://schemas.openxmlformats.org/officeDocument/2006/relationships/header';
+
+  /// footer API.
   static const String footer =
       'http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer';
+
+  /// drawing API.
   static const String drawing =
       'http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing';
 }

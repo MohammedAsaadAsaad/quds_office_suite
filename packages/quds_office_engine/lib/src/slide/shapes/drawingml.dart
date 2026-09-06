@@ -1,23 +1,47 @@
 import '../../visual/drawingml_visual_io.dart';
 import '../../visual/office_visual.dart';
 import '../../xml/namespaces.dart';
-import '../../xml/xml_writer.dart';
 import '../../xml/xml_reader.dart';
+import '../../xml/xml_writer.dart';
 import '../anim/pml_motion_io.dart';
 import '../model/pml_presentation.dart';
 
+/// parseSlideShapes helper.
 List<PmlShape> parseSlideShapes(String xml) {
+  /// shapes API.
   final List<PmlShape> shapes = <PmlShape>[];
+
+  /// reader API.
   final XmlPullReader reader = XmlPullReader(xml);
+
+  /// current API.
   PmlShape? current;
+
+  /// fillPending API.
   var fillPending = false;
+
+  /// textFillPending API.
   var textFillPending = false;
+
+  /// inSpPr API.
   var inSpPr = false;
+
+  /// inTxBody API.
   var inTxBody = false;
+
+  /// inLn API.
   var inLn = false;
+
+  /// inTbl API.
   var inTbl = false;
+
+  /// inTcPr API.
   var inTcPr = false;
+
+  /// currentRow API.
   List<PmlTableCell>? currentRow;
+
+  /// currentCell API.
   PmlTableCell? currentCell;
   while (reader.next()) {
     if (reader.eventType == XmlEventType.endElement) {
@@ -67,11 +91,7 @@ List<PmlShape> parseSlideShapes(String xml) {
         reader.localName == 'cxnSp' ||
         reader.localName == 'pic' ||
         reader.localName == 'graphicFrame') {
-      current = PmlShape(
-        id: shapes.length + 2,
-        name: 'Shape',
-        fillColor: '',
-      );
+      current = PmlShape(id: shapes.length + 2, name: 'Shape', fillColor: '');
       shapes.add(current);
       fillPending = false;
       textFillPending = false;
@@ -209,7 +229,9 @@ List<PmlShape> parseSlideShapes(String xml) {
           !current.text.endsWith('\n')) {
         current.text += '\n';
       }
-    } else if (reader.localName == 't' && current != null && !reader.isEmptyElement) {
+    } else if (reader.localName == 't' &&
+        current != null &&
+        !reader.isEmptyElement) {
       final int depth = reader.depth;
       while (reader.next() && reader.depth >= depth) {
         if (reader.eventType == XmlEventType.characters) {
@@ -225,36 +247,76 @@ List<PmlShape> parseSlideShapes(String xml) {
   return shapes;
 }
 
+/// parseChartVisual helper.
 OfficeVisual parseChartVisual(
   String xml, {
+
+  /// width API.
   double width = 360,
+
+  /// height API.
   double height = 180,
 }) {
-  return DrawingmlVisualIo.parseChart(xml, name: 'Chart', width: width, height: height);
+  return DrawingmlVisualIo.parseChart(
+    xml,
+    name: 'Chart',
+    width: width,
+    height: height,
+  );
 }
 
+/// slideToXml helper.
 String slideToXml(PmlSlide slide, {Map<PmlShape, String>? embedIds}) {
+  /// w API.
   final XmlWriter w = XmlWriter();
+
+  /// writeStartDocument API.
   w.writeStartDocument();
+
+  /// writeStartElement API.
   w.writeStartElement('sld', prefix: 'p');
   if (slide.hidden) {
     w.writeAttribute('show', '0');
   }
+
+  /// writeNamespace API.
   w.writeNamespace('p', OfficeNamespaces.p);
+
+  /// writeNamespace API.
   w.writeNamespace('a', OfficeNamespaces.a);
+
+  /// writeNamespace API.
   w.writeNamespace('r', OfficeNamespaces.r);
+
+  /// writeNamespace API.
   w.writeNamespace('c', OfficeNamespaces.c);
+
+  /// writeStartElement API.
   w.writeStartElement('cSld', prefix: 'p');
+
+  /// writeStartElement API.
   w.writeStartElement('spTree', prefix: 'p');
+
+  /// writeStartElement API.
   w.writeStartElement('nvGrpSpPr', prefix: 'p');
+
+  /// writeEmptyElement API.
   w.writeEmptyElement(
     'cNvPr',
     prefix: 'p',
     attributes: <String, String>{'id': '1', 'name': ''},
   );
+
+  /// writeEmptyElement API.
   w.writeEmptyElement('cNvGrpSpPr', prefix: 'p');
+
+  /// writeEmptyElement API.
   w.writeEmptyElement('nvPr', prefix: 'p');
+
+  /// writeEndElement API.
   w.writeEndElement();
+
+  /// writeEmptyElement API.
   w.writeEmptyElement('grpSpPr', prefix: 'p');
   for (final PmlShape shape in slide.shapes) {
     final OfficeVisual? visual = shape.visual;
@@ -271,29 +333,54 @@ String slideToXml(PmlSlide slide, {Map<PmlShape, String>? embedIds}) {
       _writeSlideShape(w, shape);
     }
   }
+
+  /// writeEndElement API.
   w.writeEndElement();
+
+  /// writeEndElement API.
   w.writeEndElement();
+
+  /// writeSlideMotion API.
   writeSlideMotion(w, slide);
+
+  /// writeEndElement API.
   w.writeEndElement();
   return w.toXml();
 }
 
 void _writeSlideShape(XmlWriter w, PmlShape shape) {
+  /// writeStartElement API.
   w.writeStartElement('sp', prefix: 'p');
+
+  /// writeStartElement API.
   w.writeStartElement('nvSpPr', prefix: 'p');
+
+  /// writeEmptyElement API.
   w.writeEmptyElement(
     'cNvPr',
     prefix: 'p',
     attributes: <String, String>{'id': '${shape.id}', 'name': shape.name},
   );
+
+  /// writeEmptyElement API.
   w.writeEmptyElement('cNvSpPr', prefix: 'p');
+
+  /// writeEmptyElement API.
   w.writeEmptyElement('nvPr', prefix: 'p');
+
+  /// writeEndElement API.
   w.writeEndElement();
+
+  /// writeStartElement API.
   w.writeStartElement('spPr', prefix: 'p');
+
+  /// writeStartElement API.
   w.writeStartElement('xfrm', prefix: 'a');
   if (shape.transform.rot != 0) {
     w.writeAttribute('rot', '${shape.transform.rot}');
   }
+
+  /// writeEmptyElement API.
   w.writeEmptyElement(
     'off',
     prefix: 'a',
@@ -302,6 +389,8 @@ void _writeSlideShape(XmlWriter w, PmlShape shape) {
       'y': '${shape.transform.y}',
     },
   );
+
+  /// writeEmptyElement API.
   w.writeEmptyElement(
     'ext',
     prefix: 'a',
@@ -310,7 +399,11 @@ void _writeSlideShape(XmlWriter w, PmlShape shape) {
       'cy': '${shape.transform.cy}',
     },
   );
+
+  /// writeEndElement API.
   w.writeEndElement();
+
+  /// writeEmptyElement API.
   w.writeEmptyElement(
     'prstGeom',
     prefix: 'a',
@@ -334,6 +427,8 @@ void _writeSlideShape(XmlWriter w, PmlShape shape) {
     );
     w.writeEndElement();
   }
+
+  /// writeEndElement API.
   w.writeEndElement();
   if (shape.text.isNotEmpty) {
     w.writeStartElement('txBody', prefix: 'p');
@@ -362,6 +457,8 @@ void _writeSlideShape(XmlWriter w, PmlShape shape) {
     w.writeEndElement();
     w.writeEndElement();
   }
+
+  /// writeEndElement API.
   w.writeEndElement();
 }
 
@@ -371,36 +468,82 @@ void _writeSlidePicture(
   OfficeVisual visual,
   String relationshipId,
 ) {
+  /// adj API.
   final PictureAdjust adj = visual.picture;
+
+  /// name API.
   final String name = adj.altTitle.isNotEmpty ? adj.altTitle : shape.name;
-  final String descr =
-      adj.altDescription.isNotEmpty ? adj.altDescription : name;
+
+  /// descr API.
+  final String descr = adj.altDescription.isNotEmpty
+      ? adj.altDescription
+      : name;
+
+  /// writeStartElement API.
   w.writeStartElement('pic', prefix: 'p');
+
+  /// writeStartElement API.
   w.writeStartElement('nvPicPr', prefix: 'p');
+
+  /// writeStartElement API.
   w.writeStartElement('cNvPr', prefix: 'p');
+
+  /// writeAttribute API.
   w.writeAttribute('id', '${shape.id}');
+
+  /// writeAttribute API.
   w.writeAttribute('name', name);
+
+  /// writeAttribute API.
   w.writeAttribute('descr', descr);
+
+  /// writeEndElement API.
   w.writeEndElement();
+
+  /// writeStartElement API.
   w.writeStartElement('cNvPicPr', prefix: 'p');
+
+  /// writeEmptyElement API.
   w.writeEmptyElement(
     'picLocks',
     prefix: 'a',
-    attributes: <String, String>{
-      'noChangeAspect': adj.lockAspect ? '1' : '0',
-    },
+    attributes: <String, String>{'noChangeAspect': adj.lockAspect ? '1' : '0'},
   );
+
+  /// writeEndElement API.
   w.writeEndElement();
+
+  /// writeEmptyElement API.
   w.writeEmptyElement('nvPr', prefix: 'p');
+
+  /// writeEndElement API.
   w.writeEndElement();
+
+  /// writeStartElement API.
   w.writeStartElement('blipFill', prefix: 'p');
+
+  /// writeBlip API.
   DrawingmlVisualIo.writeBlip(w, relationshipId: relationshipId, adj: adj);
+
+  /// writeSrcRect API.
   DrawingmlVisualIo.writeSrcRect(w, adj);
+
+  /// writeStartElement API.
   w.writeStartElement('stretch', prefix: 'a');
+
+  /// writeEmptyElement API.
   w.writeEmptyElement('fillRect', prefix: 'a');
+
+  /// writeEndElement API.
   w.writeEndElement();
+
+  /// writeEndElement API.
   w.writeEndElement();
+
+  /// writeStartElement API.
   w.writeStartElement('spPr', prefix: 'p');
+
+  /// writeXfrm API.
   DrawingmlVisualIo.writeXfrm(
     w,
     cx: shape.transform.cx,
@@ -409,29 +552,62 @@ void _writeSlidePicture(
     offX: shape.transform.x,
     offY: shape.transform.y,
   );
+
+  /// writeStartElement API.
   w.writeStartElement('prstGeom', prefix: 'a');
+
+  /// writeAttribute API.
   w.writeAttribute('prst', 'rect');
+
+  /// writeEmptyElement API.
   w.writeEmptyElement('avLst', prefix: 'a');
+
+  /// writeEndElement API.
   w.writeEndElement();
+
+  /// writeLine API.
   DrawingmlVisualIo.writeLine(w, adj);
+
+  /// writeShadow API.
   DrawingmlVisualIo.writeShadow(w, adj);
+
+  /// writeEndElement API.
   w.writeEndElement();
+
+  /// writeEndElement API.
   w.writeEndElement();
 }
 
 void _writeSlideTable(XmlWriter w, PmlShape shape) {
+  /// table API.
   final PmlTable table = shape.table!;
+
+  /// writeStartElement API.
   w.writeStartElement('graphicFrame', prefix: 'p');
+
+  /// writeStartElement API.
   w.writeStartElement('nvGraphicFramePr', prefix: 'p');
+
+  /// writeEmptyElement API.
   w.writeEmptyElement(
     'cNvPr',
     prefix: 'p',
     attributes: <String, String>{'id': '${shape.id}', 'name': shape.name},
   );
+
+  /// writeEmptyElement API.
   w.writeEmptyElement('cNvGraphicFramePr', prefix: 'p');
+
+  /// writeEmptyElement API.
   w.writeEmptyElement('nvPr', prefix: 'p');
+
+  /// writeEndElement API.
   w.writeEndElement();
+
+  /// writeStartElement API.
   w.writeStartElement('xfrm', prefix: 'p');
+
+  /// writeEmptyElement API.
   w.writeEmptyElement(
     'off',
     prefix: 'a',
@@ -440,6 +616,8 @@ void _writeSlideTable(XmlWriter w, PmlShape shape) {
       'y': '${shape.transform.y}',
     },
   );
+
+  /// writeEmptyElement API.
   w.writeEmptyElement(
     'ext',
     prefix: 'a',
@@ -448,10 +626,20 @@ void _writeSlideTable(XmlWriter w, PmlShape shape) {
       'cy': '${shape.transform.cy}',
     },
   );
+
+  /// writeEndElement API.
   w.writeEndElement();
+
+  /// writeStartElement API.
   w.writeStartElement('graphic', prefix: 'a');
+
+  /// writeStartElement API.
   w.writeStartElement('graphicData', prefix: 'a');
+
+  /// writeAttribute API.
   w.writeAttribute('uri', OfficeNamespaces.drawingmlTable);
+
+  /// writeStartElement API.
   w.writeStartElement('tbl', prefix: 'a');
   if (table.rightToLeft) {
     w.writeEmptyElement(
@@ -462,8 +650,14 @@ void _writeSlideTable(XmlWriter w, PmlShape shape) {
   } else {
     w.writeEmptyElement('tblPr', prefix: 'a');
   }
+
+  /// cols API.
   final int cols = table.colCount;
+
+  /// colW API.
   final int colW = cols <= 0 ? shape.transform.cx : shape.transform.cx ~/ cols;
+
+  /// writeStartElement API.
   w.writeStartElement('tblGrid', prefix: 'a');
   for (int i = 0; i < cols; i++) {
     w.writeEmptyElement(
@@ -472,9 +666,14 @@ void _writeSlideTable(XmlWriter w, PmlShape shape) {
       attributes: <String, String>{'w': '$colW'},
     );
   }
+
+  /// writeEndElement API.
   w.writeEndElement();
-  final int rowH =
-      table.rowCount <= 0 ? shape.transform.cy : shape.transform.cy ~/ table.rowCount;
+
+  /// rowH API.
+  final int rowH = table.rowCount <= 0
+      ? shape.transform.cy
+      : shape.transform.cy ~/ table.rowCount;
   for (final List<PmlTableCell> row in table.rows) {
     w.writeStartElement('tr', prefix: 'a');
     w.writeAttribute('h', '$rowH');
@@ -519,9 +718,17 @@ void _writeSlideTable(XmlWriter w, PmlShape shape) {
     }
     w.writeEndElement();
   }
+
+  /// writeEndElement API.
   w.writeEndElement();
+
+  /// writeEndElement API.
   w.writeEndElement();
+
+  /// writeEndElement API.
   w.writeEndElement();
+
+  /// writeEndElement API.
   w.writeEndElement();
 }
 
@@ -531,16 +738,37 @@ void _writeSlideChart(
   OfficeVisual visual,
   String relationshipId,
 ) {
+  /// name API.
   final String name = visual.title.isEmpty ? shape.name : visual.title;
+
+  /// writeStartElement API.
   w.writeStartElement('graphicFrame', prefix: 'p');
+
+  /// writeStartElement API.
   w.writeStartElement('nvGraphicFramePr', prefix: 'p');
+
+  /// writeStartElement API.
   w.writeStartElement('cNvPr', prefix: 'p');
+
+  /// writeAttribute API.
   w.writeAttribute('id', '${shape.id}');
+
+  /// writeAttribute API.
   w.writeAttribute('name', name);
+
+  /// writeEndElement API.
   w.writeEndElement();
+
+  /// writeEmptyElement API.
   w.writeEmptyElement('cNvGraphicFramePr', prefix: 'p');
+
+  /// writeEmptyElement API.
   w.writeEmptyElement('nvPr', prefix: 'p');
+
+  /// writeEndElement API.
   w.writeEndElement();
+
+  /// writeXfrm API.
   DrawingmlVisualIo.writeXfrm(
     w,
     cx: shape.transform.cx,
@@ -549,15 +777,29 @@ void _writeSlideChart(
     offX: shape.transform.x,
     offY: shape.transform.y,
   );
+
+  /// writeStartElement API.
   w.writeStartElement('graphic', prefix: 'a');
+
+  /// writeStartElement API.
   w.writeStartElement('graphicData', prefix: 'a');
+
+  /// writeAttribute API.
   w.writeAttribute('uri', OfficeNamespaces.c);
+
+  /// writeEmptyElement API.
   w.writeEmptyElement(
     'chart',
     prefix: 'c',
     attributes: <String, String>{'r:id': relationshipId},
   );
+
+  /// writeEndElement API.
   w.writeEndElement();
+
+  /// writeEndElement API.
   w.writeEndElement();
+
+  /// writeEndElement API.
   w.writeEndElement();
 }

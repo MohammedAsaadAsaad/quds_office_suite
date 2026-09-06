@@ -5,22 +5,31 @@ import 'office_visual.dart';
 
 /// Shared DrawingML conversions used by Word, Excel, and PowerPoint writers.
 abstract final class DrawingmlVisualIo {
+  /// emuPerPoint API.
   static const int emuPerPoint = 12700;
+
+  /// emuPerPixel API.
   static const int emuPerPixel = 9525;
 
+  /// pointsToEmu API.
   static int pointsToEmu(double points) =>
       (points.clamp(4, 4000) * emuPerPoint).round();
 
+  /// emuToPoints API.
   static double emuToPoints(int emu) => emu / emuPerPoint;
 
+  /// pixelsToEmu API.
   static int pixelsToEmu(double pixels) =>
       (pixels.clamp(0, 20000) * emuPerPixel).round();
 
+  /// emuToPixels API.
   static double emuToPixels(int emu) => emu / emuPerPixel;
 
+  /// cropToSrc API.
   static int cropToSrc(double fraction) =>
       (fraction.clamp(0.0, 0.49) * 100000).round();
 
+  /// srcToCrop API.
   static double srcToCrop(String? raw) {
     final int? value = int.tryParse(raw ?? '');
     if (value == null || value <= 0) {
@@ -33,6 +42,7 @@ abstract final class DrawingmlVisualIo {
   static int brightnessToLum(double brightness) =>
       (brightness.clamp(-0.5, 0.5) * 100000).round();
 
+  /// lumToBrightness API.
   static double lumToBrightness(String? raw) {
     final int? value = int.tryParse(raw ?? '');
     if (value == null) {
@@ -45,6 +55,7 @@ abstract final class DrawingmlVisualIo {
   static int contrastToLum(double contrast) =>
       ((contrast.clamp(0.5, 1.8) - 1) * 100000).round();
 
+  /// lumToContrast API.
   static double lumToContrast(String? raw) {
     final int? value = int.tryParse(raw ?? '');
     if (value == null) {
@@ -53,9 +64,11 @@ abstract final class DrawingmlVisualIo {
     return (1 + value / 100000).clamp(0.5, 1.8);
   }
 
+  /// transparencyToAlpha API.
   static int transparencyToAlpha(double transparency) =>
       ((1 - transparency.clamp(0.0, 1.0)) * 100000).round();
 
+  /// alphaToTransparency API.
   static double alphaToTransparency(String? raw) {
     final int? value = int.tryParse(raw ?? '');
     if (value == null) {
@@ -64,27 +77,32 @@ abstract final class DrawingmlVisualIo {
     return (1 - value / 100000).clamp(0.0, 1.0);
   }
 
+  /// borderToEmu API.
   static int borderToEmu(double points) =>
       (points.clamp(0, 24) * emuPerPoint).round();
 
+  /// emuToBorder API.
   static double emuToBorder(int emu) => (emu / emuPerPoint).clamp(0, 24);
 
+  /// legendPosXml API.
   static String legendPosXml(ChartLegendPos pos) => switch (pos) {
-        ChartLegendPos.bottom => 'b',
-        ChartLegendPos.top => 't',
-        ChartLegendPos.left => 'l',
-        ChartLegendPos.right => 'r',
-        ChartLegendPos.topRight => 'tr',
-      };
+    ChartLegendPos.bottom => 'b',
+    ChartLegendPos.top => 't',
+    ChartLegendPos.left => 'l',
+    ChartLegendPos.right => 'r',
+    ChartLegendPos.topRight => 'tr',
+  };
 
+  /// legendPosFromXml API.
   static ChartLegendPos legendPosFromXml(String? raw) => switch (raw) {
-        't' => ChartLegendPos.top,
-        'l' => ChartLegendPos.left,
-        'r' => ChartLegendPos.right,
-        'tr' => ChartLegendPos.topRight,
-        _ => ChartLegendPos.bottom,
-      };
+    't' => ChartLegendPos.top,
+    'l' => ChartLegendPos.left,
+    'r' => ChartLegendPos.right,
+    'tr' => ChartLegendPos.topRight,
+    _ => ChartLegendPos.bottom,
+  };
 
+  /// writeBlip API.
   static void writeBlip(
     XmlWriter w, {
     required String relationshipId,
@@ -114,6 +132,7 @@ abstract final class DrawingmlVisualIo {
     w.writeEndElement();
   }
 
+  /// writeSrcRect API.
   static void writeSrcRect(XmlWriter w, PictureAdjust adj) {
     if (adj.cropLeft <= 0 &&
         adj.cropTop <= 0 &&
@@ -133,6 +152,7 @@ abstract final class DrawingmlVisualIo {
     );
   }
 
+  /// writeXfrm API.
   static void writeXfrm(
     XmlWriter w, {
     required int cx,
@@ -165,6 +185,7 @@ abstract final class DrawingmlVisualIo {
     w.writeEndElement();
   }
 
+  /// writeLine API.
   static void writeLine(XmlWriter w, PictureAdjust adj) {
     if (adj.borderWidth <= 0 || adj.borderColor.isEmpty) {
       return;
@@ -175,14 +196,13 @@ abstract final class DrawingmlVisualIo {
     w.writeEmptyElement(
       'srgbClr',
       prefix: 'a',
-      attributes: <String, String>{
-        'val': OfficeMarkup.srgb(adj.borderColor),
-      },
+      attributes: <String, String>{'val': OfficeMarkup.srgb(adj.borderColor)},
     );
     w.writeEndElement();
     w.writeEndElement();
   }
 
+  /// writeShadow API.
   static void writeShadow(XmlWriter w, PictureAdjust adj) {
     if (!adj.shadow) {
       return;
@@ -204,6 +224,7 @@ abstract final class DrawingmlVisualIo {
     w.writeEndElement();
   }
 
+  /// wrapFromDrawing API.
   static PictureWrap wrapFromDrawing({
     required String localName,
     required bool behindDoc,
@@ -218,6 +239,7 @@ abstract final class DrawingmlVisualIo {
     };
   }
 
+  /// applyXfrm API.
   static void applyXfrm(PictureAdjust adj, XmlPullReader reader) {
     final int? rot = int.tryParse(reader.getAttribute('rot') ?? '');
     if (rot != null) {
@@ -229,6 +251,7 @@ abstract final class DrawingmlVisualIo {
     adj.flipV = flipV == '1' || flipV?.toLowerCase() == 'true';
   }
 
+  /// applySrcRect API.
   static void applySrcRect(PictureAdjust adj, XmlPullReader reader) {
     adj
       ..cropLeft = srcToCrop(reader.getAttribute('l'))
@@ -237,11 +260,13 @@ abstract final class DrawingmlVisualIo {
       ..cropBottom = srcToCrop(reader.getAttribute('b'));
   }
 
+  /// applyLum API.
   static void applyLum(PictureAdjust adj, XmlPullReader reader) {
     adj.brightness = lumToBrightness(reader.getAttribute('bright'));
     adj.contrast = lumToContrast(reader.getAttribute('contrast'));
   }
 
+  /// parseChart API.
   static OfficeVisual parseChart(
     String xml, {
     required String name,

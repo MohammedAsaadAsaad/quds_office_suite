@@ -21,14 +21,18 @@ enum XmlEventType {
 /// [String] values when a property is read. Namespace prefixes are resolved
 /// against a stack of `xmlns` declarations.
 class XmlPullReader {
+  /// XmlPullReader API.
   XmlPullReader(String source) : _source = _stripBom(source);
 
+  /// fromBytes API.
   factory XmlPullReader.fromBytes(Uint8List bytes) {
     return XmlPullReader(utf8.decode(bytes, allowMalformed: false));
   }
 
   final String _source;
   int _pos = 0;
+
+  /// none API.
   XmlEventType _type = XmlEventType.none;
   int _depth = 0;
   bool _emptyElement = false;
@@ -44,14 +48,22 @@ class XmlPullReader {
   int _textEnd = 0;
   bool _textHasEntities = false;
 
+  /// root API.
   final List<_NsScope> _nsStack = <_NsScope>[_NsScope.root()];
   final List<_AttrSlice> _attrs = <_AttrSlice>[];
   final List<String> _elementStack = <String>[];
 
+  /// eventType API.
   XmlEventType get eventType => _type;
+
+  /// depth API.
   int get depth => _depth;
+
+  /// isEmptyElement API.
   bool get isEmptyElement =>
       _emptyElement && _type == XmlEventType.startElement;
+
+  /// isWhitespace API.
   bool get isWhitespace {
     if (_type != XmlEventType.characters) {
       return false;
@@ -64,13 +76,17 @@ class XmlPullReader {
     return true;
   }
 
+  /// qualifiedName API.
   String get qualifiedName => _slice(_nameStart, _nameEnd);
 
+  /// localName API.
   String get localName => _slice(_localStart, _localEnd);
 
+  /// prefix API.
   String get prefix =>
       _prefixEnd > _prefixStart ? _slice(_prefixStart, _prefixEnd) : '';
 
+  /// namespaceUri API.
   String get namespaceUri {
     if (_type != XmlEventType.startElement &&
         _type != XmlEventType.endElement) {
@@ -79,6 +95,7 @@ class XmlPullReader {
     return _resolvePrefix(prefix);
   }
 
+  /// text API.
   String get text {
     if (_type == XmlEventType.characters || _type == XmlEventType.cdata) {
       if (_textHasEntities && _type == XmlEventType.characters) {
@@ -95,6 +112,7 @@ class XmlPullReader {
     return '';
   }
 
+  /// attributeCount API.
   int get attributeCount => _attrs.length;
 
   /// Advances to the next event. Returns `false` after [XmlEventType.endDocument].
@@ -185,14 +203,19 @@ class XmlPullReader {
     }
   }
 
+  /// attributeQualifiedName API.
   String attributeQualifiedName(int index) => _attrs[index].qualified(_source);
 
+  /// attributeLocalName API.
   String attributeLocalName(int index) => _attrs[index].local(_source);
 
+  /// attributePrefix API.
   String attributePrefix(int index) => _attrs[index].prefix(_source);
 
+  /// attributeValue API.
   String attributeValue(int index) => _attrs[index].decodedValue(_source);
 
+  /// attributeNamespace API.
   String attributeNamespace(int index) {
     final _AttrSlice attr = _attrs[index];
     if (attr.isXmlns) {
@@ -205,6 +228,7 @@ class XmlPullReader {
     return _resolvePrefix(pfx);
   }
 
+  /// getAttribute API.
   String? getAttribute(String localName, {String? namespaceUri}) {
     for (int i = 0; i < _attrs.length; i++) {
       final _AttrSlice attr = _attrs[i];
@@ -221,6 +245,7 @@ class XmlPullReader {
     return null;
   }
 
+  /// attributesAsMap API.
   Map<String, String> attributesAsMap() {
     final Map<String, String> map = <String, String>{};
     for (int i = 0; i < _attrs.length; i++) {
@@ -491,6 +516,7 @@ class XmlPullReader {
     return _source.startsWith(token, _pos);
   }
 
+  /// substring API.
   String _slice(int start, int end) => _source.substring(start, end);
 
   static String _stripBom(String source) {
@@ -503,11 +529,16 @@ class XmlPullReader {
 
 /// Decodes XML predefined and numeric character entities.
 String decodeXmlEntities(String raw) {
+  /// amp API.
   final int amp = raw.indexOf('&');
   if (amp < 0) {
     return raw.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
   }
+
+  /// out API.
   final StringBuffer out = StringBuffer();
+
+  /// i API.
   int i = 0;
   while (i < raw.length) {
     final int nextAmp = raw.indexOf('&', i);
@@ -529,6 +560,7 @@ String decodeXmlEntities(String raw) {
 
 /// Encodes text for XML character data.
 String encodeXmlText(String raw) {
+  /// buffer API.
   final StringBuffer? buffer = _escape(
     raw,
     escapeApos: false,
@@ -539,6 +571,7 @@ String encodeXmlText(String raw) {
 
 /// Encodes text for a double-quoted XML attribute.
 String encodeXmlAttribute(String raw) {
+  /// buffer API.
   final StringBuffer? buffer = _escape(
     raw,
     escapeApos: false,
@@ -552,6 +585,7 @@ StringBuffer? _escape(
   required bool escapeApos,
   required bool escapeQuot,
 }) {
+  /// buffer API.
   StringBuffer? buffer;
   for (int i = 0; i < raw.length; i++) {
     final int ch = raw.codeUnitAt(i);
@@ -614,16 +648,31 @@ class _AttrSlice {
     required this.hasEntities,
   });
 
+  /// nameStart API.
   final int nameStart;
+
+  /// nameEnd API.
   final int nameEnd;
+
+  /// prefixEnd API.
   final int prefixEnd;
+
+  /// valueStart API.
   final int valueStart;
+
+  /// valueEnd API.
   final int valueEnd;
+
+  /// hasEntities API.
   final bool hasEntities;
+
+  /// isXmlns API.
   bool isXmlns = false;
 
+  /// qualified API.
   String qualified(String source) => source.substring(nameStart, nameEnd);
 
+  /// local API.
   String local(String source) {
     if (prefixEnd > nameStart) {
       return source.substring(prefixEnd + 1, nameEnd);
@@ -631,6 +680,7 @@ class _AttrSlice {
     return source.substring(nameStart, nameEnd);
   }
 
+  /// prefix API.
   String prefix(String source) {
     if (prefixEnd > nameStart) {
       return source.substring(nameStart, prefixEnd);
@@ -638,6 +688,7 @@ class _AttrSlice {
     return '';
   }
 
+  /// decodedValue API.
   String decodedValue(String source) {
     final String raw = source.substring(valueStart, valueEnd);
     if (!hasEntities) {
@@ -650,17 +701,21 @@ class _AttrSlice {
 class _NsScope {
   _NsScope(this.parent);
 
+  /// root API.
   _NsScope.root() : parent = null {
     _map[''] = '';
   }
 
+  /// parent API.
   final _NsScope? parent;
   final Map<String, String> _map = <String, String>{};
 
+  /// declare API.
   void declare(String prefix, String uri) {
     _map[prefix] = uri;
   }
 
+  /// resolve API.
   String resolve(String prefix) {
     final String? local = _map[prefix];
     if (local != null) {
@@ -676,12 +731,17 @@ class _NsScope {
 
 /// Thrown when the pull parser encounters malformed XML.
 class XmlParseException implements Exception {
+  /// XmlParseException API.
   XmlParseException(this.message, this.position);
 
+  /// message API.
   final String message;
+
+  /// position API.
   final int position;
 
   @override
+  /// toString API.
   String toString() => 'XmlParseException: $message (at $position)';
 }
 

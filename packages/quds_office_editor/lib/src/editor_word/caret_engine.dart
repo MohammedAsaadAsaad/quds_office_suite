@@ -4,21 +4,34 @@ import 'package:quds_office_engine/quds_office_engine.dart';
 
 /// BiDi-aware visual caret plus disjoint selection rectangles.
 class CaretEngine {
+  /// CaretEngine API.
   CaretEngine();
 
   /// Index into [WmlDocument.paragraphs].
   int paragraphIndex = 0;
+
+  /// logicalIndex API.
   int logicalIndex = 0;
+
+  /// selectionAnchor API.
   int selectionAnchor = 0;
+
+  /// selectionAnchorParagraph API.
   int selectionAnchorParagraph = 0;
+
+  /// visible API.
   var visible = true;
+
+  /// now API.
   DateTime _lastBlink = DateTime.now();
 
+  /// resetBlink API.
   void resetBlink() {
     visible = true;
     _lastBlink = DateTime.now();
   }
 
+  /// tick API.
   void tick(Duration elapsed) {
     if (DateTime.now().difference(_lastBlink).inMilliseconds >= 500) {
       visible = !visible;
@@ -26,12 +39,15 @@ class CaretEngine {
     }
   }
 
+  /// RegExp API.
   static final RegExp _wordChar = RegExp(r'[\p{L}\p{N}\p{M}]', unicode: true);
 
+  /// isCollapsed API.
   bool get isCollapsed =>
       selectionAnchorParagraph == paragraphIndex &&
       selectionAnchor == logicalIndex;
 
+  /// normalizedRange API.
   ({int startPara, int startIdx, int endPara, int endIdx}) get normalizedRange {
     final bool forward =
         selectionAnchorParagraph < paragraphIndex ||
@@ -53,12 +69,14 @@ class CaretEngine {
     );
   }
 
+  /// collapseSelection API.
   void collapseSelection() {
     selectionAnchorParagraph = paragraphIndex;
     selectionAnchor = logicalIndex;
     resetBlink();
   }
 
+  /// moveLogical API.
   void moveLogical(int delta, int max) {
     logicalIndex = (logicalIndex + delta).clamp(0, max);
     collapseSelection();
@@ -140,6 +158,7 @@ class CaretEngine {
     return (start: start, end: end);
   }
 
+  /// coversIndex API.
   bool coversIndex(int paragraph, int index) {
     if (isCollapsed) {
       return false;
@@ -158,6 +177,7 @@ class CaretEngine {
     return true;
   }
 
+  /// coversParagraph API.
   bool coversParagraph(int index) {
     final int a = selectionAnchorParagraph < paragraphIndex
         ? selectionAnchorParagraph
@@ -185,6 +205,7 @@ class CaretEngine {
     return text[index].trim().isEmpty;
   }
 
+  /// moveVisual API.
   void moveVisual(BrokenLine line, bool right) {
     final double x = logicalToVisualX(line, logicalIndex);
     final double next = right ? x + 1 : x - 1;
@@ -192,6 +213,7 @@ class CaretEngine {
     collapseSelection();
   }
 
+  /// selectionRects API.
   List<Rect> selectionRects(
     BrokenLine line,
     double y,
@@ -251,6 +273,7 @@ class CaretEngine {
     return rects;
   }
 
+  /// caretRect API.
   Rect caretRect(BrokenLine line, double y, double height) {
     final double x = logicalToVisualX(line, logicalIndex);
     return Rect.fromLTWH(x, y, 1.5, height);

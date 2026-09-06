@@ -40,7 +40,10 @@ void main() {
           int.parse(hex.substring(i, i + 2), radix: 16),
       ]);
       final String got = utf8.decode(RawDeflate.inflate(raw));
-      expect(got, startsWith('<w:p><w:r><w:t>Strategic Framework UNDP section '));
+      expect(
+        got,
+        startsWith('<w:p><w:r><w:t>Strategic Framework UNDP section '),
+      );
       expect(got.length, 106960);
     });
   });

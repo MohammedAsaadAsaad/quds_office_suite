@@ -33,20 +33,28 @@ enum OmmlStructure {
   lim,
 }
 
+/// Class OmmlCharRef.
 class OmmlCharRef {
+  /// OmmlCharRef API.
   const OmmlCharRef({
     required this.cell,
     required this.run,
     required this.offset,
   });
 
+  /// cell API.
   final OmmlSeq cell;
+
+  /// run API.
   final OmmlText run;
+
+  /// offset API.
   final int offset;
 }
 
 /// Slot navigation and structural edits on an [OmmlEquation].
 abstract final class OmmlEdit {
+  /// slots API.
   static List<OmmlSeq> slots(OmmlSeq root) {
     final List<OmmlSeq> out = <OmmlSeq>[];
     late void Function(OmmlNode node) walk;
@@ -111,6 +119,7 @@ abstract final class OmmlEdit {
     return out;
   }
 
+  /// slotAt API.
   static OmmlSeq slotAt(OmmlSeq root, int index) {
     final List<OmmlSeq> all = slots(root);
     if (all.isEmpty) {
@@ -148,17 +157,20 @@ abstract final class OmmlEdit {
     return hasText || structures > 0;
   }
 
+  /// slotIndexOf API.
   static int slotIndexOf(OmmlSeq root, OmmlSeq seq) {
     final int i = slots(root).indexOf(seq);
     return i < 0 ? 0 : i;
   }
 
+  /// cellIndexes API.
   static Set<int> cellIndexes(OmmlSeq root) {
     return <int>{
       for (final OmmlSeq cell in cells(root)) slotIndexOf(root, cell),
     };
   }
 
+  /// snapToCell API.
   static int snapToCell(OmmlSeq root, int slotIndex) {
     final List<OmmlSeq> all = slots(root);
     final List<OmmlSeq> cellList = cells(root);
@@ -194,6 +206,7 @@ abstract final class OmmlEdit {
     return false;
   }
 
+  /// chars API.
   static List<OmmlCharRef> chars(OmmlSeq root) {
     final List<OmmlSeq> cellList = cells(root);
     final List<OmmlCharRef> out = <OmmlCharRef>[];
@@ -264,6 +277,7 @@ abstract final class OmmlEdit {
     return out;
   }
 
+  /// cellChars API.
   static List<OmmlCharRef> cellChars(OmmlSeq root, OmmlSeq cell) {
     return <OmmlCharRef>[
       for (final OmmlCharRef ch in chars(root))
@@ -271,6 +285,7 @@ abstract final class OmmlEdit {
     ];
   }
 
+  /// cellPlain API.
   static String cellPlain(OmmlSeq root, OmmlSeq cell) {
     final StringBuffer buf = StringBuffer();
     for (final OmmlCharRef ch in cellChars(root, cell)) {
@@ -279,6 +294,7 @@ abstract final class OmmlEdit {
     return buf.toString();
   }
 
+  /// readingCells API.
   static List<OmmlSeq> readingCells(OmmlSeq root) {
     final List<OmmlSeq> list = cells(root);
     final List<OmmlCharRef> stream = chars(root);
@@ -309,14 +325,17 @@ abstract final class OmmlEdit {
     return ranked;
   }
 
+  /// nextSlot API.
   static int nextSlot(OmmlSeq root, int index) {
     return _stepCell(root, index, 1, wrap: true);
   }
 
+  /// prevSlot API.
   static int prevSlot(OmmlSeq root, int index) {
     return _stepCell(root, index, -1, wrap: true);
   }
 
+  /// stepReading API.
   static int stepReading(OmmlSeq root, int index, int delta) {
     return _stepCell(root, index, delta, wrap: false);
   }
@@ -324,6 +343,7 @@ abstract final class OmmlEdit {
   /// True when any placeholder still holds typed characters.
   static bool hasUserText(OmmlSeq root) => chars(root).isNotEmpty;
 
+  /// isFirstReadingCell API.
   static bool isFirstReadingCell(OmmlSeq root, int slotIndex) {
     final List<OmmlSeq> order = readingCells(root);
     if (order.isEmpty) {
@@ -338,7 +358,12 @@ abstract final class OmmlEdit {
     return identical(order.first, here);
   }
 
-  static int _stepCell(OmmlSeq root, int index, int delta, {required bool wrap}) {
+  static int _stepCell(
+    OmmlSeq root,
+    int index,
+    int delta, {
+    required bool wrap,
+  }) {
     final List<OmmlSeq> all = slots(root);
     final List<OmmlSeq> order = readingCells(root);
     if (all.isEmpty) {
@@ -369,6 +394,7 @@ abstract final class OmmlEdit {
     return all.indexOf(order[next]);
   }
 
+  /// insertAt API.
   static void insertAt(OmmlSeq root, OmmlSeq cell, int offset, String text) {
     if (text.isEmpty) {
       return;
@@ -388,11 +414,13 @@ abstract final class OmmlEdit {
       return;
     }
     final OmmlCharRef at = mine[offset];
-    at.run.text = at.run.text.substring(0, at.offset) +
+    at.run.text =
+        at.run.text.substring(0, at.offset) +
         text +
         at.run.text.substring(at.offset);
   }
 
+  /// deleteAt API.
   static bool deleteAt(
     OmmlSeq root,
     OmmlSeq cell,
@@ -405,7 +433,8 @@ abstract final class OmmlEdit {
       return false;
     }
     final OmmlCharRef ch = mine[index];
-    ch.run.text = ch.run.text.substring(0, ch.offset) +
+    ch.run.text =
+        ch.run.text.substring(0, ch.offset) +
         ch.run.text.substring(ch.offset + 1);
     if (ch.run.text.isEmpty) {
       for (final OmmlSeq seq in slots(root)) {
@@ -417,6 +446,7 @@ abstract final class OmmlEdit {
     return true;
   }
 
+  /// insertText API.
   static void insertText(OmmlSeq slot, String text, {bool normal = false}) {
     if (text.isEmpty) {
       return;
@@ -437,6 +467,7 @@ abstract final class OmmlEdit {
     );
   }
 
+  /// deleteBack API.
   static bool deleteBack(OmmlSeq slot) {
     if (slot.children.isEmpty) {
       return false;
@@ -457,6 +488,7 @@ abstract final class OmmlEdit {
     return true;
   }
 
+  /// applyStructure API.
   static void applyStructure(OmmlSeq slot, OmmlStructure kind) {
     final OmmlSeq content = slot.isEmpty
         ? OmmlSeq()
@@ -471,15 +503,31 @@ abstract final class OmmlEdit {
       case OmmlStructure.fractionBar:
         return OmmlFrac(num: content, den: OmmlSeq());
       case OmmlStructure.fractionSkewed:
-        return OmmlFrac(num: content, den: OmmlSeq(), type: OmmlFracType.skewed);
+        return OmmlFrac(
+          num: content,
+          den: OmmlSeq(),
+          type: OmmlFracType.skewed,
+        );
       case OmmlStructure.fractionLinear:
-        return OmmlFrac(num: content, den: OmmlSeq(), type: OmmlFracType.linear);
+        return OmmlFrac(
+          num: content,
+          den: OmmlSeq(),
+          type: OmmlFracType.linear,
+        );
       case OmmlStructure.stack:
         return OmmlFrac(num: content, den: OmmlSeq(), type: OmmlFracType.noBar);
       case OmmlStructure.superscript:
-        return OmmlScript(base: content, sup: OmmlSeq(), kind: OmmlScriptKind.sup);
+        return OmmlScript(
+          base: content,
+          sup: OmmlSeq(),
+          kind: OmmlScriptKind.sup,
+        );
       case OmmlStructure.subscript:
-        return OmmlScript(base: content, sub: OmmlSeq(), kind: OmmlScriptKind.sub);
+        return OmmlScript(
+          base: content,
+          sub: OmmlSeq(),
+          kind: OmmlScriptKind.sub,
+        );
       case OmmlStructure.subSuperscript:
         return OmmlScript(
           base: content,

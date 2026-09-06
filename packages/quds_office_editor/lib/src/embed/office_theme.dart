@@ -14,6 +14,7 @@ enum OfficeInteractionMode {
 
 /// Visual tokens for every custom RenderBox surface.
 class OfficeTheme {
+  /// OfficeTheme API.
   const OfficeTheme({
     required this.canvasBackground,
     required this.pageBackground,
@@ -35,25 +36,61 @@ class OfficeTheme {
     this.fontFamily,
   });
 
+  /// canvasBackground API.
   final Color canvasBackground;
+
+  /// pageBackground API.
   final Color pageBackground;
+
+  /// pageBorder API.
   final Color pageBorder;
+
+  /// caret API.
   final Color caret;
+
+  /// selectionFill API.
   final Color selectionFill;
+
+  /// selectionStroke API.
   final Color selectionStroke;
+
+  /// gridLine API.
   final Color gridLine;
+
+  /// frozenFill API.
   final Color frozenFill;
+
+  /// headerFill API.
   final Color headerFill;
+
+  /// headerText API.
   final Color headerText;
+
+  /// chromeFill API.
   final Color chromeFill;
+
+  /// chromeText API.
   final Color chromeText;
+
+  /// handleStroke API.
   final Color handleStroke;
+
+  /// handleFill API.
   final Color handleFill;
+
+  /// snapGuide API.
   final Color snapGuide;
+
+  /// slideBackground API.
   final Color slideBackground;
+
+  /// focusRing API.
   final Color focusRing;
+
+  /// fontFamily API.
   final String? fontFamily;
 
+  /// light API.
   static const OfficeTheme light = OfficeTheme(
     canvasBackground: Color(0xFF5B5B5B),
     pageBackground: Color(0xFFFFFFFF),
@@ -74,6 +111,7 @@ class OfficeTheme {
     focusRing: Color(0xFF2E75B6),
   );
 
+  /// dark API.
   static const OfficeTheme dark = OfficeTheme(
     canvasBackground: Color(0xFF1E1E1E),
     pageBackground: Color(0xFF2B2B2B),
@@ -94,6 +132,7 @@ class OfficeTheme {
     focusRing: Color(0xFF5B9BD5),
   );
 
+  /// highContrast API.
   static const OfficeTheme highContrast = OfficeTheme(
     canvasBackground: Color(0xFF000000),
     pageBackground: Color(0xFF000000),
@@ -114,6 +153,7 @@ class OfficeTheme {
     focusRing: Color(0xFFFFFF00),
   );
 
+  /// copyWith API.
   OfficeTheme copyWith({
     Color? canvasBackground,
     Color? pageBackground,
@@ -159,6 +199,7 @@ class OfficeTheme {
 
 /// Host-facing chrome and interaction flags for an embedded surface.
 class OfficeSurfaceConfig {
+  /// OfficeSurfaceConfig API.
   const OfficeSurfaceConfig({
     this.mode = OfficeInteractionMode.editing,
     this.theme = OfficeTheme.light,
@@ -173,26 +214,51 @@ class OfficeSurfaceConfig {
     this.strings = OfficeStrings.english,
   });
 
+  /// mode API.
   final OfficeInteractionMode mode;
+
+  /// theme API.
   final OfficeTheme theme;
+
+  /// showRulers API.
   final bool showRulers;
+
+  /// showFormulaBar API.
   final bool showFormulaBar;
+
+  /// showGridHeaders API.
   final bool showGridHeaders;
+
+  /// showGridlines API.
   final bool showGridlines;
+
+  /// showSlideHandles API.
   final bool showSlideHandles;
+
+  /// enableUndo API.
   final bool enableUndo;
+
+  /// autofocus API.
   final bool autofocus;
+
+  /// textDirection API.
   final TextDirection textDirection;
+
+  /// strings API.
   final OfficeStrings strings;
 
+  /// allowsMutation API.
   bool get allowsMutation => mode == OfficeInteractionMode.editing;
 
+  /// allowsSelection API.
   bool get allowsSelection =>
       mode == OfficeInteractionMode.editing ||
       mode == OfficeInteractionMode.selecting;
 
+  /// showsCaret API.
   bool get showsCaret => mode == OfficeInteractionMode.editing;
 
+  /// copyWith API.
   OfficeSurfaceConfig copyWith({
     OfficeInteractionMode? mode,
     OfficeTheme? theme,
@@ -224,6 +290,7 @@ class OfficeSurfaceConfig {
 
 /// Accessible labels for screen readers and chrome (English / Arabic).
 class OfficeStrings {
+  /// OfficeStrings API.
   const OfficeStrings({
     required this.wordEditor,
     required this.sheetEditor,
@@ -277,56 +344,154 @@ class OfficeStrings {
     this.showSlide = 'Show Slide',
   });
 
+  /// wordEditor API.
   final String wordEditor;
+
+  /// sheetEditor API.
   final String sheetEditor;
+
+  /// slideEditor API.
   final String slideEditor;
+
+  /// formulaBar API.
   final String formulaBar;
+
+  /// pageLabel API.
   final String pageLabel;
+
+  /// cellLabel API.
   final String cellLabel;
+
+  /// shapeLabel API.
   final String shapeLabel;
+
+  /// viewing API.
   final String viewing;
+
+  /// editing API.
   final String editing;
+
+  /// undo API.
   final String undo;
+
+  /// redo API.
   final String redo;
+
+  /// speakerNotes API.
   final String speakerNotes;
+
+  /// cut API.
   final String cut;
+
+  /// copy API.
   final String copy;
+
+  /// paste API.
   final String paste;
+
+  /// pasteKeepSource API.
   final String pasteKeepSource;
+
+  /// pasteMerge API.
   final String pasteMerge;
+
+  /// pasteTextOnly API.
   final String pasteTextOnly;
+
+  /// pictureLabel API.
   final String pictureLabel;
+
+  /// cropMode API.
   final String cropMode;
+
+  /// pictureHint API.
   final String pictureHint;
+
+  /// followLinkHint API.
   final String followLinkHint;
+
+  /// selectAll API.
   final String selectAll;
+
+  /// insertComment API.
   final String insertComment;
+
+  /// replyComment API.
   final String replyComment;
+
+  /// resolveComment API.
   final String resolveComment;
+
+  /// reopenComment API.
   final String reopenComment;
+
+  /// deleteComment API.
   final String deleteComment;
+
+  /// insertRowAbove API.
   final String insertRowAbove;
+
+  /// insertRowBelow API.
   final String insertRowBelow;
+
+  /// insertColumnLeft API.
   final String insertColumnLeft;
+
+  /// insertColumnRight API.
   final String insertColumnRight;
+
+  /// deleteRow API.
   final String deleteRow;
+
+  /// deleteColumn API.
   final String deleteColumn;
+
+  /// deleteTable API.
   final String deleteTable;
+
+  /// autoFitContents API.
   final String autoFitContents;
+
+  /// autoFitWindow API.
   final String autoFitWindow;
+
+  /// autoFitFixed API.
   final String autoFitFixed;
+
+  /// mergeTableCells API.
   final String mergeTableCells;
+
+  /// unmergeTableCells API.
   final String unmergeTableCells;
+
+  /// insertSheetRow API.
   final String insertSheetRow;
+
+  /// insertSheetColumn API.
   final String insertSheetColumn;
+
+  /// deleteSheetRow API.
   final String deleteSheetRow;
+
+  /// deleteSheetColumn API.
   final String deleteSheetColumn;
+
+  /// clearCells API.
   final String clearCells;
+
+  /// deleteShape API.
   final String deleteShape;
+
+  /// followLink API.
   final String followLink;
+
+  /// hideSlide API.
   final String hideSlide;
+
+  /// showSlide API.
   final String showSlide;
 
+  /// english API.
   static const OfficeStrings english = OfficeStrings(
     wordEditor: 'Word document',
     sheetEditor: 'Spreadsheet',
@@ -380,6 +545,7 @@ class OfficeStrings {
     showSlide: 'Show Slide',
   );
 
+  /// arabic API.
   static const OfficeStrings arabic = OfficeStrings(
     wordEditor: 'مستند وورد',
     sheetEditor: 'ورقة عمل',

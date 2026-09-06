@@ -14,6 +14,7 @@ class VisualImageCache {
 
   ui.Image? get(Uint8List bytes) => _ready[identityHashCode(bytes)];
 
+  /// load API.
   void load(Uint8List bytes, VoidCallback onReady) {
     final int key = identityHashCode(bytes);
     if (_ready.containsKey(key) || _loading.contains(key)) {
@@ -28,7 +29,9 @@ class VisualImageCache {
   }
 }
 
+/// Class PaintOfficeVisual.
 abstract final class PaintOfficeVisual {
+  /// paint API.
   static void paint(
     Canvas canvas,
     Rect rect,
@@ -70,13 +73,23 @@ abstract final class PaintOfficeVisual {
     );
     final Uint8List? bytes = visual.imageBytes;
     if (bytes == null || images == null) {
-      _label(canvas, rect, visual.title.isEmpty ? 'Picture' : visual.title, fontSize: 12);
+      _label(
+        canvas,
+        rect,
+        visual.title.isEmpty ? 'Picture' : visual.title,
+        fontSize: 12,
+      );
       return;
     }
     final ui.Image? image = images.get(bytes);
     if (image == null) {
       images.load(bytes, onImageReady ?? () {});
-      _label(canvas, rect, visual.title.isEmpty ? 'Picture' : visual.title, fontSize: 12);
+      _label(
+        canvas,
+        rect,
+        visual.title.isEmpty ? 'Picture' : visual.title,
+        fontSize: 12,
+      );
       return;
     }
     final PictureAdjust adj = visual.picture;
@@ -105,16 +118,35 @@ abstract final class PaintOfficeVisual {
       final double k = adj.contrast;
       final double b = adj.brightness * 255;
       paint.colorFilter = ColorFilter.matrix(<double>[
-        k, 0, 0, 0, b,
-        0, k, 0, 0, b,
-        0, 0, k, 0, b,
-        0, 0, 0, 1 - adj.transparency, 0,
+        k,
+        0,
+        0,
+        0,
+        b,
+        0,
+        k,
+        0,
+        0,
+        b,
+        0,
+        0,
+        k,
+        0,
+        b,
+        0,
+        0,
+        0,
+        1 - adj.transparency,
+        0,
       ]);
     }
     final double sl = (image.width * adj.cropLeft).clamp(0, image.width / 2);
     final double st = (image.height * adj.cropTop).clamp(0, image.height / 2);
     final double sr = (image.width * adj.cropRight).clamp(0, image.width / 2);
-    final double sb = (image.height * adj.cropBottom).clamp(0, image.height / 2);
+    final double sb = (image.height * adj.cropBottom).clamp(
+      0,
+      image.height / 2,
+    );
     canvas.drawImageRect(
       image,
       Rect.fromLTWH(
@@ -150,7 +182,10 @@ abstract final class PaintOfficeVisual {
     if (pts.isEmpty) {
       return;
     }
-    final double maxV = pts.fold<double>(1, (double m, ChartPoint p) => math.max(m, p.value));
+    final double maxV = pts.fold<double>(
+      1,
+      (double m, ChartPoint p) => math.max(m, p.value),
+    );
     final double gap = 8;
     final double barW = (plot.width - gap * (pts.length + 1)) / pts.length;
     for (int i = 0; i < pts.length; i++) {
@@ -196,7 +231,10 @@ abstract final class PaintOfficeVisual {
     if (pts.isEmpty) {
       return;
     }
-    final double maxV = pts.fold<double>(1, (double m, ChartPoint p) => math.max(m, p.value));
+    final double maxV = pts.fold<double>(
+      1,
+      (double m, ChartPoint p) => math.max(m, p.value),
+    );
     final double gap = 6;
     final double barH = (plot.height - gap * (pts.length + 1)) / pts.length;
     for (int i = 0; i < pts.length; i++) {
@@ -231,7 +269,10 @@ abstract final class PaintOfficeVisual {
     _frame(canvas, rect, visual, fontFamily);
     final Rect plot = _plot(rect);
     final List<ChartPoint> pts = visual.points;
-    final double sum = pts.fold<double>(0, (double a, ChartPoint p) => a + p.value);
+    final double sum = pts.fold<double>(
+      0,
+      (double a, ChartPoint p) => a + p.value,
+    );
     if (sum <= 0) {
       return;
     }
@@ -279,7 +320,10 @@ abstract final class PaintOfficeVisual {
     if (pts.length < 2) {
       return;
     }
-    final double maxV = pts.fold<double>(1, (double m, ChartPoint p) => math.max(m, p.value));
+    final double maxV = pts.fold<double>(
+      1,
+      (double m, ChartPoint p) => math.max(m, p.value),
+    );
     final Path path = Path();
     for (int i = 0; i < pts.length; i++) {
       final double x = plot.left + plot.width * i / (pts.length - 1);
@@ -312,7 +356,10 @@ abstract final class PaintOfficeVisual {
     if (pts.isEmpty) {
       return;
     }
-    final double boxW = math.min(110, (plot.width - 24 * pts.length) / pts.length);
+    final double boxW = math.min(
+      110,
+      (plot.width - 24 * pts.length) / pts.length,
+    );
     final double boxH = 44;
     final double y = plot.center.dy - boxH / 2;
     for (int i = 0; i < pts.length; i++) {
@@ -322,20 +369,36 @@ abstract final class PaintOfficeVisual {
         RRect.fromRectAndRadius(box, const Radius.circular(6)),
         Paint()..color = _hex(pts[i].color),
       );
-      _label(canvas, box, pts[i].label, fontFamily: fontFamily, color: const Color(0xFFFFFFFF));
+      _label(
+        canvas,
+        box,
+        pts[i].label,
+        fontFamily: fontFamily,
+        color: const Color(0xFFFFFFFF),
+      );
       if (i < pts.length - 1) {
         final Offset a = Offset(box.right + 2, box.center.dy);
         final Offset b = Offset(box.right + 20, box.center.dy);
-        canvas.drawLine(a, b, Paint()..color = const Color(0xFF555555)..strokeWidth = 1.5);
+        canvas.drawLine(
+          a,
+          b,
+          Paint()
+            ..color = const Color(0xFF555555)
+            ..strokeWidth = 1.5,
+        );
         canvas.drawLine(
           b,
           Offset(b.dx - 6, b.dy - 4),
-          Paint()..color = const Color(0xFF555555)..strokeWidth = 1.5,
+          Paint()
+            ..color = const Color(0xFF555555)
+            ..strokeWidth = 1.5,
         );
         canvas.drawLine(
           b,
           Offset(b.dx - 6, b.dy + 4),
-          Paint()..color = const Color(0xFF555555)..strokeWidth = 1.5,
+          Paint()
+            ..color = const Color(0xFF555555)
+            ..strokeWidth = 1.5,
         );
       }
     }
@@ -363,7 +426,13 @@ abstract final class PaintOfficeVisual {
         RRect.fromRectAndRadius(box, const Radius.circular(14)),
         Paint()..color = _hex(pts[i].color),
       );
-      _label(canvas, box, pts[i].label, fontFamily: fontFamily, color: const Color(0xFFFFFFFF));
+      _label(
+        canvas,
+        box,
+        pts[i].label,
+        fontFamily: fontFamily,
+        color: const Color(0xFFFFFFFF),
+      );
     }
     canvas.drawCircle(
       c,
@@ -396,8 +465,16 @@ abstract final class PaintOfficeVisual {
       RRect.fromRectAndRadius(root, const Radius.circular(4)),
       Paint()..color = _hex(pts.first.color),
     );
-    _label(canvas, root, pts.first.label, fontFamily: fontFamily, color: const Color(0xFFFFFFFF));
-    final List<ChartPoint> kids = pts.length > 1 ? pts.sublist(1) : <ChartPoint>[];
+    _label(
+      canvas,
+      root,
+      pts.first.label,
+      fontFamily: fontFamily,
+      color: const Color(0xFFFFFFFF),
+    );
+    final List<ChartPoint> kids = pts.length > 1
+        ? pts.sublist(1)
+        : <ChartPoint>[];
     if (kids.isEmpty) {
       return;
     }
@@ -408,16 +485,31 @@ abstract final class PaintOfficeVisual {
         width: math.min(90, gap - 8),
         height: 28,
       );
-      canvas.drawLine(root.bottomCenter, child.topCenter, Paint()..color = const Color(0xFF888888));
+      canvas.drawLine(
+        root.bottomCenter,
+        child.topCenter,
+        Paint()..color = const Color(0xFF888888),
+      );
       canvas.drawRRect(
         RRect.fromRectAndRadius(child, const Radius.circular(4)),
         Paint()..color = _hex(kids[i].color),
       );
-      _label(canvas, child, kids[i].label, fontFamily: fontFamily, color: const Color(0xFFFFFFFF));
+      _label(
+        canvas,
+        child,
+        kids[i].label,
+        fontFamily: fontFamily,
+        color: const Color(0xFFFFFFFF),
+      );
     }
   }
 
-  static void _frame(Canvas canvas, Rect rect, OfficeVisual visual, String fontFamily) {
+  static void _frame(
+    Canvas canvas,
+    Rect rect,
+    OfficeVisual visual,
+    String fontFamily,
+  ) {
     canvas.drawRRect(
       RRect.fromRectAndRadius(rect, const Radius.circular(4)),
       Paint()..color = const Color(0xFFFFFFFF),
@@ -429,7 +521,8 @@ abstract final class PaintOfficeVisual {
         ..style = PaintingStyle.stroke
         ..strokeWidth = 0.8,
     );
-    if (visual.title.isNotEmpty && (!visual.isChart || visual.chart.showTitle)) {
+    if (visual.title.isNotEmpty &&
+        (!visual.isChart || visual.chart.showTitle)) {
       _label(
         canvas,
         Rect.fromLTWH(rect.left + 8, rect.top + 4, rect.width - 16, 16),
@@ -440,7 +533,9 @@ abstract final class PaintOfficeVisual {
         bold: true,
       );
     }
-    if (visual.chart.showAxes && visual.isChart && visual.kind != OfficeVisualKind.chartPie) {
+    if (visual.chart.showAxes &&
+        visual.isChart &&
+        visual.kind != OfficeVisualKind.chartPie) {
       final Rect plot = _plot(rect);
       final Paint axis = Paint()
         ..color = const Color(0xFF888888)
@@ -457,11 +552,16 @@ abstract final class PaintOfficeVisual {
         }
       }
     }
-    if (visual.chart.showLegend && visual.isChart && visual.kind != OfficeVisualKind.chartPie) {
+    if (visual.chart.showLegend &&
+        visual.isChart &&
+        visual.kind != OfficeVisualKind.chartPie) {
       var x = rect.left + 10;
       final double y = rect.bottom - 16;
       for (final ChartPoint p in visual.points.take(6)) {
-        canvas.drawRect(Rect.fromLTWH(x, y + 3, 8, 8), Paint()..color = _hex(p.color));
+        canvas.drawRect(
+          Rect.fromLTWH(x, y + 3, 8, 8),
+          Paint()..color = _hex(p.color),
+        );
         _label(
           canvas,
           Rect.fromLTWH(x + 10, y, 36, 14),
@@ -475,12 +575,13 @@ abstract final class PaintOfficeVisual {
     }
   }
 
+  /// fromLTWH API.
   static Rect _plot(Rect rect) => Rect.fromLTWH(
-        rect.left + 10,
-        rect.top + 24,
-        rect.width - 20,
-        rect.height - 40,
-      );
+    rect.left + 10,
+    rect.top + 24,
+    rect.width - 20,
+    rect.height - 40,
+  );
 
   static void _label(
     Canvas canvas,
@@ -515,7 +616,9 @@ abstract final class PaintOfficeVisual {
     painter.paint(
       canvas,
       Offset(
-        align == TextAlign.left ? rect.left : rect.left + (rect.width - painter.width) / 2,
+        align == TextAlign.left
+            ? rect.left
+            : rect.left + (rect.width - painter.width) / 2,
         rect.top + (rect.height - painter.height) / 2,
       ),
     );
@@ -523,6 +626,8 @@ abstract final class PaintOfficeVisual {
 
   static Color _hex(String hex) {
     final String clean = hex.replaceFirst('#', '');
-    return Color(0xFF000000 | (int.tryParse(clean.padLeft(6, '0'), radix: 16) ?? 0x4472C4));
+    return Color(
+      0xFF000000 | (int.tryParse(clean.padLeft(6, '0'), radix: 16) ?? 0x4472C4),
+    );
   }
 }

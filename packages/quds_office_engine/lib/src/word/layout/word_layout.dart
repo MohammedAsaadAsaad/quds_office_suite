@@ -15,7 +15,9 @@ import '../model/word_table.dart';
 import '../model/word_toc.dart';
 import '../properties/wml_properties.dart';
 
+/// Class LaidOutGlyph.
 class LaidOutGlyph {
+  /// LaidOutGlyph API.
   LaidOutGlyph({
     required this.glyph,
     required this.x,
@@ -32,27 +34,58 @@ class LaidOutGlyph {
     this.hyperlink,
     List<int>? commentIds,
     double? advance,
-  })  : commentIds = commentIds ?? const <int>[],
-        advance = advance ?? glyph.advance;
+  }) : commentIds = commentIds ?? const <int>[],
+       advance = advance ?? glyph.advance;
 
+  /// glyph API.
   final ShapedGlyph glyph;
+
+  /// x API.
   double x;
+
+  /// y API.
   final double y;
+
+  /// color API.
   final String color;
+
+  /// fontSize API.
   final double fontSize;
+
+  /// bold API.
   final bool bold;
+
+  /// underline API.
   final WmlUnderline underline;
+
+  /// italic API.
   final bool italic;
+
+  /// strike API.
   final bool strike;
+
+  /// highlight API.
   final String? highlight;
+
+  /// fontFamily API.
   final String? fontFamily;
+
+  /// vertAlign API.
   final WmlVertAlign vertAlign;
+
+  /// hyperlink API.
   final WmlHyperlink? hyperlink;
+
+  /// commentIds API.
   final List<int> commentIds;
+
+  /// advance API.
   double advance;
 }
 
+/// Class LaidOutLine.
 class LaidOutLine {
+  /// LaidOutLine API.
   LaidOutLine({
     required this.glyphs,
     required this.x,
@@ -75,27 +108,65 @@ class LaidOutLine {
     this.hyperlink,
   });
 
+  /// glyphs API.
   final List<LaidOutGlyph> glyphs;
+
+  /// x API.
   double x;
+
+  /// y API.
   final double y;
+
+  /// width API.
   double width;
+
+  /// height API.
   final double height;
+
+  /// pageIndex API.
   final int pageIndex;
+
+  /// justification API.
   final WmlJustification justification;
+
+  /// paragraphIndex API.
   final int paragraphIndex;
+
+  /// listLabel API.
   final String? listLabel;
+
+  /// isParagraphStart API.
   final bool isParagraphStart;
+
+  /// isFooter API.
   final bool isFooter;
+
+  /// overlayText API.
   final String? overlayText;
+
+  /// overlayColor API.
   final String? overlayColor;
+
+  /// overlaySize API.
   final double overlaySize;
+
+  /// overlayBold API.
   final bool overlayBold;
+
+  /// sourceText API.
   final String? sourceText;
+
+  /// tocTargetParagraph API.
   final int? tocTargetParagraph;
+
+  /// tocLeader API.
   final bool tocLeader;
+
+  /// hyperlink API.
   final WmlHyperlink? hyperlink;
 }
 
+/// Enum LaidOutBoxKind.
 enum LaidOutBoxKind {
   tableCell,
   picture,
@@ -109,6 +180,7 @@ enum LaidOutBoxKind {
 
 /// Decorative box in page coordinates (table cell, picture, chart).
 class LaidOutBox {
+  /// LaidOutBox API.
   LaidOutBox({
     required this.x,
     required this.y,
@@ -129,26 +201,61 @@ class LaidOutBox {
     this.frame,
   });
 
+  /// x API.
   double x;
+
+  /// y API.
   double y;
+
+  /// width API.
   double width;
+
+  /// height API.
   double height;
+
+  /// fillColor API.
   String? fillColor;
+
+  /// strokeColor API.
   String strokeColor;
+
+  /// paragraphIndex API.
   int? paragraphIndex;
+
+  /// paragraphEnd API.
   int? paragraphEnd;
+
+  /// kind API.
   LaidOutBoxKind kind;
+
+  /// visual API.
   OfficeVisual? visual;
+
+  /// equation API.
   WmlEquation? equation;
+
+  /// omml API.
   LaidOutOmml? omml;
+
+  /// table API.
   WmlTable? table;
+
+  /// tableRow API.
   int? tableRow;
+
+  /// tableCol API.
   int? tableCol;
+
+  /// tableGridCol API.
   int? tableGridCol;
+
+  /// frame API.
   WmlFrame? frame;
 }
 
+/// Class LaidOutBand.
 class LaidOutBand {
+  /// LaidOutBand API.
   const LaidOutBand({
     required this.left,
     required this.top,
@@ -156,20 +263,27 @@ class LaidOutBand {
     required this.height,
   });
 
+  /// left API.
   final double left;
+
+  /// top API.
   final double top;
+
+  /// width API.
   final double width;
+
+  /// height API.
   final double height;
 
+  /// contains API.
   bool contains(double x, double y) {
-    return x >= left &&
-        x <= left + width &&
-        y >= top &&
-        y <= top + height;
+    return x >= left && x <= left + width && y >= top && y <= top + height;
   }
 }
 
+/// Class LaidOutPage.
 class LaidOutPage {
+  /// LaidOutPage API.
   LaidOutPage({
     required this.index,
     required this.width,
@@ -184,32 +298,52 @@ class LaidOutPage {
   }) : frames = frames ?? <LaidOutBox>[],
        header = header ?? <LaidOutLine>[],
        footer = footer ?? <LaidOutLine>[],
-       headerBand = headerBand ??
-           LaidOutBand(left: 0, top: 0, width: width, height: 72),
-       footerBand = footerBand ??
-           LaidOutBand(
-             left: 0,
-             top: height - 72,
-             width: width,
-             height: 72,
-           );
+       headerBand =
+           headerBand ?? LaidOutBand(left: 0, top: 0, width: width, height: 72),
+       footerBand =
+           footerBand ??
+           LaidOutBand(left: 0, top: height - 72, width: width, height: 72);
 
+  /// index API.
   final int index;
+
+  /// sectionIndex API.
   final int sectionIndex;
+
+  /// width API.
   final double width;
+
+  /// height API.
   final double height;
+
+  /// lines API.
   final List<LaidOutLine> lines;
+
+  /// frames API.
   final List<LaidOutBox> frames;
+
+  /// header API.
   final List<LaidOutLine> header;
+
+  /// footer API.
   final List<LaidOutLine> footer;
+
+  /// headerBand API.
   final LaidOutBand headerBand;
+
+  /// footerBand API.
   final LaidOutBand footerBand;
 }
 
+/// Class LaidOutDocument.
 class LaidOutDocument {
+  /// LaidOutDocument API.
   LaidOutDocument({required this.pages, required this.pageSize});
 
+  /// pages API.
   final List<LaidOutPage> pages;
+
+  /// pageSize API.
   final WmlPageSize pageSize;
 
   /// Vertical offset of page [index] in the stacked Word canvas (points × scale).
@@ -225,6 +359,7 @@ class LaidOutDocument {
     return top;
   }
 
+  /// pageIndexAtContentY API.
   int pageIndexAtContentY(double contentY, double scale) {
     if (pages.isEmpty) {
       return 0;
@@ -246,9 +381,16 @@ class _Flow {
     : pageIndex = pages.length,
       y = section.margins.top;
 
+  /// section API.
   final WmlSection section;
+
+  /// sectionIndex API.
   final int sectionIndex;
+
+  /// pages API.
   final List<LaidOutPage> pages;
+
+  /// Function API.
   final LaidOutPage Function(
     WmlSection section,
     int index,
@@ -256,21 +398,37 @@ class _Flow {
     List<LaidOutBox> frames, {
     required int sectionIndex,
   })
+  /// makePage API.
   makePage;
+
+  /// current API.
   final List<LaidOutLine> current = <LaidOutLine>[];
+
+  /// currentFrames API.
   final List<LaidOutBox> currentFrames = <LaidOutBox>[];
+
+  /// pageIndex API.
   int pageIndex;
+
+  /// columnIndex API.
   int columnIndex = 0;
+
+  /// y API.
   double y;
 
+  /// originX API.
   double get originX => section.columnOriginX(columnIndex);
 
+  /// colWidth API.
   double get colWidth => section.columnWidth;
 
+  /// bottom API.
   double get bottom => section.pageSize.height - section.margins.bottom;
 
+  /// hasContent API.
   bool get hasContent => current.isNotEmpty || currentFrames.isNotEmpty;
 
+  /// flushPage API.
   void flushPage() {
     pages.add(_make());
     current.clear();
@@ -280,6 +438,7 @@ class _Flow {
     y = section.margins.top;
   }
 
+  /// nextColumn API.
   void nextColumn() {
     if (columnIndex + 1 < section.resolvedColumnCount) {
       columnIndex++;
@@ -289,25 +448,27 @@ class _Flow {
     }
   }
 
+  /// breakPage API.
   void breakPage() {
     if (hasContent || columnIndex > 0) {
       flushPage();
     }
   }
 
+  /// ensure API.
   void ensure(double height) {
     if (y + height > bottom && (hasContent || columnIndex > 0)) {
       nextColumn();
     }
   }
 
+  /// addSeparators API.
   void addSeparators() {
     if (!section.columnSep || section.resolvedColumnCount < 2) {
       return;
     }
     for (int i = 1; i < section.resolvedColumnCount; i++) {
-      final double x =
-          section.columnOriginX(i) - section.columnSpace / 2;
+      final double x = section.columnOriginX(i) - section.columnSpace / 2;
       currentFrames.add(
         LaidOutBox(
           x: x,
@@ -333,6 +494,7 @@ class _Flow {
     );
   }
 
+  /// finish API.
   void finish() {
     if (hasContent || pages.isEmpty) {
       pages.add(_make());
@@ -344,11 +506,16 @@ class _Flow {
 
 /// Flowable pagination: Knuth–Plass lines accumulated into physical pages.
 class WordLayoutEngine {
+  /// WordLayoutEngine API.
   WordLayoutEngine({required this.font, this.fallbackWidthFactor = 0.5});
 
+  /// font API.
   final SfntFont? font;
+
+  /// fallbackWidthFactor API.
   final double fallbackWidthFactor;
 
+  /// layout API.
   LaidOutDocument layout(WmlDocument document) {
     final List<LaidOutPage> pages = <LaidOutPage>[];
     var paragraphIndex = 0;
@@ -405,7 +572,8 @@ class WordLayoutEngine {
             flow.y,
             paragraphIndex,
             originX: flow.originX,
-            maxWidthOverride: flow.colWidth -
+            maxWidthOverride:
+                flow.colWidth -
                 block.properties.indent.left -
                 block.properties.indent.right,
             flow: flow,
@@ -449,12 +617,7 @@ class WordLayoutEngine {
           flow.y = visual.y;
           flow.pageIndex = visual.pageIndex;
         case WmlFrame():
-          paragraphIndex = _layoutFrame(
-            block,
-            section,
-            flow,
-            paragraphIndex,
-          );
+          paragraphIndex = _layoutFrame(block, section, flow, paragraphIndex);
         case WmlEquation():
           final ({double y, int pageIndex}) equation = _layoutEquation(
             block,
@@ -616,10 +779,7 @@ class WordLayoutEngine {
           cursorY = section.margins.top;
         }
       }
-      final double x0 =
-          lineOrigin +
-          paragraph.properties.indent.left +
-          listPad;
+      final double x0 = lineOrigin + paragraph.properties.indent.left + listPad;
       double x = x0;
       if (paragraph.properties.justification == WmlJustification.center) {
         x += (maxWidth - line.width) / 2;
@@ -632,12 +792,15 @@ class WordLayoutEngine {
         final WmlRunProps props = WmlRunEdit.propsAt(paragraph, g.logicalIndex);
         final double baseSize = props.fontSizePoints;
         final double size = baseSize * props.vertAlign.fontScale;
-        final double scale = fontSize <= 0 ? props.vertAlign.fontScale : size / fontSize;
+        final double scale = fontSize <= 0
+            ? props.vertAlign.fontScale
+            : size / fontSize;
         glyphs.add(
           LaidOutGlyph(
             glyph: g,
             x: gx,
-            y: cursorY +
+            y:
+                cursorY +
                 (metrics?.ascender ?? baseSize * 0.8) +
                 props.vertAlign.baselineShift(baseSize),
             color: props.color,
@@ -722,8 +885,9 @@ class WordLayoutEngine {
         para,
         sourceText: item.text,
         tocTargetParagraph: entry?.headingParagraphIndex,
-        overlayText:
-            toc.showPageNumbers && entry != null ? '${entry.pageNumber}' : null,
+        overlayText: toc.showPageNumbers && entry != null
+            ? '${entry.pageNumber}'
+            : null,
         tocLeader: toc.showPageNumbers && entry != null,
       );
       cursorY = laid.y;
@@ -764,11 +928,7 @@ class WordLayoutEngine {
     double? maxWidthOverride,
     _Flow? flow,
   }) {
-    final List<double> cols = _columnWidths(
-      table,
-      section,
-      maxWidthOverride,
-    );
+    final List<double> cols = _columnWidths(table, section, maxWidthOverride);
     var cursorY = y + 6;
     var idx = pageIndex;
     var para = paragraphIndex;
@@ -844,7 +1004,10 @@ class WordLayoutEngine {
             idx = laid.pageIndex;
             para++;
           } else if (block is WmlEquation) {
-            final LaidOutOmml omml = OmmlLayout.layout(block.math, fontSize: 14);
+            final LaidOutOmml omml = OmmlLayout.layout(
+              block.math,
+              fontSize: 14,
+            );
             currentFrames.add(
               LaidOutBox(
                 x: x + cellPad,
@@ -869,8 +1032,7 @@ class WordLayoutEngine {
             width: colW,
             height: 0,
             fillColor: cell.vMerge == WmlVMerge.cont ? null : cell.fillColor,
-            strokeColor:
-                cell.vMerge == WmlVMerge.cont ? '00000000' : 'B0B0B0',
+            strokeColor: cell.vMerge == WmlVMerge.cont ? '00000000' : 'B0B0B0',
             paragraphIndex: cellParaStart,
             paragraphEnd: para > cellParaStart ? para - 1 : cellParaStart,
             table: table,
@@ -1046,9 +1208,13 @@ class WordLayoutEngine {
     bool allowBreak = true,
   }) {
     final double maxW = maxWidthOverride ?? section.contentWidth;
-    final bool absolute = visual.picture.wrap == PictureWrap.behind ||
+    final bool absolute =
+        visual.picture.wrap == PictureWrap.behind ||
         visual.picture.wrap == PictureWrap.inFront;
-    final double width = visual.width.clamp(24, absolute ? section.pageSize.width : maxW);
+    final double width = visual.width.clamp(
+      24,
+      absolute ? section.pageSize.width : maxW,
+    );
     final double height = visual.height.clamp(
       24,
       absolute ? section.pageSize.height : section.contentHeight,
@@ -1125,7 +1291,10 @@ class WordLayoutEngine {
     double y,
   ) {
     final LaidOutOmml omml = OmmlLayout.layout(equation.math, fontSize: 16);
-    final double width = math.min(section.contentWidth, math.max(72, omml.width));
+    final double width = math.min(
+      section.contentWidth,
+      math.max(72, omml.width),
+    );
     final double height = math.max(28, omml.height);
     var cursorY = y + 8;
     var idx = pageIndex;
@@ -1221,7 +1390,8 @@ class WordLayoutEngine {
       return <LaidOutLine>[];
     }
     final double y = isFooter
-        ? section.pageSize.height - math.max(22.0, section.margins.bottom * 0.45)
+        ? section.pageSize.height -
+              math.max(22.0, section.margins.bottom * 0.45)
         : math.max(16.0, math.min(24.0, section.margins.top * 0.38));
     final List<LaidOutLine> lines = <LaidOutLine>[];
     var offsetY = 0.0;

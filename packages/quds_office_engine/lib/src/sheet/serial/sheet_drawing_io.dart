@@ -17,9 +17,11 @@ import '../model/sml_workbook.dart';
 
 /// SpreadsheetML drawings (`xdr:wsDr` / `xdr:oneCellAnchor`).
 abstract final class SheetDrawingIo {
+  /// pictureUri API.
   static const String pictureUri =
       'http://schemas.openxmlformats.org/drawingml/2006/picture';
 
+  /// syncSheet API.
   static void syncSheet(
     SmlWorksheet sheet,
     OpcPackage package,
@@ -40,7 +42,9 @@ abstract final class SheetDrawingIo {
       }
     }
     found ??= sheetRels.add(type: RelationshipTypes.drawing, target: target);
-    final RelationshipCollection drawingRels = package.relationshipsFor(drawingUri);
+    final RelationshipCollection drawingRels = package.relationshipsFor(
+      drawingUri,
+    );
     final List<String> embedIds = <String>[];
     var mediaIndex = 1;
     var chartIndex = 1;
@@ -50,7 +54,12 @@ abstract final class SheetDrawingIo {
         final String uri = '/xl/charts/chart$chartIndex.xml';
         chartIndex++;
         final String xml = _chartXml(visual);
-        _writePart(package, uri, OfficeContentTypes.drawingChart, utf8.encode(xml));
+        _writePart(
+          package,
+          uri,
+          OfficeContentTypes.drawingChart,
+          utf8.encode(xml),
+        );
         embedIds.add(
           _ensureRel(
             drawingRels,
@@ -82,6 +91,7 @@ abstract final class SheetDrawingIo {
     );
   }
 
+  /// drawingRelationshipId API.
   static String? drawingRelationshipId(OpcPackage package, String sheetUri) {
     return package
         .relationshipsFor(sheetUri)
@@ -89,13 +99,15 @@ abstract final class SheetDrawingIo {
         ?.id;
   }
 
+  /// readSheet API.
   static void readSheet(
     SmlWorksheet sheet,
     OpcPackage package,
     String sheetUri,
   ) {
-    final PackageRelationship? rel =
-        package.relationshipsFor(sheetUri).firstByType(RelationshipTypes.drawing);
+    final PackageRelationship? rel = package
+        .relationshipsFor(sheetUri)
+        .firstByType(RelationshipTypes.drawing);
     if (rel == null) {
       return;
     }
@@ -137,7 +149,15 @@ abstract final class SheetDrawingIo {
       if (chartRel != null) {
         visual = _loadChart(package, drawingUri, chartRel, name, cx, cy);
       } else if (embedRel != null) {
-        visual = _loadPicture(package, drawingUri, embedRel, name, cx, cy, adj.copy());
+        visual = _loadPicture(
+          package,
+          drawingUri,
+          embedRel,
+          name,
+          cx,
+          cy,
+          adj.copy(),
+        );
       }
       if (visual != null) {
         out.add(
@@ -201,17 +221,20 @@ abstract final class SheetDrawingIo {
           cy = int.tryParse(reader.getAttribute('cy') ?? '') ?? cy;
         case 'cNvPr':
         case 'docPr':
-          name = reader.getAttribute('name') ??
+          name =
+              reader.getAttribute('name') ??
               reader.getAttribute('descr') ??
               name;
           adj.altTitle = name;
           adj.altDescription = reader.getAttribute('descr') ?? '';
         case 'blip':
-          embed = reader.getAttribute('embed', namespaceUri: OfficeNamespaces.r) ??
+          embed =
+              reader.getAttribute('embed', namespaceUri: OfficeNamespaces.r) ??
               reader.getAttribute('embed') ??
               embed;
         case 'chart':
-          chartId = reader.getAttribute('id', namespaceUri: OfficeNamespaces.r) ??
+          chartId =
+              reader.getAttribute('id', namespaceUri: OfficeNamespaces.r) ??
               reader.getAttribute('id') ??
               chartId;
         case 'srcRect':
@@ -221,8 +244,9 @@ abstract final class SheetDrawingIo {
         case 'lum':
           DrawingmlVisualIo.applyLum(adj, reader);
         case 'alphaModFix':
-          adj.transparency =
-              DrawingmlVisualIo.alphaToTransparency(reader.getAttribute('amt'));
+          adj.transparency = DrawingmlVisualIo.alphaToTransparency(
+            reader.getAttribute('amt'),
+          );
         case 'outerShdw':
           adj.shadow = true;
         case 'ln':
@@ -310,8 +334,9 @@ abstract final class SheetDrawingIo {
     final String name = adj.altTitle.isNotEmpty
         ? adj.altTitle
         : (visual.title.isEmpty ? 'Picture' : visual.title);
-    final String descr =
-        adj.altDescription.isNotEmpty ? adj.altDescription : name;
+    final String descr = adj.altDescription.isNotEmpty
+        ? adj.altDescription
+        : name;
     w.writeStartElement('pic', prefix: 'xdr');
     w.writeStartElement('nvPicPr', prefix: 'xdr');
     w.writeStartElement('cNvPr', prefix: 'xdr');
@@ -386,30 +411,30 @@ abstract final class SheetDrawingIo {
         : visual.points;
     return switch (visual.kind) {
       OfficeVisualKind.chartPie => DrawingmlCharts.pie(
-          title: title,
-          series: points,
-          rtl: false,
-          display: visual.chart,
-        ),
+        title: title,
+        series: points,
+        rtl: false,
+        display: visual.chart,
+      ),
       OfficeVisualKind.chartLine => DrawingmlCharts.line(
-          title: title,
-          series: <ChartSeries>[ChartSeries(name: title, points: points)],
-          rtl: false,
-          display: visual.chart,
-        ),
+        title: title,
+        series: <ChartSeries>[ChartSeries(name: title, points: points)],
+        rtl: false,
+        display: visual.chart,
+      ),
       OfficeVisualKind.chartBar => DrawingmlCharts.bar(
-          title: title,
-          series: points,
-          rtl: false,
-          display: visual.chart,
-        ),
+        title: title,
+        series: points,
+        rtl: false,
+        display: visual.chart,
+      ),
       _ => DrawingmlCharts.bar(
-          title: title,
-          series: points,
-          rtl: false,
-          horizontal: false,
-          display: visual.chart,
-        ),
+        title: title,
+        series: points,
+        rtl: false,
+        horizontal: false,
+        display: visual.chart,
+      ),
     };
   }
 
@@ -422,13 +447,15 @@ abstract final class SheetDrawingIo {
     int cy,
     PictureAdjust adj,
   ) {
-    final PackageRelationship? rel =
-        package.relationshipsFor(drawingUri).byId(relationshipId);
+    final PackageRelationship? rel = package
+        .relationshipsFor(drawingUri)
+        .byId(relationshipId);
     if (rel == null) {
       return null;
     }
-    final PackagePart? part =
-        package.getPart(package.relationshipsFor(drawingUri).resolve(rel));
+    final PackagePart? part = package.getPart(
+      package.relationshipsFor(drawingUri).resolve(rel),
+    );
     if (part == null) {
       return null;
     }
@@ -450,13 +477,15 @@ abstract final class SheetDrawingIo {
     int cx,
     int cy,
   ) {
-    final PackageRelationship? rel =
-        package.relationshipsFor(drawingUri).byId(relationshipId);
+    final PackageRelationship? rel = package
+        .relationshipsFor(drawingUri)
+        .byId(relationshipId);
     if (rel == null) {
       return null;
     }
-    final PackagePart? part =
-        package.getPart(package.relationshipsFor(drawingUri).resolve(rel));
+    final PackagePart? part = package.getPart(
+      package.relationshipsFor(drawingUri).resolve(rel),
+    );
     if (part == null) {
       return null;
     }
@@ -510,7 +539,9 @@ abstract final class SheetDrawingIo {
   }
 }
 
+/// Class WordLikeMedia.
 abstract final class WordLikeMedia {
+  /// mimeOf API.
   static String mimeOf(Uint8List bytes) {
     if (bytes.length > 3 && bytes[0] == 0xFF && bytes[1] == 0xD8) {
       return 'image/jpeg';
@@ -518,6 +549,7 @@ abstract final class WordLikeMedia {
     return 'image/png';
   }
 
+  /// extensionOf API.
   static String extensionOf(String mime) {
     if (mime == 'image/jpeg') {
       return '.jpeg';

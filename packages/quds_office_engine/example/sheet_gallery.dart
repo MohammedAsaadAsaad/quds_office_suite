@@ -2,12 +2,7 @@ import 'dart:typed_data';
 
 import 'package:quds_office_engine/quds_office_engine.dart';
 
-void _put(
-  SmlWorksheet sheet,
-  String a1,
-  Object? value, {
-  String? formula,
-}) {
+void _put(SmlWorksheet sheet, String a1, Object? value, {String? formula}) {
   final SmlCell cell = sheet.cellA1(a1);
   if (formula != null) {
     cell.type = SmlCellType.formula;
@@ -102,11 +97,7 @@ Uint8List builderWorkbook() {
   final XlsxWorkbookBuilder book = XlsxWorkbookBuilder(
     theme: OfficeDocumentTheme.light(),
   );
-  final int title = book.style(
-    bold: true,
-    size: 16,
-    color: '1F4E79',
-  );
+  final int title = book.style(bold: true, size: 16, color: '1F4E79');
   final int header = book.style(
     bold: true,
     fillRgb: '2B579A',
@@ -114,7 +105,11 @@ Uint8List builderWorkbook() {
     border: true,
     horizontal: 'center',
   );
-  final int money = book.style(numFmt: '0.00', border: true, horizontal: 'right');
+  final int money = book.style(
+    numFmt: '0.00',
+    border: true,
+    horizontal: 'right',
+  );
   final int band = book.style(fillRgb: 'F2F2F2', border: true);
   final int pct = book.style(numFmt: '0.00%', border: true);
 

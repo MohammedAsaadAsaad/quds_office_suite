@@ -25,6 +25,7 @@ enum CfbfObjectType { empty, storage, stream, root }
 
 /// One 128-byte directory entry.
 class CfbfDirectoryEntry {
+  /// CfbfDirectoryEntry API.
   CfbfDirectoryEntry({
     required this.index,
     required this.name,
@@ -41,21 +42,49 @@ class CfbfDirectoryEntry {
     required this.streamSize,
   });
 
+  /// index API.
   final int index;
+
+  /// name API.
   final String name;
+
+  /// type API.
   final CfbfObjectType type;
+
+  /// colorBlack API.
   final bool colorBlack;
+
+  /// leftSibling API.
   final int leftSibling;
+
+  /// rightSibling API.
   final int rightSibling;
+
+  /// child API.
   final int child;
+
+  /// clsid API.
   final Uint8List clsid;
+
+  /// stateBits API.
   final int stateBits;
+
+  /// created API.
   final DateTime? created;
+
+  /// modified API.
   final DateTime? modified;
+
+  /// startSector API.
   final int startSector;
+
+  /// streamSize API.
   final int streamSize;
 
+  /// isStream API.
   bool get isStream => type == CfbfObjectType.stream;
+
+  /// isStorage API.
   bool get isStorage =>
       type == CfbfObjectType.storage || type == CfbfObjectType.root;
 }
@@ -70,16 +99,27 @@ class CfbfFile {
     required this.entries,
   });
 
+  /// source API.
   final ByteSource source;
+
+  /// header API.
   final CfbfHeader header;
+
+  /// fat API.
   final List<int> fat;
+
+  /// miniFat API.
   final List<int> miniFat;
+
+  /// entries API.
   final List<CfbfDirectoryEntry> entries;
 
+  /// root API.
   CfbfDirectoryEntry get root => entries.firstWhere(
     (CfbfDirectoryEntry e) => e.type == CfbfObjectType.root,
   );
 
+  /// open API.
   factory CfbfFile.open(ByteSource source) {
     final CfbfHeader header = CfbfHeader.parse(source);
     final List<int> fat = _readFat(source, header);
@@ -98,9 +138,11 @@ class CfbfFile {
     );
   }
 
+  /// fromBytes API.
   factory CfbfFile.fromBytes(Uint8List bytes) =>
       CfbfFile.open(MemoryByteSource(bytes));
 
+  /// isCfbf API.
   static bool isCfbf(List<int> bytes) {
     if (bytes.length < 8) {
       return false;
@@ -113,6 +155,7 @@ class CfbfFile {
     return true;
   }
 
+  /// entryByName API.
   CfbfDirectoryEntry? entryByName(String name) {
     for (final CfbfDirectoryEntry entry in entries) {
       if (entry.type == CfbfObjectType.empty) {
@@ -158,6 +201,7 @@ class CfbfFile {
     return readEntry(entry);
   }
 
+  /// readEntry API.
   Uint8List readEntry(CfbfDirectoryEntry entry) {
     if (entry.streamSize == 0) {
       return Uint8List(0);
@@ -437,6 +481,7 @@ class CfbfFile {
 
 /// CFBF header (first 512 bytes).
 class CfbfHeader {
+  /// CfbfHeader API.
   CfbfHeader({
     required this.majorVersion,
     required this.sectorShift,
@@ -452,24 +497,52 @@ class CfbfHeader {
     required this.headerDifat,
   });
 
+  /// majorVersion API.
   final int majorVersion;
+
+  /// sectorShift API.
   final int sectorShift;
+
+  /// miniSectorShift API.
   final int miniSectorShift;
+
+  /// directorySectorCount API.
   final int directorySectorCount;
+
+  /// fatSectorCount API.
   final int fatSectorCount;
+
+  /// firstDirectorySector API.
   final int firstDirectorySector;
+
+  /// miniStreamCutoff API.
   final int miniStreamCutoff;
+
+  /// firstMiniFatSector API.
   final int firstMiniFatSector;
+
+  /// miniFatSectorCount API.
   final int miniFatSectorCount;
+
+  /// firstDifatSector API.
   final int firstDifatSector;
+
+  /// difatSectorCount API.
   final int difatSectorCount;
+
+  /// headerDifat API.
   final List<int> headerDifat;
 
+  /// sectorSize API.
   int get sectorSize => 1 << sectorShift;
+
+  /// miniSectorSize API.
   int get miniSectorSize => 1 << miniSectorShift;
 
+  /// sectorOffset API.
   int sectorOffset(int sector) => (sector + 1) * sectorSize;
 
+  /// parse API.
   factory CfbfHeader.parse(ByteSource source) {
     if (source.length < 512) {
       throw const CfbfException('CFBF header is shorter than 512 bytes');
@@ -528,11 +601,14 @@ class CfbfHeader {
 
 /// Thrown when a CFBF file is corrupt or unsupported.
 class CfbfException implements Exception {
+  /// CfbfException API.
   const CfbfException(this.message);
 
+  /// message API.
   final String message;
 
   @override
+  /// toString API.
   String toString() => 'CfbfException: $message';
 }
 
@@ -547,7 +623,11 @@ DateTime? _filetimeToDate(int filetime) {
   if (filetime == 0) {
     return null;
   }
+
+  /// epochDiff API.
   const int epochDiff = 116444736000000000;
+
+  /// micros API.
   final int micros = (filetime - epochDiff) ~/ 10;
   return DateTime.fromMicrosecondsSinceEpoch(micros, isUtc: true);
 }

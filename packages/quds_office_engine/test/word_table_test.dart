@@ -13,16 +13,12 @@ WmlDocument tableDoc() {
                 cells: <WmlTableCell>[
                   WmlTableCell(
                     blocks: <WmlBlock>[
-                      WmlParagraph(
-                        inlines: <WmlInline>[WmlRun(text: 'A1')],
-                      ),
+                      WmlParagraph(inlines: <WmlInline>[WmlRun(text: 'A1')]),
                     ],
                   ),
                   WmlTableCell(
                     blocks: <WmlBlock>[
-                      WmlParagraph(
-                        inlines: <WmlInline>[WmlRun(text: 'B1')],
-                      ),
+                      WmlParagraph(inlines: <WmlInline>[WmlRun(text: 'B1')]),
                     ],
                   ),
                 ],
@@ -31,16 +27,12 @@ WmlDocument tableDoc() {
                 cells: <WmlTableCell>[
                   WmlTableCell(
                     blocks: <WmlBlock>[
-                      WmlParagraph(
-                        inlines: <WmlInline>[WmlRun(text: 'A2')],
-                      ),
+                      WmlParagraph(inlines: <WmlInline>[WmlRun(text: 'A2')]),
                     ],
                   ),
                   WmlTableCell(
                     blocks: <WmlBlock>[
-                      WmlParagraph(
-                        inlines: <WmlInline>[WmlRun(text: 'B2')],
-                      ),
+                      WmlParagraph(inlines: <WmlInline>[WmlRun(text: 'B2')]),
                     ],
                   ),
                 ],
@@ -58,8 +50,10 @@ void main() {
     final WmlDocument doc = tableDoc();
     final List<WmlParagraph> paras = doc.paragraphs.toList();
     expect(paras.length, 4);
-    final ({WmlTable table, int row, int col})? loc =
-        WordTable.locationOfIndex(doc, 3);
+    final ({WmlTable table, int row, int col})? loc = WordTable.locationOfIndex(
+      doc,
+      3,
+    );
     expect(loc, isNotNull);
     expect(loc!.row, 1);
     expect(loc.col, 1);
@@ -72,14 +66,8 @@ void main() {
     WordTable.insertRow(table, 1);
     expect(table.rows.length, 3);
     expect(table.rows[1].cells.length, 2);
-    expect(
-      (table.rows[1].cells.first.blocks.first as WmlParagraph).text,
-      '',
-    );
-    expect(
-      (table.rows[2].cells.first.blocks.first as WmlParagraph).text,
-      'A2',
-    );
+    expect((table.rows[1].cells.first.blocks.first as WmlParagraph).text, '');
+    expect((table.rows[2].cells.first.blocks.first as WmlParagraph).text, 'A2');
   });
 
   test('insertColumn copies the previous column formatting', () {
@@ -87,13 +75,14 @@ void main() {
     final WmlTable table = doc.sections.first.blocks.first as WmlTable;
     table.rows.first.cells.first.fillColor = '1F4E79';
     table.rows.first.cells.first.blocks
-        .whereType<WmlParagraph>()
-        .first
-        .inlines
-        .whereType<WmlRun>()
-        .first
-        .properties
-        .bold = true;
+            .whereType<WmlParagraph>()
+            .first
+            .inlines
+            .whereType<WmlRun>()
+            .first
+            .properties
+            .bold =
+        true;
     WordTable.insertColumn(table, 1);
     expect(table.rows.first.cells[1].fillColor, '1F4E79');
     expect(
@@ -107,14 +96,8 @@ void main() {
           .bold,
       isTrue,
     );
-    expect(
-      (table.rows.first.cells[1].blocks.first as WmlParagraph).text,
-      '',
-    );
-    expect(
-      (table.rows.first.cells[2].blocks.first as WmlParagraph).text,
-      'B1',
-    );
+    expect((table.rows.first.cells[1].blocks.first as WmlParagraph).text, '');
+    expect((table.rows.first.cells[2].blocks.first as WmlParagraph).text, 'B1');
   });
 
   test('autoFit window keeps the table inside the page width', () {
@@ -135,10 +118,7 @@ void main() {
     expect(WordTable.columnCount(table), 3);
     expect(table.grid.length, 3);
     expect(table.rows.first.cells.length, 3);
-    expect(
-      (table.rows.first.cells[2].blocks.first as WmlParagraph).text,
-      'B1',
-    );
+    expect((table.rows.first.cells[2].blocks.first as WmlParagraph).text, 'B1');
   });
 
   test('deleteRow and deleteColumn refuse to remove the last axis', () {
@@ -218,10 +198,7 @@ void main() {
       (table.rows.first.cells.first.blocks.first as WmlParagraph).text,
       'A1',
     );
-    expect(
-      (table.rows.first.cells.first.blocks[1] as WmlParagraph).text,
-      'B1',
-    );
+    expect((table.rows.first.cells.first.blocks[1] as WmlParagraph).text, 'B1');
     expect(WordTable.canUnmerge(table, 0, 0), isTrue);
     WordTable.unmerge(table, 0, 0);
     expect(table.rows.first.cells.length, 2);

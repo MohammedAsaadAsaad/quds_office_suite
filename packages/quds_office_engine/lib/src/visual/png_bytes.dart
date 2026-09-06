@@ -7,6 +7,7 @@ import 'office_visual.dart';
 
 /// Minimal RGB PNG writer used for demo pictures (no `dart:ui`).
 abstract final class PngBytes {
+  /// rgb API.
   static Uint8List rgb({
     required int width,
     required int height,
@@ -56,6 +57,7 @@ abstract final class PngBytes {
     return diagram(title: visual.title, width: w, height: h, kind: visual.kind);
   }
 
+  /// chart API.
   static Uint8List chart(
     List<ChartPoint> points, {
     String title = '',
@@ -86,16 +88,7 @@ abstract final class PngBytes {
           return;
         }
         if (kind == OfficeVisualKind.chartBar) {
-          _plotBars(
-            x,
-            y,
-            width,
-            height,
-            pts,
-            maxV,
-            rgb,
-            vertical: false,
-          );
+          _plotBars(x, y, width, height, pts, maxV, rgb, vertical: false);
           return;
         }
         if (kind == OfficeVisualKind.chartPie) {
@@ -111,6 +104,7 @@ abstract final class PngBytes {
     );
   }
 
+  /// diagram API.
   static Uint8List diagram({
     String title = '',
     int width = 360,
@@ -156,7 +150,10 @@ abstract final class PngBytes {
           final int boxTop = kind == OfficeVisualKind.diagramHierarchy && i == 1
               ? top + 36
               : top;
-          if (x >= left && x < left + boxW && y >= boxTop && y < boxTop + boxH) {
+          if (x >= left &&
+              x < left + boxW &&
+              y >= boxTop &&
+              y < boxTop + boxH) {
             rgb[0] = colors[i][0];
             rgb[1] = colors[i][1];
             rgb[2] = colors[i][2];
@@ -190,8 +187,9 @@ abstract final class PngBytes {
       final int gap = 6;
       final int barLeft = plotLeft + (i * slot).round() + gap;
       final int barRight = plotLeft + ((i + 1) * slot).round() - gap;
-      final int barH =
-          ((plotBottom - plotTop) * (pts[i].value / maxV)).round().clamp(2, plotBottom - plotTop);
+      final int barH = ((plotBottom - plotTop) * (pts[i].value / maxV))
+          .round()
+          .clamp(2, plotBottom - plotTop);
       if (x >= barLeft && x < barRight && y > plotBottom - barH) {
         _fillColor(pts[i].color, rgb);
       }
@@ -202,8 +200,9 @@ abstract final class PngBytes {
     final int gap = 4;
     final int barTop = plotTop + (i * slot).round() + gap;
     final int barBottom = plotTop + ((i + 1) * slot).round() - gap;
-    final int barW =
-        ((plotRight - plotLeft) * (pts[i].value / maxV)).round().clamp(2, plotRight - plotLeft);
+    final int barW = ((plotRight - plotLeft) * (pts[i].value / maxV))
+        .round()
+        .clamp(2, plotRight - plotLeft);
     if (y >= barTop && y < barBottom && x < plotLeft + barW) {
       _fillColor(pts[i].color, rgb);
     }
@@ -269,8 +268,7 @@ abstract final class PngBytes {
     final int i0 = idx.floor().clamp(0, pts.length - 2);
     final double f = idx - i0;
     final double v = pts[i0].value * (1 - f) + pts[i0 + 1].value * f;
-    final int py =
-        plotBottom - ((plotBottom - plotTop) * (v / maxV)).round();
+    final int py = plotBottom - ((plotBottom - plotTop) * (v / maxV)).round();
     if ((y - py).abs() <= 2) {
       _fillColor(pts[i0].color, rgb);
     }
@@ -279,8 +277,12 @@ abstract final class PngBytes {
   static void _fillColor(String hex, List<int> rgb) {
     final String h = hex.replaceAll('#', '');
     if (h.length >= 6) {
-      rgb[0] = int.tryParse(h.substring(h.length - 6, h.length - 4), radix: 16) ?? 0x2B;
-      rgb[1] = int.tryParse(h.substring(h.length - 4, h.length - 2), radix: 16) ?? 0x57;
+      rgb[0] =
+          int.tryParse(h.substring(h.length - 6, h.length - 4), radix: 16) ??
+          0x2B;
+      rgb[1] =
+          int.tryParse(h.substring(h.length - 4, h.length - 2), radix: 16) ??
+          0x57;
       rgb[2] = int.tryParse(h.substring(h.length - 2), radix: 16) ?? 0x9A;
       return;
     }

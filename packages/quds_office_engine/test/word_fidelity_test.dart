@@ -203,7 +203,10 @@ void main() {
     expect(mid.first.properties.bold, isTrue);
     expect(mid.last.properties.italic, isTrue);
     WmlRunEdit.insertRuns(para, 6, <WmlRun>[
-      WmlRun(text: 'X', properties: WmlRunProps(underline: WmlUnderline.single)),
+      WmlRun(
+        text: 'X',
+        properties: WmlRunProps(underline: WmlUnderline.single),
+      ),
     ]);
     expect(para.text, 'Hello Xworld');
   });
@@ -318,8 +321,9 @@ void main() {
       ],
     );
     final Uint8List bytes = WordSerializer().writeBytes(doc);
-    final String xml =
-        OpcPackage.openBytes(bytes).getPart('/word/document.xml')!.readText();
+    final String xml = OpcPackage.openBytes(
+      bytes,
+    ).getPart('/word/document.xml')!.readText();
     expect(xml.contains('<wp:anchor'), isTrue);
     expect(xml.contains('<wp:wrapSquare'), isTrue);
     expect(xml.contains('<a:lum'), isTrue);
@@ -328,8 +332,11 @@ void main() {
     expect(xml.contains('<a:outerShdw'), isTrue);
     expect(xml.contains('<a:ln'), isTrue);
 
-    final OfficeVisual copy =
-        WordDeserializer().readBytes(bytes).visuals.first.visual;
+    final OfficeVisual copy = WordDeserializer()
+        .readBytes(bytes)
+        .visuals
+        .first
+        .visual;
     expect(copy.picture.cropLeft, closeTo(0.1, 0.01));
     expect(copy.picture.rotationDeg, closeTo(90, 0.2));
     expect(copy.picture.brightness, closeTo(0.2, 0.02));
@@ -367,16 +374,20 @@ void main() {
       ],
     );
     final Uint8List bytes = WordSerializer().writeBytes(doc);
-    final String chart =
-        OpcPackage.openBytes(bytes).getPart('/word/charts/chart1.xml')!.readText();
+    final String chart = OpcPackage.openBytes(
+      bytes,
+    ).getPart('/word/charts/chart1.xml')!.readText();
     expect(chart.contains('<c:legend>'), isTrue);
     expect(chart.contains('legendPos val="r"'), isTrue);
     expect(chart.contains('showVal val="1"'), isTrue);
     expect(chart.contains('<c:majorGridlines/>'), isFalse);
     expect(chart.contains('gapWidth val="80"'), isTrue);
 
-    final OfficeVisual copy =
-        WordDeserializer().readBytes(bytes).visuals.first.visual;
+    final OfficeVisual copy = WordDeserializer()
+        .readBytes(bytes)
+        .visuals
+        .first
+        .visual;
     expect(copy.chart.showLegend, isTrue);
     expect(copy.chart.showDataLabels, isTrue);
     expect(copy.chart.legendPos, ChartLegendPos.right);
@@ -428,7 +439,10 @@ void main() {
     expect(package.getPart('/xl/drawings/drawing1.xml'), isNotNull);
     expect(package.getPart('/xl/charts/chart1.xml'), isNotNull);
     expect(
-      package.getPart('/xl/worksheets/sheet1.xml')!.readText().contains('<drawing'),
+      package
+          .getPart('/xl/worksheets/sheet1.xml')!
+          .readText()
+          .contains('<drawing'),
       isTrue,
     );
 
@@ -436,8 +450,10 @@ void main() {
     expect(copy.sheets.first.drawings, hasLength(2));
     expect(copy.sheets.first.drawings.first.visual.isPicture, isTrue);
     expect(copy.sheets.first.drawings.first.col, 2);
-    expect(copy.sheets.first.drawings.first.visual.picture.rotationDeg,
-        closeTo(15, 0.2));
+    expect(
+      copy.sheets.first.drawings.first.visual.picture.rotationDeg,
+      closeTo(15, 0.2),
+    );
     expect(copy.sheets.first.drawings.last.visual.isChart, isTrue);
     expect(copy.sheets.first.drawings.last.visual.points, isNotEmpty);
   });
@@ -457,7 +473,12 @@ void main() {
                 imageBytes: PngBytes.studioCard(),
                 picture: PictureAdjust(flipV: true, brightness: -0.1),
               ),
-              transform: const PmlTransform(x: 100000, y: 100000, cx: 2000000, cy: 1200000),
+              transform: const PmlTransform(
+                x: 100000,
+                y: 100000,
+                cx: 2000000,
+                cy: 1200000,
+              ),
             ),
             PmlShape(
               id: 3,
@@ -468,7 +489,12 @@ void main() {
                 points: OfficeVisual.sampleSeries(),
                 chart: ChartDisplay(showLegend: false, showAxes: true),
               ),
-              transform: const PmlTransform(x: 300000, y: 2000000, cx: 4000000, cy: 2000000),
+              transform: const PmlTransform(
+                x: 300000,
+                y: 2000000,
+                cx: 4000000,
+                cy: 2000000,
+              ),
             ),
           ],
         ),
@@ -483,7 +509,10 @@ void main() {
     expect(package.getPart('/ppt/charts/chart1.xml'), isNotNull);
 
     final PmlPresentation copy = SlideDeserializer().readBytes(bytes);
-    expect(copy.slides.first.shapes.where((PmlShape s) => s.visual != null), hasLength(2));
+    expect(
+      copy.slides.first.shapes.where((PmlShape s) => s.visual != null),
+      hasLength(2),
+    );
     final OfficeVisual? picture = copy.slides.first.shapes
         .map((PmlShape s) => s.visual)
         .firstWhere((OfficeVisual? v) => v?.isPicture ?? false);
@@ -492,10 +521,11 @@ void main() {
   });
 
   test('Docx builder images deserialize as Word visuals', () {
-    final Uint8List bytes = (DocxDocumentBuilder()
-          ..paragraph('Intro')
-          ..image(PngBytes.studioCard(), name: 'card.png'))
-        .build();
+    final Uint8List bytes =
+        (DocxDocumentBuilder()
+              ..paragraph('Intro')
+              ..image(PngBytes.studioCard(), name: 'card.png'))
+            .build();
     final WmlDocument doc = WordDeserializer().readBytes(bytes);
     expect(doc.visuals, isNotEmpty);
     expect(doc.visuals.first.visual.imageBytes, isNotEmpty);
@@ -517,14 +547,10 @@ void main() {
               fillColor: '1F4E79',
               strokeColor: '000000',
               blocks: <WmlBlock>[
-                WmlParagraph(
-                  inlines: <WmlInline>[WmlRun(text: 'Boxed')],
-                ),
+                WmlParagraph(inlines: <WmlInline>[WmlRun(text: 'Boxed')]),
               ],
             ),
-            WmlParagraph(
-              inlines: <WmlInline>[WmlRun(text: 'Left')],
-            ),
+            WmlParagraph(inlines: <WmlInline>[WmlRun(text: 'Left')]),
             WmlParagraph(
               properties: WmlParagraphProps(columnBreakBefore: true),
               inlines: <WmlInline>[WmlRun(text: 'Right')],
@@ -538,7 +564,9 @@ void main() {
     expect(copy.sections.first.columnCount, 2);
     expect(copy.sections.first.columnSpace, 24);
     expect(copy.sections.first.columnSep, isTrue);
-    final WmlFrame frame = copy.sections.first.blocks.whereType<WmlFrame>().single;
+    final WmlFrame frame = copy.sections.first.blocks
+        .whereType<WmlFrame>()
+        .single;
     expect(frame.x, 40);
     expect(frame.y, 60);
     expect(frame.fillColor, '1F4E79');
@@ -555,7 +583,12 @@ void main() {
     final WmlDocument doc = WmlDocument(
       sections: <WmlSection>[
         WmlSection(
-          margins: const WmlPageMargins(top: 48, bottom: 48, left: 48, right: 48),
+          margins: const WmlPageMargins(
+            top: 48,
+            bottom: 48,
+            left: 48,
+            right: 48,
+          ),
           blocks: <WmlBlock>[
             WmlParagraph(inlines: <WmlInline>[WmlRun(text: 'Section A')]),
           ],

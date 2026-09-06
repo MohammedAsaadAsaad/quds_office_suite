@@ -3,12 +3,11 @@ import 'formula_ast.dart';
 
 /// 150+ Excel-compatible functions.
 abstract final class FormulaFunctions {
-  static Object? call(
-    String name,
-    List<FormulaNode> args,
-    FormulaContext ctx,
-  ) {
-    final List<Object?> vals = args.map((FormulaNode a) => a.eval(ctx)).toList();
+  /// call API.
+  static Object? call(String name, List<FormulaNode> args, FormulaContext ctx) {
+    final List<Object?> vals = args
+        .map((FormulaNode a) => a.eval(ctx))
+        .toList();
     final String n = name.toUpperCase();
     switch (n) {
       case 'SUM':
@@ -33,7 +32,9 @@ abstract final class FormulaFunctions {
         if (a == null || b == null || b == 0) return '#DIV/0!';
         return a - b * (a / b).floor();
       case 'PRODUCT':
-        return flattenNumbers(vals).fold<double>(1, (double p, double x) => p * x);
+        return flattenNumbers(
+          vals,
+        ).fold<double>(1, (double p, double x) => p * x);
       case 'POWER':
       case 'POW':
         return _powNum(_n(vals, 0) ?? 0, _n(vals, 1) ?? 0);
@@ -74,7 +75,9 @@ abstract final class FormulaFunctions {
       case 'QUOTIENT':
         final double? qa = _n(vals, 0);
         final double? qb = _n(vals, 1);
-        return (qa == null || qb == null || qb == 0) ? '#DIV/0!' : (qa / qb).truncate();
+        return (qa == null || qb == null || qb == 0)
+            ? '#DIV/0!'
+            : (qa / qb).truncate();
       case 'MROUND':
         final double? m = _n(vals, 1);
         if (m == null || m == 0) return 0;
@@ -82,7 +85,9 @@ abstract final class FormulaFunctions {
       case 'SUMPRODUCT':
         return _sumproduct(vals);
       case 'SUMSQ':
-        return flattenNumbers(vals).fold<double>(0, (double s, double x) => s + x * x);
+        return flattenNumbers(
+          vals,
+        ).fold<double>(0, (double s, double x) => s + x * x);
       case 'MEDIAN':
         return _median(flattenNumbers(vals));
       case 'AVEDEV':
@@ -137,9 +142,13 @@ abstract final class FormulaFunctions {
       case 'COUNT':
         return flattenNumbers(vals).length.toDouble();
       case 'COUNTA':
-        return flattenValues(vals).where((Object? v) => v != null && v != '').length.toDouble();
+        return flattenValues(
+          vals,
+        ).where((Object? v) => v != null && v != '').length.toDouble();
       case 'COUNTBLANK':
-        return flattenValues(vals).where((Object? v) => v == null || v == '').length.toDouble();
+        return flattenValues(
+          vals,
+        ).where((Object? v) => v == null || v == '').length.toDouble();
       case 'SUMIF':
         return _sumIf(ctx, args);
       case 'COUNTIF':
@@ -178,7 +187,8 @@ abstract final class FormulaFunctions {
       case 'PROPER':
         return formulaString(vals[0]).split(' ').map(_cap).join(' ');
       case 'EXACT':
-        return formulaString(vals[0]) == formulaString(vals.length > 1 ? vals[1] : '');
+        return formulaString(vals[0]) ==
+            formulaString(vals.length > 1 ? vals[1] : '');
       case 'FIND':
       case 'SEARCH':
         final int at = formulaString(vals.length > 1 ? vals[1] : '').indexOf(
@@ -191,14 +201,21 @@ abstract final class FormulaFunctions {
         final String base = formulaString(vals[0]);
         final int rs = ((_n(vals, 1)?.toInt() ?? 1) - 1).clamp(0, base.length);
         final int rl = _n(vals, 2)?.toInt() ?? 0;
-        return base.replaceRange(rs, (rs + rl).clamp(0, base.length), formulaString(vals.length > 3 ? vals[3] : ''));
+        return base.replaceRange(
+          rs,
+          (rs + rl).clamp(0, base.length),
+          formulaString(vals.length > 3 ? vals[3] : ''),
+        );
       case 'SUBSTITUTE':
         return formulaString(vals[0]).replaceAll(
           formulaString(vals.length > 1 ? vals[1] : ''),
           formulaString(vals.length > 2 ? vals[2] : ''),
         );
       case 'REPT':
-        return List<String>.filled(_n(vals, 1)?.toInt() ?? 0, formulaString(vals[0])).join();
+        return List<String>.filled(
+          _n(vals, 1)?.toInt() ?? 0,
+          formulaString(vals[0]),
+        ).join();
       case 'VALUE':
         return asFormulaNumber(vals[0]) ?? '#VALUE!';
       case 'CHAR':
@@ -246,29 +263,29 @@ abstract final class FormulaFunctions {
         return (vals.isEmpty
                 ? ctx.origin.row
                 : (args[0] is CellNode
-                    ? (args[0] as CellNode).ref.row
-                    : ctx.origin.row)) +
+                      ? (args[0] as CellNode).ref.row
+                      : ctx.origin.row)) +
             1;
       case 'COLUMN':
         return (vals.isEmpty
                 ? ctx.origin.col
                 : (args[0] is CellNode
-                    ? (args[0] as CellNode).ref.col
-                    : ctx.origin.col)) +
+                      ? (args[0] as CellNode).ref.col
+                      : ctx.origin.col)) +
             1;
       case 'ROWS':
         return args.isNotEmpty && args[0] is RangeNode
             ? ((args[0] as RangeNode).range.end.row -
-                    (args[0] as RangeNode).range.start.row)
-                .abs() +
-                1
+                          (args[0] as RangeNode).range.start.row)
+                      .abs() +
+                  1
             : 1;
       case 'COLUMNS':
         return args.isNotEmpty && args[0] is RangeNode
             ? ((args[0] as RangeNode).range.end.col -
-                    (args[0] as RangeNode).range.start.col)
-                .abs() +
-                1
+                          (args[0] as RangeNode).range.start.col)
+                      .abs() +
+                  1
             : 1;
       case 'ISBLANK':
         return vals[0] == null || vals[0] == '';
@@ -296,10 +313,11 @@ abstract final class FormulaFunctions {
         return 64;
       case 'DATE':
         return DateTime(
-          _n(vals, 0)?.toInt() ?? 1900,
-          _n(vals, 1)?.toInt() ?? 1,
-          _n(vals, 2)?.toInt() ?? 1,
-        ).millisecondsSinceEpoch / 86400000;
+              _n(vals, 0)?.toInt() ?? 1900,
+              _n(vals, 1)?.toInt() ?? 1,
+              _n(vals, 2)?.toInt() ?? 1,
+            ).millisecondsSinceEpoch /
+            86400000;
       case 'TODAY':
       case 'NOW':
         return DateTime.now().millisecondsSinceEpoch / 86400000;
@@ -431,7 +449,9 @@ abstract final class FormulaFunctions {
 
   static Object? _avg(List<Object?> vals) {
     final List<double> n = flattenNumbers(vals);
-    return n.isEmpty ? '#DIV/0!' : n.fold(0.0, (double s, double x) => s + x) / n.length;
+    return n.isEmpty
+        ? '#DIV/0!'
+        : n.fold(0.0, (double s, double x) => s + x) / n.length;
   }
 
   static Object? _minmax(List<Object?> vals, bool min) {
@@ -457,6 +477,7 @@ abstract final class FormulaFunctions {
     return v != null;
   }
 
+  /// startsWith API.
   static bool _isErr(Object? v) => v is String && v.startsWith('#');
 
   static int _clamp(int v, int max) => v < 0 ? 0 : (v > max ? max : v);
@@ -532,7 +553,9 @@ abstract final class FormulaFunctions {
         .map((Object? v) => flattenNumbers(<Object?>[v]))
         .toList();
     if (arrays.isEmpty) return 0;
-    final int n = arrays.map((List<double> a) => a.length).reduce((int a, int b) => a < b ? a : b);
+    final int n = arrays
+        .map((List<double> a) => a.length)
+        .reduce((int a, int b) => a < b ? a : b);
     var s = 0.0;
     for (int i = 0; i < n; i++) {
       var p = 1.0;
@@ -566,7 +589,10 @@ abstract final class FormulaFunctions {
     if (n.length < 2 && !pop) return '#DIV/0!';
     if (n.isEmpty) return 0;
     final double avg = n.fold(0.0, (double s, double x) => s + x) / n.length;
-    final double ss = n.fold(0.0, (double s, double x) => s + (x - avg) * (x - avg));
+    final double ss = n.fold(
+      0.0,
+      (double s, double x) => s + (x - avg) * (x - avg),
+    );
     return ss / (pop ? n.length : n.length - 1);
   }
 
@@ -574,8 +600,9 @@ abstract final class FormulaFunctions {
     if (args.isEmpty || args[0] is! RangeNode) return 0;
     final RangeNode range = args[0] as RangeNode;
     final String crit = args.length > 1 ? formulaString(args[1].eval(ctx)) : '';
-    final RangeNode sumRange =
-        args.length > 2 && args[2] is RangeNode ? args[2] as RangeNode : range;
+    final RangeNode sumRange = args.length > 2 && args[2] is RangeNode
+        ? args[2] as RangeNode
+        : range;
     var s = 0.0;
     final List<SmlCellRef> keys = range.range.cells.toList();
     final List<SmlCellRef> sums = sumRange.range.cells.toList();
@@ -613,28 +640,37 @@ abstract final class FormulaFunctions {
 
   static bool _matchCrit(Object? value, String crit) {
     if (crit.startsWith('>=')) {
-      return (asFormulaNumber(value) ?? 0) >= (double.tryParse(crit.substring(2)) ?? 0);
+      return (asFormulaNumber(value) ?? 0) >=
+          (double.tryParse(crit.substring(2)) ?? 0);
     }
     if (crit.startsWith('<=')) {
-      return (asFormulaNumber(value) ?? 0) <= (double.tryParse(crit.substring(2)) ?? 0);
+      return (asFormulaNumber(value) ?? 0) <=
+          (double.tryParse(crit.substring(2)) ?? 0);
     }
     if (crit.startsWith('<>')) {
       return formulaString(value) != crit.substring(2);
     }
     if (crit.startsWith('>')) {
-      return (asFormulaNumber(value) ?? 0) > (double.tryParse(crit.substring(1)) ?? 0);
+      return (asFormulaNumber(value) ?? 0) >
+          (double.tryParse(crit.substring(1)) ?? 0);
     }
     if (crit.startsWith('<')) {
-      return (asFormulaNumber(value) ?? 0) < (double.tryParse(crit.substring(1)) ?? 0);
+      return (asFormulaNumber(value) ?? 0) <
+          (double.tryParse(crit.substring(1)) ?? 0);
     }
     if (crit.contains('*')) {
       final String re = RegExp.escape(crit).replaceAll('\\*', '.*');
       return RegExp('^$re\$').hasMatch(formulaString(value));
     }
-    return formulaString(value) == crit || asFormulaNumber(value) == double.tryParse(crit);
+    return formulaString(value) == crit ||
+        asFormulaNumber(value) == double.tryParse(crit);
   }
 
-  static Object? _vlookup(FormulaContext ctx, List<FormulaNode> args, bool horiz) {
+  static Object? _vlookup(
+    FormulaContext ctx,
+    List<FormulaNode> args,
+    bool horiz,
+  ) {
     if (args.length < 3 || args[1] is! RangeNode) return '#N/A';
     final Object? key = args[0].eval(ctx);
     final RangeNode table = args[1] as RangeNode;
@@ -644,19 +680,33 @@ abstract final class FormulaFunctions {
     final int rows = (table.range.end.row - table.range.start.row).abs() + 1;
     if (horiz) {
       for (int c = 0; c < cols; c++) {
-        if (formulaString(ctx.valueOf(SmlCellRef(table.range.start.col + c, table.range.start.row))) ==
+        if (formulaString(
+              ctx.valueOf(
+                SmlCellRef(table.range.start.col + c, table.range.start.row),
+              ),
+            ) ==
             formulaString(key)) {
           return ctx.valueOf(
-            SmlCellRef(table.range.start.col + c, table.range.start.row + index - 1),
+            SmlCellRef(
+              table.range.start.col + c,
+              table.range.start.row + index - 1,
+            ),
           );
         }
       }
     } else {
       for (int r = 0; r < rows; r++) {
-        if (formulaString(ctx.valueOf(SmlCellRef(table.range.start.col, table.range.start.row + r))) ==
+        if (formulaString(
+              ctx.valueOf(
+                SmlCellRef(table.range.start.col, table.range.start.row + r),
+              ),
+            ) ==
             formulaString(key)) {
           return ctx.valueOf(
-            SmlCellRef(table.range.start.col + index - 1, table.range.start.row + r),
+            SmlCellRef(
+              table.range.start.col + index - 1,
+              table.range.start.row + r,
+            ),
           );
         }
       }
@@ -675,9 +725,13 @@ abstract final class FormulaFunctions {
 
   static Object? _match(List<Object?> vals) {
     final Object? key = vals[0];
-    final List<Object?> arr = flattenValues(vals.length > 1 ? vals[1] : <Object?>[]);
+    final List<Object?> arr = flattenValues(
+      vals.length > 1 ? vals[1] : <Object?>[],
+    );
     for (int i = 0; i < arr.length; i++) {
-      if (formulaString(arr[i]) == formulaString(key)) return (i + 1).toDouble();
+      if (formulaString(arr[i]) == formulaString(key)) {
+        return (i + 1).toDouble();
+      }
     }
     return '#N/A';
   }
@@ -685,7 +739,9 @@ abstract final class FormulaFunctions {
   static Object? _xlookup(List<Object?> vals) {
     final Object? found = _match(vals);
     if (found is! num) return found;
-    final List<Object?> ret = flattenValues(vals.length > 2 ? vals[2] : vals[1]);
+    final List<Object?> ret = flattenValues(
+      vals.length > 2 ? vals[2] : vals[1],
+    );
     final int i = found.toInt() - 1;
     return (i >= 0 && i < ret.length) ? ret[i] : '#N/A';
   }
@@ -696,7 +752,10 @@ abstract final class FormulaFunctions {
     if (v is DateTime) return v;
     final double? n = asFormulaNumber(v);
     if (n == null) return null;
-    return DateTime.fromMillisecondsSinceEpoch((n * 86400000).round(), isUtc: true);
+    return DateTime.fromMillisecondsSinceEpoch(
+      (n * 86400000).round(),
+      isUtc: true,
+    );
   }
 
   static Object? _fin(String name, List<Object?> vals) {

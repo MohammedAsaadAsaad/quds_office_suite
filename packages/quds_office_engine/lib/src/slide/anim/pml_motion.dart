@@ -32,6 +32,7 @@ enum PmlTransitionKind {
   doors,
 }
 
+/// Enum PmlTransitionDir.
 enum PmlTransitionDir {
   left,
   right,
@@ -43,8 +44,10 @@ enum PmlTransitionDir {
   outward,
 }
 
+/// Enum PmlAnimClass.
 enum PmlAnimClass { entrance, emphasis, exit, motion }
 
+/// Enum PmlAnimPreset.
 enum PmlAnimPreset {
   appear,
   fade,
@@ -71,9 +74,12 @@ enum PmlAnimPreset {
   pathArc,
 }
 
+/// Enum PmlAnimTrigger.
 enum PmlAnimTrigger { onClick, withPrevious, afterPrevious }
 
+/// Class PmlSlideTransition.
 class PmlSlideTransition {
+  /// PmlSlideTransition API.
   const PmlSlideTransition({
     this.kind = PmlTransitionKind.none,
     this.direction = PmlTransitionDir.left,
@@ -82,14 +88,25 @@ class PmlSlideTransition {
     this.advanceAfterMs,
   });
 
+  /// kind API.
   final PmlTransitionKind kind;
+
+  /// direction API.
   final PmlTransitionDir direction;
+
+  /// durationMs API.
   final int durationMs;
+
+  /// advanceOnClick API.
   final bool advanceOnClick;
+
+  /// advanceAfterMs API.
   final int? advanceAfterMs;
 
+  /// isNone API.
   bool get isNone => kind == PmlTransitionKind.none;
 
+  /// copyWith API.
   PmlSlideTransition copyWith({
     PmlTransitionKind? kind,
     PmlTransitionDir? direction,
@@ -103,13 +120,16 @@ class PmlSlideTransition {
       direction: direction ?? this.direction,
       durationMs: durationMs ?? this.durationMs,
       advanceOnClick: advanceOnClick ?? this.advanceOnClick,
-      advanceAfterMs:
-          clearAdvanceAfter ? null : (advanceAfterMs ?? this.advanceAfterMs),
+      advanceAfterMs: clearAdvanceAfter
+          ? null
+          : (advanceAfterMs ?? this.advanceAfterMs),
     );
   }
 }
 
+/// Class PmlShapeAnimation.
 class PmlShapeAnimation {
+  /// PmlShapeAnimation API.
   PmlShapeAnimation({
     required this.shapeId,
     required this.preset,
@@ -120,42 +140,54 @@ class PmlShapeAnimation {
     this.order = 0,
   });
 
+  /// shapeId API.
   int shapeId;
+
+  /// preset API.
   PmlAnimPreset preset;
+
+  /// trigger API.
   PmlAnimTrigger trigger;
+
+  /// direction API.
   PmlTransitionDir direction;
+
+  /// durationMs API.
   int durationMs;
+
+  /// delayMs API.
   int delayMs;
+
+  /// order API.
   int order;
 
+  /// category API.
   PmlAnimClass get category => switch (preset) {
-        PmlAnimPreset.appear ||
-        PmlAnimPreset.fade ||
-        PmlAnimPreset.flyIn ||
-        PmlAnimPreset.floatIn ||
-        PmlAnimPreset.peekIn ||
-        PmlAnimPreset.riseUp ||
-        PmlAnimPreset.split ||
-        PmlAnimPreset.wipe ||
-        PmlAnimPreset.grow ||
-        PmlAnimPreset.growTurn ||
-        PmlAnimPreset.zoom ||
-        PmlAnimPreset.swivel ||
-        PmlAnimPreset.bounce =>
-          PmlAnimClass.entrance,
-        PmlAnimPreset.pulse ||
-        PmlAnimPreset.spin ||
-        PmlAnimPreset.teeter ||
-        PmlAnimPreset.growShrink =>
-          PmlAnimClass.emphasis,
-        PmlAnimPreset.disappear ||
-        PmlAnimPreset.fadeOut ||
-        PmlAnimPreset.flyOut ||
-        PmlAnimPreset.shrink =>
-          PmlAnimClass.exit,
-        PmlAnimPreset.pathLine || PmlAnimPreset.pathArc => PmlAnimClass.motion,
-      };
+    PmlAnimPreset.appear ||
+    PmlAnimPreset.fade ||
+    PmlAnimPreset.flyIn ||
+    PmlAnimPreset.floatIn ||
+    PmlAnimPreset.peekIn ||
+    PmlAnimPreset.riseUp ||
+    PmlAnimPreset.split ||
+    PmlAnimPreset.wipe ||
+    PmlAnimPreset.grow ||
+    PmlAnimPreset.growTurn ||
+    PmlAnimPreset.zoom ||
+    PmlAnimPreset.swivel ||
+    PmlAnimPreset.bounce => PmlAnimClass.entrance,
+    PmlAnimPreset.pulse ||
+    PmlAnimPreset.spin ||
+    PmlAnimPreset.teeter ||
+    PmlAnimPreset.growShrink => PmlAnimClass.emphasis,
+    PmlAnimPreset.disappear ||
+    PmlAnimPreset.fadeOut ||
+    PmlAnimPreset.flyOut ||
+    PmlAnimPreset.shrink => PmlAnimClass.exit,
+    PmlAnimPreset.pathLine || PmlAnimPreset.pathArc => PmlAnimClass.motion,
+  };
 
+  /// copyWith API.
   PmlShapeAnimation copyWith({
     int? shapeId,
     PmlAnimPreset? preset,
@@ -177,7 +209,9 @@ class PmlShapeAnimation {
   }
 }
 
+/// Class PmlMotionCatalog.
 class PmlMotionCatalog {
+  /// transitions API.
   static const List<PmlTransitionKind> transitions = <PmlTransitionKind>[
     PmlTransitionKind.none,
     PmlTransitionKind.morph,
@@ -207,6 +241,7 @@ class PmlMotionCatalog {
     PmlTransitionKind.doors,
   ];
 
+  /// entrance API.
   static const List<PmlAnimPreset> entrance = <PmlAnimPreset>[
     PmlAnimPreset.appear,
     PmlAnimPreset.fade,
@@ -223,6 +258,7 @@ class PmlMotionCatalog {
     PmlAnimPreset.bounce,
   ];
 
+  /// emphasis API.
   static const List<PmlAnimPreset> emphasis = <PmlAnimPreset>[
     PmlAnimPreset.pulse,
     PmlAnimPreset.spin,
@@ -230,6 +266,7 @@ class PmlMotionCatalog {
     PmlAnimPreset.growShrink,
   ];
 
+  /// exit API.
   static const List<PmlAnimPreset> exit = <PmlAnimPreset>[
     PmlAnimPreset.disappear,
     PmlAnimPreset.fadeOut,
@@ -237,11 +274,13 @@ class PmlMotionCatalog {
     PmlAnimPreset.shrink,
   ];
 
+  /// motion API.
   static const List<PmlAnimPreset> motion = <PmlAnimPreset>[
     PmlAnimPreset.pathLine,
     PmlAnimPreset.pathArc,
   ];
 
+  /// usesDirection API.
   static bool usesDirection(PmlTransitionKind kind) {
     return switch (kind) {
       PmlTransitionKind.push ||
@@ -254,12 +293,12 @@ class PmlMotionCatalog {
       PmlTransitionKind.strips ||
       PmlTransitionKind.randomBars ||
       PmlTransitionKind.reveal ||
-      PmlTransitionKind.doors =>
-        true,
+      PmlTransitionKind.doors => true,
       _ => false,
     };
   }
 
+  /// animUsesDirection API.
   static bool animUsesDirection(PmlAnimPreset preset) {
     return preset == PmlAnimPreset.flyIn ||
         preset == PmlAnimPreset.floatIn ||
@@ -271,7 +310,11 @@ class PmlMotionCatalog {
         preset == PmlAnimPreset.pathArc;
   }
 
-  static String transitionLabel(PmlTransitionKind kind, {required bool arabic}) {
+  /// transitionLabel API.
+  static String transitionLabel(
+    PmlTransitionKind kind, {
+    required bool arabic,
+  }) {
     return switch (kind) {
       PmlTransitionKind.none => arabic ? 'بدون' : 'None',
       PmlTransitionKind.morph => arabic ? 'تحوّل' : 'Morph',
@@ -303,6 +346,7 @@ class PmlMotionCatalog {
     };
   }
 
+  /// animLabel API.
   static String animLabel(PmlAnimPreset preset, {required bool arabic}) {
     return switch (preset) {
       PmlAnimPreset.appear => arabic ? 'ظهور' : 'Appear',
@@ -331,6 +375,7 @@ class PmlMotionCatalog {
     };
   }
 
+  /// classLabel API.
   static String classLabel(PmlAnimClass cls, {required bool arabic}) {
     return switch (cls) {
       PmlAnimClass.entrance => arabic ? 'دخول' : 'Entrance',
@@ -341,7 +386,9 @@ class PmlMotionCatalog {
   }
 }
 
+/// Class PmlAnimSample.
 class PmlAnimSample {
+  /// PmlAnimSample API.
   const PmlAnimSample({
     this.visible = true,
     this.opacity = 1,
@@ -355,34 +402,69 @@ class PmlAnimSample {
     this.clipDir = PmlTransitionDir.left,
   });
 
+  /// hidden API.
   static const PmlAnimSample hidden = PmlAnimSample(visible: false, opacity: 0);
+
+  /// identity API.
   static const PmlAnimSample identity = PmlAnimSample();
 
+  /// visible API.
   final bool visible;
+
+  /// opacity API.
   final double opacity;
+
+  /// dx API.
   final double dx;
+
+  /// dy API.
   final double dy;
+
+  /// scale API.
   final double scale;
+
+  /// rotationDeg API.
   final double rotationDeg;
+
+  /// reveal API.
   final double reveal;
+
+  /// wipeClip API.
   final bool wipeClip;
+
+  /// splitClip API.
   final bool splitClip;
+
+  /// clipDir API.
   final PmlTransitionDir clipDir;
 
+  /// usesClip API.
   bool get usesClip => wipeClip || splitClip;
 }
 
 class _TimedAnim {
   _TimedAnim(this.anim, this.startMs);
+
+  /// anim API.
   final PmlShapeAnimation anim;
+
+  /// startMs API.
   final int startMs;
+
+  /// endMs API.
   int get endMs => startMs + anim.durationMs;
 }
 
 class _AnimGroup {
   _AnimGroup({required this.waitForClick, required this.items});
+
+  /// waitForClick API.
   final bool waitForClick;
+
+  /// items API.
   final List<_TimedAnim> items;
+
+  /// spanMs API.
   int get spanMs {
     var max = 0;
     for (final _TimedAnim item in items) {
@@ -396,12 +478,19 @@ class _AnimGroup {
 
 /// Click-driven slideshow clock for transitions and shape animations.
 class PmlSlideShow {
+  /// PmlSlideShow API.
   PmlSlideShow(this.presentation);
 
+  /// presentation API.
   final PmlPresentation presentation;
 
+  /// slideIndex API.
   var slideIndex = 0;
+
+  /// presenting API.
   var presenting = false;
+
+  /// finished API.
   var finished = false;
   var _transitioning = false;
   var _transitionElapsed = 0;
@@ -424,14 +513,26 @@ class PmlSlideShow {
   List<_AnimGroup> _groups = const <_AnimGroup>[];
   List<PmlShapeAnimation> _samplingAnims = const <PmlShapeAnimation>[];
 
+  /// previewHoldMs API.
   static const int previewHoldMs = 350;
 
+  /// isPreview API.
   bool get isPreview => _previewOnly;
+
+  /// isTransitioning API.
   bool get isTransitioning => _transitioning;
+
+  /// isTransitionReverse API.
   bool get isTransitionReverse => _transitioning && _transitionReverse;
+
+  /// isRewinding API.
   bool get isRewinding => _rewinding;
+
+  /// playingTransition API.
   PmlSlideTransition? get playingTransition =>
       _transitioning ? currentSlide.transition : null;
+
+  /// transitionProgress API.
   double get transitionProgress {
     if (!_transitioning) {
       return 1;
@@ -444,13 +545,18 @@ class PmlSlideShow {
     return _transitionReverse ? 1.0 - raw : raw;
   }
 
+  /// currentSlide API.
   PmlSlide get currentSlide {
     if (presentation.slides.isEmpty) {
       return PmlSlide(id: 256);
     }
-    return presentation.slides[slideIndex.clamp(0, presentation.slides.length - 1)];
+    return presentation.slides[slideIndex.clamp(
+      0,
+      presentation.slides.length - 1,
+    )];
   }
 
+  /// outgoingSlide API.
   PmlSlide? get outgoingSlide {
     if (!_transitioning) {
       return null;
@@ -464,6 +570,7 @@ class PmlSlideShow {
     )];
   }
 
+  /// start API.
   void start({
     int from = 0,
     bool withTransition = false,
@@ -484,6 +591,7 @@ class PmlSlideShow {
     _enterSlide(playTransition: withTransition);
   }
 
+  /// stop API.
   void stop() {
     presenting = false;
     _transitioning = false;
@@ -492,6 +600,7 @@ class PmlSlideShow {
     _clearRewind();
   }
 
+  /// next API.
   bool next() {
     if (!presenting || finished) {
       return false;
@@ -524,6 +633,7 @@ class PmlSlideShow {
     return false;
   }
 
+  /// previous API.
   bool previous() {
     if (!presenting) {
       return false;
@@ -545,10 +655,7 @@ class PmlSlideShow {
       _startRewindLastGroup();
       return true;
     }
-    final int? dest = presentation.visibleIndexAfter(
-      slideIndex,
-      direction: -1,
-    );
+    final int? dest = presentation.visibleIndexAfter(slideIndex, direction: -1);
     if (dest != null) {
       _startReverseTransition(dest);
       return true;
@@ -562,6 +669,7 @@ class PmlSlideShow {
     _holdingPreview = false;
   }
 
+  /// elapse API.
   void elapse(int ms) {
     if (!presenting || finished || ms <= 0) {
       return;
@@ -608,6 +716,7 @@ class PmlSlideShow {
     }
   }
 
+  /// sample API.
   PmlAnimSample sample(int shapeId) {
     if (!presenting) {
       return PmlAnimSample.identity;
@@ -630,14 +739,13 @@ class PmlSlideShow {
 
   List<PmlShapeAnimation> _animsForSlide() {
     final int? only = _onlyAnimationIndex;
-    if (only != null &&
-        only >= 0 &&
-        only < currentSlide.animations.length) {
+    if (only != null && only >= 0 && only < currentSlide.animations.length) {
       return <PmlShapeAnimation>[currentSlide.animations[only]];
     }
     return currentSlide.animations;
   }
 
+  /// atEnd API.
   void _enterSlide({required bool playTransition, bool atEnd = false}) {
     _samplingAnims = _animsForSlide();
     _groups = _buildGroups(_samplingAnims);
@@ -708,8 +816,10 @@ class PmlSlideShow {
     if (group >= 0 && group < _groups.length) {
       final int groupStart = group < _clickAt.length ? _clickAt[group] : 0;
       final int span = math.max(1, _groups[group].spanMs);
-      final double rewindP =
-          (_rewindElapsed / _rewindDurationMs).clamp(0.0, 1.0);
+      final double rewindP = (_rewindElapsed / _rewindDurationMs).clamp(
+        0.0,
+        1.0,
+      );
       final int localNow = (_rewindFromMs - groupStart).clamp(0, span);
       _slideElapsed = groupStart + (localNow * (1.0 - rewindP)).round();
     }
@@ -834,8 +944,9 @@ class PmlSlideShow {
       for (final PmlShapeAnimation a in _samplingAnims)
         if (a.shapeId == shapeId) a,
     ];
-    final bool hasEntrance =
-        mine.any((PmlShapeAnimation a) => a.category == PmlAnimClass.entrance);
+    final bool hasEntrance = mine.any(
+      (PmlShapeAnimation a) => a.category == PmlAnimClass.entrance,
+    );
     var visible = !hasEntrance;
     var opacity = 1.0;
     var dx = 0.0;
@@ -863,9 +974,14 @@ class PmlSlideShow {
         final double t = done
             ? 1
             : started
-                ? _ease(((clock - start) / dur).clamp(0.0, 1.0))
-                : 0;
-        final PmlAnimSample part = _applyPreset(item.anim, t, started: started, done: done);
+            ? _ease(((clock - start) / dur).clamp(0.0, 1.0))
+            : 0;
+        final PmlAnimSample part = _applyPreset(
+          item.anim,
+          t,
+          started: started,
+          done: done,
+        );
         if (!started) {
           continue;
         }
@@ -928,7 +1044,10 @@ class PmlSlideShow {
 
   static List<_AnimGroup> _buildGroups(List<PmlShapeAnimation> source) {
     final List<PmlShapeAnimation> anims = List<PmlShapeAnimation>.from(source)
-      ..sort((PmlShapeAnimation a, PmlShapeAnimation b) => a.order.compareTo(b.order));
+      ..sort(
+        (PmlShapeAnimation a, PmlShapeAnimation b) =>
+            a.order.compareTo(b.order),
+      );
     final List<_AnimGroup> groups = <_AnimGroup>[];
     var items = <_TimedAnim>[];
     var wait = true;
@@ -978,7 +1097,12 @@ class PmlSlideShow {
       case PmlAnimPreset.fade:
         return PmlAnimSample(opacity: t, visible: started);
       case PmlAnimPreset.flyIn:
-        return PmlAnimSample(opacity: t, dx: ox * from, dy: oy * from, visible: started);
+        return PmlAnimSample(
+          opacity: t,
+          dx: ox * from,
+          dy: oy * from,
+          visible: started,
+        );
       case PmlAnimPreset.floatIn:
         return PmlAnimSample(
           opacity: t,
@@ -1004,7 +1128,11 @@ class PmlSlideShow {
           clipDir: anim.direction,
         );
       case PmlAnimPreset.grow:
-        return PmlAnimSample(opacity: t, scale: 0.2 + 0.8 * t, visible: started);
+        return PmlAnimSample(
+          opacity: t,
+          scale: 0.2 + 0.8 * t,
+          visible: started,
+        );
       case PmlAnimPreset.growTurn:
         return PmlAnimSample(
           opacity: t,
@@ -1013,7 +1141,11 @@ class PmlSlideShow {
           visible: started,
         );
       case PmlAnimPreset.zoom:
-        return PmlAnimSample(opacity: t, scale: 0.05 + 0.95 * t, visible: started);
+        return PmlAnimSample(
+          opacity: t,
+          scale: 0.05 + 0.95 * t,
+          visible: started,
+        );
       case PmlAnimPreset.swivel:
         return PmlAnimSample(
           opacity: t,
@@ -1022,18 +1154,31 @@ class PmlSlideShow {
           visible: started,
         );
       case PmlAnimPreset.bounce:
-        final double bounce = t < 1 ? (1 - t) * math.sin(t * math.pi * 3) * 0.18 : 0;
-        return PmlAnimSample(opacity: t, dy: bounce, scale: 0.7 + 0.3 * t, visible: started);
+        final double bounce = t < 1
+            ? (1 - t) * math.sin(t * math.pi * 3) * 0.18
+            : 0;
+        return PmlAnimSample(
+          opacity: t,
+          dy: bounce,
+          scale: 0.7 + 0.3 * t,
+          visible: started,
+        );
       case PmlAnimPreset.pulse:
-        final double p = started && !done ? 1 + 0.12 * math.sin(t * math.pi) : 1;
+        final double p = started && !done
+            ? 1 + 0.12 * math.sin(t * math.pi)
+            : 1;
         return PmlAnimSample(scale: p);
       case PmlAnimPreset.spin:
         return PmlAnimSample(rotationDeg: started ? 360 * t : 0);
       case PmlAnimPreset.teeter:
-        final double tilt = started && !done ? 8 * math.sin(t * math.pi * 4) : 0;
+        final double tilt = started && !done
+            ? 8 * math.sin(t * math.pi * 4)
+            : 0;
         return PmlAnimSample(rotationDeg: tilt);
       case PmlAnimPreset.growShrink:
-        final double gs = started && !done ? 1 + 0.22 * math.sin(t * math.pi) : 1;
+        final double gs = started && !done
+            ? 1 + 0.22 * math.sin(t * math.pi)
+            : 1;
         return PmlAnimSample(scale: gs);
       case PmlAnimPreset.disappear:
         return done || !started
@@ -1076,5 +1221,6 @@ class PmlSlideShow {
     };
   }
 
+  /// pow API.
   static double _ease(double t) => 1 - math.pow(1 - t, 3).toDouble();
 }

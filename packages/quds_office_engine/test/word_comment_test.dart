@@ -9,7 +9,12 @@ void main() {
     WordComment.applyRange(para, 6, 12, 0);
     final WmlDocument doc = WmlDocument(
       comments: <WmlComment>[
-        WmlComment(id: 0, author: 'Reviewer', initials: 'RV', text: 'Check this'),
+        WmlComment(
+          id: 0,
+          author: 'Reviewer',
+          initials: 'RV',
+          text: 'Check this',
+        ),
       ],
       sections: <WmlSection>[
         WmlSection(blocks: <WmlBlock>[para]),
@@ -136,7 +141,10 @@ void main() {
       for (final WmlParagraph paragraph in root.paragraphs)
         ...paragraph.inlines.whereType<WmlRun>(),
     ];
-    expect(runs.any((WmlRun run) => run.properties.bold && run.text == 'tighten'), isTrue);
+    expect(
+      runs.any((WmlRun run) => run.properties.bold && run.text == 'tighten'),
+      isTrue,
+    );
     expect(root.visuals, isNotEmpty);
     expect(root.visuals.first.visual.isPicture, isTrue);
     expect(root.visuals.first.visual.imageBytes, isNotNull);

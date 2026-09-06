@@ -3,22 +3,54 @@ import '../../xml/xml_writer.dart';
 import '../model/pml_presentation.dart';
 import 'pml_motion.dart';
 
+/// parseSlideMotion helper.
 void parseSlideMotion(String xml, PmlSlide slide) {
+  /// reader API.
   final XmlPullReader reader = XmlPullReader(xml);
+
+  /// inTransition API.
   var inTransition = false;
+
+  /// inTiming API.
   var inTiming = false;
+
+  /// kind API.
   PmlTransitionKind? kind;
+
+  /// dir API.
   var dir = PmlTransitionDir.left;
+
+  /// durationMs API.
   var durationMs = 700;
+
+  /// advClick API.
   var advClick = true;
+
+  /// advAfter API.
   int? advAfter;
+
+  /// pendingSpid API.
   int? pendingSpid;
+
+  /// pendingClass API.
   PmlAnimClass? pendingClass;
+
+  /// pendingPreset API.
   PmlAnimPreset? pendingPreset;
+
+  /// pendingDur API.
   var pendingDur = 500;
+
+  /// pendingDelay API.
   var pendingDelay = 0;
+
+  /// pendingTrigger API.
   var pendingTrigger = PmlAnimTrigger.onClick;
+
+  /// pendingDir API.
   var pendingDir = PmlTransitionDir.left;
+
+  /// order API.
   var order = 0;
   while (reader.next()) {
     if (reader.eventType == XmlEventType.endElement) {
@@ -54,7 +86,8 @@ void parseSlideMotion(String xml, PmlSlide slide) {
     if (reader.localName == 'transition') {
       inTransition = true;
       durationMs = _spdToMs(reader.getAttribute('spd'));
-      final String? dur = reader.getAttribute('dur') ?? reader.getAttribute('p14:dur');
+      final String? dur =
+          reader.getAttribute('dur') ?? reader.getAttribute('p14:dur');
       if (dur != null) {
         durationMs = int.tryParse(dur) ?? durationMs;
       }
@@ -75,7 +108,9 @@ void parseSlideMotion(String xml, PmlSlide slide) {
               parsed == PmlTransitionKind.fade) {
             kind = PmlTransitionKind.fadeThroughBlack;
           }
-          dir = _dirFromXml(reader.getAttribute('dir') ?? reader.getAttribute('orient'));
+          dir = _dirFromXml(
+            reader.getAttribute('dir') ?? reader.getAttribute('orient'),
+          );
         }
       }
     } else if (reader.localName == 'timing') {
@@ -96,7 +131,9 @@ void parseSlideMotion(String xml, PmlSlide slide) {
         if (dur != null && dur > 0) {
           pendingDur = dur;
         }
-        final int? subtype = int.tryParse(reader.getAttribute('presetSubtype') ?? '');
+        final int? subtype = int.tryParse(
+          reader.getAttribute('presetSubtype') ?? '',
+        );
         if (subtype != null) {
           pendingDir = _dirFromSubtype(subtype);
         }
@@ -127,6 +164,7 @@ void parseSlideMotion(String xml, PmlSlide slide) {
   }
 }
 
+/// writeSlideMotion helper.
 void writeSlideMotion(XmlWriter w, PmlSlide slide) {
   if (!slide.transition.isNone) {
     w.writeStartElement('transition', prefix: 'p');
@@ -154,14 +192,32 @@ void writeSlideMotion(XmlWriter w, PmlSlide slide) {
   if (slide.animations.isEmpty) {
     return;
   }
+
+  /// writeStartElement API.
   w.writeStartElement('timing', prefix: 'p');
+
+  /// writeStartElement API.
   w.writeStartElement('tnLst', prefix: 'p');
+
+  /// writeStartElement API.
   w.writeStartElement('par', prefix: 'p');
+
+  /// writeStartElement API.
   w.writeStartElement('cTn', prefix: 'p');
+
+  /// writeAttribute API.
   w.writeAttribute('id', '1');
+
+  /// writeAttribute API.
   w.writeAttribute('dur', 'indefinite');
+
+  /// writeAttribute API.
   w.writeAttribute('nodeType', 'tmRoot');
+
+  /// writeStartElement API.
   w.writeStartElement('childTnLst', prefix: 'p');
+
+  /// id API.
   var id = 2;
   for (final PmlShapeAnimation anim in slide.animations) {
     w.writeStartElement('par', prefix: 'p');
@@ -176,14 +232,11 @@ void writeSlideMotion(XmlWriter w, PmlSlide slide) {
       PmlAnimClass.motion => 'path',
     });
     w.writeAttribute('dur', '${anim.durationMs}');
-    w.writeAttribute(
-      'nodeType',
-      switch (anim.trigger) {
-        PmlAnimTrigger.onClick => 'clickEffect',
-        PmlAnimTrigger.withPrevious => 'withEffect',
-        PmlAnimTrigger.afterPrevious => 'afterEffect',
-      },
-    );
+    w.writeAttribute('nodeType', switch (anim.trigger) {
+      PmlAnimTrigger.onClick => 'clickEffect',
+      PmlAnimTrigger.withPrevious => 'withEffect',
+      PmlAnimTrigger.afterPrevious => 'afterEffect',
+    });
     w.writeStartElement('stCondLst', prefix: 'p');
     w.writeStartElement('cond', prefix: 'p');
     w.writeAttribute('delay', '${anim.delayMs}');
@@ -212,10 +265,20 @@ void writeSlideMotion(XmlWriter w, PmlSlide slide) {
     w.writeEndElement();
     w.writeEndElement();
   }
+
+  /// writeEndElement API.
   w.writeEndElement();
+
+  /// writeEndElement API.
   w.writeEndElement();
+
+  /// writeEndElement API.
   w.writeEndElement();
+
+  /// writeEndElement API.
   w.writeEndElement();
+
+  /// writeEndElement API.
   w.writeEndElement();
 }
 
@@ -251,8 +314,9 @@ PmlTransitionKind? _kindFromXml(String name) {
 
 String _kindToXml(PmlTransitionKind kind) {
   return switch (kind) {
-    PmlTransitionKind.none || PmlTransitionKind.fade || PmlTransitionKind.fadeThroughBlack =>
-      'fade',
+    PmlTransitionKind.none ||
+    PmlTransitionKind.fade ||
+    PmlTransitionKind.fadeThroughBlack => 'fade',
     PmlTransitionKind.cut => 'cut',
     PmlTransitionKind.push => 'push',
     PmlTransitionKind.wipe => 'wipe',

@@ -13,18 +13,27 @@ enum OfficePasteMode {
   keepTextOnly,
 }
 
+/// Enum OfficeClipboardKind.
 enum OfficeClipboardKind { empty, text, richText, cells, shape, visual }
 
+/// Class OfficeClipboardSpan.
 class OfficeClipboardSpan {
+  /// OfficeClipboardSpan API.
   OfficeClipboardSpan({required this.text, required this.props});
 
+  /// text API.
   final String text;
+
+  /// props API.
   final WmlRunProps props;
 
+  /// toRun API.
   WmlRun toRun() => WmlRun(text: text, properties: props.copy());
 }
 
+/// Class OfficeClipboardCell.
 class OfficeClipboardCell {
+  /// OfficeClipboardCell API.
   const OfficeClipboardCell({
     this.value,
     this.formula,
@@ -32,14 +41,22 @@ class OfficeClipboardCell {
     this.text = '',
   });
 
+  /// value API.
   final Object? value;
+
+  /// formula API.
   final String? formula;
+
+  /// type API.
   final SmlCellType type;
+
+  /// text API.
   final String text;
 }
 
 /// In-memory Office payload plus the last plain text written to the OS clipboard.
 class OfficeClipboardPayload {
+  /// OfficeClipboardPayload API.
   OfficeClipboardPayload({
     required this.kind,
     required this.plain,
@@ -52,29 +69,40 @@ class OfficeClipboardPayload {
        cells = cells ?? <List<OfficeClipboardCell>>[],
        wordBlocks = wordBlocks ?? <WmlBlock>[];
 
-  factory OfficeClipboardPayload.empty() => OfficeClipboardPayload(
-        kind: OfficeClipboardKind.empty,
-        plain: '',
-      );
+  /// empty API.
+  factory OfficeClipboardPayload.empty() =>
+      OfficeClipboardPayload(kind: OfficeClipboardKind.empty, plain: '');
 
+  /// fromPlain API.
   factory OfficeClipboardPayload.fromPlain(String text) {
     if (text.isEmpty) {
       return OfficeClipboardPayload.empty();
     }
-    return OfficeClipboardPayload(
-      kind: OfficeClipboardKind.text,
-      plain: text,
-    );
+    return OfficeClipboardPayload(kind: OfficeClipboardKind.text, plain: text);
   }
 
+  /// kind API.
   final OfficeClipboardKind kind;
+
+  /// plain API.
   final String plain;
+
+  /// paragraphs API.
   final List<List<OfficeClipboardSpan>> paragraphs;
+
+  /// cells API.
   final List<List<OfficeClipboardCell>> cells;
+
+  /// wordBlocks API.
   final List<WmlBlock> wordBlocks;
+
+  /// shape API.
   final PmlShape? shape;
+
+  /// visual API.
   final OfficeVisual? visual;
 
+  /// isEmpty API.
   bool get isEmpty {
     return plain.isEmpty &&
         paragraphs.every((List<OfficeClipboardSpan> p) => p.isEmpty) &&
@@ -84,26 +112,29 @@ class OfficeClipboardPayload {
         visual == null;
   }
 
+  /// hasWordBlocks API.
   bool get hasWordBlocks => wordBlocks.isNotEmpty;
 
+  /// hasRichText API.
   bool get hasRichText =>
       kind == OfficeClipboardKind.richText &&
       (wordBlocks.isNotEmpty || paragraphs.isNotEmpty);
 
+  /// hasCells API.
   bool get hasCells => cells.isNotEmpty;
 
+  /// splitPlainLines API.
   static List<String> splitPlainLines(String text) {
     return text.replaceAll('\r\n', '\n').replaceAll('\r', '\n').split('\n');
   }
 
+  /// parseTsv API.
   static List<List<String>> parseTsv(String text) {
     final List<String> lines = splitPlainLines(text);
     while (lines.isNotEmpty && lines.last.isEmpty) {
       lines.removeLast();
     }
-    return <List<String>>[
-      for (final String line in lines) line.split('\t'),
-    ];
+    return <List<String>>[for (final String line in lines) line.split('\t')];
   }
 }
 
@@ -111,15 +142,21 @@ class OfficeClipboardPayload {
 class OfficeClipboard {
   OfficeClipboard._();
 
+  /// instance API.
   static final OfficeClipboard instance = OfficeClipboard._();
 
   OfficeClipboardPayload? _local;
+
+  /// useSystem API.
   var useSystem = true;
 
+  /// local API.
   OfficeClipboardPayload? get local => _local;
 
+  /// hasContent API.
   bool get hasContent => _local != null && !_local!.isEmpty;
 
+  /// write API.
   Future<void> write(OfficeClipboardPayload payload) async {
     _local = payload;
     if (useSystem) {
@@ -127,10 +164,12 @@ class OfficeClipboard {
     }
   }
 
+  /// writeLocal API.
   void writeLocal(OfficeClipboardPayload payload) {
     _local = payload;
   }
 
+  /// read API.
   Future<OfficeClipboardPayload> read() async {
     var system = '';
     if (useSystem) {
@@ -141,7 +180,9 @@ class OfficeClipboard {
       }
     }
     final OfficeClipboardPayload? local = _local;
-    if (local != null && !local.isEmpty && (system.isEmpty || system == local.plain)) {
+    if (local != null &&
+        !local.isEmpty &&
+        (system.isEmpty || system == local.plain)) {
       return local;
     }
     if (system.isNotEmpty) {
@@ -150,12 +191,22 @@ class OfficeClipboard {
     return local ?? OfficeClipboardPayload.empty();
   }
 
+  /// clear API.
   void clear() {
     _local = null;
   }
 }
 
-PmlShape cloneClipboardShape(PmlShape source, {int id = 0, int nudgeEmu = 127000}) {
+/// cloneClipboardShape helper.
+PmlShape cloneClipboardShape(
+  PmlShape source, {
+
+  /// id API.
+  int id = 0,
+
+  /// nudgeEmu API.
+  int nudgeEmu = 127000,
+}) {
   return PmlShape(
     id: id == 0 ? source.id : id,
     name: source.name,

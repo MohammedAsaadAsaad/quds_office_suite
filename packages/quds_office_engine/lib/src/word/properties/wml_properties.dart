@@ -1,85 +1,110 @@
 // WordprocessingML paragraph / run / table properties.
 // Measurements are stored in points (1 twip = 1/20 pt, w:sz is half-points).
 
+/// Enum WmlJustification.
 enum WmlJustification { left, right, center, justify, distributed }
 
+/// Enum WmlUnderline.
 enum WmlUnderline { none, single, double, dotted, wavy }
 
+/// Enum WmlLineSpacingRule.
 enum WmlLineSpacingRule { auto, exact, atLeast }
 
+/// Enum WmlVertAlign.
 enum WmlVertAlign { baseline, superscript, subscript }
 
 /// Word-like script metrics: about two-thirds size, raised or lowered.
 extension WmlVertAlignMetrics on WmlVertAlign {
+  /// fontScale API.
   double get fontScale => switch (this) {
-        WmlVertAlign.baseline => 1,
-        WmlVertAlign.superscript || WmlVertAlign.subscript => 0.65,
-      };
+    WmlVertAlign.baseline => 1,
+    WmlVertAlign.superscript || WmlVertAlign.subscript => 0.65,
+  };
 
+  /// baselineShift API.
   double baselineShift(double baseFontSize) => switch (this) {
-        WmlVertAlign.superscript => -baseFontSize * 0.35,
-        WmlVertAlign.subscript => baseFontSize * 0.14,
-        WmlVertAlign.baseline => 0,
-      };
+    WmlVertAlign.superscript => -baseFontSize * 0.35,
+    WmlVertAlign.subscript => baseFontSize * 0.14,
+    WmlVertAlign.baseline => 0,
+  };
 
+  /// paintTop API.
   double paintTop({
     required double lineY,
     required double lineHeight,
     required double fontSize,
-  }) =>
-      switch (this) {
-        WmlVertAlign.baseline => lineY,
-        WmlVertAlign.superscript => lineY,
-        WmlVertAlign.subscript =>
-          lineY + (lineHeight - fontSize).clamp(0, lineHeight),
-      };
+  }) => switch (this) {
+    WmlVertAlign.baseline => lineY,
+    WmlVertAlign.superscript => lineY,
+    WmlVertAlign.subscript =>
+      lineY + (lineHeight - fontSize).clamp(0, lineHeight),
+  };
 }
 
+/// Enum WmlTabAlignment.
 enum WmlTabAlignment { left, center, right, decimal }
 
+/// Enum WmlTabLeader.
 enum WmlTabLeader { none, dot, hyphen, underscore }
 
+/// Enum WmlVMerge.
 enum WmlVMerge { none, restart, cont }
 
+/// Enum WmlBreakType.
 enum WmlBreakType { page, column, textWrapping }
 
+/// Enum WmlFrameAnchor.
 enum WmlFrameAnchor { page, margin }
 
+/// Enum WmlFrameWrap.
 enum WmlFrameWrap { none, square }
 
+/// Class WmlPageSize.
 class WmlPageSize {
+  /// WmlPageSize API.
   const WmlPageSize({this.width = 595.28, this.height = 841.89});
 
+  /// a4 API.
   factory WmlPageSize.a4() => const WmlPageSize();
 
-  factory WmlPageSize.letter() =>
-      const WmlPageSize(width: 612, height: 792);
+  /// letter API.
+  factory WmlPageSize.letter() => const WmlPageSize(width: 612, height: 792);
 
-  factory WmlPageSize.legal() =>
-      const WmlPageSize(width: 612, height: 1008);
+  /// legal API.
+  factory WmlPageSize.legal() => const WmlPageSize(width: 612, height: 1008);
 
-  factory WmlPageSize.a3() =>
-      const WmlPageSize(width: 841.89, height: 1190.55);
+  /// a3 API.
+  factory WmlPageSize.a3() => const WmlPageSize(width: 841.89, height: 1190.55);
 
+  /// width API.
   final double width;
+
+  /// height API.
   final double height;
 
+  /// isLandscape API.
   bool get isLandscape => width > height + 0.5;
 
+  /// portrait API.
   WmlPageSize get portrait =>
       isLandscape ? WmlPageSize(width: height, height: width) : this;
 
+  /// landscape API.
   WmlPageSize get landscape =>
       isLandscape ? this : WmlPageSize(width: height, height: width);
 
+  /// matches API.
   bool matches(WmlPageSize other) =>
       (width - other.width).abs() < 1 && (height - other.height).abs() < 1;
 
+  /// copyWith API.
   WmlPageSize copyWith({double? width, double? height}) =>
       WmlPageSize(width: width ?? this.width, height: height ?? this.height);
 }
 
+/// Class WmlPageMargins.
 class WmlPageMargins {
+  /// WmlPageMargins API.
   const WmlPageMargins({
     this.top = 72,
     this.bottom = 72,
@@ -114,32 +139,42 @@ class WmlPageMargins {
     right: 144,
   );
 
+  /// top API.
   final double top;
+
+  /// bottom API.
   final double bottom;
+
+  /// left API.
   final double left;
+
+  /// right API.
   final double right;
 
+  /// matches API.
   bool matches(WmlPageMargins other) =>
       (top - other.top).abs() < 0.5 &&
       (bottom - other.bottom).abs() < 0.5 &&
       (left - other.left).abs() < 0.5 &&
       (right - other.right).abs() < 0.5;
 
+  /// copyWith API.
   WmlPageMargins copyWith({
     double? top,
     double? bottom,
     double? left,
     double? right,
-  }) =>
-      WmlPageMargins(
-        top: top ?? this.top,
-        bottom: bottom ?? this.bottom,
-        left: left ?? this.left,
-        right: right ?? this.right,
-      );
+  }) => WmlPageMargins(
+    top: top ?? this.top,
+    bottom: bottom ?? this.bottom,
+    left: left ?? this.left,
+    right: right ?? this.right,
+  );
 }
 
+/// Class WmlIndent.
 class WmlIndent {
+  /// WmlIndent API.
   const WmlIndent({
     this.left = 0,
     this.right = 0,
@@ -147,37 +182,60 @@ class WmlIndent {
     this.hanging = 0,
   });
 
+  /// left API.
   final double left;
+
+  /// right API.
   final double right;
+
+  /// firstLine API.
   final double firstLine;
+
+  /// hanging API.
   final double hanging;
 }
 
+/// Class WmlTabStop.
 class WmlTabStop {
+  /// WmlTabStop API.
   const WmlTabStop({
     required this.position,
     this.alignment = WmlTabAlignment.left,
     this.leader = WmlTabLeader.none,
   });
 
+  /// position API.
   final double position;
+
+  /// alignment API.
   final WmlTabAlignment alignment;
+
+  /// leader API.
   final WmlTabLeader leader;
 }
 
+/// Class WmlBorder.
 class WmlBorder {
+  /// WmlBorder API.
   const WmlBorder({
     this.style = 'single',
     this.sizeEighths = 8,
     this.color = '000000',
   });
 
+  /// style API.
   final String style;
+
+  /// sizeEighths API.
   final int sizeEighths;
+
+  /// color API.
   final String color;
 }
 
+/// Class WmlParagraphProps.
 class WmlParagraphProps {
+  /// WmlParagraphProps API.
   WmlParagraphProps({
     this.justification = WmlJustification.left,
     this.lineSpacing = 1.15,
@@ -202,26 +260,64 @@ class WmlParagraphProps {
     this.rightToLeft,
   }) : tabs = tabs ?? <WmlTabStop>[];
 
+  /// justification API.
   WmlJustification justification;
+
+  /// lineSpacing API.
   double lineSpacing;
+
+  /// lineSpacingRule API.
   WmlLineSpacingRule lineSpacingRule;
+
+  /// spacingBefore API.
   double spacingBefore;
+
+  /// spacingAfter API.
   double spacingAfter;
+
+  /// indent API.
   WmlIndent indent;
+
+  /// tabs API.
   List<WmlTabStop> tabs;
+
+  /// keepTogether API.
   bool keepTogether;
+
+  /// pageBreakBefore API.
   bool pageBreakBefore;
+
+  /// columnBreakBefore API.
   bool columnBreakBefore;
+
+  /// numId API.
   int? numId;
+
+  /// ilvl API.
   int ilvl;
+
+  /// listLabel API.
   String? listLabel;
+
+  /// pageNumberField API.
   bool pageNumberField;
+
   /// Word heading 1–9. `null` is body text (Normal).
   int? headingLevel;
+
+  /// styleId API.
   String? styleId;
+
+  /// fieldInstruction API.
   String? fieldInstruction;
+
+  /// fieldBegin API.
   bool fieldBegin;
+
+  /// fieldEnd API.
   bool fieldEnd;
+
+  /// bookmarkName API.
   String? bookmarkName;
 
   /// Word `w:bidi`. `null` lets UAX #9 pick the paragraph level.
@@ -238,33 +334,35 @@ class WmlParagraphProps {
     return justification == WmlJustification.right ? 1 : null;
   }
 
+  /// copy API.
   WmlParagraphProps copy() => WmlParagraphProps(
-        justification: justification,
-        lineSpacing: lineSpacing,
-        lineSpacingRule: lineSpacingRule,
-        spacingBefore: spacingBefore,
-        spacingAfter: spacingAfter,
-        indent: indent,
-        tabs: List<WmlTabStop>.from(tabs),
-        keepTogether: keepTogether,
-        pageBreakBefore: pageBreakBefore,
-        columnBreakBefore: columnBreakBefore,
-        numId: numId,
-        ilvl: ilvl,
-        listLabel: listLabel,
-        pageNumberField: pageNumberField,
-        headingLevel: headingLevel,
-        styleId: styleId,
-        fieldInstruction: fieldInstruction,
-        fieldBegin: fieldBegin,
-        fieldEnd: fieldEnd,
-        bookmarkName: bookmarkName,
-        rightToLeft: rightToLeft,
-      );
+    justification: justification,
+    lineSpacing: lineSpacing,
+    lineSpacingRule: lineSpacingRule,
+    spacingBefore: spacingBefore,
+    spacingAfter: spacingAfter,
+    indent: indent,
+    tabs: List<WmlTabStop>.from(tabs),
+    keepTogether: keepTogether,
+    pageBreakBefore: pageBreakBefore,
+    columnBreakBefore: columnBreakBefore,
+    numId: numId,
+    ilvl: ilvl,
+    listLabel: listLabel,
+    pageNumberField: pageNumberField,
+    headingLevel: headingLevel,
+    styleId: styleId,
+    fieldInstruction: fieldInstruction,
+    fieldBegin: fieldBegin,
+    fieldEnd: fieldEnd,
+    bookmarkName: bookmarkName,
+    rightToLeft: rightToLeft,
+  );
 }
 
 /// Maps Word `w:highlight` names (and raw hex) to RRGGBB.
 abstract final class WmlHighlight {
+  /// toRgb API.
   static String? toRgb(String? value) {
     if (value == null || value.isEmpty || value == 'none') {
       return null;
@@ -312,7 +410,9 @@ abstract final class WmlHighlight {
   }
 }
 
+/// Class WmlRunProps.
 class WmlRunProps {
+  /// WmlRunProps API.
   WmlRunProps({
     this.bold = false,
     this.italic = false,
@@ -326,34 +426,57 @@ class WmlRunProps {
     this.vertAlign = WmlVertAlign.baseline,
   });
 
+  /// bold API.
   bool bold;
+
+  /// italic API.
   bool italic;
+
+  /// underline API.
   WmlUnderline underline;
+
+  /// strike API.
   bool strike;
+
+  /// color API.
   String color;
+
+  /// highlight API.
   String? highlight;
+
+  /// fontSizeHalfPoints API.
   int fontSizeHalfPoints;
+
+  /// asciiFont API.
   String asciiFont;
+
+  /// csFont API.
   String csFont;
+
+  /// vertAlign API.
   WmlVertAlign vertAlign;
 
+  /// fontSizePoints API.
   double get fontSizePoints => fontSizeHalfPoints / 2.0;
 
+  /// copy API.
   WmlRunProps copy() => WmlRunProps(
-        bold: bold,
-        italic: italic,
-        underline: underline,
-        strike: strike,
-        color: color,
-        highlight: highlight,
-        fontSizeHalfPoints: fontSizeHalfPoints,
-        asciiFont: asciiFont,
-        csFont: csFont,
-        vertAlign: vertAlign,
-      );
+    bold: bold,
+    italic: italic,
+    underline: underline,
+    strike: strike,
+    color: color,
+    highlight: highlight,
+    fontSizeHalfPoints: fontSizeHalfPoints,
+    asciiFont: asciiFont,
+    csFont: csFont,
+    vertAlign: vertAlign,
+  );
 }
 
+/// Class WmlTableProps.
 class WmlTableProps {
+  /// WmlTableProps API.
   WmlTableProps({
     this.alignment = WmlJustification.left,
     this.floating = false,
@@ -361,25 +484,34 @@ class WmlTableProps {
     this.rightToLeft = false,
   });
 
+  /// alignment API.
   WmlJustification alignment;
+
+  /// floating API.
   bool floating;
+
+  /// cellMargin API.
   double cellMargin;
 
   /// Word `w:bidiVisual` — first column is drawn on the right.
   bool rightToLeft;
 
+  /// copy API.
   WmlTableProps copy() => WmlTableProps(
-        alignment: alignment,
-        floating: floating,
-        cellMargin: cellMargin,
-        rightToLeft: rightToLeft,
-      );
+    alignment: alignment,
+    floating: floating,
+    cellMargin: cellMargin,
+    rightToLeft: rightToLeft,
+  );
 }
 
+/// pointsToTwips helper.
 int pointsToTwips(double points) => (points * 20).round();
 
+/// twipsToPoints helper.
 double twipsToPoints(int twips) => twips / 20.0;
 
+/// parseHexInt helper.
 int? parseHexInt(String? raw) {
   if (raw == null || raw.isEmpty || raw == 'auto') {
     return null;

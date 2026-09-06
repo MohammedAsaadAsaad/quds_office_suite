@@ -5,6 +5,7 @@ import 'omml_document.dart';
 
 /// Reads and writes Office Math (`m:oMath` / `m:oMathPara`).
 abstract final class OmmlIo {
+  /// writeEquation API.
   static void writeEquation(XmlWriter w, OmmlEquation equation) {
     w.writeStartElement('oMathPara', prefix: 'm');
     if (equation.display == OmmlDisplay.display) {
@@ -20,18 +21,21 @@ abstract final class OmmlIo {
     w.writeEndElement();
   }
 
+  /// writeMath API.
   static void writeMath(XmlWriter w, OmmlEquation equation) {
     w.writeStartElement('oMath', prefix: 'm');
     writeSeq(w, equation.root);
     w.writeEndElement();
   }
 
+  /// writeSeq API.
   static void writeSeq(XmlWriter w, OmmlSeq seq) {
     for (final OmmlNode child in seq.children) {
       writeNode(w, child);
     }
   }
 
+  /// writeNode API.
   static void writeNode(XmlWriter w, OmmlNode node) {
     switch (node) {
       case OmmlSeq():
@@ -205,6 +209,7 @@ abstract final class OmmlIo {
     }
   }
 
+  /// readFrom API.
   static OmmlEquation? readFrom(XmlPullReader reader) {
     if (reader.localName == 'oMathPara') {
       return _readMathPara(reader);
@@ -241,8 +246,7 @@ abstract final class OmmlIo {
       if (reader.eventType != XmlEventType.startElement) {
         continue;
       }
-      if (reader.namespaceUri != OfficeNamespaces.m &&
-          reader.prefix != 'm') {
+      if (reader.namespaceUri != OfficeNamespaces.m && reader.prefix != 'm') {
         continue;
       }
       final OmmlNode? node = _readNode(reader);
@@ -311,7 +315,8 @@ abstract final class OmmlIo {
         if (reader.localName == 't') {
           text += _elementText(reader);
         } else if (reader.localName == 'sty') {
-          final String? val = reader.getAttribute('val') ??
+          final String? val =
+              reader.getAttribute('val') ??
               reader.getAttribute('val', namespaceUri: OfficeNamespaces.m);
           normal = val == 'p';
         }
@@ -382,7 +387,8 @@ abstract final class OmmlIo {
     _walkChildren(reader, (XmlPullReader r) {
       switch (r.localName) {
         case 'chr':
-          chr = r.getAttribute('val') ??
+          chr =
+              r.getAttribute('val') ??
               r.getAttribute('val', namespaceUri: OfficeNamespaces.m) ??
               chr;
         case 'sub':
@@ -403,11 +409,13 @@ abstract final class OmmlIo {
     _walkChildren(reader, (XmlPullReader r) {
       switch (r.localName) {
         case 'begChr':
-          beg = r.getAttribute('val') ??
+          beg =
+              r.getAttribute('val') ??
               r.getAttribute('val', namespaceUri: OfficeNamespaces.m) ??
               beg;
         case 'endChr':
-          end = r.getAttribute('val') ??
+          end =
+              r.getAttribute('val') ??
               r.getAttribute('val', namespaceUri: OfficeNamespaces.m) ??
               end;
         case 'e':
@@ -440,7 +448,8 @@ abstract final class OmmlIo {
     _walkChildren(reader, (XmlPullReader r) {
       switch (r.localName) {
         case 'chr':
-          chr = r.getAttribute('val') ??
+          chr =
+              r.getAttribute('val') ??
               r.getAttribute('val', namespaceUri: OfficeNamespaces.m) ??
               chr;
         case 'e':
@@ -519,7 +528,9 @@ abstract final class OmmlIo {
   }
 }
 
+/// Class OmmlLinearPlain.
 abstract final class OmmlLinearPlain {
+  /// collect API.
   static String collect(OmmlSeq seq) {
     final StringBuffer buf = StringBuffer();
     void walk(OmmlNode node) {

@@ -9,9 +9,13 @@ import 'zip_reader.dart';
 /// Streaming ZIP writer that emits local headers as parts are added and
 /// finishes with a central directory plus EOCD (ZIP64 when required).
 class ZipWriter {
+  /// ZipWriter API.
   ZipWriter({this.deflateLevel = 6});
 
+  /// deflateLevel API.
   final int deflateLevel;
+
+  /// ByteSink API.
   final ByteSink _sink = ByteSink(capacity: 4096);
   final List<_PendingEntry> _entries = <_PendingEntry>[];
 
@@ -52,6 +56,7 @@ class ZipWriter {
     addFile(fileName, rawBuilder.takeBytes(), store: store);
   }
 
+  /// close API.
   Uint8List close() {
     final int cdStart = _sink.length;
     var needsZip64 = false;
@@ -195,13 +200,30 @@ class _PendingEntry {
     required this.zip64,
   });
 
+  /// fileName API.
   final String fileName;
+
+  /// nameBytes API.
   final Uint8List nameBytes;
+
+  /// method API.
   final int method;
+
+  /// crc API.
   final int crc;
+
+  /// compressedSize API.
   final int compressedSize;
+
+  /// uncompressedSize API.
   final int uncompressedSize;
+
+  /// localHeaderOffset API.
   final int localHeaderOffset;
+
+  /// utf8Flag API.
   final bool utf8Flag;
+
+  /// zip64 API.
   final bool zip64;
 }

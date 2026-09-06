@@ -25,25 +25,29 @@ void main(List<String> args) {
     'word/01_engine_briefing.docx',
     WordSerializer().writeBytes(briefing),
     title: 'Engine briefing',
-    pdfBytes: OfficePdfExport.word(briefing, font: font, title: 'Engine briefing'),
+    pdfBytes: OfficePdfExport.word(
+      briefing,
+      font: font,
+      title: 'Engine briefing',
+    ),
   );
   sink.office(
     'word/02_builder_report.docx',
     builderReport(),
     title: 'Builder report',
   );
-  sink.office(
-    'word/03_letter.docx',
-    formalLetter(),
-    title: 'Release notes',
-  );
+  sink.office('word/03_letter.docx', formalLetter(), title: 'Release notes');
 
   final SmlWorkbook formulas = engineWorkbook();
   sink.office(
     'excel/01_formula_workbook.xlsx',
     SheetSerializer().writeBytes(formulas),
     title: 'Formula workbook',
-    pdfBytes: OfficePdfExport.workbook(formulas, font: font, title: 'Formula workbook'),
+    pdfBytes: OfficePdfExport.workbook(
+      formulas,
+      font: font,
+      title: 'Formula workbook',
+    ),
   );
   sink.office(
     'excel/02_styled_workbook.xlsx',
@@ -64,25 +68,27 @@ void main(List<String> args) {
     SlideSerializer().writeBytes(deck),
     title: 'Engine deck',
     notesPages: true,
-    pdfBytes: OfficePdfExport.presentation(deck, font: font, title: 'Engine deck'),
+    pdfBytes: OfficePdfExport.presentation(
+      deck,
+      font: font,
+      title: 'Engine deck',
+    ),
   );
   sink.office(
     'powerpoint/02_builder_deck.pptx',
     builderDeck(),
     title: 'Builder deck',
   );
-  sink.office(
-    'powerpoint/03_rtl_deck.pptx',
-    rtlDeck(),
-    title: 'RTL deck',
-  );
+  sink.office('powerpoint/03_rtl_deck.pptx', rtlDeck(), title: 'RTL deck');
 
   sink.writeManifest();
 
   stdout.writeln('Wrote ${sink.written.length} files under ${root.path}');
-  stdout.writeln(font == null
-      ? 'No system UI font — PDF uses Helvetica for Latin only.'
-      : 'PDF embeds a subset of the system UI font.');
+  stdout.writeln(
+    font == null
+        ? 'No system UI font — PDF uses Helvetica for Latin only.'
+        : 'PDF embeds a subset of the system UI font.',
+  );
   for (final String name in sink.written) {
     stdout.writeln('  $name');
   }

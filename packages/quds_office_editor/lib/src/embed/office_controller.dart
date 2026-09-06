@@ -15,25 +15,43 @@ import 'office_theme.dart';
 
 /// Shared undo, dirty-state, and interaction mode for every embedded editor.
 abstract class OfficeController extends ChangeNotifier {
+  /// OfficeController API.
   OfficeController({OfficeSurfaceConfig? config})
     : _config = config ?? const OfficeSurfaceConfig() {
     commands.addListener(_onCommands);
   }
 
+  /// commands API.
   final CommandPipeline commands = CommandPipeline();
+
+  /// viewport API.
   final VirtualViewport viewport = VirtualViewport();
   OfficeSurfaceConfig _config;
   var _dirty = false;
   var _disposed = false;
 
+  /// config API.
   OfficeSurfaceConfig get config => _config;
+
+  /// mode API.
   OfficeInteractionMode get mode => _config.mode;
+
+  /// theme API.
   OfficeTheme get theme => _config.theme;
+
+  /// isDirty API.
   bool get isDirty => _dirty;
+
+  /// canUndo API.
   bool get canUndo => commands.canUndo;
+
+  /// canRedo API.
   bool get canRedo => commands.canRedo;
+
+  /// kind API.
   OpcPackageKind get kind;
 
+  /// config API.
   set config(OfficeSurfaceConfig value) {
     if (identical(_config, value)) {
       return;
@@ -47,6 +65,7 @@ abstract class OfficeController extends ChangeNotifier {
     _config = value;
   }
 
+  /// setMode API.
   void setMode(OfficeInteractionMode mode) {
     _config = _config.copyWith(mode: mode);
     if (!config.allowsMutation) {
@@ -55,6 +74,7 @@ abstract class OfficeController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// markClean API.
   void markClean() {
     _dirty = false;
     notifyListeners();
@@ -65,6 +85,7 @@ abstract class OfficeController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// undo API.
   void undo() {
     if (!config.enableUndo || !config.allowsMutation || !commands.canUndo) {
       return;
@@ -74,6 +95,7 @@ abstract class OfficeController extends ChangeNotifier {
     afterHistoryChange();
   }
 
+  /// redo API.
   void redo() {
     if (!config.enableUndo || !config.allowsMutation || !commands.canRedo) {
       return;
@@ -89,6 +111,7 @@ abstract class OfficeController extends ChangeNotifier {
   /// Relayout / refresh after undo/redo.
   void afterHistoryChange() {}
 
+  /// saveBytes API.
   Uint8List saveBytes({String? password});
 
   /// Encodes the package, using a worker isolate when the file is large.
@@ -99,27 +122,38 @@ abstract class OfficeController extends ChangeNotifier {
     return saveBytes(password: password);
   }
 
+  /// detachInput API.
   void detachInput();
 
+  /// canCopy API.
   bool get canCopy => false;
 
+  /// canCut API.
   bool get canCut => canCopy && config.allowsMutation;
 
+  /// canPaste API.
   bool get canPaste => config.allowsMutation;
 
+  /// selectAll API.
   void selectAll() {}
 
+  /// copyToClipboard API.
   Future<void> copyToClipboard() async {}
 
+  /// cutToClipboard API.
   Future<void> cutToClipboard() async {
     await copyToClipboard();
   }
 
+  /// pasteFromClipboard API.
   Future<void> pasteFromClipboard({
     OfficePasteMode mode = OfficePasteMode.keepSource,
   }) async {}
 
+  /// semanticsLabel API.
   String get semanticsLabel;
+
+  /// semanticsValue API.
   String get semanticsValue;
 
   void _onCommands() {
@@ -128,6 +162,7 @@ abstract class OfficeController extends ChangeNotifier {
   }
 
   @override
+  /// notifyListeners API.
   void notifyListeners() {
     if (_disposed) {
       return;
@@ -136,6 +171,7 @@ abstract class OfficeController extends ChangeNotifier {
   }
 
   @override
+  /// dispose API.
   void dispose() {
     _disposed = true;
     commands.removeListener(_onCommands);
@@ -146,6 +182,7 @@ abstract class OfficeController extends ChangeNotifier {
 
 /// Word document controller: IME, caret, layout, load/save.
 class WordEditorController extends OfficeController {
+  /// WordEditorController API.
   WordEditorController({WmlDocument? document, super.config, this.layoutEngine})
     : document = document ?? WmlDocument.empty() {
     relayout();
@@ -156,6 +193,7 @@ class WordEditorController extends OfficeController {
     );
   }
 
+  /// fromBytes API.
   factory WordEditorController.fromBytes(
     Uint8List bytes, {
     String? password,
@@ -168,33 +206,66 @@ class WordEditorController extends OfficeController {
     return controller;
   }
 
+  /// document API.
   WmlDocument document;
+
+  /// documentLaidOut API.
   late LaidOutDocument documentLaidOut;
+
+  /// commentLaidOut API.
   LaidOutDocument? commentLaidOut;
+
+  /// layoutEngine API.
   final WordLayoutEngine? layoutEngine;
+
+  /// documentCaret API.
   final CaretEngine documentCaret = CaretEngine();
+
+  /// commentCaret API.
   final CaretEngine commentCaret = CaretEngine();
+
+  /// headerFooterCaret API.
   final CaretEngine headerFooterCaret = CaretEngine();
   var _editingComment = false;
   var _editingHeaderFooter = false;
   var _editingFooter = false;
   var _editingSectionIndex = 0;
+
+  /// commentSurfaceWidth API.
   double commentSurfaceWidth = 288;
+
+  /// input API.
   late final OfficeInputBridge input;
   var _applyingIme = false;
+
+  /// fromMillisecondsSinceEpoch API.
   var _localEditAt = DateTime.fromMillisecondsSinceEpoch(0);
   String? _textBeforeLocalEdit;
   double? _stickyCaretX;
 
   @override
+  /// kind API.
   OpcPackageKind get kind => OpcPackageKind.word;
 
+  /// selectedVisual API.
   WmlVisual? selectedVisual;
+
+  /// selectedEquation API.
   WmlEquation? selectedEquation;
+
+  /// selectedCommentId API.
   int? selectedCommentId;
+
+  /// equationSlot API.
   var equationSlot = 0;
+
+  /// equationCaret API.
   var equationCaret = 0;
+
+  /// onRequestFocus API.
   VoidCallback? onRequestFocus;
+
+  /// pictureCropMode API.
   var pictureCropMode = false;
   ({
     double width,
@@ -206,8 +277,10 @@ class WordEditorController extends OfficeController {
     double cropTop,
     double cropRight,
     double cropBottom,
-  })? _visualSnap;
+  })?
+  _visualSnap;
 
+  /// caret API.
   CaretEngine get caret {
     if (isEditingComment) {
       return commentCaret;
@@ -218,22 +291,27 @@ class WordEditorController extends OfficeController {
     return documentCaret;
   }
 
-  LaidOutDocument get laidOut =>
-      isEditingComment && commentLaidOut != null
-          ? commentLaidOut!
-          : documentLaidOut;
+  /// laidOut API.
+  LaidOutDocument get laidOut => isEditingComment && commentLaidOut != null
+      ? commentLaidOut!
+      : documentLaidOut;
 
-  bool get isEditingComment =>
-      _editingComment && selectedComment != null;
+  /// isEditingComment API.
+  bool get isEditingComment => _editingComment && selectedComment != null;
 
+  /// isEditingHeaderFooter API.
   bool get isEditingHeaderFooter => _editingHeaderFooter;
 
+  /// isEditingFooter API.
   bool get isEditingFooter => _editingHeaderFooter && _editingFooter;
 
+  /// isEditingHeader API.
   bool get isEditingHeader => _editingHeaderFooter && !_editingFooter;
 
+  /// editingSectionIndex API.
   int get editingSectionIndex => _editingSectionIndex;
 
+  /// headerFooterParagraphs API.
   List<WmlParagraph> get headerFooterParagraphs =>
       _ensureHeaderFooterParagraphs();
 
@@ -250,6 +328,7 @@ class WordEditorController extends OfficeController {
     return document.paragraphs.toList();
   }
 
+  /// visuals API.
   List<WmlVisual> get visuals => document.visuals.toList();
 
   WmlParagraph get _activeParagraph {
@@ -283,18 +362,14 @@ class WordEditorController extends OfficeController {
     return comment.paragraphs;
   }
 
+  /// commentDocument API.
   WmlDocument get commentDocument {
     final WmlComment comment = selectedComment!;
     return WmlDocument(
       sections: <WmlSection>[
         WmlSection(
           pageSize: WmlPageSize(width: commentSurfaceWidth, height: 2000),
-          margins: const WmlPageMargins(
-            top: 4,
-            bottom: 4,
-            left: 4,
-            right: 4,
-          ),
+          margins: const WmlPageMargins(top: 4, bottom: 4, left: 4, right: 4),
           blocks: <WmlBlock>[
             ..._ensureCommentParagraphs(comment),
             ...comment.visuals,
@@ -304,6 +379,7 @@ class WordEditorController extends OfficeController {
     );
   }
 
+  /// commentSurfaceHeight API.
   double get commentSurfaceHeight {
     final LaidOutDocument? laid = commentLaidOut;
     if (laid == null || laid.pages.isEmpty) {
@@ -332,24 +408,23 @@ class WordEditorController extends OfficeController {
             0,
             document.sections.length - 1,
           )];
-    final List<WmlParagraph> story =
-        _editingFooter ? section.footer : section.header;
+    final List<WmlParagraph> story = _editingFooter
+        ? section.footer
+        : section.header;
     if (story.isEmpty) {
       story.add(WmlParagraph(inlines: <WmlInline>[WmlRun(text: '')]));
     }
     return story;
   }
 
-  void beginHeaderFooterEdit(
-    int pageIndex, {
-    required bool footer,
-  }) {
+  /// beginHeaderFooterEdit API.
+  void beginHeaderFooterEdit(int pageIndex, {required bool footer}) {
     if (!config.allowsMutation && !config.allowsSelection) {
       return;
     }
     endCommentEdit();
-    final int sectionIndex = pageIndex >= 0 &&
-            pageIndex < documentLaidOut.pages.length
+    final int sectionIndex =
+        pageIndex >= 0 && pageIndex < documentLaidOut.pages.length
         ? documentLaidOut.pages[pageIndex].sectionIndex
         : sectionIndexAtCaret;
     _editingSectionIndex = sectionIndex.clamp(
@@ -368,14 +443,17 @@ class WordEditorController extends OfficeController {
       ..logicalIndex = 0
       ..selectionAnchorParagraph = 0
       ..selectionAnchor = 0;
-    headerFooterCaret.paragraphIndex =
-        headerFooterCaret.paragraphIndex.clamp(0, paras.length - 1);
+    headerFooterCaret.paragraphIndex = headerFooterCaret.paragraphIndex.clamp(
+      0,
+      paras.length - 1,
+    );
     relayout();
     onRequestFocus?.call();
     attachInput();
     notifyListeners();
   }
 
+  /// endHeaderFooterEdit API.
   void endHeaderFooterEdit() {
     if (!_editingHeaderFooter) {
       return;
@@ -384,6 +462,7 @@ class WordEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// beginCommentEdit API.
   void beginCommentEdit(int id) {
     selectedCommentId = id;
     if (selectedComment == null) {
@@ -394,12 +473,15 @@ class WordEditorController extends OfficeController {
     selectedVisual = null;
     selectedEquation = null;
     final List<WmlParagraph> paras = _ensureCommentParagraphs(selectedComment!);
-    commentCaret.paragraphIndex =
-        commentCaret.paragraphIndex.clamp(0, paras.length - 1);
+    commentCaret.paragraphIndex = commentCaret.paragraphIndex.clamp(
+      0,
+      paras.length - 1,
+    );
     final int max = paras[commentCaret.paragraphIndex].text.length;
     commentCaret.logicalIndex = commentCaret.logicalIndex.clamp(0, max);
-    commentCaret.selectionAnchorParagraph =
-        commentCaret.selectionAnchorParagraph.clamp(0, paras.length - 1);
+    commentCaret.selectionAnchorParagraph = commentCaret
+        .selectionAnchorParagraph
+        .clamp(0, paras.length - 1);
     commentCaret.selectionAnchor = commentCaret.selectionAnchor.clamp(
       0,
       paras[commentCaret.selectionAnchorParagraph].text.length,
@@ -410,6 +492,7 @@ class WordEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// endCommentEdit API.
   void endCommentEdit() {
     if (!_editingComment) {
       return;
@@ -418,6 +501,7 @@ class WordEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// setCommentSurfaceWidth API.
   void setCommentSurfaceWidth(double width) {
     final double next = width.clamp(160.0, 480.0);
     if ((commentSurfaceWidth - next).abs() < 0.5) {
@@ -435,18 +519,19 @@ class WordEditorController extends OfficeController {
       commentLaidOut = null;
       return;
     }
-    commentLaidOut = (layoutEngine ?? WordLayoutEngine(font: null))
-        .layout(commentDocument);
-  }
-
-  void loadBytes(Uint8List bytes, {String? password}) {
-    _acceptOpenedWord(
-      WordDeserializer().read(
-        OfficeRepair.open(bytes, password: password),
-      ),
+    commentLaidOut = (layoutEngine ?? WordLayoutEngine(font: null)).layout(
+      commentDocument,
     );
   }
 
+  /// loadBytes API.
+  void loadBytes(Uint8List bytes, {String? password}) {
+    _acceptOpenedWord(
+      WordDeserializer().read(OfficeRepair.open(bytes, password: password)),
+    );
+  }
+
+  /// loadBytesAsync API.
   Future<void> loadBytesAsync(
     Uint8List bytes, {
     String? password,
@@ -485,6 +570,7 @@ class WordEditorController extends OfficeController {
   }
 
   @override
+  /// saveBytes API.
   Uint8List saveBytes({String? password}) {
     final Uint8List bytes = WordSerializer().writeBytes(
       document,
@@ -495,6 +581,7 @@ class WordEditorController extends OfficeController {
   }
 
   @override
+  /// saveBytesAsync API.
   Future<Uint8List> saveBytesAsync({String? password}) {
     return OfficeIsolateSave.word(document, password: password);
   }
@@ -502,11 +589,13 @@ class WordEditorController extends OfficeController {
   /// Host opens web / file targets. Internal anchors stay in the editor.
   void Function(WmlHyperlink link)? onFollowExternalLink;
 
+  /// relayout API.
   void relayout() {
     WordLink.ensureHeadingBookmarks(document);
     WordToc.refreshEmpty(document);
     WordToc.rebindHeadings(document);
-    final WordLayoutEngine engine = layoutEngine ?? WordLayoutEngine(font: null);
+    final WordLayoutEngine engine =
+        layoutEngine ?? WordLayoutEngine(font: null);
     documentLaidOut = engine.layout(document);
     if (WordToc.syncPageNumbers(document, documentLaidOut)) {
       documentLaidOut = engine.layout(document);
@@ -514,9 +603,10 @@ class WordEditorController extends OfficeController {
     _layoutComment();
   }
 
-  int get activeHeadingLevel =>
-      WordToc.headingLevelOf(_activeParagraph) ?? 0;
+  /// activeHeadingLevel API.
+  int get activeHeadingLevel => WordToc.headingLevelOf(_activeParagraph) ?? 0;
 
+  /// applyHeading API.
   void applyHeading(int level) {
     if (!config.allowsMutation || isEditingComment) {
       return;
@@ -531,12 +621,8 @@ class WordEditorController extends OfficeController {
       startPara = caret.paragraphIndex.clamp(0, paras.length - 1);
       endPara = startPara;
     } else {
-      final ({
-        int startPara,
-        int startIdx,
-        int endPara,
-        int endIdx,
-      }) range = caret.normalizedRange;
+      final ({int startPara, int startIdx, int endPara, int endIdx}) range =
+          caret.normalizedRange;
       startPara = range.startPara;
       endPara = range.endPara;
     }
@@ -570,6 +656,7 @@ class WordEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// insertHeading API.
   void insertHeading({int level = 1, String text = ''}) {
     if (!config.allowsMutation) {
       return;
@@ -578,8 +665,9 @@ class WordEditorController extends OfficeController {
       inlines: <WmlInline>[WmlRun(text: text)],
     );
     WordToc.applyHeading(created, level);
-    final ({List<WmlBlock> parent, int index})? slot =
-        _hostSlotOf(_activeParagraph);
+    final ({List<WmlBlock> parent, int index})? slot = _hostSlotOf(
+      _activeParagraph,
+    );
     final List<WmlBlock> parent =
         slot?.parent ?? document.sections.first.blocks;
     final int at = slot == null
@@ -604,6 +692,7 @@ class WordEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// insertTableOfContents API.
   void insertTableOfContents({
     int minLevel = 1,
     int maxLevel = 3,
@@ -618,8 +707,11 @@ class WordEditorController extends OfficeController {
       title: title,
     );
     final ({List<WmlBlock> parent, int index})? slot = _topLevelInsertSlot();
-    final List<WmlBlock> parent = slot?.parent ?? document.sections.first.blocks;
-    final int index = slot == null ? 0 : (slot.index + 1).clamp(0, parent.length);
+    final List<WmlBlock> parent =
+        slot?.parent ?? document.sections.first.blocks;
+    final int index = slot == null
+        ? 0
+        : (slot.index + 1).clamp(0, parent.length);
     commands.commit(
       _CallbackCommand(
         executeFn: () {
@@ -649,15 +741,18 @@ class WordEditorController extends OfficeController {
   }
 
   void _relayoutTocPages() {
-    documentLaidOut =
-        (layoutEngine ?? WordLayoutEngine(font: null)).layout(document);
+    documentLaidOut = (layoutEngine ?? WordLayoutEngine(font: null)).layout(
+      document,
+    );
     if (WordToc.syncPageNumbers(document, documentLaidOut)) {
-      documentLaidOut =
-          (layoutEngine ?? WordLayoutEngine(font: null)).layout(document);
+      documentLaidOut = (layoutEngine ?? WordLayoutEngine(font: null)).layout(
+        document,
+      );
     }
     _layoutComment();
   }
 
+  /// followLink API.
   void followLink(WmlHyperlink link) {
     if (link.isInternal) {
       final int? index = WordLink.paragraphIndexForAnchor(
@@ -672,6 +767,7 @@ class WordEditorController extends OfficeController {
     onFollowExternalLink?.call(link);
   }
 
+  /// insertHyperlink API.
   void insertHyperlink({
     required String text,
     WmlHyperlink? link,
@@ -680,7 +776,8 @@ class WordEditorController extends OfficeController {
     if (!config.allowsMutation) {
       return;
     }
-    final WmlHyperlink? resolved = link ?? WmlHyperlink.fromTarget(target ?? '');
+    final WmlHyperlink? resolved =
+        link ?? WmlHyperlink.fromTarget(target ?? '');
     if (resolved == null) {
       return;
     }
@@ -691,19 +788,10 @@ class WordEditorController extends OfficeController {
       final int start = (end - text.length).clamp(0, end);
       WordLink.applyRange(para, start, end, resolved);
     } else {
-      final ({
-        int startPara,
-        int startIdx,
-        int endPara,
-        int endIdx,
-      }) range = caret.normalizedRange;
+      final ({int startPara, int startIdx, int endPara, int endIdx}) range =
+          caret.normalizedRange;
       if (range.startPara == range.endPara) {
-        WordLink.applyRange(
-          para,
-          range.startIdx,
-          range.endIdx,
-          resolved,
-        );
+        WordLink.applyRange(para, range.startIdx, range.endIdx, resolved);
       } else {
         insertText(text);
         final int end = caret.logicalIndex;
@@ -715,11 +803,12 @@ class WordEditorController extends OfficeController {
     notifyListeners();
   }
 
-  WmlComment? get selectedComment =>
-      selectedCommentId == null
-          ? null
-          : WordComment.byId(document, selectedCommentId!);
+  /// selectedComment API.
+  WmlComment? get selectedComment => selectedCommentId == null
+      ? null
+      : WordComment.byId(document, selectedCommentId!);
 
+  /// commentsAtCaret API.
   List<WmlComment> commentsAtCaret() {
     final List<WmlParagraph> paras = document.paragraphs.toList();
     if (paras.isEmpty) {
@@ -727,16 +816,15 @@ class WordEditorController extends OfficeController {
     }
     final WmlParagraph para =
         paras[documentCaret.paragraphIndex.clamp(0, paras.length - 1)];
-    final List<int> ids = WordComment.idsAt(
-      para,
-      documentCaret.logicalIndex,
-    );
+    final List<int> ids = WordComment.idsAt(para, documentCaret.logicalIndex);
     return <WmlComment>[
       for (final int id in ids)
-        if (WordComment.byId(document, id) != null) WordComment.byId(document, id)!,
+        if (WordComment.byId(document, id) != null)
+          WordComment.byId(document, id)!,
     ];
   }
 
+  /// selectComment API.
   void selectComment(int? id, {bool jump = false}) {
     if (id == null || (isEditingComment && selectedCommentId != id)) {
       _editingComment = false;
@@ -750,6 +838,7 @@ class WordEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// jumpToComment API.
   void jumpToComment(int id) {
     _editingComment = false;
     selectedCommentId = id;
@@ -766,6 +855,7 @@ class WordEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// insertComment API.
   void insertComment({
     String text = '',
     String author = 'Quds Office',
@@ -803,12 +893,8 @@ class WordEditorController extends OfficeController {
       endPara = startPara;
       endIdx = paras[startPara].text.length;
     } else {
-      final ({
-        int startPara,
-        int startIdx,
-        int endPara,
-        int endIdx,
-      }) range = caret.normalizedRange;
+      final ({int startPara, int startIdx, int endPara, int endIdx}) range =
+          caret.normalizedRange;
       startPara = range.startPara;
       startIdx = range.startIdx;
       endPara = range.endPara;
@@ -844,7 +930,8 @@ class WordEditorController extends OfficeController {
               for (final WmlComment comment in previous) comment.copy(),
               created.copy(),
             ]);
-          for (final MapEntry<int, List<WmlInline>> entry in snapshots.entries) {
+          for (final MapEntry<int, List<WmlInline>> entry
+              in snapshots.entries) {
             paras[entry.key].inlines
               ..clear()
               ..addAll(_cloneInlinesFrom(entry.value));
@@ -867,7 +954,8 @@ class WordEditorController extends OfficeController {
             ..addAll(<WmlComment>[
               for (final WmlComment comment in previous) comment.copy(),
             ]);
-          for (final MapEntry<int, List<WmlInline>> entry in snapshots.entries) {
+          for (final MapEntry<int, List<WmlInline>> entry
+              in snapshots.entries) {
             paras[entry.key].inlines
               ..clear()
               ..addAll(_cloneInlinesFrom(entry.value));
@@ -891,6 +979,7 @@ class WordEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// replyToComment API.
   void replyToComment(
     int parentId, {
     required String text,
@@ -909,6 +998,7 @@ class WordEditorController extends OfficeController {
     );
   }
 
+  /// setCommentResolved API.
   void setCommentResolved(int id, bool resolved) {
     final int root = WordComment.threadRootId(document, id);
     final WmlComment? comment = WordComment.byId(document, root);
@@ -926,6 +1016,7 @@ class WordEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// applyCommentRunFormat API.
   void applyCommentRunFormat(int id, void Function(WmlRunProps props) update) {
     if (WordComment.byId(document, id) == null || !config.allowsMutation) {
       return;
@@ -934,6 +1025,7 @@ class WordEditorController extends OfficeController {
     applyRunFormat(update);
   }
 
+  /// insertCommentVisual API.
   void insertCommentVisual(int id, OfficeVisual visual) {
     final WmlComment? comment = WordComment.byId(document, id);
     if (comment == null || !config.allowsMutation) {
@@ -955,6 +1047,7 @@ class WordEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// removeCommentVisual API.
   void removeCommentVisual(int id, WmlVisual visual) {
     final WmlComment? comment = WordComment.byId(document, id);
     if (comment == null || !config.allowsMutation) {
@@ -969,7 +1062,10 @@ class WordEditorController extends OfficeController {
         executeFn: () => comment.visuals.remove(visual),
         undoFn: () {
           if (!comment.visuals.contains(visual)) {
-            comment.visuals.insert(index.clamp(0, comment.visuals.length), visual);
+            comment.visuals.insert(
+              index.clamp(0, comment.visuals.length),
+              visual,
+            );
           }
         },
       ),
@@ -978,6 +1074,7 @@ class WordEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// updateComment API.
   void updateComment(
     int id, {
     String? text,
@@ -1027,6 +1124,7 @@ class WordEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// deleteComment API.
   void deleteComment(int id) {
     if (!config.allowsMutation) {
       return;
@@ -1053,7 +1151,8 @@ class WordEditorController extends OfficeController {
               for (final WmlComment comment in previous) comment.copy(),
             ]);
           final List<WmlParagraph> paras = _paragraphs;
-          for (final MapEntry<int, List<WmlInline>> entry in snapshots.entries) {
+          for (final MapEntry<int, List<WmlInline>> entry
+              in snapshots.entries) {
             if (entry.key < paras.length) {
               paras[entry.key].inlines
                 ..clear()
@@ -1068,6 +1167,7 @@ class WordEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// stepComment API.
   void stepComment(int delta) {
     if (document.comments.isEmpty) {
       return;
@@ -1094,6 +1194,7 @@ class WordEditorController extends OfficeController {
     jumpToComment(comments[next < 0 ? next + comments.length : next].id);
   }
 
+  /// jumpToParagraph API.
   void jumpToParagraph(int index) {
     _editingComment = false;
     selectedVisual = null;
@@ -1120,8 +1221,10 @@ class WordEditorController extends OfficeController {
           return (parent: section.blocks, index: i);
         }
         if (block is WmlTable) {
-          final ({List<WmlBlock> parent, int index})? nested =
-              _tableSlotOf(block, para);
+          final ({List<WmlBlock> parent, int index})? nested = _tableSlotOf(
+            block,
+            para,
+          );
           if (nested != null) {
             return nested;
           }
@@ -1143,8 +1246,10 @@ class WordEditorController extends OfficeController {
         }
         for (final WmlBlock block in cell.blocks) {
           if (block is WmlTable) {
-            final ({List<WmlBlock> parent, int index})? nested =
-                _tableSlotOf(block, para);
+            final ({List<WmlBlock> parent, int index})? nested = _tableSlotOf(
+              block,
+              para,
+            );
             if (nested != null) {
               return nested;
             }
@@ -1228,17 +1333,9 @@ class WordEditorController extends OfficeController {
   /// Re-lays out then applies the same Flutter metrics used on screen.
   void fitPaintMetrics({String? themeFamily}) {
     relayout();
-    _fitLaidOut(
-      documentLaidOut,
-      document.paragraphs.toList(),
-      themeFamily,
-    );
+    _fitLaidOut(documentLaidOut, document.paragraphs.toList(), themeFamily);
     if (commentLaidOut != null && selectedComment != null) {
-      _fitLaidOut(
-        commentLaidOut!,
-        selectedComment!.paragraphs,
-        themeFamily,
-      );
+      _fitLaidOut(commentLaidOut!, selectedComment!.paragraphs, themeFamily);
     }
   }
 
@@ -1248,7 +1345,8 @@ class WordEditorController extends OfficeController {
     String? themeFamily,
   ) {
     void fit(LaidOutLine line) {
-      final String text = line.sourceText ??
+      final String text =
+          line.sourceText ??
           (paras.isEmpty
               ? ''
               : paras[line.paragraphIndex.clamp(0, paras.length - 1)].text);
@@ -1268,6 +1366,7 @@ class WordEditorController extends OfficeController {
     }
   }
 
+  /// attachInput API.
   void attachInput() {
     if (!config.allowsMutation) {
       return;
@@ -1279,10 +1378,12 @@ class WordEditorController extends OfficeController {
   }
 
   @override
+  /// detachInput API.
   void detachInput() {
     input.detach();
   }
 
+  /// moveCaret API.
   void moveCaret(int delta, {bool extend = false}) {
     if (!config.allowsSelection) {
       return;
@@ -1357,8 +1458,7 @@ class WordEditorController extends OfficeController {
       moveCaret(toRight ? 1 : -1, extend: extend);
       return;
     }
-    if (!extend &&
-        _selectNeighborVisual(toRight ? 1 : -1, requireEdge: true)) {
+    if (!extend && _selectNeighborVisual(toRight ? 1 : -1, requireEdge: true)) {
       return;
     }
     final LaidOutLine line = lines[index];
@@ -1452,6 +1552,7 @@ class WordEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// moveParagraph API.
   void moveParagraph(int delta, {bool extend = false}) {
     if (!config.allowsSelection) {
       return;
@@ -1485,6 +1586,8 @@ class WordEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// selectAll API.
+  @override
   void selectAll() {
     if (!config.allowsSelection) {
       return;
@@ -1504,6 +1607,7 @@ class WordEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// selectWordAtCaret API.
   void selectWordAtCaret() {
     if (!config.allowsSelection) {
       return;
@@ -1513,6 +1617,7 @@ class WordEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// selectParagraphAtCaret API.
   void selectParagraphAtCaret() {
     if (!config.allowsSelection) {
       return;
@@ -1522,6 +1627,7 @@ class WordEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// tableAtCaret API.
   ({WmlTable table, int row, int col})? get tableAtCaret {
     if (isEditingComment || isEditingHeaderFooter) {
       return null;
@@ -1529,8 +1635,10 @@ class WordEditorController extends OfficeController {
     return WordTable.locationOfIndex(document, caret.paragraphIndex);
   }
 
+  /// isInTable API.
   bool get isInTable => tableAtCaret != null;
 
+  /// tableCellRange API.
   ({WmlTable table, int r0, int g0, int r1, int g1})? get tableCellRange {
     if (isEditingComment) {
       return null;
@@ -1560,10 +1668,14 @@ class WordEditorController extends OfficeController {
     }
     final ({int startPara, int startIdx, int endPara, int endIdx}) range =
         caret.normalizedRange;
-    final ({WmlTable table, int row, int col})? a =
-        WordTable.locationOfIndex(document, range.startPara);
-    final ({WmlTable table, int row, int col})? b =
-        WordTable.locationOfIndex(document, range.endPara);
+    final ({WmlTable table, int row, int col})? a = WordTable.locationOfIndex(
+      document,
+      range.startPara,
+    );
+    final ({WmlTable table, int row, int col})? b = WordTable.locationOfIndex(
+      document,
+      range.endPara,
+    );
     if (a == null || b == null || !identical(a.table, b.table)) {
       return null;
     }
@@ -1577,15 +1689,10 @@ class WordEditorController extends OfficeController {
     if (rect == null) {
       return null;
     }
-    return (
-      table: a.table,
-      r0: rect.r0,
-      g0: rect.g0,
-      r1: rect.r1,
-      g1: rect.g1,
-    );
+    return (table: a.table, r0: rect.r0, g0: rect.g0, r1: rect.r1, g1: rect.g1);
   }
 
+  /// canMergeTableCells API.
   bool get canMergeTableCells {
     final ({WmlTable table, int r0, int g0, int r1, int g1})? range =
         tableCellRange;
@@ -1593,11 +1700,13 @@ class WordEditorController extends OfficeController {
         WordTable.canMerge(range.table, range.r0, range.g0, range.r1, range.g1);
   }
 
+  /// canUnmergeTableCells API.
   bool get canUnmergeTableCells {
     final ({WmlTable table, int row, int col})? loc = tableAtCaret;
     return loc != null && WordTable.canUnmerge(loc.table, loc.row, loc.col);
   }
 
+  /// mergeTableCells API.
   void mergeTableCells() {
     final ({WmlTable table, int r0, int g0, int r1, int g1})? range =
         tableCellRange;
@@ -1606,7 +1715,8 @@ class WordEditorController extends OfficeController {
     }
     _mutateWordTable(
       range.table,
-      () => WordTable.merge(range.table, range.r0, range.g0, range.r1, range.g1),
+      () =>
+          WordTable.merge(range.table, range.r0, range.g0, range.r1, range.g1),
       (WmlTable table) {
         final int col =
             WordTable.cellIndexAtGrid(table.rows[range.r0], range.g0) ?? 0;
@@ -1616,6 +1726,7 @@ class WordEditorController extends OfficeController {
     );
   }
 
+  /// unmergeTableCells API.
   void unmergeTableCells() {
     final ({WmlTable table, int row, int col})? loc = tableAtCaret;
     if (loc == null || !config.allowsMutation) {
@@ -1633,10 +1744,12 @@ class WordEditorController extends OfficeController {
 
   WmlTable? _tableResizeSnap;
 
+  /// beginTableResize API.
   void beginTableResize(WmlTable table) {
     _tableResizeSnap = WordTable.snapshot(table);
   }
 
+  /// previewTableColumnWidth API.
   void previewTableColumnWidth(WmlTable table, int col, double width) {
     if (!config.allowsMutation) {
       return;
@@ -1655,6 +1768,7 @@ class WordEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// previewTableRowHeight API.
   void previewTableRowHeight(WmlTable table, int row, double height) {
     if (!config.allowsMutation || row < 0 || row >= table.rows.length) {
       return;
@@ -1664,6 +1778,7 @@ class WordEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// commitTableResize API.
   void commitTableResize(WmlTable table) {
     final WmlTable? snap = _tableResizeSnap;
     _tableResizeSnap = null;
@@ -1681,42 +1796,40 @@ class WordEditorController extends OfficeController {
     notifyListeners();
   }
 
-  void insertTableRow({
-    required bool after,
-    WmlTable? table,
-    int? row,
-  }) {
+  /// insertTableRow API.
+  void insertTableRow({required bool after, WmlTable? table, int? row}) {
     final ({WmlTable table, int row, int col})? loc =
         table != null && row != null
-            ? (table: table, row: row, col: 0)
-            : tableAtCaret;
+        ? (table: table, row: row, col: 0)
+        : tableAtCaret;
     if (loc == null) {
       return;
     }
     insertTableRowAt(loc.table, after ? loc.row + 1 : loc.row);
   }
 
+  /// insertTableRowAt API.
   void insertTableRowAt(WmlTable table, int index) {
-    _mutateWordTable(table, () => WordTable.insertRow(table, index), (WmlTable t) {
+    _mutateWordTable(table, () => WordTable.insertRow(table, index), (
+      WmlTable t,
+    ) {
       _placeCaretInTable(t, index.clamp(0, t.rows.length - 1), 0);
     });
   }
 
-  void insertTableColumn({
-    required bool after,
-    WmlTable? table,
-    int? col,
-  }) {
+  /// insertTableColumn API.
+  void insertTableColumn({required bool after, WmlTable? table, int? col}) {
     final ({WmlTable table, int row, int col})? loc =
         table != null && col != null
-            ? (table: table, row: 0, col: col)
-            : tableAtCaret;
+        ? (table: table, row: 0, col: col)
+        : tableAtCaret;
     if (loc == null) {
       return;
     }
     insertTableColumnAt(loc.table, after ? loc.col + 1 : loc.col);
   }
 
+  /// insertTableColumnAt API.
   void insertTableColumnAt(WmlTable table, int index) {
     _mutateWordTable(
       table,
@@ -1742,9 +1855,13 @@ class WordEditorController extends OfficeController {
     return document.sections.first.contentWidth;
   }
 
+  /// selectedTable API.
   WmlTable? selectedTable;
+
+  /// selectedTableBand API.
   ({WmlTable table, bool column, int from, int to})? selectedTableBand;
 
+  /// selectTable API.
   void selectTable(WmlTable? table) {
     selectedTable = table;
     selectedTableBand = null;
@@ -1756,10 +1873,8 @@ class WordEditorController extends OfficeController {
     notifyListeners();
   }
 
-  void autoFitTable(
-    WordTableAutoFit mode, {
-    WmlTable? table,
-  }) {
+  /// autoFitTable API.
+  void autoFitTable(WordTableAutoFit mode, {WmlTable? table}) {
     final WmlTable? target = table ?? selectedTable ?? tableAtCaret?.table;
     if (target == null) {
       return;
@@ -1771,6 +1886,7 @@ class WordEditorController extends OfficeController {
     );
   }
 
+  /// deleteTable API.
   void deleteTable({WmlTable? table}) {
     final WmlTable? target = table ?? selectedTable ?? tableAtCaret?.table;
     if (target == null || !config.allowsMutation) {
@@ -1880,6 +1996,7 @@ class WordEditorController extends OfficeController {
       ..logicalIndex = last!.text.length;
   }
 
+  /// selectTableBand API.
   void selectTableBand(
     WmlTable table, {
     required bool column,
@@ -1951,32 +2068,28 @@ class WordEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// deleteTableRow API.
   void deleteTableRow({WmlTable? table, int? row}) {
     final ({WmlTable table, int row, int col})? loc =
         table != null && row != null
-            ? (table: table, row: row, col: 0)
-            : tableAtCaret;
+        ? (table: table, row: row, col: 0)
+        : tableAtCaret;
     if (loc == null || loc.table.rows.length <= 1) {
       return;
     }
-    _mutateWordTable(
-      loc.table,
-      () => WordTable.deleteRow(loc.table, loc.row),
-      (WmlTable t) {
-        _placeCaretInTable(
-          t,
-          loc.row.clamp(0, t.rows.length - 1),
-          loc.col,
-        );
-      },
-    );
+    _mutateWordTable(loc.table, () => WordTable.deleteRow(loc.table, loc.row), (
+      WmlTable t,
+    ) {
+      _placeCaretInTable(t, loc.row.clamp(0, t.rows.length - 1), loc.col);
+    });
   }
 
+  /// deleteTableColumn API.
   void deleteTableColumn({WmlTable? table, int? col}) {
     final ({WmlTable table, int row, int col})? loc =
         table != null && col != null
-            ? (table: table, row: 0, col: col)
-            : tableAtCaret;
+        ? (table: table, row: 0, col: col)
+        : tableAtCaret;
     if (loc == null || WordTable.columnCount(loc.table) <= 1) {
       return;
     }
@@ -2111,10 +2224,12 @@ class WordEditorController extends OfficeController {
   }
 
   @override
+  /// canCopy API.
   bool get canCopy =>
       selectedVisual != null || selectedTable != null || !caret.isCollapsed;
 
   @override
+  /// copyToClipboard API.
   Future<void> copyToClipboard() async {
     final OfficeClipboardPayload payload = _captureWordClipboard();
     if (payload.isEmpty) {
@@ -2124,6 +2239,7 @@ class WordEditorController extends OfficeController {
   }
 
   @override
+  /// cutToClipboard API.
   Future<void> cutToClipboard() async {
     if (!canCut) {
       return;
@@ -2137,13 +2253,15 @@ class WordEditorController extends OfficeController {
   }
 
   @override
+  /// pasteFromClipboard API.
   Future<void> pasteFromClipboard({
     OfficePasteMode mode = OfficePasteMode.keepSource,
   }) async {
     if (!canPaste) {
       return;
     }
-    final OfficeClipboardPayload payload = await OfficeClipboard.instance.read();
+    final OfficeClipboardPayload payload = await OfficeClipboard.instance
+        .read();
     if (payload.isEmpty) {
       return;
     }
@@ -2250,7 +2368,14 @@ class WordEditorController extends OfficeController {
     final List<WmlBlock> out = <WmlBlock>[];
     for (final WmlSection section in document.sections) {
       for (final WmlBlock block in section.blocks) {
-        switch (_coverageOf(block, paras, startPara, startIdx, endPara, endIdx)) {
+        switch (_coverageOf(
+          block,
+          paras,
+          startPara,
+          startIdx,
+          endPara,
+          endIdx,
+        )) {
           case _WordBlockCover.none:
             break;
           case _WordBlockCover.full:
@@ -2268,7 +2393,13 @@ class WordEditorController extends OfficeController {
             } else if (block is WmlTable) {
               if (_selectionInsideTableOnly(block, startPara, endPara, paras)) {
                 out.addAll(
-                  _slicedParagraphsInRange(paras, startPara, startIdx, endPara, endIdx),
+                  _slicedParagraphsInRange(
+                    paras,
+                    startPara,
+                    startIdx,
+                    endPara,
+                    endIdx,
+                  ),
                 );
               } else {
                 out.add(WmlClone.table(block));
@@ -2485,7 +2616,10 @@ class WordEditorController extends OfficeController {
     return <OfficeClipboardSpan>[
       for (final WmlInline inline in para.inlines)
         if (inline is WmlRun)
-          OfficeClipboardSpan(text: inline.text, props: inline.properties.copy()),
+          OfficeClipboardSpan(
+            text: inline.text,
+            props: inline.properties.copy(),
+          ),
     ];
   }
 
@@ -2507,9 +2641,9 @@ class WordEditorController extends OfficeController {
   void _replaceBodyWith(List<WmlBlock> blocks) {
     final List<({WmlSection section, List<WmlBlock> blocks})> before =
         <({WmlSection section, List<WmlBlock> blocks})>[
-      for (final WmlSection section in document.sections)
-        (section: section, blocks: List<WmlBlock>.from(section.blocks)),
-    ];
+          for (final WmlSection section in document.sections)
+            (section: section, blocks: List<WmlBlock>.from(section.blocks)),
+        ];
     commands.commit(
       _CallbackCommand(
         executeFn: () {
@@ -2668,10 +2802,7 @@ class WordEditorController extends OfficeController {
                 ? <WmlInline>[WmlRun()]
                 : <WmlInline>[
                     for (final WmlRun run in tail)
-                      WmlRun(
-                        text: run.text,
-                        properties: run.properties.copy(),
-                      ),
+                      WmlRun(text: run.text, properties: run.properties.copy()),
                   ],
           );
           _insertParagraphAfter(para, next);
@@ -2737,12 +2868,8 @@ class WordEditorController extends OfficeController {
       startIdx = span.start;
       endIdx = span.end;
     } else {
-      final ({
-        int startPara,
-        int startIdx,
-        int endPara,
-        int endIdx,
-      }) range = caret.normalizedRange;
+      final ({int startPara, int startIdx, int endPara, int endIdx}) range =
+          caret.normalizedRange;
       startPara = range.startPara;
       startIdx = range.startIdx;
       endPara = range.endPara;
@@ -2805,6 +2932,7 @@ class WordEditorController extends OfficeController {
     return (start: lastStart, end: lastEnd == 0 ? length : lastEnd);
   }
 
+  /// activeRunProps API.
   WmlRunProps get activeRunProps =>
       WmlRunEdit.propsAt(_activeParagraph, caret.logicalIndex);
 
@@ -2826,6 +2954,7 @@ class WordEditorController extends OfficeController {
     ];
   }
 
+  /// insertText API.
   void insertText(String text) {
     if (!config.allowsMutation || text.isEmpty) {
       return;
@@ -2861,6 +2990,7 @@ class WordEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// deleteSelectionOr API.
   void deleteSelectionOr({required bool backward}) {
     if (!config.allowsMutation) {
       return;
@@ -2987,9 +3117,9 @@ class WordEditorController extends OfficeController {
   void _replaceDocumentWithEmptyParagraph() {
     final List<({WmlSection section, List<WmlBlock> blocks})> before =
         <({WmlSection section, List<WmlBlock> blocks})>[
-      for (final WmlSection section in document.sections)
-        (section: section, blocks: List<WmlBlock>.from(section.blocks)),
-    ];
+          for (final WmlSection section in document.sections)
+            (section: section, blocks: List<WmlBlock>.from(section.blocks)),
+        ];
     final WmlParagraph empty = WmlParagraph(inlines: <WmlInline>[WmlRun()]);
     commands.commit(
       _CallbackCommand(
@@ -3028,14 +3158,14 @@ class WordEditorController extends OfficeController {
     final WmlParagraph startIdentity = paras[startPara];
     final List<({WmlSection section, List<WmlBlock> blocks})> sectionSnaps =
         <({WmlSection section, List<WmlBlock> blocks})>[
-      for (final WmlSection section in document.sections)
-        (section: section, blocks: List<WmlBlock>.from(section.blocks)),
-    ];
+          for (final WmlSection section in document.sections)
+            (section: section, blocks: List<WmlBlock>.from(section.blocks)),
+        ];
     final Map<WmlParagraph, List<WmlInline>> inlineSnaps =
         <WmlParagraph, List<WmlInline>>{
-      for (int p = startPara; p <= endPara; p++)
-        paras[p]: _cloneInlines(paras[p]),
-    };
+          for (int p = startPara; p <= endPara; p++)
+            paras[p]: _cloneInlines(paras[p]),
+        };
     final List<WmlBlock> remove = <WmlBlock>[];
     for (final WmlSection section in document.sections) {
       for (final WmlBlock block in section.blocks) {
@@ -3133,6 +3263,7 @@ class WordEditorController extends OfficeController {
     }
   }
 
+  /// insertParagraphBreak API.
   void insertParagraphBreak() {
     if (!config.allowsMutation) {
       return;
@@ -3246,11 +3377,13 @@ class WordEditorController extends OfficeController {
   }
 
   @override
+  /// beforeHistoryChange API.
   void beforeHistoryChange() {
     _textBeforeLocalEdit = _activeParagraph.text;
   }
 
   @override
+  /// afterHistoryChange API.
   void afterHistoryChange() {
     relayout();
     caret.logicalIndex = caret.logicalIndex.clamp(
@@ -3354,6 +3487,7 @@ class WordEditorController extends OfficeController {
     _writeImeValue();
   }
 
+  /// equationEditingText API.
   String equationEditingText() {
     final WmlEquation? equation = selectedEquation;
     if (equation == null) {
@@ -3437,6 +3571,7 @@ class WordEditorController extends OfficeController {
   }
 
   @visibleForTesting
+  /// applyImeText API.
   void applyImeText(String text) {
     _onIme(
       TextEditingValue(
@@ -3740,6 +3875,7 @@ class WordEditorController extends OfficeController {
     relayout();
   }
 
+  /// selectVisual API.
   void selectVisual(WmlVisual? visual) {
     if (!config.allowsSelection) {
       selectedVisual = null;
@@ -3757,6 +3893,7 @@ class WordEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// togglePictureCropMode API.
   void togglePictureCropMode() {
     if (selectedVisual == null || !selectedVisual!.visual.isPicture) {
       pictureCropMode = false;
@@ -3767,6 +3904,7 @@ class WordEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// beginVisualTransform API.
   void beginVisualTransform() {
     final OfficeVisual? visual = selectedVisual?.visual;
     if (visual == null) {
@@ -3785,6 +3923,7 @@ class WordEditorController extends OfficeController {
     );
   }
 
+  /// previewVisualMove API.
   void previewVisualMove(double dx, [double dy = 0]) {
     final OfficeVisual? visual = selectedVisual?.visual;
     if (visual == null || !config.allowsMutation) {
@@ -3796,6 +3935,7 @@ class WordEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// sectionAtCaret API.
   WmlSection get sectionAtCaret {
     if (document.sections.isEmpty) {
       document.sections.add(WmlSection());
@@ -3814,6 +3954,7 @@ class WordEditorController extends OfficeController {
     return document.sections[document.sectionIndexOf(paras[index])];
   }
 
+  /// sectionIndexAtCaret API.
   int get sectionIndexAtCaret {
     if (document.sections.isEmpty) {
       return 0;
@@ -3829,8 +3970,10 @@ class WordEditorController extends OfficeController {
     return document.sectionIndexOf(paras[index]);
   }
 
+  /// sectionCount API.
   int get sectionCount => document.sections.length;
 
+  /// sectionForPage API.
   WmlSection sectionForPage(int pageIndex) {
     if (pageIndex >= 0 && pageIndex < documentLaidOut.pages.length) {
       final int index = documentLaidOut.pages[pageIndex].sectionIndex;
@@ -3841,8 +3984,10 @@ class WordEditorController extends OfficeController {
     return sectionAtCaret;
   }
 
+  /// sectionAtCaret API.
   WmlSection get _pageSection => sectionAtCaret;
 
+  /// insertSectionBreak API.
   void insertSectionBreak() {
     if (!config.allowsMutation || isEditingComment || isEditingHeaderFooter) {
       return;
@@ -3857,7 +4002,9 @@ class WordEditorController extends OfficeController {
         : <WmlBlock>[];
     final WmlSection next = WmlSection(
       blocks: moved.isEmpty
-          ? <WmlBlock>[WmlParagraph(inlines: <WmlInline>[WmlRun(text: '')])]
+          ? <WmlBlock>[
+              WmlParagraph(inlines: <WmlInline>[WmlRun(text: '')]),
+            ]
           : moved,
       pageSize: current.pageSize,
       margins: current.margins,
@@ -3865,10 +4012,12 @@ class WordEditorController extends OfficeController {
       columnSpace: current.columnSpace,
       columnSep: current.columnSep,
       header: <WmlParagraph>[
-        for (final WmlParagraph para in current.header) WmlClone.paragraph(para),
+        for (final WmlParagraph para in current.header)
+          WmlClone.paragraph(para),
       ],
       footer: <WmlParagraph>[
-        for (final WmlParagraph para in current.footer) WmlClone.paragraph(para),
+        for (final WmlParagraph para in current.footer)
+          WmlClone.paragraph(para),
       ],
     );
     final int at = document.sections.indexOf(current) + 1;
@@ -3907,24 +4056,31 @@ class WordEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// pageMargins API.
   WmlPageMargins get pageMargins => _pageSection.margins;
 
+  /// pageSize API.
   WmlPageSize get pageSize => _pageSection.pageSize;
 
+  /// isPageLandscape API.
   bool get isPageLandscape => pageSize.isLandscape;
 
+  /// pageCount API.
   int get pageCount => documentLaidOut.pages.length;
 
+  /// visiblePageIndex API.
   int get visiblePageIndex {
     final double scale = viewport.scale * (96 / 72);
-    final double viewH =
-        viewport.extent.height > 0 ? viewport.extent.height : 1;
+    final double viewH = viewport.extent.height > 0
+        ? viewport.extent.height
+        : 1;
     return documentLaidOut.pageIndexAtContentY(
       viewport.origin.dy + viewH * 0.35,
       scale,
     );
   }
 
+  /// setPageMargins API.
   void setPageMargins(WmlPageMargins margins) {
     if (!config.allowsMutation) {
       return;
@@ -3941,6 +4097,7 @@ class WordEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// setPageSize API.
   void setPageSize(WmlPageSize size) {
     if (!config.allowsMutation) {
       return;
@@ -3957,10 +4114,12 @@ class WordEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// setPageLandscape API.
   void setPageLandscape(bool landscape) {
     setPageSize(landscape ? pageSize.landscape : pageSize.portrait);
   }
 
+  /// applyParagraphFormat API.
   void applyParagraphFormat(void Function(WmlParagraphProps props) update) {
     if (!config.allowsMutation) {
       return;
@@ -4001,6 +4160,7 @@ class WordEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// setParagraphDirection API.
   void setParagraphDirection({required bool rtl}) {
     applyParagraphFormat((WmlParagraphProps props) {
       props.rightToLeft = rtl;
@@ -4014,6 +4174,7 @@ class WordEditorController extends OfficeController {
     });
   }
 
+  /// toggleList API.
   void toggleList({required bool numbered}) {
     applyParagraphFormat((WmlParagraphProps props) {
       if (props.numId != null) {
@@ -4030,6 +4191,7 @@ class WordEditorController extends OfficeController {
     });
   }
 
+  /// setSectionColumns API.
   void setSectionColumns(int count, {double space = 36, bool sep = false}) {
     if (!config.allowsMutation) {
       return;
@@ -4056,6 +4218,7 @@ class WordEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// insertTextFrame API.
   void insertTextFrame({
     double x = 72,
     double y = 96,
@@ -4068,7 +4231,8 @@ class WordEditorController extends OfficeController {
       return;
     }
     final ({List<WmlBlock> parent, int index})? slot = _topLevelInsertSlot();
-    final List<WmlBlock> parent = slot?.parent ?? document.sections.first.blocks;
+    final List<WmlBlock> parent =
+        slot?.parent ?? document.sections.first.blocks;
     final int index = slot == null ? parent.length : slot.index + 1;
     final WmlFrame frame = WmlFrame(
       x: x,
@@ -4079,9 +4243,7 @@ class WordEditorController extends OfficeController {
       strokeColor: 'B0B0B0',
       blocks: <WmlBlock>[
         WmlParagraph(
-          inlines: <WmlInline>[
-            WmlRun(text: text.isEmpty ? 'Text box' : text),
-          ],
+          inlines: <WmlInline>[WmlRun(text: text.isEmpty ? 'Text box' : text)],
         ),
       ],
     );
@@ -4095,6 +4257,7 @@ class WordEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// insertColumnBreak API.
   void insertColumnBreak() {
     if (!config.allowsMutation) {
       return;
@@ -4105,6 +4268,7 @@ class WordEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// previewVisualResize API.
   void previewVisualResize({required double width, required double height}) {
     final OfficeVisual? visual = selectedVisual?.visual;
     if (visual == null || !config.allowsMutation) {
@@ -4116,6 +4280,7 @@ class WordEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// previewVisualRotate API.
   void previewVisualRotate(double degrees) {
     final OfficeVisual? visual = selectedVisual?.visual;
     if (visual == null || !config.allowsMutation) {
@@ -4125,6 +4290,7 @@ class WordEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// previewVisualCrop API.
   void previewVisualCrop({
     required double left,
     required double top,
@@ -4143,6 +4309,7 @@ class WordEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// commitVisualTransform API.
   void commitVisualTransform() {
     final OfficeVisual? visual = selectedVisual?.visual;
     final snap = _visualSnap;
@@ -4200,6 +4367,7 @@ class WordEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// nudgeSelectedVisual API.
   void nudgeSelectedVisual({
     double dx = 0,
     double dy = 0,
@@ -4219,18 +4387,17 @@ class WordEditorController extends OfficeController {
         bottom: visual.picture.cropBottom + (dy > 0 ? 0.02 : 0),
       );
     } else if (resize) {
-      previewVisualResize(
-        width: visual.width + dx,
-        height: visual.height + dy,
-      );
+      previewVisualResize(width: visual.width + dx, height: visual.height + dy);
     } else {
       previewVisualMove(dx, dy);
     }
     commitVisualTransform();
   }
 
+  /// equations API.
   List<WmlEquation> get equations => document.equations.toList();
 
+  /// selectEquation API.
   void selectEquation(WmlEquation? equation, {int? slot, int? caret}) {
     if (!config.allowsSelection) {
       selectedEquation = null;
@@ -4254,6 +4421,7 @@ class WordEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// insertEquation API.
   void insertEquation(OmmlEquation math) {
     if (!config.allowsMutation) {
       return;
@@ -4288,6 +4456,7 @@ class WordEditorController extends OfficeController {
     onRequestFocus?.call();
   }
 
+  /// deleteSelectedEquation API.
   void deleteSelectedEquation() {
     final WmlEquation? equation = selectedEquation;
     if (equation == null || !config.allowsMutation) {
@@ -4318,6 +4487,7 @@ class WordEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// insertEquationText API.
   void insertEquationText(String text) {
     final WmlEquation? equation = selectedEquation;
     if (equation == null || !config.allowsMutation || text.isEmpty) {
@@ -4343,8 +4513,10 @@ class WordEditorController extends OfficeController {
     _clampEquationCaret();
   }
 
+  /// insertEquationSymbol API.
   void insertEquationSymbol(String symbol) => insertEquationText(symbol);
 
+  /// applyEquationStructure API.
   void applyEquationStructure(OmmlStructure kind) {
     final WmlEquation? equation = selectedEquation;
     if (equation == null || !config.allowsMutation) {
@@ -4372,6 +4544,7 @@ class WordEditorController extends OfficeController {
     }
   }
 
+  /// setEquationView API.
   void setEquationView(OmmlView view) {
     final WmlEquation? equation = selectedEquation;
     if (equation == null || !config.allowsMutation) {
@@ -4391,6 +4564,7 @@ class WordEditorController extends OfficeController {
     });
   }
 
+  /// deleteEquationContent API.
   void deleteEquationContent({required bool backward}) {
     final WmlEquation? equation = selectedEquation;
     if (equation == null || !config.allowsMutation) {
@@ -4477,6 +4651,7 @@ class WordEditorController extends OfficeController {
     _clampEquationCaret();
   }
 
+  /// moveEquationSlot API.
   void moveEquationSlot(int delta) {
     final WmlEquation? equation = selectedEquation;
     if (equation == null) {
@@ -4493,6 +4668,7 @@ class WordEditorController extends OfficeController {
     }
   }
 
+  /// moveEquationArrow API.
   void moveEquationArrow({required int dx, required int dy}) {
     final WmlEquation? equation = selectedEquation;
     if (equation == null) {
@@ -4584,7 +4760,8 @@ class WordEditorController extends OfficeController {
   }) {
     final List<OmmlSeq> all = OmmlEdit.slots(root);
     final Set<int> cellIdx = <int>{
-      for (final OmmlSeq cell in OmmlEdit.cells(root)) OmmlEdit.slotIndexOf(root, cell),
+      for (final OmmlSeq cell in OmmlEdit.cells(root))
+        OmmlEdit.slotIndexOf(root, cell),
     };
     LaidOutOmmlSlot? current;
     for (final LaidOutOmmlSlot slot in omml.slots) {
@@ -4638,6 +4815,7 @@ class WordEditorController extends OfficeController {
     return best?.slotIndex;
   }
 
+  /// Function API.
   void _mutateEquation(void Function(OmmlEquation math) edit) {
     final WmlEquation? equation = selectedEquation;
     if (equation == null) {
@@ -4663,6 +4841,7 @@ class WordEditorController extends OfficeController {
     onRequestFocus?.call();
   }
 
+  /// visualsInSelection API.
   List<WmlVisual> get visualsInSelection {
     if (selectedVisual != null && caret.isCollapsed) {
       return <WmlVisual>[selectedVisual!];
@@ -4678,6 +4857,7 @@ class WordEditorController extends OfficeController {
     ];
   }
 
+  /// isVisualInSelection API.
   bool isVisualInSelection(OfficeVisual visual) {
     for (final WmlVisual candidate in visualsInSelection) {
       if (identical(candidate.visual, visual)) {
@@ -4687,6 +4867,7 @@ class WordEditorController extends OfficeController {
     return false;
   }
 
+  /// extendSelectionThroughVisual API.
   void extendSelectionThroughVisual(OfficeVisual office) {
     if (!config.allowsSelection) {
       return;
@@ -4721,6 +4902,7 @@ class WordEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// selectVisualFromOffice API.
   void selectVisualFromOffice(OfficeVisual? visual) {
     if (visual == null) {
       selectVisual(null);
@@ -4735,6 +4917,7 @@ class WordEditorController extends OfficeController {
     selectVisual(null);
   }
 
+  /// deleteSelectedVisual API.
   void deleteSelectedVisual() {
     final WmlVisual? visual = selectedVisual;
     if (visual == null || !config.allowsMutation) {
@@ -4763,6 +4946,7 @@ class WordEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// updateSelectedVisual API.
   void updateSelectedVisual({
     String? title,
     OfficeVisualKind? kind,
@@ -4817,6 +5001,7 @@ class WordEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// mutateSelectedVisual API.
   void mutateSelectedVisual(void Function(OfficeVisual visual) edit) {
     final WmlVisual? wrap = selectedVisual;
     if (wrap == null || !config.allowsMutation) {
@@ -4836,6 +5021,7 @@ class WordEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// cycleSelectedVisualKind API.
   void cycleSelectedVisualKind() {
     final WmlVisual? visual = selectedVisual;
     if (visual == null) {
@@ -4846,8 +5032,7 @@ class WordEditorController extends OfficeController {
 
   bool _selectNeighborVisual(int delta, {required bool requireEdge}) {
     final WmlParagraph para = _activeParagraph;
-    if (delta > 0 &&
-        (!requireEdge || caret.logicalIndex >= para.text.length)) {
+    if (delta > 0 && (!requireEdge || caret.logicalIndex >= para.text.length)) {
       final WmlBlock? next = _siblingBlock(para, after: true);
       if (next is WmlVisual) {
         selectedVisual = next;
@@ -4956,14 +5141,16 @@ class WordEditorController extends OfficeController {
   List<LaidOutLine> _contentLines() {
     return <LaidOutLine>[
       for (final LaidOutPage page in laidOut.pages)
-        for (final LaidOutLine line in page.lines)
-          line,
+        for (final LaidOutLine line in page.lines) line,
     ];
   }
 
   int _lineIndexOfCaret(List<LaidOutLine> lines) {
     for (int i = 0; i < lines.length; i++) {
-      if (caret.isOnLine(lines[i], lastOfParagraph: _isLastContentLine(lines, i))) {
+      if (caret.isOnLine(
+        lines[i],
+        lastOfParagraph: _isLastContentLine(lines, i),
+      )) {
         return i;
       }
     }
@@ -5094,7 +5281,11 @@ class WordEditorController extends OfficeController {
     return null;
   }
 
-  bool _isVisualBetweenParagraphs(WmlVisual visual, int startPara, int endPara) {
+  bool _isVisualBetweenParagraphs(
+    WmlVisual visual,
+    int startPara,
+    int endPara,
+  ) {
     if (endPara <= startPara) {
       return false;
     }
@@ -5216,6 +5407,7 @@ class WordEditorController extends OfficeController {
   }
 
   @override
+  /// semanticsLabel API.
   String get semanticsLabel {
     final WmlVisual? visual = selectedVisual;
     if (visual != null) {
@@ -5229,6 +5421,7 @@ class WordEditorController extends OfficeController {
   }
 
   @override
+  /// semanticsValue API.
   String get semanticsValue {
     final WmlVisual? visual = selectedVisual;
     if (visual != null) {
@@ -5245,6 +5438,7 @@ enum _WordBlockCover { none, partial, full }
 
 /// Spreadsheet controller: selection, formula bar, cell IME.
 class SheetEditorController extends OfficeController {
+  /// SheetEditorController API.
   SheetEditorController({
     SmlWorkbook? workbook,
     super.config,
@@ -5258,6 +5452,7 @@ class SheetEditorController extends OfficeController {
     recalculateWorkbook();
   }
 
+  /// fromBytes API.
   factory SheetEditorController.fromBytes(
     Uint8List bytes, {
     String? password,
@@ -5270,22 +5465,35 @@ class SheetEditorController extends OfficeController {
     return controller;
   }
 
+  /// workbook API.
   SmlWorkbook workbook;
   int _activeSheet;
+
+  /// selection API.
   final SelectionMatrix selection = SelectionMatrix();
+
+  /// cellEditor API.
   late final InlineCellEditor cellEditor;
+
+  /// selectedDrawingIndex API.
   int? selectedDrawingIndex;
   var _applyingPoint = false;
   int? _pointStart;
   int? _pointEnd;
   SmlCellRef? _pointAnchor;
+
+  /// functionSuggestions API.
   List<FormulaFnDoc> functionSuggestions = const <FormulaFnDoc>[];
+
+  /// functionSuggestionIndex API.
   var functionSuggestionIndex = 0;
   var _suppressFunctionSuggestions = false;
   String? _suppressedFunctionPrefix;
 
+  /// activeSheetIndex API.
   int get activeSheetIndex => _activeSheet;
 
+  /// sheet API.
   SmlWorksheet get sheet {
     if (workbook.sheets.isEmpty) {
       workbook.sheets.add(SmlWorksheet(name: 'Sheet1', sheetId: 1));
@@ -5294,8 +5502,10 @@ class SheetEditorController extends OfficeController {
   }
 
   @override
+  /// kind API.
   OpcPackageKind get kind => OpcPackageKind.sheet;
 
+  /// formulaBarText API.
   String get formulaBarText {
     if (cellEditor.editing) {
       return cellEditor.formulaBar;
@@ -5304,6 +5514,7 @@ class SheetEditorController extends OfficeController {
     return cell.formula ?? cell.asString;
   }
 
+  /// cellDisplayText API.
   String cellDisplayText(SmlCell cell) {
     if (cellEditor.editing &&
         cell.ref.col == selection.focus.col &&
@@ -5318,6 +5529,7 @@ class SheetEditorController extends OfficeController {
     return _formatCellValue(cell.value);
   }
 
+  /// recalculateWorkbook API.
   void recalculateWorkbook() {
     FormulaEvaluator.recalculate(workbook);
     SheetChartData.refreshWorkbook(workbook);
@@ -5336,15 +5548,15 @@ class SheetEditorController extends OfficeController {
     return value.toString();
   }
 
+  /// loadBytes API.
   void loadBytes(Uint8List bytes, {String? password}) {
     _acceptOpenedWorkbook(
-      SheetDeserializer().read(
-        OfficeRepair.open(bytes, password: password),
-      ),
+      SheetDeserializer().read(OfficeRepair.open(bytes, password: password)),
       recalculate: true,
     );
   }
 
+  /// loadBytesAsync API.
   Future<void> loadBytesAsync(
     Uint8List bytes, {
     String? password,
@@ -5372,11 +5584,13 @@ class SheetEditorController extends OfficeController {
   }
 
   @override
+  /// afterHistoryChange API.
   void afterHistoryChange() {
     recalculateWorkbook();
   }
 
   @override
+  /// saveBytes API.
   Uint8List saveBytes({String? password}) {
     final Uint8List bytes = SheetSerializer().writeBytes(
       workbook,
@@ -5387,10 +5601,12 @@ class SheetEditorController extends OfficeController {
   }
 
   @override
+  /// saveBytesAsync API.
   Future<Uint8List> saveBytesAsync({String? password}) {
     return OfficeIsolateSave.workbook(workbook, password: password);
   }
 
+  /// setActiveSheet API.
   void setActiveSheet(int index) {
     _activeSheet = index.clamp(0, workbook.sheets.length - 1);
     selectedDrawingIndex = null;
@@ -5399,6 +5615,7 @@ class SheetEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// setSheetRightToLeft API.
   void setSheetRightToLeft(bool value) {
     if (sheet.rightToLeft == value) {
       return;
@@ -5407,12 +5624,15 @@ class SheetEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// toggleSheetRightToLeft API.
   void toggleSheetRightToLeft() {
     setSheetRightToLeft(!sheet.rightToLeft);
   }
 
+  /// hasFrozenPanes API.
   bool get hasFrozenPanes => sheet.freezeRows > 0 || sheet.freezeCols > 0;
 
+  /// unfreezePanes API.
   void unfreezePanes() {
     if (!hasFrozenPanes) {
       return;
@@ -5456,6 +5676,7 @@ class SheetEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// toggleFreezePanes API.
   void toggleFreezePanes() {
     if (hasFrozenPanes) {
       unfreezePanes();
@@ -5464,6 +5685,7 @@ class SheetEditorController extends OfficeController {
     }
   }
 
+  /// freezeTopRow API.
   void freezeTopRow() {
     sheet.freezeRows = 1;
     sheet.freezeCols = 0;
@@ -5471,6 +5693,7 @@ class SheetEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// freezeFirstColumn API.
   void freezeFirstColumn() {
     sheet.freezeRows = 0;
     sheet.freezeCols = 1;
@@ -5478,6 +5701,7 @@ class SheetEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// selectedDrawing API.
   SmlDrawing? get selectedDrawing {
     final int? index = selectedDrawingIndex;
     if (index == null || index < 0 || index >= sheet.drawings.length) {
@@ -5486,6 +5710,7 @@ class SheetEditorController extends OfficeController {
     return sheet.drawings[index];
   }
 
+  /// selectDrawing API.
   void selectDrawing(int? index) {
     if (!config.allowsSelection) {
       selectedDrawingIndex = null;
@@ -5496,6 +5721,7 @@ class SheetEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// deleteSelectedDrawing API.
   void deleteSelectedDrawing() {
     final int? index = selectedDrawingIndex;
     if (index == null || !config.allowsMutation) {
@@ -5513,7 +5739,10 @@ class SheetEditorController extends OfficeController {
         },
         undoFn: () {
           if (!sheet.drawings.contains(drawing)) {
-            sheet.drawings.insert(index.clamp(0, sheet.drawings.length), drawing);
+            sheet.drawings.insert(
+              index.clamp(0, sheet.drawings.length),
+              drawing,
+            );
           }
           selectedDrawingIndex = sheet.drawings.indexOf(drawing);
         },
@@ -5522,6 +5751,7 @@ class SheetEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// nudgeSelectedDrawing API.
   void nudgeSelectedDrawing(int dc, int dr) {
     final SmlDrawing? drawing = selectedDrawing;
     if (drawing == null || !config.allowsMutation) {
@@ -5549,6 +5779,7 @@ class SheetEditorController extends OfficeController {
 
   ({int col, int row, double ox, double oy, double w, double h})? _drawingSnap;
 
+  /// beginDrawingTransform API.
   void beginDrawingTransform() {
     final SmlDrawing? drawing = selectedDrawing;
     if (drawing == null) {
@@ -5564,6 +5795,7 @@ class SheetEditorController extends OfficeController {
     );
   }
 
+  /// previewDrawingMove API.
   void previewDrawingMove(double dx, double dy) {
     final SmlDrawing? drawing = selectedDrawing;
     if (drawing == null || !config.allowsMutation) {
@@ -5577,6 +5809,7 @@ class SheetEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// previewDrawingResize API.
   void previewDrawingResize({
     required double left,
     required double top,
@@ -5593,6 +5826,7 @@ class SheetEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// commitDrawingTransform API.
   void commitDrawingTransform() {
     final SmlDrawing? drawing = selectedDrawing;
     final snap = _drawingSnap;
@@ -5642,7 +5876,10 @@ class SheetEditorController extends OfficeController {
   }
 
   void _placeDrawing(SmlDrawing drawing, double x, double y) {
-    final double px = x.clamp(0, sheet.columnLeft(SmlWorksheet.excelColumnCount - 1));
+    final double px = x.clamp(
+      0,
+      sheet.columnLeft(SmlWorksheet.excelColumnCount - 1),
+    );
     final double py = y.clamp(0, sheet.rowTop(SmlWorksheet.excelRowCount - 1));
     drawing.col = sheet.columnAt(px);
     drawing.row = sheet.rowAt(py);
@@ -5650,6 +5887,7 @@ class SheetEditorController extends OfficeController {
     drawing.offsetY = py - sheet.rowTop(drawing.row);
   }
 
+  /// updateSelectedDrawing API.
   void updateSelectedDrawing({
     String? title,
     OfficeVisualKind? kind,
@@ -5703,6 +5941,7 @@ class SheetEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// mutateSelectedDrawing API.
   void mutateSelectedDrawing(void Function(OfficeVisual visual) edit) {
     final SmlDrawing? drawing = selectedDrawing;
     if (drawing == null || !config.allowsMutation) {
@@ -5721,15 +5960,19 @@ class SheetEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// cycleSelectedDrawingKind API.
   void cycleSelectedDrawingKind() {
     final SmlDrawing? drawing = selectedDrawing;
     if (drawing == null) {
       return;
     }
-    updateSelectedDrawing(kind: WordEditorController._nextVisualKind(drawing.visual.kind));
+    updateSelectedDrawing(
+      kind: WordEditorController._nextVisualKind(drawing.visual.kind),
+    );
   }
 
   @override
+  /// selectAll API.
   void selectAll() {
     if (!config.allowsSelection) {
       return;
@@ -5774,6 +6017,7 @@ class SheetEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// moveSelection API.
   void moveSelection(int dc, int dr, {bool extend = false}) {
     if (!config.allowsSelection) {
       return;
@@ -5789,6 +6033,7 @@ class SheetEditorController extends OfficeController {
     );
   }
 
+  /// jumpSelectionByOccupancy API.
   void jumpSelectionByOccupancy(int dc, int dr, {bool extend = false}) {
     if (!config.allowsSelection) {
       return;
@@ -5800,6 +6045,7 @@ class SheetEditorController extends OfficeController {
     );
   }
 
+  /// moveSelectionTo API.
   void moveSelectionTo(SmlCellRef ref, {bool extend = false}) {
     if (!config.allowsSelection) {
       return;
@@ -5818,11 +6064,10 @@ class SheetEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// panSheet API.
   void panSheet(Offset delta, {bool zoom = false}) {
     if (zoom) {
-      viewport.setScale(
-        viewport.scale * (delta.dy > 0 ? 0.9 : 1.1),
-      );
+      viewport.setScale(viewport.scale * (delta.dy > 0 ? 0.9 : 1.1));
     } else {
       viewport.pan(delta);
     }
@@ -5830,6 +6075,7 @@ class SheetEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// visibleRowPage API.
   int get visibleRowPage {
     final double inner = viewport.extent.height - 48;
     final double h = sheet.rowHeightAt(selection.focus.row) * viewport.scale;
@@ -5839,6 +6085,7 @@ class SheetEditorController extends OfficeController {
     return (inner / h).floor().clamp(1, 200);
   }
 
+  /// visibleColPage API.
   int get visibleColPage {
     final double inner = viewport.extent.width - 28;
     final double w = sheet.columnWidth(selection.focus.col) * viewport.scale;
@@ -5848,6 +6095,7 @@ class SheetEditorController extends OfficeController {
     return (inner / w).floor().clamp(1, 64);
   }
 
+  /// scrollTarget API.
   SmlCellRef scrollTarget([SmlCellRef? ref]) {
     final SmlCellRef cell = ref ?? selection.focus;
     if (selection.isFullRowSelection) {
@@ -5859,6 +6107,7 @@ class SheetEditorController extends OfficeController {
     return cell;
   }
 
+  /// lastUsedCell API.
   SmlCellRef lastUsedCell() {
     var maxC = 0;
     var maxR = 0;
@@ -5879,6 +6128,7 @@ class SheetEditorController extends OfficeController {
     return any ? SmlCellRef(maxC, maxR) : const SmlCellRef(0, 0);
   }
 
+  /// lastUsedColOnRow API.
   int lastUsedColOnRow(int row) {
     final SmlRow? data = sheet.rows[row];
     if (data == null || data.cells.isEmpty) {
@@ -5897,6 +6147,7 @@ class SheetEditorController extends OfficeController {
     return maxC;
   }
 
+  /// ensureCellVisible API.
   void ensureCellVisible([SmlCellRef? ref]) {
     final SmlCellRef cell = ref ?? scrollTarget();
     final double scale = viewport.scale <= 0 ? 1 : viewport.scale;
@@ -5906,10 +6157,10 @@ class SheetEditorController extends OfficeController {
     final Size view = viewport.extent;
     final double frozenW = sheet.columnLeft(sheet.freezeCols) * scale;
     final double frozenH = sheet.rowTop(sheet.freezeRows) * scale;
-    final double viewW =
-        view.width > headW + 1 ? view.width - headW : 1;
-    final double viewH =
-        view.height > barH + headH + 1 ? view.height - barH - headH : 1;
+    final double viewW = view.width > headW + 1 ? view.width - headW : 1;
+    final double viewH = view.height > barH + headH + 1
+        ? view.height - barH - headH
+        : 1;
     final double left = sheet.columnLeft(cell.col) * scale;
     final double right = left + sheet.columnWidth(cell.col) * scale;
     final double top = sheet.rowTop(cell.row) * scale;
@@ -5934,6 +6185,7 @@ class SheetEditorController extends OfficeController {
     clampSheetViewport();
   }
 
+  /// clampSheetViewport API.
   void clampSheetViewport() {
     final double scale = viewport.scale <= 0 ? 1 : viewport.scale;
     final double headW = config.showGridHeaders ? 28 : 0;
@@ -5986,6 +6238,7 @@ class SheetEditorController extends OfficeController {
   Map<int, double>? _resizeFromCols;
   Map<int, double>? _resizeFromRows;
 
+  /// previewColumnWidth API.
   void previewColumnWidth(int col, double px) {
     if (!config.allowsMutation) {
       return;
@@ -6000,6 +6253,7 @@ class SheetEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// previewRowHeight API.
   void previewRowHeight(int row, double px) {
     if (!config.allowsMutation) {
       return;
@@ -6014,6 +6268,7 @@ class SheetEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// commitResize API.
   void commitResize() {
     if (_resizeFromCols != null) {
       final Map<int, double> from = _resizeFromCols!;
@@ -6086,6 +6341,7 @@ class SheetEditorController extends OfficeController {
     }
   }
 
+  /// nudgeColumnWidth API.
   void nudgeColumnWidth(double delta) {
     if (!config.allowsMutation) {
       return;
@@ -6095,6 +6351,7 @@ class SheetEditorController extends OfficeController {
     commitResize();
   }
 
+  /// nudgeRowHeight API.
   void nudgeRowHeight(double delta) {
     if (!config.allowsMutation) {
       return;
@@ -6105,14 +6362,17 @@ class SheetEditorController extends OfficeController {
   }
 
   @override
+  /// canCopy API.
   bool get canCopy => true;
 
   @override
+  /// copyToClipboard API.
   Future<void> copyToClipboard() async {
     await OfficeClipboard.instance.write(_captureSheetClipboard());
   }
 
   @override
+  /// cutToClipboard API.
   Future<void> cutToClipboard() async {
     if (!canCut) {
       return;
@@ -6126,13 +6386,15 @@ class SheetEditorController extends OfficeController {
   }
 
   @override
+  /// pasteFromClipboard API.
   Future<void> pasteFromClipboard({
     OfficePasteMode mode = OfficePasteMode.keepSource,
   }) async {
     if (!canPaste) {
       return;
     }
-    final OfficeClipboardPayload payload = await OfficeClipboard.instance.read();
+    final OfficeClipboardPayload payload = await OfficeClipboard.instance
+        .read();
     if (payload.isEmpty) {
       return;
     }
@@ -6141,7 +6403,10 @@ class SheetEditorController extends OfficeController {
       return;
     }
     if (mode != OfficePasteMode.keepTextOnly && payload.hasCells) {
-      _pasteSheetCells(payload.cells, formulas: mode == OfficePasteMode.keepSource);
+      _pasteSheetCells(
+        payload.cells,
+        formulas: mode == OfficePasteMode.keepSource,
+      );
       return;
     }
     _pasteSheetTsv(payload.plain, formulas: mode == OfficePasteMode.keepSource);
@@ -6279,22 +6544,20 @@ class SheetEditorController extends OfficeController {
     if (rows.isEmpty) {
       return;
     }
-    _pasteSheetCells(
-      <List<OfficeClipboardCell>>[
-        for (final List<String> row in rows)
-          <OfficeClipboardCell>[
-            for (final String cell in row)
-              OfficeClipboardCell(
-                text: cell,
-                value: cell,
-                type: SmlCellType.string,
-              ),
-          ],
-      ],
-      formulas: formulas,
-    );
+    _pasteSheetCells(<List<OfficeClipboardCell>>[
+      for (final List<String> row in rows)
+        <OfficeClipboardCell>[
+          for (final String cell in row)
+            OfficeClipboardCell(
+              text: cell,
+              value: cell,
+              type: SmlCellType.string,
+            ),
+        ],
+    ], formulas: formulas);
   }
 
+  /// clearSelectedCells API.
   void clearSelectedCells() {
     if (!config.allowsMutation || cellEditor.editing) {
       return;
@@ -6321,66 +6584,73 @@ class SheetEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// insertSheetRows API.
   void insertSheetRows({required bool after, int? index, int count = 1}) {
     if (!config.allowsMutation || count <= 0) {
       return;
     }
     final SmlRange range = selection.range;
-    final int minRow =
-        range.start.row < range.end.row ? range.start.row : range.end.row;
-    final int maxRow =
-        range.start.row > range.end.row ? range.start.row : range.end.row;
+    final int minRow = range.start.row < range.end.row
+        ? range.start.row
+        : range.end.row;
+    final int maxRow = range.start.row > range.end.row
+        ? range.start.row
+        : range.end.row;
     final int at = index ?? (after ? maxRow + 1 : minRow);
     _mutateSheetGrid(() => sheet.insertRows(at, count));
     selection.selectCell(SmlCellRef(selection.focus.col, at.clamp(0, 1048575)));
     notifyListeners();
   }
 
+  /// insertSheetCols API.
   void insertSheetCols({required bool after, int? index, int count = 1}) {
     if (!config.allowsMutation || count <= 0) {
       return;
     }
     final SmlRange range = selection.range;
-    final int minCol =
-        range.start.col < range.end.col ? range.start.col : range.end.col;
-    final int maxCol =
-        range.start.col > range.end.col ? range.start.col : range.end.col;
+    final int minCol = range.start.col < range.end.col
+        ? range.start.col
+        : range.end.col;
+    final int maxCol = range.start.col > range.end.col
+        ? range.start.col
+        : range.end.col;
     final int at = index ?? (after ? maxCol + 1 : minCol);
     _mutateSheetGrid(() => sheet.insertCols(at, count));
     selection.selectCell(SmlCellRef(at.clamp(0, 16383), selection.focus.row));
     notifyListeners();
   }
 
+  /// deleteSheetRows API.
   void deleteSheetRows({int? index, int count = 1}) {
     if (!config.allowsMutation || count <= 0) {
       return;
     }
     final SmlRange range = selection.range;
-    final int minRow =
-        range.start.row < range.end.row ? range.start.row : range.end.row;
+    final int minRow = range.start.row < range.end.row
+        ? range.start.row
+        : range.end.row;
     final int at = index ?? minRow;
     _mutateSheetGrid(() => sheet.deleteRows(at, count));
-    selection.selectCell(
-      SmlCellRef(selection.focus.col, at.clamp(0, 1048575)),
-    );
+    selection.selectCell(SmlCellRef(selection.focus.col, at.clamp(0, 1048575)));
     notifyListeners();
   }
 
+  /// deleteSheetCols API.
   void deleteSheetCols({int? index, int count = 1}) {
     if (!config.allowsMutation || count <= 0) {
       return;
     }
     final SmlRange range = selection.range;
-    final int minCol =
-        range.start.col < range.end.col ? range.start.col : range.end.col;
+    final int minCol = range.start.col < range.end.col
+        ? range.start.col
+        : range.end.col;
     final int at = index ?? minCol;
     _mutateSheetGrid(() => sheet.deleteCols(at, count));
-    selection.selectCell(
-      SmlCellRef(at.clamp(0, 16383), selection.focus.row),
-    );
+    selection.selectCell(SmlCellRef(at.clamp(0, 16383), selection.focus.row));
     notifyListeners();
   }
 
+  /// Function API.
   void _mutateSheetGrid(void Function() mutate) {
     final _SheetGridSnap snap = _SheetGridSnap.capture(sheet);
     commands.commit(
@@ -6417,6 +6687,7 @@ class SheetEditorController extends OfficeController {
     );
   }
 
+  /// beginCellEdit API.
   void beginCellEdit({String? initial, bool replace = false, int? caret}) {
     if (!config.allowsMutation) {
       return;
@@ -6435,6 +6706,7 @@ class SheetEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// canPointEditRefs API.
   bool get canPointEditRefs {
     if (!cellEditor.editing) {
       return false;
@@ -6474,23 +6746,27 @@ class SheetEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// highlightedFunction API.
   FormulaFnDoc? get highlightedFunction {
     if (functionSuggestions.isEmpty) {
       return null;
     }
-    return functionSuggestions[
-        functionSuggestionIndex.clamp(0, functionSuggestions.length - 1)];
+    return functionSuggestions[functionSuggestionIndex.clamp(
+      0,
+      functionSuggestions.length - 1,
+    )];
   }
 
+  /// highlightFunctionSuggestion API.
   void highlightFunctionSuggestion(int index) {
     if (functionSuggestions.isEmpty) {
       return;
     }
-    functionSuggestionIndex =
-        index.clamp(0, functionSuggestions.length - 1);
+    functionSuggestionIndex = index.clamp(0, functionSuggestions.length - 1);
     notifyListeners();
   }
 
+  /// moveFunctionSuggestion API.
   void moveFunctionSuggestion(int delta) {
     if (functionSuggestions.isEmpty) {
       return;
@@ -6498,6 +6774,7 @@ class SheetEditorController extends OfficeController {
     highlightFunctionSuggestion(functionSuggestionIndex + delta);
   }
 
+  /// dismissFunctionSuggestions API.
   void dismissFunctionSuggestions() {
     _suppressedFunctionPrefix = FormulaFunctionGuide.queryAt(
       cellEditor.formulaBar,
@@ -6509,6 +6786,7 @@ class SheetEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// applyFunctionSuggestion API.
   bool applyFunctionSuggestion([int? index]) {
     if (functionSuggestions.isEmpty) {
       return false;
@@ -6520,19 +6798,23 @@ class SheetEditorController extends OfficeController {
     if (query == null) {
       return false;
     }
-    final FormulaFnDoc doc = functionSuggestions[
-        (index ?? functionSuggestionIndex)
-            .clamp(0, functionSuggestions.length - 1)];
+    final FormulaFnDoc doc =
+        functionSuggestions[(index ?? functionSuggestionIndex).clamp(
+          0,
+          functionSuggestions.length - 1,
+        )];
     cellEditor.replaceRange(query.start, query.end, '${doc.name}(');
     return true;
   }
 
+  /// deleteEditBackward API.
   void deleteEditBackward() {
     if (cellEditor.editing) {
       cellEditor.deleteBackward();
     }
   }
 
+  /// deleteEditForward API.
   void deleteEditForward() {
     if (cellEditor.editing) {
       cellEditor.deleteForward();
@@ -6602,6 +6884,7 @@ class SheetEditorController extends OfficeController {
     return '${a.a1}:${b.a1}';
   }
 
+  /// placeEditCaret API.
   void placeEditCaret(int index, {bool extend = false}) {
     if (!cellEditor.editing) {
       return;
@@ -6609,6 +6892,7 @@ class SheetEditorController extends OfficeController {
     cellEditor.setCaret(index, extend: extend);
   }
 
+  /// moveEditCaret API.
   void moveEditCaret(int delta, {bool extend = false}) {
     if (!cellEditor.editing) {
       return;
@@ -6616,12 +6900,14 @@ class SheetEditorController extends OfficeController {
     cellEditor.moveCaret(delta, extend: extend);
   }
 
+  /// commitCellEdit API.
   void commitCellEdit() {
     _clearPoint();
     functionSuggestions = const <FormulaFnDoc>[];
     cellEditor.end();
   }
 
+  /// cancelCellEdit API.
   void cancelCellEdit() {
     if (!cellEditor.editing) {
       return;
@@ -6634,6 +6920,7 @@ class SheetEditorController extends OfficeController {
   }
 
   @override
+  /// detachInput API.
   void detachInput() {
     if (cellEditor.editing) {
       cancelCellEdit();
@@ -6664,6 +6951,7 @@ class SheetEditorController extends OfficeController {
   }
 
   @override
+  /// semanticsLabel API.
   String get semanticsLabel {
     final SmlDrawing? drawing = selectedDrawing;
     if (drawing != null) {
@@ -6676,6 +6964,7 @@ class SheetEditorController extends OfficeController {
   }
 
   @override
+  /// semanticsValue API.
   String get semanticsValue {
     final SmlDrawing? drawing = selectedDrawing;
     if (drawing != null) {
@@ -6688,12 +6977,14 @@ class SheetEditorController extends OfficeController {
 
 /// Presentation controller: slide index, shape selection, transforms.
 class SlideEditorController extends OfficeController {
+  /// SlideEditorController API.
   SlideEditorController({
     PmlPresentation? presentation,
     super.config,
     this._activeSlide = 0,
   }) : presentation = presentation ?? PmlPresentation();
 
+  /// fromBytes API.
   factory SlideEditorController.fromBytes(
     Uint8List bytes, {
     String? password,
@@ -6706,24 +6997,36 @@ class SlideEditorController extends OfficeController {
     return controller;
   }
 
+  /// presentation API.
   PmlPresentation presentation;
   int _activeSlide;
+
+  /// selected API.
   PmlShape? selected;
+
+  /// selectedTableRow API.
   int selectedTableRow = 0;
+
+  /// selectedTableCol API.
   int selectedTableCol = 0;
   int? _selectedAnimationIndex;
   PmlSlideShow? _show;
   String? _textBeforeEdit;
+
+  /// textEditor API.
   late final InlineCellEditor textEditor = InlineCellEditor(
     onCommit: _commitShapeText,
     onChanged: _onShapeTextChanged,
     commitOnNewline: false,
   );
 
+  /// activeSlideIndex API.
   int get activeSlideIndex => _activeSlide;
 
+  /// speakerNotes API.
   String get speakerNotes => slide.notes;
 
+  /// slide API.
   PmlSlide get slide {
     if (presentation.slides.isEmpty) {
       presentation.slides.add(PmlSlide(id: 256));
@@ -6735,16 +7038,17 @@ class SlideEditorController extends OfficeController {
   }
 
   @override
+  /// kind API.
   OpcPackageKind get kind => OpcPackageKind.slide;
 
+  /// loadBytes API.
   void loadBytes(Uint8List bytes, {String? password}) {
     _acceptOpenedPresentation(
-      SlideDeserializer().read(
-        OfficeRepair.open(bytes, password: password),
-      ),
+      SlideDeserializer().read(OfficeRepair.open(bytes, password: password)),
     );
   }
 
+  /// loadBytesAsync API.
   Future<void> loadBytesAsync(
     Uint8List bytes, {
     String? password,
@@ -6772,6 +7076,7 @@ class SlideEditorController extends OfficeController {
   }
 
   @override
+  /// saveBytes API.
   Uint8List saveBytes({String? password}) {
     final Uint8List bytes = SlideSerializer().writeBytes(
       presentation,
@@ -6782,13 +7087,12 @@ class SlideEditorController extends OfficeController {
   }
 
   @override
+  /// saveBytesAsync API.
   Future<Uint8List> saveBytesAsync({String? password}) {
-    return OfficeIsolateSave.presentation(
-      presentation,
-      password: password,
-    );
+    return OfficeIsolateSave.presentation(presentation, password: password);
   }
 
+  /// setActiveSlide API.
   void setActiveSlide(int index) {
     if (textEditor.editing) {
       commitTextEdit();
@@ -6799,6 +7103,7 @@ class SlideEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// reorderSlide API.
   void reorderSlide(int from, int to) {
     if (!config.allowsMutation) {
       return;
@@ -6831,6 +7136,7 @@ class SlideEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// setSlideHidden API.
   void setSlideHidden(int index, bool hidden) {
     if (!config.allowsMutation) {
       return;
@@ -6851,6 +7157,7 @@ class SlideEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// toggleSlideHidden API.
   void toggleSlideHidden(int index) {
     if (index < 0 || index >= presentation.slides.length) {
       return;
@@ -6871,20 +7178,27 @@ class SlideEditorController extends OfficeController {
     return active;
   }
 
+  /// isPlayingMotion API.
   bool get isPlayingMotion => _show?.presenting == true;
 
+  /// isPreviewing API.
   bool get isPreviewing =>
       _show?.presenting == true && (_show?.isPreview ?? false);
 
+  /// isPresenting API.
   bool get isPresenting =>
       _show?.presenting == true && !(_show?.isPreview ?? false);
 
+  /// slideShow API.
   PmlSlideShow? get slideShow => _show;
 
   PmlShape? _restoreSelected;
   int? _restoreAnimationIndex;
+
+  /// motionFrame API.
   final ValueNotifier<int> motionFrame = ValueNotifier<int>(0);
 
+  /// showSamples API.
   Map<int, PmlAnimSample> get showSamples {
     final PmlSlideShow? show = _show;
     if (show == null || !show.presenting) {
@@ -6896,6 +7210,7 @@ class SlideEditorController extends OfficeController {
     };
   }
 
+  /// selectedAnimationIndex API.
   int? get selectedAnimationIndex {
     final int? index = _selectedAnimationIndex;
     if (index == null || index < 0 || index >= slide.animations.length) {
@@ -6904,6 +7219,7 @@ class SlideEditorController extends OfficeController {
     return index;
   }
 
+  /// selectedAnimation API.
   PmlShapeAnimation? get selectedAnimation {
     final int? index = selectedAnimationIndex;
     if (index == null) {
@@ -6912,13 +7228,12 @@ class SlideEditorController extends OfficeController {
     return slide.animations[index];
   }
 
+  /// startShow API.
   void startShow({int? from, bool withTransition = false}) {
-    _beginShow(
-      from: from,
-      withTransition: withTransition,
-    );
+    _beginShow(from: from, withTransition: withTransition);
   }
 
+  /// previewTransition API.
   void previewTransition() {
     if (slide.transition.isNone) {
       return;
@@ -6931,6 +7246,7 @@ class SlideEditorController extends OfficeController {
     );
   }
 
+  /// previewAnimations API.
   void previewAnimations() {
     if (slide.animations.isEmpty) {
       return;
@@ -6943,6 +7259,7 @@ class SlideEditorController extends OfficeController {
     );
   }
 
+  /// previewAnimationAt API.
   void previewAnimationAt(int index) {
     if (index < 0 || index >= slide.animations.length) {
       return;
@@ -6996,6 +7313,7 @@ class SlideEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// endShow API.
   void endShow() {
     if (_show == null) {
       return;
@@ -7014,6 +7332,7 @@ class SlideEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// showNext API.
   void showNext() {
     final PmlSlideShow? show = _show;
     if (show == null) {
@@ -7028,6 +7347,7 @@ class SlideEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// showPrevious API.
   void showPrevious() {
     final PmlSlideShow? show = _show;
     if (show == null) {
@@ -7038,6 +7358,7 @@ class SlideEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// tickShow API.
   void tickShow(int milliseconds) {
     final PmlSlideShow? show = _show;
     if (show == null || !show.presenting) {
@@ -7057,6 +7378,7 @@ class SlideEditorController extends OfficeController {
     motionFrame.value++;
   }
 
+  /// setSlideTransition API.
   void setSlideTransition(
     PmlSlideTransition transition, {
     bool applyToAll = false,
@@ -7076,6 +7398,7 @@ class SlideEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// addShapeAnimation API.
   void addShapeAnimation(
     PmlAnimPreset preset, {
     PmlAnimTrigger trigger = PmlAnimTrigger.onClick,
@@ -7100,6 +7423,7 @@ class SlideEditorController extends OfficeController {
     previewAnimationAt(_selectedAnimationIndex!);
   }
 
+  /// selectAnimation API.
   void selectAnimation(int? index) {
     if (index == null || index < 0 || index >= slide.animations.length) {
       _selectedAnimationIndex = null;
@@ -7118,6 +7442,7 @@ class SlideEditorController extends OfficeController {
     previewAnimationAt(index);
   }
 
+  /// updateShapeAnimation API.
   void updateShapeAnimation(
     int index, {
     PmlAnimTrigger? trigger,
@@ -7144,6 +7469,7 @@ class SlideEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// removeShapeAnimation API.
   void removeShapeAnimation(int index) {
     if (index < 0 || index >= slide.animations.length) {
       return;
@@ -7154,7 +7480,9 @@ class SlideEditorController extends OfficeController {
     }
     if (_selectedAnimationIndex != null) {
       if (_selectedAnimationIndex == index) {
-        _selectedAnimationIndex = slide.animations.isEmpty ? null : index.clamp(0, slide.animations.length - 1);
+        _selectedAnimationIndex = slide.animations.isEmpty
+            ? null
+            : index.clamp(0, slide.animations.length - 1);
       } else if (_selectedAnimationIndex! > index) {
         _selectedAnimationIndex = _selectedAnimationIndex! - 1;
       }
@@ -7162,6 +7490,7 @@ class SlideEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// moveShapeAnimation API.
   void moveShapeAnimation(int index, int delta) {
     final int next = (index + delta).clamp(0, slide.animations.length - 1);
     if (next == index) {
@@ -7175,6 +7504,7 @@ class SlideEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// setAnimationTrigger API.
   void setAnimationTrigger(int index, PmlAnimTrigger trigger) {
     if (index < 0 || index >= slide.animations.length) {
       return;
@@ -7183,6 +7513,7 @@ class SlideEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// selectShape API.
   void selectShape(PmlShape? shape) {
     if (!config.allowsSelection) {
       selected = null;
@@ -7200,6 +7531,7 @@ class SlideEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// selectTableCell API.
   void selectTableCell(PmlShape shape, int row, int col) {
     if (!config.allowsSelection) {
       return;
@@ -7216,6 +7548,7 @@ class SlideEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// selectedTable API.
   PmlTable? get selectedTable => selected?.table;
 
   int _nextSlideShapeId() {
@@ -7226,6 +7559,7 @@ class SlideEditorController extends OfficeController {
         1;
   }
 
+  /// insertTable API.
   void insertTable({int rows = 3, int cols = 3, bool arabic = false}) {
     if (!config.allowsMutation) {
       return;
@@ -7266,13 +7600,16 @@ class SlideEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// insertSelectedTableRow API.
   void insertSelectedTableRow({required bool after}) {
     final PmlTable? table = selectedTable;
     if (table == null || !config.allowsMutation) {
       return;
     }
-    final int index = (after ? selectedTableRow + 1 : selectedTableRow)
-        .clamp(0, table.rowCount);
+    final int index = (after ? selectedTableRow + 1 : selectedTableRow).clamp(
+      0,
+      table.rowCount,
+    );
     final int cols = table.colCount < 1 ? 1 : table.colCount;
     final List<PmlTableCell> row = <PmlTableCell>[
       for (int c = 0; c < cols; c++)
@@ -7294,13 +7631,16 @@ class SlideEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// insertSelectedTableColumn API.
   void insertSelectedTableColumn({required bool after}) {
     final PmlTable? table = selectedTable;
     if (table == null || !config.allowsMutation) {
       return;
     }
-    final int index = (after ? selectedTableCol + 1 : selectedTableCol)
-        .clamp(0, table.colCount);
+    final int index = (after ? selectedTableCol + 1 : selectedTableCol).clamp(
+      0,
+      table.colCount,
+    );
     final int prevCol = selectedTableCol;
     final List<PmlTableCell> added = <PmlTableCell>[];
     commands.commit(
@@ -7329,6 +7669,7 @@ class SlideEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// deleteSelectedTableRow API.
   void deleteSelectedTableRow() {
     final PmlTable? table = selectedTable;
     if (table == null || table.rowCount <= 1 || !config.allowsMutation) {
@@ -7351,6 +7692,7 @@ class SlideEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// deleteSelectedTableColumn API.
   void deleteSelectedTableColumn() {
     final PmlTable? table = selectedTable;
     if (table == null || table.colCount <= 1 || !config.allowsMutation) {
@@ -7385,6 +7727,7 @@ class SlideEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// moveSelectedTableCell API.
   void moveSelectedTableCell({required bool forward}) {
     final PmlTable? table = selectedTable;
     if (table == null || table.rowCount == 0 || table.colCount == 0) {
@@ -7421,8 +7764,10 @@ class SlideEditorController extends OfficeController {
     beginTextEdit();
   }
 
+  /// editingText API.
   bool get editingText => textEditor.editing;
 
+  /// beginTextEdit API.
   void beginTextEdit({String? initial, bool replace = false, int? caret}) {
     final PmlShape? shape = selected;
     if (shape == null || shape.visual != null || !config.allowsMutation) {
@@ -7448,6 +7793,7 @@ class SlideEditorController extends OfficeController {
   }
 
   @override
+  /// selectAll API.
   void selectAll() {
     if (!config.allowsSelection) {
       return;
@@ -7466,9 +7812,11 @@ class SlideEditorController extends OfficeController {
   }
 
   @override
+  /// canCopy API.
   bool get canCopy => selected != null || textEditor.editing;
 
   @override
+  /// copyToClipboard API.
   Future<void> copyToClipboard() async {
     final OfficeClipboardPayload payload = _captureSlideClipboard();
     if (payload.isEmpty) {
@@ -7478,6 +7826,7 @@ class SlideEditorController extends OfficeController {
   }
 
   @override
+  /// cutToClipboard API.
   Future<void> cutToClipboard() async {
     if (!canCut) {
       return;
@@ -7491,13 +7840,15 @@ class SlideEditorController extends OfficeController {
   }
 
   @override
+  /// pasteFromClipboard API.
   Future<void> pasteFromClipboard({
     OfficePasteMode mode = OfficePasteMode.keepSource,
   }) async {
     if (!canPaste) {
       return;
     }
-    final OfficeClipboardPayload payload = await OfficeClipboard.instance.read();
+    final OfficeClipboardPayload payload = await OfficeClipboard.instance
+        .read();
     if (payload.isEmpty) {
       return;
     }
@@ -7515,7 +7866,8 @@ class SlideEditorController extends OfficeController {
     }
     if (selected != null && selected!.visual == null) {
       final PmlShape shape = selected!;
-      if (mode == OfficePasteMode.keepTextOnly || !payload.plain.contains('\n')) {
+      if (mode == OfficePasteMode.keepTextOnly ||
+          !payload.plain.contains('\n')) {
         updateSelected(text: payload.plain);
         return;
       }
@@ -7572,10 +7924,12 @@ class SlideEditorController extends OfficeController {
   }
 
   void _pasteSlideShape(PmlShape source) {
-    final int nextId = slide.shapes.fold<int>(
-      2,
-      (int max, PmlShape s) => s.id > max ? s.id : max,
-    ) + 1;
+    final int nextId =
+        slide.shapes.fold<int>(
+          2,
+          (int max, PmlShape s) => s.id > max ? s.id : max,
+        ) +
+        1;
     final PmlShape clone = cloneClipboardShape(source, id: nextId);
     commands.commit(
       _CallbackCommand(
@@ -7595,14 +7949,21 @@ class SlideEditorController extends OfficeController {
   }
 
   void _pasteSlideVisual(OfficeVisual visual) {
-    final int nextId = slide.shapes.fold<int>(
-      2,
-      (int max, PmlShape s) => s.id > max ? s.id : max,
-    ) + 1;
+    final int nextId =
+        slide.shapes.fold<int>(
+          2,
+          (int max, PmlShape s) => s.id > max ? s.id : max,
+        ) +
+        1;
     final PmlShape shape = PmlShape(
       id: nextId,
       name: visual.title,
-      transform: const PmlTransform(x: 1270000, y: 762000, cx: 4572000, cy: 2286000),
+      transform: const PmlTransform(
+        x: 1270000,
+        y: 762000,
+        cx: 4572000,
+        cy: 2286000,
+      ),
       visual: visual.copy(),
     );
     commands.commit(
@@ -7623,14 +7984,21 @@ class SlideEditorController extends OfficeController {
   }
 
   void _pasteSlideTextBox(String text) {
-    final int nextId = slide.shapes.fold<int>(
-      2,
-      (int max, PmlShape s) => s.id > max ? s.id : max,
-    ) + 1;
+    final int nextId =
+        slide.shapes.fold<int>(
+          2,
+          (int max, PmlShape s) => s.id > max ? s.id : max,
+        ) +
+        1;
     final PmlShape shape = PmlShape(
       id: nextId,
       name: 'Text',
-      transform: const PmlTransform(x: 1270000, y: 1270000, cx: 4572000, cy: 1270000),
+      transform: const PmlTransform(
+        x: 1270000,
+        y: 1270000,
+        cx: 4572000,
+        cy: 1270000,
+      ),
       text: text,
       fillColor: '4472C4',
     );
@@ -7651,6 +8019,7 @@ class SlideEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// commitTextEdit API.
   void commitTextEdit() {
     if (!textEditor.editing) {
       return;
@@ -7658,6 +8027,7 @@ class SlideEditorController extends OfficeController {
     textEditor.end();
   }
 
+  /// cancelTextEdit API.
   void cancelTextEdit() {
     if (!textEditor.editing) {
       return;
@@ -7670,6 +8040,7 @@ class SlideEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// placeTextCaret API.
   void placeTextCaret(int index, {bool extend = false}) {
     if (!textEditor.editing) {
       return;
@@ -7678,6 +8049,7 @@ class SlideEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// selectTextWordAt API.
   void selectTextWordAt(int index) {
     if (!textEditor.editing) {
       return;
@@ -7686,6 +8058,7 @@ class SlideEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// selectTextParagraphAt API.
   void selectTextParagraphAt(int index) {
     if (!textEditor.editing) {
       return;
@@ -7694,6 +8067,7 @@ class SlideEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// moveTextCaret API.
   void moveTextCaret(int delta, {bool extend = false}) {
     if (!textEditor.editing) {
       return;
@@ -7701,6 +8075,7 @@ class SlideEditorController extends OfficeController {
     textEditor.moveCaret(delta, extend: extend);
   }
 
+  /// deleteSelectedShape API.
   void deleteSelectedShape() {
     if (textEditor.editing) {
       return;
@@ -7797,6 +8172,7 @@ class SlideEditorController extends OfficeController {
     _textBeforeEdit = null;
   }
 
+  /// nudgeSelected API.
   void nudgeSelected(int dxEmu, int dyEmu) {
     final PmlShape? shape = selected;
     if (shape == null || !config.allowsMutation) {
@@ -7814,6 +8190,7 @@ class SlideEditorController extends OfficeController {
     );
   }
 
+  /// updateSelected API.
   void updateSelected({String? text, String? fillColor, double? fontSizePt}) {
     final PmlShape? shape = selected;
     if (shape == null || !config.allowsMutation) {
@@ -7845,6 +8222,7 @@ class SlideEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// setSelectedTextDirection API.
   void setSelectedTextDirection({required bool rtl}) {
     final PmlShape? shape = selected;
     if (shape == null || shape.visual != null || !config.allowsMutation) {
@@ -7867,6 +8245,7 @@ class SlideEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// setSelectedTextAlign API.
   void setSelectedTextAlign(PmlTextAlign align) {
     final PmlShape? shape = selected;
     if (shape == null || shape.visual != null || !config.allowsMutation) {
@@ -7882,6 +8261,7 @@ class SlideEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// mutateSelectedShapeVisual API.
   void mutateSelectedShapeVisual(void Function(OfficeVisual visual) edit) {
     final OfficeVisual? visual = selected?.visual;
     if (visual == null || !config.allowsMutation) {
@@ -7899,6 +8279,7 @@ class SlideEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// reorderSelected API.
   void reorderSelected({required bool forward}) {
     final PmlShape? shape = selected;
     if (shape == null || !config.allowsMutation) {
@@ -7931,6 +8312,7 @@ class SlideEditorController extends OfficeController {
     notifyListeners();
   }
 
+  /// applyTransform API.
   void applyTransform(PmlShape shape, PmlTransform next) {
     if (!config.allowsMutation) {
       return;
@@ -7946,12 +8328,14 @@ class SlideEditorController extends OfficeController {
   }
 
   @override
+  /// dispose API.
   void dispose() {
     motionFrame.dispose();
     super.dispose();
   }
 
   @override
+  /// detachInput API.
   void detachInput() {
     if (textEditor.editing) {
       cancelTextEdit();
@@ -7959,9 +8343,11 @@ class SlideEditorController extends OfficeController {
   }
 
   @override
+  /// semanticsLabel API.
   String get semanticsLabel => config.strings.slideEditor;
 
   @override
+  /// semanticsValue API.
   String get semanticsValue {
     final PmlShape? shape = selected;
     if (shape == null) {
@@ -7981,6 +8367,7 @@ class _HeadingSnap {
     required this.inlines,
   });
 
+  /// capture API.
   factory _HeadingSnap.capture(WmlParagraph paragraph) {
     return _HeadingSnap(
       headingLevel: paragraph.properties.headingLevel,
@@ -7992,13 +8379,25 @@ class _HeadingSnap {
     );
   }
 
+  /// headingLevel API.
   final int? headingLevel;
+
+  /// styleId API.
   final String? styleId;
+
+  /// spacingBefore API.
   final double spacingBefore;
+
+  /// spacingAfter API.
   final double spacingAfter;
+
+  /// keepTogether API.
   final bool keepTogether;
+
+  /// inlines API.
   final List<WmlInline> inlines;
 
+  /// restore API.
   void restore(WmlParagraph paragraph) {
     paragraph.properties
       ..headingLevel = headingLevel
@@ -8019,6 +8418,7 @@ class _SheetGridSnap {
     required this.heights,
   });
 
+  /// capture API.
   factory _SheetGridSnap.capture(SmlWorksheet sheet) {
     return _SheetGridSnap._(
       cells: <SmlCell>[
@@ -8036,10 +8436,16 @@ class _SheetGridSnap {
     );
   }
 
+  /// cells API.
   final List<SmlCell> cells;
+
+  /// widths API.
   final Map<int, double> widths;
+
+  /// heights API.
   final Map<int, double> heights;
 
+  /// restore API.
   void restore(SmlWorksheet sheet) {
     sheet.rows.clear();
     for (final SmlCell cell in cells) {
@@ -8062,16 +8468,22 @@ class _SheetGridSnap {
 class _CallbackCommand implements OfficeCommand {
   _CallbackCommand({required this.executeFn, required this.undoFn});
 
+  /// Function API.
   final void Function() executeFn;
+
+  /// Function API.
   final void Function() undoFn;
 
   @override
+  /// execute API.
   void execute() => executeFn();
 
   @override
+  /// undo API.
   void undo() => undoFn();
 
   @override
+  /// invert API.
   OfficeCommand invert() =>
       _CallbackCommand(executeFn: undoFn, undoFn: executeFn);
 }

@@ -3,6 +3,7 @@ import 'package:quds_office_engine/quds_office_engine.dart';
 
 /// Excel-like rainbow colors for formula references.
 abstract final class FormulaRefStyle {
+  /// palette API.
   static const List<Color> palette = <Color>[
     Color(0xFF0070C0),
     Color(0xFFE03636),
@@ -14,6 +15,7 @@ abstract final class FormulaRefStyle {
     Color(0xFF833C0C),
   ];
 
+  /// colored API.
   static List<(FormulaRefSpan span, Color color)> colored(String formula) {
     final Map<String, Color> assigned = <String, Color>{};
     var next = 0;
@@ -28,6 +30,7 @@ abstract final class FormulaRefStyle {
     return out;
   }
 
+  /// textSpan API.
   static TextSpan textSpan(
     String formula, {
     required Color baseColor,
@@ -52,7 +55,9 @@ abstract final class FormulaRefStyle {
       final int start = span.start.clamp(0, formula.length);
       final int end = span.end.clamp(start, formula.length);
       if (start > cursor) {
-        children.add(TextSpan(text: formula.substring(cursor, start), style: base));
+        children.add(
+          TextSpan(text: formula.substring(cursor, start), style: base),
+        );
       }
       if (end > start) {
         children.add(

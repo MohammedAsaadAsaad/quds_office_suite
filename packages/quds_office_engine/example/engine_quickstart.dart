@@ -15,17 +15,18 @@ void main(List<String> args) {
     page: OfficePageSize.a4Portrait,
   );
 
-  final Uint8List docx = (DocxDocumentBuilder(theme: theme)
-        ..heading('Quds Office Engine')
-        ..paragraph('Pure Dart Office Open XML — no Flutter, no dart:ui.')
-        ..note('القدس · Word · Excel · PowerPoint · PDF')
-        ..bulletList(<String>['Builders', 'Models', 'Formulas', 'PDF 1.7'])
-        ..table(<List<String>>[
-          <String>['Package', 'Runtime'],
-          <String>['quds_office_engine', 'Dart'],
-          <String>['quds_office_editor', 'Flutter RenderBox'],
-        ]))
-      .build();
+  final Uint8List docx =
+      (DocxDocumentBuilder(theme: theme)
+            ..heading('Quds Office Engine')
+            ..paragraph('Pure Dart Office Open XML — no Flutter, no dart:ui.')
+            ..note('القدس · Word · Excel · PowerPoint · PDF')
+            ..bulletList(<String>['Builders', 'Models', 'Formulas', 'PDF 1.7'])
+            ..table(<List<String>>[
+              <String>['Package', 'Runtime'],
+              <String>['quds_office_engine', 'Dart'],
+              <String>['quds_office_editor', 'Flutter RenderBox'],
+            ]))
+          .build();
 
   File('${out.path}/quickstart.docx').writeAsBytesSync(docx);
   File('${out.path}/quickstart.pdf').writeAsBytesSync(
