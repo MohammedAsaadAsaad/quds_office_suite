@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import '../../builders/drawingml_charts.dart';
 import '../../builders/office_markup.dart';
+import '../../office/office_document_properties.dart';
 import '../../opc/content_types.dart';
 import '../../opc/opc_archive.dart';
 import '../../opc/package_part.dart';
@@ -24,6 +25,7 @@ class SlideDeserializer {
     final PmlPresentation pres = PmlPresentation(
       package: package,
       slides: <PmlSlide>[],
+      properties: OfficeDocumentProperties.fromPackage(package),
     );
     final part = package.getPart('/ppt/presentation.xml');
     if (part == null) {
@@ -37,6 +39,10 @@ class SlideDeserializer {
       if (reader.localName == 'sldId') {
         final int id = int.parse(reader.getAttribute('id') ?? '256');
         pres.slides.add(PmlSlide(id: id));
+      } else if (reader.localName == 'sldSection') {
+        final String name = reader.getAttribute('name') ?? 'Section';
+        final int start = int.tryParse(reader.getAttribute('start') ?? '0') ?? 0;
+        pres.sections.add(PmlSection(name: name, startIndex: start));
       } else if (reader.localName == 'sldSz') {
         pres.slideWidth = int.parse(
           reader.getAttribute('cx') ?? '${pres.slideWidth}',
@@ -202,7 +208,9 @@ class SlideSerializer {
       package
           .getPart(uri)!
           .writeText(slideToXml(pres.slides[i], embedIds: embedIds));
+      _syncNotesSlide(pres.slides[i], package, uri, i + 1);
     }
+    pres.properties.writeToPackage(package);
     pres.package = package;
     return package;
   }
@@ -282,29 +290,30 @@ class SlideSerializer {
     final List<ChartPoint> points = visual.points.isEmpty
         ? OfficeVisual.sampleSeries()
         : visual.points;
+    final bool rtl = visual.chart.rtl;
     return switch (visual.kind) {
       OfficeVisualKind.chartPie => DrawingmlCharts.pie(
         title: title,
         series: points,
-        rtl: false,
+        rtl: rtl,
         display: visual.chart,
       ),
       OfficeVisualKind.chartLine => DrawingmlCharts.line(
         title: title,
         series: <ChartSeries>[ChartSeries(name: title, points: points)],
-        rtl: false,
+        rtl: rtl,
         display: visual.chart,
       ),
       OfficeVisualKind.chartBar => DrawingmlCharts.bar(
         title: title,
         series: points,
-        rtl: false,
+        rtl: rtl,
         display: visual.chart,
       ),
       _ => DrawingmlCharts.bar(
         title: title,
         series: points,
-        rtl: false,
+        rtl: rtl,
         horizontal: false,
         display: visual.chart,
       ),
@@ -329,7 +338,63 @@ class SlideSerializer {
     w.writeAttribute('cx', '${pres.slideWidth}');
     w.writeAttribute('cy', '${pres.slideHeight}');
     w.writeEndElement();
+    if (pres.sections.isNotEmpty) {
+      w.writeStartElement('sldSections', prefix: 'p');
+      for (final PmlSection section in pres.sections) {
+        w.writeEmptyElement(
+          'sldSection',
+          prefix: 'p',
+          attributes: <String, String>{
+            'name': section.name,
+            'start': '${section.startIndex}',
+          },
+        );
+      }
+      w.writeEndElement();
+    }
     w.writeEndElement();
     return w.toXml();
+  }
+
+  static void _syncNotesSlide(
+    PmlSlide slide,
+    OpcPackage package,
+    String slideUri,
+    int index,
+  ) {
+    if (slide.notes.trim().isEmpty) {
+      return;
+    }
+    final String uri = '/ppt/notesSlides/notesSlide$index.xml';
+    final String escaped = slide.notes
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;');
+    final String xml =
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<p:notes xmlns:a="${OfficeNamespaces.a}" xmlns:r="${OfficeNamespaces.r}" '
+        'xmlns:p="${OfficeNamespaces.p}">'
+        '<p:cSld><p:spTree>'
+        '<p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>'
+        '<p:grpSpPr/>'
+        '<p:sp><p:nvSpPr><p:cNvPr id="2" name="Notes"/><p:cNvSpPr txBox="1"/>'
+        '<p:nvPr><p:ph type="body" idx="1"/></p:nvPr></p:nvSpPr>'
+        '<p:spPr/><p:txBody><a:bodyPr/><a:lstStyle/>'
+        '<a:p><a:r><a:t>$escaped</a:t></a:r></a:p>'
+        '</p:txBody></p:sp>'
+        '</p:spTree></p:cSld></p:notes>';
+    final PackagePart? existing = package.getPart(uri);
+    if (existing == null) {
+      package.createPart(uri, OfficeContentTypes.notesSlide, utf8.encode(xml));
+    } else {
+      existing.writeText(xml);
+    }
+    final RelationshipCollection rels = package.relationshipsFor(slideUri);
+    if (rels.firstByType(RelationshipTypes.notesSlide) == null) {
+      rels.add(
+        type: RelationshipTypes.notesSlide,
+        target: '../notesSlides/notesSlide$index.xml',
+      );
+    }
   }
 }

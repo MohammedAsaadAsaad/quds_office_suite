@@ -8,6 +8,7 @@ import 'package:flutter/widgets.dart';
 import 'package:quds_office_engine/quds_office_engine.dart';
 
 import '../core/virtual_viewport.dart';
+import '../editor_word/caret_engine.dart';
 import '../editor_word/paint_run_text.dart';
 import '../embed/office_context_menu.dart';
 import '../embed/office_theme.dart';
@@ -23,6 +24,7 @@ class SlideStage extends LeafRenderObjectWidget {
     super.key,
     required this.slide,
     this.selected,
+    this.selectedShapes = const <PmlShape>[],
     this.config = const OfficeSurfaceConfig(),
     this.hasFocus = false,
     this.semanticsLabel = '',
@@ -35,6 +37,7 @@ class SlideStage extends LeafRenderObjectWidget {
     this.onSelect,
     this.onSelectTableCell,
     this.onTransform,
+    this.onTransforms,
     this.onActivate,
     this.onPlaceCaret,
     this.onSelectWord,
@@ -57,6 +60,9 @@ class SlideStage extends LeafRenderObjectWidget {
 
   /// selected API.
   final PmlShape? selected;
+
+  /// selectedShapes API.
+  final List<PmlShape> selectedShapes;
 
   /// config API.
   final OfficeSurfaceConfig config;
@@ -86,7 +92,10 @@ class SlideStage extends LeafRenderObjectWidget {
   final VoidCallback? onChanged;
 
   /// onSelect API.
-  final ValueChanged<PmlShape?>? onSelect;
+  final void Function(PmlShape? shape, {bool additive})? onSelect;
+
+  /// onTransforms API.
+  final void Function(Map<PmlShape, PmlTransform> next)? onTransforms;
 
   /// Function API.
   final void Function(PmlShape shape, int row, int col)? onSelectTableCell;
@@ -145,6 +154,7 @@ class SlideStage extends LeafRenderObjectWidget {
     return RenderSlideStage(
       slide: slide,
       selected: selected,
+      selectedShapes: selectedShapes,
       config: config,
       hasFocus: hasFocus,
       semanticsLabel: semanticsLabel,
@@ -157,6 +167,7 @@ class SlideStage extends LeafRenderObjectWidget {
       onSelect: onSelect,
       onSelectTableCell: onSelectTableCell,
       onTransform: onTransform,
+      onTransforms: onTransforms,
       onActivate: onActivate,
       selectedTableRow: selectedTableRow,
       selectedTableCol: selectedTableCol,
@@ -181,6 +192,7 @@ class SlideStage extends LeafRenderObjectWidget {
     renderObject
       ..slide = slide
       ..selected = selected
+      ..selectedShapes = selectedShapes
       ..config = config
       ..hasFocus = hasFocus
       ..semanticsLabel = semanticsLabel
@@ -192,6 +204,7 @@ class SlideStage extends LeafRenderObjectWidget {
       ..onSelect = onSelect
       ..onSelectTableCell = onSelectTableCell
       ..onTransform = onTransform
+      ..onTransforms = onTransforms
       ..onActivate = onActivate
       ..selectedTableRow = selectedTableRow
       ..selectedTableCol = selectedTableCol
@@ -222,6 +235,7 @@ class RenderSlideStage extends RenderBox implements MouseTrackerAnnotation {
   RenderSlideStage({
     required this.slide,
     this.selected,
+    this.selectedShapes = const <PmlShape>[],
     required this.config,
     required this.hasFocus,
     required this.semanticsLabel,
@@ -234,6 +248,7 @@ class RenderSlideStage extends RenderBox implements MouseTrackerAnnotation {
     this.onSelect,
     this.onSelectTableCell,
     this.onTransform,
+    this.onTransforms,
     this.onActivate,
     this.onPlaceCaret,
     this.onSelectWord,
@@ -256,6 +271,9 @@ class RenderSlideStage extends RenderBox implements MouseTrackerAnnotation {
 
   /// selected API.
   PmlShape? selected;
+
+  /// selectedShapes API.
+  List<PmlShape> selectedShapes;
 
   /// config API.
   OfficeSurfaceConfig config;
@@ -291,13 +309,16 @@ class RenderSlideStage extends RenderBox implements MouseTrackerAnnotation {
   VoidCallback? onChanged;
 
   /// onSelect API.
-  ValueChanged<PmlShape?>? onSelect;
+  void Function(PmlShape? shape, {bool additive})? onSelect;
 
   /// Function API.
   void Function(PmlShape shape, int row, int col)? onSelectTableCell;
 
   /// Function API.
   void Function(PmlShape shape, PmlTransform next)? onTransform;
+
+  /// onTransforms API.
+  void Function(Map<PmlShape, PmlTransform> next)? onTransforms;
 
   /// onActivate API.
   VoidCallback? onActivate;
@@ -355,6 +376,11 @@ class RenderSlideStage extends RenderBox implements MouseTrackerAnnotation {
   /// zero API.
   Offset _lastSlide = Offset.zero;
   PmlTransform? _startTx;
+  final Map<PmlShape, PmlTransform> _startTxs = <PmlShape, PmlTransform>{};
+  List<PmlShape> _dragShapes = <PmlShape>[];
+  Rect _startUnion = Rect.zero;
+  Offset _dragOrigin = Offset.zero;
+  var _startRotateDeg = 0.0;
   var _paintRotateCursor = false;
 
   /// VisualImageCache API.
@@ -481,8 +507,100 @@ class RenderSlideStage extends RenderBox implements MouseTrackerAnnotation {
     return _shapeRect(shape).contains(_unrotate(shape, slide));
   }
 
+  static bool _listHas(List<PmlShape> list, PmlShape shape) {
+    for (final PmlShape item in list) {
+      if (identical(item, shape)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  List<PmlShape> get _effectiveSelection {
+    if (selectedShapes.isNotEmpty) {
+      return selectedShapes;
+    }
+    if (selected != null) {
+      return <PmlShape>[selected!];
+    }
+    return const <PmlShape>[];
+  }
+
+  bool _isSelected(PmlShape shape) => _listHas(_effectiveSelection, shape);
+
+  bool get _usesUnionHandles => _effectiveSelection.length > 1;
+
+  List<PmlShape> _matesOf(PmlShape shape) {
+    return PmlArrange.mates(slide.shapes, shape);
+  }
+
+  Rect _unionRect(List<PmlShape> shapes) {
+    if (shapes.isEmpty) {
+      return Rect.zero;
+    }
+    Rect union = _shapeRect(shapes.first);
+    for (int i = 1; i < shapes.length; i++) {
+      union = union.expandToInclude(_shapeRect(shapes[i]));
+    }
+    return union;
+  }
+
+  static bool get _additivePressed =>
+      HardwareKeyboard.instance.isControlPressed ||
+      HardwareKeyboard.instance.isMetaPressed;
+
   int? _hitHandle(PmlShape shape, Offset slide) {
     return TransformHandles(_shapeRect(shape)).hit(_unrotate(shape, slide));
+  }
+
+  int? _hitSelectionHandle(Offset slide) {
+    final List<PmlShape> items = _effectiveSelection;
+    if (items.isEmpty) {
+      return null;
+    }
+    if (items.length == 1) {
+      return _hitHandle(items.first, slide);
+    }
+    return TransformHandles(_unionRect(items)).hit(slide);
+  }
+
+  List<PmlShape> _selectionAfterClick(PmlShape shape, bool additive) {
+    final List<PmlShape> current = List<PmlShape>.from(_effectiveSelection);
+    final List<PmlShape> mates = _matesOf(shape);
+    if (additive) {
+      final bool allIn = mates.every(
+        (PmlShape mate) => _listHas(current, mate),
+      );
+      if (allIn) {
+        current.removeWhere((PmlShape item) => _listHas(mates, item));
+      } else {
+        for (final PmlShape mate in mates) {
+          if (!_listHas(current, mate)) {
+            current.add(mate);
+          }
+        }
+      }
+      return current;
+    }
+    if (_listHas(current, shape) && current.length > 1) {
+      return current;
+    }
+    return mates;
+  }
+
+  void _beginDragTransforms(List<PmlShape> shapes) {
+    _dragShapes = List<PmlShape>.from(shapes);
+    _startTxs
+      ..clear()
+      ..addEntries(
+        _dragShapes.map(
+          (PmlShape shape) =>
+              MapEntry<PmlShape, PmlTransform>(shape, shape.transform),
+        ),
+      );
+    _startUnion = _unionRect(_dragShapes);
+    _startTx = selected?.transform ??
+        (_dragShapes.isEmpty ? null : _dragShapes.first.transform);
   }
 
   void _rotateTo(PmlShape shape, Offset slide) {
@@ -523,11 +641,11 @@ class RenderSlideStage extends RenderBox implements MouseTrackerAnnotation {
       return SystemMouseCursors.none;
     }
     final Offset at = _toSlide(local);
-    if (selected != null &&
+    if (_effectiveSelection.isNotEmpty &&
         !editing &&
         config.showSlideHandles &&
         config.allowsMutation) {
-      final int? handle = _hitHandle(selected!, at);
+      final int? handle = _hitSelectionHandle(at);
       if (handle != null) {
         return _cursorForHandle(handle);
       }
@@ -620,24 +738,37 @@ class RenderSlideStage extends RenderBox implements MouseTrackerAnnotation {
       }
       if (config.allowsMutation &&
           config.showSlideHandles &&
-          selected != null) {
-        final int? handle = _hitHandle(selected!, local);
+          _effectiveSelection.isNotEmpty) {
+        final int? handle = _hitSelectionHandle(local);
         if (handle != null) {
           _drag = handle == 8 ? _SlideDrag.rotate : _SlideDrag.resize;
           _handle = handle;
           _lastSlide = local;
-          _startTx = selected!.transform;
+          _dragOrigin = local;
+          _beginDragTransforms(_effectiveSelection);
+          if (_startUnion.width > 0 || _startUnion.height > 0) {
+            _startRotateDeg =
+                math.atan2(
+                  local.dx - _startUnion.center.dx,
+                  _startUnion.center.dy - local.dy,
+                ) *
+                180 /
+                math.pi;
+          }
           _paintRotateCursor = handle == 8;
           return;
         }
       }
       if (config.allowsSelection) {
+        final bool additive = _additivePressed;
         for (final PmlShape shape in slide.shapes.reversed) {
           if (_shapeContains(shape, local)) {
             final int taps = _countTap(event.localPosition);
-            selected = shape;
+            final List<PmlShape> next = _selectionAfterClick(shape, additive);
+            selected = next.isEmpty ? null : shape;
+            selectedShapes = next;
             final PmlTable? table = shape.table;
-            if (table != null) {
+            if (table != null && !additive) {
               final Rect bounds = _shapeRect(shape);
               final ({int row, int col})? cell = table.hitCell(
                 x: bounds.left,
@@ -650,12 +781,15 @@ class RenderSlideStage extends RenderBox implements MouseTrackerAnnotation {
               if (cell != null) {
                 onSelectTableCell?.call(shape, cell.row, cell.col);
               } else {
-                onSelect?.call(shape);
+                onSelect?.call(shape, additive: additive);
               }
             } else {
-              onSelect?.call(shape);
+              onSelect?.call(shape, additive: additive);
             }
-            if (taps >= 2 && config.allowsMutation && shape.visual == null) {
+            if (!additive &&
+                taps >= 2 &&
+                config.allowsMutation &&
+                shape.visual == null) {
               final int index = _hitTextIndex(shape, local);
               onActivate?.call();
               onPlaceCaret?.call(index);
@@ -667,10 +801,13 @@ class RenderSlideStage extends RenderBox implements MouseTrackerAnnotation {
               _drag = _SlideDrag.select;
               _lastSlide = local;
               _startTx = null;
-            } else if (config.allowsMutation) {
+              _dragShapes = <PmlShape>[];
+              _startTxs.clear();
+            } else if (config.allowsMutation && next.isNotEmpty) {
               _drag = _SlideDrag.move;
               _lastSlide = local;
-              _startTx = shape.transform;
+              _dragOrigin = local;
+              _beginDragTransforms(next);
             }
             markNeedsPaint();
             onChanged?.call();
@@ -678,7 +815,8 @@ class RenderSlideStage extends RenderBox implements MouseTrackerAnnotation {
           }
         }
         selected = null;
-        onSelect?.call(null);
+        selectedShapes = <PmlShape>[];
+        onSelect?.call(null, additive: false);
       }
       _drag = _SlideDrag.pan;
       _lastSlide = event.localPosition;
@@ -702,39 +840,62 @@ class RenderSlideStage extends RenderBox implements MouseTrackerAnnotation {
         markNeedsPaint();
         return;
       }
-      if (!config.allowsMutation || selected == null || _startTx == null) {
+      if (!config.allowsMutation ||
+          _dragShapes.isEmpty ||
+          _startTxs.isEmpty) {
         return;
       }
       final Offset local = _toSlide(event.localPosition);
       final Offset delta = local - _lastSlide;
       _lastSlide = local;
       if (_drag == _SlideDrag.move) {
-        Rect moving = _shapeRect(selected!).shift(delta);
+        Rect moving = _unionRect(_dragShapes).shift(delta);
         _loadSnapTargets();
         moving = moving.shift(snaps.snap(moving));
-        _applyRect(selected!, moving);
+        final Offset applied =
+            moving.topLeft - _unionRect(_dragShapes).topLeft;
+        for (final PmlShape shape in _dragShapes) {
+          _applyRect(shape, _shapeRect(shape).shift(applied));
+        }
       } else if (_drag == _SlideDrag.resize && _handle != null) {
-        _resize(selected!, delta, _handle!);
+        _resizeSelection(delta, local, _handle!);
       } else if (_drag == _SlideDrag.rotate) {
-        _rotateTo(selected!, local);
+        _rotateSelectionTo(local);
       }
       markNeedsPaint();
     } else if (event is PointerUpEvent || event is PointerCancelEvent) {
       if ((_drag == _SlideDrag.move ||
               _drag == _SlideDrag.resize ||
               _drag == _SlideDrag.rotate) &&
-          selected != null &&
-          _startTx != null) {
-        final PmlTransform next = selected!.transform;
-        selected!.transform = _startTx!;
-        if (onTransform != null && !_sameTransform(_startTx!, next)) {
-          onTransform!(selected!, next);
+          _startTxs.isNotEmpty) {
+        final Map<PmlShape, PmlTransform> next =
+            <PmlShape, PmlTransform>{
+              for (final PmlShape shape in _dragShapes) shape: shape.transform,
+            };
+        var changed = false;
+        for (final MapEntry<PmlShape, PmlTransform> entry in _startTxs.entries) {
+          if (!_sameTransform(entry.value, next[entry.key] ?? entry.value)) {
+            changed = true;
+          }
+          entry.key.transform = entry.value;
+        }
+        if (changed) {
+          if (onTransforms != null) {
+            onTransforms!(next);
+          } else if (onTransform != null && selected != null) {
+            final PmlTransform? after = next[selected!];
+            if (after != null) {
+              onTransform!(selected!, after);
+            }
+          }
         }
         onChanged?.call();
       }
       _drag = _SlideDrag.none;
       _handle = null;
       _startTx = null;
+      _startTxs.clear();
+      _dragShapes = <PmlShape>[];
       snaps.clear();
       _paintRotateCursor = _wantsRotateCursor(event.localPosition);
       markNeedsPaint();
@@ -763,7 +924,8 @@ class RenderSlideStage extends RenderBox implements MouseTrackerAnnotation {
       for (final PmlShape shape in slide.shapes.reversed) {
         if (_shapeContains(shape, local)) {
           selected = shape;
-          onSelect?.call(shape);
+          selectedShapes = _matesOf(shape);
+          onSelect?.call(shape, additive: false);
           _drag = _SlideDrag.none;
           _startTx = null;
           markNeedsPaint();
@@ -772,7 +934,8 @@ class RenderSlideStage extends RenderBox implements MouseTrackerAnnotation {
         }
       }
       selected = null;
-      onSelect?.call(null);
+      selectedShapes = <PmlShape>[];
+      onSelect?.call(null, additive: false);
     }
     _drag = _SlideDrag.none;
     _startTx = null;
@@ -803,17 +966,17 @@ class RenderSlideStage extends RenderBox implements MouseTrackerAnnotation {
     if (_drag == _SlideDrag.rotate) {
       return true;
     }
-    if (selected == null) {
+    if (_effectiveSelection.isEmpty) {
       return false;
     }
-    return _hitHandle(selected!, _toSlide(local)) == 8;
+    return _hitSelectionHandle(_toSlide(local)) == 8;
   }
 
   void _loadSnapTargets() {
     snaps.clear();
     snaps.addSlide(_slideSize);
     for (final PmlShape shape in slide.shapes) {
-      if (!identical(shape, selected)) {
+      if (!_listHas(_dragShapes, shape) && !_isSelected(shape)) {
         snaps.addTarget(_shapeRect(shape));
       }
     }
@@ -1003,9 +1166,18 @@ class RenderSlideStage extends RenderBox implements MouseTrackerAnnotation {
             TextPosition(offset: editCaret.clamp(0, body.length)),
             const Rect.fromLTWH(0, 0, 0, 14),
           );
-          canvas.drawRect(
-            Rect.fromLTWH(origin.dx + caret.dx, origin.dy + caret.dy, 1.4, 16),
-            Paint()..color = ink,
+          CaretEngine.paintFlagged(
+            canvas,
+            stem: Rect.fromLTWH(
+              origin.dx + caret.dx,
+              origin.dy + caret.dy,
+              1.0,
+              16,
+            ),
+            color: ink,
+            rtl: table.rightToLeft ||
+                config.textDirection == TextDirection.rtl ||
+                PaintRunText.looksRtl(body),
           );
         }
       }
@@ -1042,9 +1214,18 @@ class RenderSlideStage extends RenderBox implements MouseTrackerAnnotation {
         TextPosition(offset: editCaret.clamp(0, shape.text.length)),
         const Rect.fromLTWH(0, 0, 0, 16),
       );
-      canvas.drawRect(
-        Rect.fromLTWH(origin.dx + caret.dx, origin.dy + caret.dy, 1.4, 18),
-        Paint()..color = color,
+      CaretEngine.paintFlagged(
+        canvas,
+        stem: Rect.fromLTWH(
+          origin.dx + caret.dx,
+          origin.dy + caret.dy,
+          1.0,
+          18,
+        ),
+        color: color,
+        rtl: shape.rightToLeft ??
+            (PaintRunText.looksRtl(body) ||
+                config.textDirection == TextDirection.rtl),
       );
     }
     canvas.restore();
@@ -1142,6 +1323,19 @@ class RenderSlideStage extends RenderBox implements MouseTrackerAnnotation {
     canvas.restore();
   }
 
+  void _paintMediaBadge(Canvas canvas, Rect r) {
+    final Rect badge = Rect.fromLTWH(r.left + 6, r.bottom - 28, 22, 22);
+    canvas.drawCircle(badge.center, 11, Paint()..color = const Color(0xCC111111));
+    canvas.drawPath(
+      Path()
+        ..moveTo(badge.left + 7, badge.top + 5)
+        ..lineTo(badge.right - 5, badge.center.dy)
+        ..lineTo(badge.left + 7, badge.bottom - 5)
+        ..close(),
+      Paint()..color = const Color(0xFFFFFFFF),
+    );
+  }
+
   void _paintSlideBody(
     Canvas canvas,
     PmlSlide target, {
@@ -1186,19 +1380,44 @@ class RenderSlideStage extends RenderBox implements MouseTrackerAnnotation {
         );
         _paintShapeText(canvas, shape, r);
       }
+      if (shape.hasMedia) {
+        _paintMediaBadge(canvas, r);
+      }
       if (!presenting &&
-          identical(shape, selected) &&
+          _isSelected(shape) &&
           config.allowsSelection &&
           config.showSlideHandles) {
-        TransformHandles(r).paint(
-          canvas,
-          strokeColor: _theme.handleStroke,
-          fillColor: _theme.handleFill,
-          showKnobs: !editing,
-        );
+        if (_usesUnionHandles) {
+          canvas.drawRect(
+            r,
+            Paint()
+              ..color = _theme.handleStroke
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = 1,
+          );
+        } else {
+          TransformHandles(r).paint(
+            canvas,
+            strokeColor: _theme.handleStroke,
+            fillColor: _theme.handleFill,
+            showKnobs: !editing,
+          );
+        }
       }
       PaintSlideMotion.restoreShapeSample(canvas, sample);
       canvas.restore();
+    }
+    if (!presenting &&
+        _usesUnionHandles &&
+        config.allowsSelection &&
+        config.showSlideHandles &&
+        identical(target, slide)) {
+      TransformHandles(_unionRect(_effectiveSelection)).paint(
+        canvas,
+        strokeColor: _theme.handleStroke,
+        fillColor: _theme.handleFill,
+        showKnobs: !editing,
+      );
     }
   }
 
@@ -1222,8 +1441,7 @@ class RenderSlideStage extends RenderBox implements MouseTrackerAnnotation {
     );
   }
 
-  void _resize(PmlShape shape, Offset delta, int handle) {
-    Rect r = _shapeRect(shape);
+  Rect _applyHandleDelta(Rect r, Offset delta, int handle) {
     switch (handle) {
       case 0:
         r = Rect.fromLTRB(
@@ -1264,8 +1482,79 @@ class RenderSlideStage extends RenderBox implements MouseTrackerAnnotation {
       default:
         break;
     }
+    return r;
+  }
+
+  void _resize(PmlShape shape, Offset delta, int handle) {
+    final Rect r = _applyHandleDelta(_shapeRect(shape), delta, handle);
     if (r.width > 8 && r.height > 8) {
       _applyRect(shape, r);
+    }
+  }
+
+  void _resizeSelection(Offset delta, Offset local, int handle) {
+    if (_dragShapes.length <= 1) {
+      final PmlShape? shape = _dragShapes.isEmpty ? selected : _dragShapes.first;
+      if (shape != null) {
+        _resize(shape, delta, handle);
+      }
+      return;
+    }
+    final Rect from = _startUnion;
+    if (from.width <= 0 || from.height <= 0) {
+      return;
+    }
+    final Rect to = _applyHandleDelta(from, local - _dragOrigin, handle);
+    if (to.width <= 8 || to.height <= 8) {
+      return;
+    }
+    final double sx = to.width / from.width;
+    final double sy = to.height / from.height;
+    for (final PmlShape shape in _dragShapes) {
+      final PmlTransform start = _startTxs[shape] ?? shape.transform;
+      final double nx = to.left + (start.xPoints - from.left) * sx;
+      final double ny = to.top + (start.yPoints - from.top) * sy;
+      _applyRect(
+        shape,
+        Rect.fromLTWH(nx, ny, start.widthPoints * sx, start.heightPoints * sy),
+      );
+    }
+  }
+
+  void _rotateSelectionTo(Offset slide) {
+    if (_dragShapes.length <= 1) {
+      final PmlShape? shape = selected ??
+          (_dragShapes.isEmpty ? null : _dragShapes.first);
+      if (shape != null) {
+        _rotateTo(shape, slide);
+      }
+      return;
+    }
+    final Offset c = _startUnion.center;
+    final double deg =
+        math.atan2(slide.dx - c.dx, c.dy - slide.dy) * 180 / math.pi;
+    final double delta = deg - _startRotateDeg;
+    final double rad = delta * math.pi / 180;
+    final double cos = math.cos(rad);
+    final double sin = math.sin(rad);
+    for (final PmlShape shape in _dragShapes) {
+      final PmlTransform start = _startTxs[shape] ?? shape.transform;
+      final Offset sc = Offset(
+        start.xPoints + start.widthPoints / 2,
+        start.yPoints + start.heightPoints / 2,
+      );
+      final Offset p = sc - c;
+      final Offset np = Offset(
+        c.dx + p.dx * cos - p.dy * sin,
+        c.dy + p.dx * sin + p.dy * cos,
+      );
+      shape.transform = PmlTransform(
+        x: ((np.dx - start.widthPoints / 2) * 12700).round(),
+        y: ((np.dy - start.heightPoints / 2) * 12700).round(),
+        cx: start.cx,
+        cy: start.cy,
+        rot: start.rot + (delta * 60000).round(),
+      );
     }
   }
 

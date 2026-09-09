@@ -137,6 +137,63 @@ void main() {
     expect(controller.document.paragraphs.first.text, 'H');
   });
 
+  test('word ruler indent preview commits as one undo', () {
+    final WordEditorController controller = WordEditorController(
+      document: WmlDocument.empty(text: 'Hello'),
+    );
+    controller.beginRulerEdit();
+    controller.previewRulerEdit(
+      const WordRulerEdit(indent: WmlIndent(firstLine: 36)),
+    );
+    expect(controller.document.paragraphs.first.properties.indent.firstLine, 36);
+    controller.commitRulerEdit();
+    expect(controller.document.paragraphs.first.properties.indent.firstLine, 36);
+    controller.undo();
+    expect(controller.document.paragraphs.first.properties.indent.firstLine, 0);
+  });
+
+  test('word tab inserts a half-inch gap', () {
+    final WordEditorController controller = WordEditorController(
+      document: WmlDocument.empty(text: 'AB'),
+    );
+    controller.caret
+      ..logicalIndex = 1
+      ..collapseSelection();
+    controller.insertText('\t');
+    expect(controller.document.paragraphs.first.text, 'A\tB');
+    final List<LaidOutGlyph> glyphs = controller.laidOut.pages.first.lines.first
+        .glyphs;
+    expect(glyphs, hasLength(3));
+    expect(glyphs[1].glyph.codePoint, 0x09);
+    expect(glyphs[1].advance, closeTo(kDefaultTabWidth, 0.01));
+  });
+
+  testWidgets('word editor tab key inserts a tab', (
+    WidgetTester tester,
+  ) async {
+    final WordEditorController controller = WordEditorController(
+      document: WmlDocument.empty(text: 'Hi'),
+    );
+    controller.caret
+      ..logicalIndex = 2
+      ..collapseSelection();
+    await tester.pumpWidget(
+      Directionality(
+        textDirection: TextDirection.ltr,
+        child: SizedBox(
+          width: 800,
+          height: 600,
+          child: QudsWordEditor(controller: controller),
+        ),
+      ),
+    );
+    await tester.tap(find.byType(WordCanvas));
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pump();
+    expect(controller.document.paragraphs.first.text, 'Hi\t');
+  });
+
   testWidgets('word editor backspace key deletes a character', (
     WidgetTester tester,
   ) async {
@@ -161,6 +218,40 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
     await tester.pump();
     expect(controller.document.paragraphs.first.text, 'H');
+  });
+
+  testWidgets('tapping the canvas reattaches IME after another client steals it', (
+    WidgetTester tester,
+  ) async {
+    final WordEditorController controller = WordEditorController(
+      document: WmlDocument.empty(text: 'Hi'),
+    );
+    await tester.pumpWidget(
+      Directionality(
+        textDirection: TextDirection.ltr,
+        child: SizedBox(
+          width: 800,
+          height: 600,
+          child: QudsWordEditor(controller: controller),
+        ),
+      ),
+    );
+    await tester.tap(find.byType(WordCanvas));
+    await tester.pump();
+    expect(controller.input.isAttached, isTrue);
+
+    final OfficeInputBridge thief = OfficeInputBridge(onValue: (_) {});
+    thief.attach();
+    expect(controller.input.isAttached, isFalse);
+    expect(controller.attachInput, returnsNormally);
+    expect(controller.input.isAttached, isTrue);
+
+    await tester.tap(find.byType(WordCanvas));
+    await tester.pump();
+    expect(controller.input.isAttached, isTrue);
+    controller.applyImeText('Hi!');
+    expect(controller.document.paragraphs.first.text, 'Hi!');
+    thief.detach();
   });
 
   testWidgets('word editor ctrl+z undoes and ctrl+y redoes', (
@@ -196,6 +287,50 @@ void main() {
     await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
     await tester.pump();
     expect(controller.document.paragraphs.first.text, 'Hi!');
+  });
+
+  testWidgets('word editor shift arrows grow and shrink the selection', (
+    WidgetTester tester,
+  ) async {
+    final WordEditorController controller = WordEditorController(
+      document: WmlDocument.empty(text: 'Hello'),
+    );
+    controller.caret
+      ..logicalIndex = 1
+      ..collapseSelection();
+    await tester.pumpWidget(
+      Directionality(
+        textDirection: TextDirection.ltr,
+        child: SizedBox(
+          width: 800,
+          height: 600,
+          child: QudsWordEditor(controller: controller),
+        ),
+      ),
+    );
+    await tester.tap(find.byType(WordCanvas));
+    await tester.pump();
+    controller.caret
+      ..logicalIndex = 1
+      ..collapseSelection();
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await tester.pump();
+    expect(controller.caret.selectionAnchor, 1);
+    expect(controller.caret.logicalIndex, 2);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await tester.pump();
+    expect(controller.caret.selectionAnchor, 1);
+    expect(controller.caret.logicalIndex, 3);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+    await tester.pump();
+    expect(controller.caret.selectionAnchor, 1);
+    expect(controller.caret.logicalIndex, 2);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+    await tester.pump();
+    expect(controller.caret.isCollapsed, isTrue);
+    expect(controller.caret.logicalIndex, 1);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
   });
 
   testWidgets('word editor ctrl+a selects the whole document', (
@@ -273,6 +408,54 @@ void main() {
     controller.selection.selectRow(2);
     controller.nudgeRowHeight(12);
     expect(controller.sheet.rowHeightAt(2), closeTo(32, 0.6));
+  });
+
+  test('grid display uses the cell number format', () {
+    final SheetEditorController controller = SheetEditorController();
+    controller.workbook.styles = SmlStyleSheet(
+      numFmts: <int, String>{16: 'd-mmm'},
+      cellXfsNumFmt: <int>[0, 16],
+    );
+    final SmlCell cell = controller.sheet.cellA1('E6');
+    cell
+      ..value = DateTime.utc(
+        2026,
+        9,
+        9,
+      ).difference(DateTime.utc(1899, 12, 30)).inDays.toDouble()
+      ..styleIndex = 1;
+    expect(controller.cellDisplayText(cell), '9-Sep');
+  });
+
+  test('selection fill covers every selected cell and undoes', () {
+    final SheetEditorController controller = SheetEditorController();
+    controller.selection.anchor = const SmlCellRef(0, 0);
+    controller.selection.focus = const SmlCellRef(2, 0);
+    controller.setSelectionFillRgb('000000');
+    expect(controller.sheet.cellA1('A1').fillRgb, '000000');
+    expect(controller.sheet.cellA1('C1').fillRgb, '000000');
+    controller.undo();
+    expect(controller.sheet.cellA1('A1').fillRgb, isEmpty);
+  });
+
+  test('merge and center joins the selection and can undo', () {
+    final SheetEditorController controller = SheetEditorController();
+    controller.sheet.cellA1('A1').value = 'Quds';
+    controller.selection.anchor = const SmlCellRef(0, 0);
+    controller.selection.focus = const SmlCellRef(2, 0);
+    expect(controller.canMergeAndCenter, isTrue);
+    controller.mergeAndCenter();
+    expect(controller.sheet.merges, hasLength(1));
+    expect(controller.sheet.merges.first.a1, 'A1:C1');
+    expect(controller.sheet.cellA1('A1').horizontalAlign, SmlHAlign.center);
+    expect(controller.hasMergedSelection, isTrue);
+    expect(controller.activeCell.a1, 'A1');
+    controller.toggleMergeAndCenter();
+    expect(controller.sheet.merges, isEmpty);
+    controller.undo();
+    expect(controller.sheet.merges.first.a1, 'A1:C1');
+    controller.undo();
+    expect(controller.sheet.merges, isEmpty);
   });
 
   test('freeze panes follow the Excel selection rules', () {
@@ -721,12 +904,63 @@ void main() {
       ..logicalIndex = 2
       ..collapseSelection();
     controller.moveCaretVisual(toRight: true);
-    expect(controller.caret.logicalIndex, greaterThan(2));
+    expect(controller.caret.logicalIndex, 3);
     controller.moveCaretVisual(toRight: false);
     expect(controller.caret.logicalIndex, 2);
     controller.selectAll();
     expect(controller.caret.logicalIndex, 5);
     expect(controller.caret.selectionAnchor, 0);
+  });
+
+  test('shift arrows grow and shrink the character selection', () {
+    final WordEditorController controller = WordEditorController(
+      document: WmlDocument.empty(text: 'Hello'),
+    );
+    controller.caret
+      ..logicalIndex = 1
+      ..collapseSelection();
+    controller.moveCaretVisual(toRight: true, extend: true);
+    expect(controller.caret.selectionAnchor, 1);
+    expect(controller.caret.logicalIndex, 2);
+    expect(controller.caret.isCollapsed, isFalse);
+    controller.moveCaretVisual(toRight: true, extend: true);
+    expect(controller.caret.selectionAnchor, 1);
+    expect(controller.caret.logicalIndex, 3);
+    controller.moveCaretVisual(toRight: false, extend: true);
+    expect(controller.caret.selectionAnchor, 1);
+    expect(controller.caret.logicalIndex, 2);
+    controller.moveCaretVisual(toRight: false, extend: true);
+    expect(controller.caret.selectionAnchor, 1);
+    expect(controller.caret.logicalIndex, 1);
+    expect(controller.caret.isCollapsed, isTrue);
+  });
+
+  test('shift arrows grow and shrink an RTL selection', () {
+    final WordEditorController controller = WordEditorController(
+      document: WmlDocument(
+        sections: <WmlSection>[
+          WmlSection(
+            blocks: <WmlBlock>[
+              WmlParagraph(
+                properties: WmlParagraphProps(rightToLeft: true),
+                inlines: <WmlInline>[WmlRun(text: 'مرحبا')],
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+    controller.caret
+      ..logicalIndex = 0
+      ..collapseSelection();
+    controller.moveCaretVisual(toRight: false, extend: true);
+    expect(controller.caret.selectionAnchor, 0);
+    expect(controller.caret.logicalIndex, 1);
+    expect(controller.caret.isCollapsed, isFalse);
+    controller.moveCaretVisual(toRight: true, extend: true);
+    expect(controller.caret.selectionAnchor, 0);
+    expect(controller.caret.logicalIndex, 0);
+    expect(controller.caret.isCollapsed, isTrue);
   });
 
   test('sheet controller selects a drawing and can delete it', () {
@@ -1220,6 +1454,41 @@ void main() {
     expect(controller.pageCount, greaterThan(0));
   });
 
+  test('landscape applies to the whole continuous section group', () {
+    final WmlSection heading = WmlSection(
+      blocks: <WmlBlock>[
+        WmlParagraph(inlines: <WmlInline>[WmlRun(text: 'Head')]),
+      ],
+      breakKind: WmlSectionBreakKind.nextPage,
+    );
+    final WmlSection body = WmlSection(
+      blocks: <WmlBlock>[
+        WmlParagraph(inlines: <WmlInline>[WmlRun(text: 'Body')]),
+      ],
+      breakKind: WmlSectionBreakKind.continuous,
+    );
+    final WmlSection later = WmlSection(
+      blocks: <WmlBlock>[
+        WmlParagraph(inlines: <WmlInline>[WmlRun(text: 'Later')]),
+      ],
+      breakKind: WmlSectionBreakKind.nextPage,
+    );
+    final WordEditorController controller = WordEditorController(
+      document: WmlDocument(sections: <WmlSection>[heading, body, later]),
+    );
+    controller.documentCaret
+      ..paragraphIndex = 1
+      ..logicalIndex = 0
+      ..collapseSelection();
+    controller.setPageLandscape(true);
+    expect(heading.pageSize.isLandscape, isTrue);
+    expect(body.pageSize.isLandscape, isTrue);
+    expect(later.pageSize.isLandscape, isFalse);
+    controller.undo();
+    expect(heading.pageSize.isLandscape, isFalse);
+    expect(body.pageSize.isLandscape, isFalse);
+  });
+
   test('selectTable covers every cell paragraph', () {
     final WmlParagraph a = WmlParagraph(
       inlines: <WmlInline>[WmlRun(text: 'A')],
@@ -1339,6 +1608,66 @@ void main() {
     expect(controller.selectedTable, same(table));
   });
 
+  test('backspace deletes a selected table column or row', () {
+    final WmlTable table = WmlTable(
+      grid: <double>[80, 80],
+      rows: <WmlTableRow>[
+        WmlTableRow(
+          cells: <WmlTableCell>[
+            WmlTableCell(
+              blocks: <WmlBlock>[
+                WmlParagraph(inlines: <WmlInline>[WmlRun(text: 'A1')]),
+              ],
+            ),
+            WmlTableCell(
+              blocks: <WmlBlock>[
+                WmlParagraph(inlines: <WmlInline>[WmlRun(text: 'B1')]),
+              ],
+            ),
+          ],
+        ),
+        WmlTableRow(
+          cells: <WmlTableCell>[
+            WmlTableCell(
+              blocks: <WmlBlock>[
+                WmlParagraph(inlines: <WmlInline>[WmlRun(text: 'A2')]),
+              ],
+            ),
+            WmlTableCell(
+              blocks: <WmlBlock>[
+                WmlParagraph(inlines: <WmlInline>[WmlRun(text: 'B2')]),
+              ],
+            ),
+          ],
+        ),
+      ],
+    );
+    final WordEditorController controller = WordEditorController(
+      document: WmlDocument(
+        sections: <WmlSection>[
+          WmlSection(
+            blocks: <WmlBlock>[
+              WmlParagraph(inlines: <WmlInline>[WmlRun(text: 'Before')]),
+              table,
+            ],
+          ),
+        ],
+      ),
+    );
+    controller.selectTableBand(table, column: true, from: 0, to: 0);
+    controller.deleteSelectionOr(backward: true);
+    expect(controller.selectedTableBand, isNull);
+    expect(WordTable.columnCount(table), 1);
+    expect(table.rows.first.cells.single.blocks.first, isA<WmlParagraph>());
+    expect((table.rows.first.cells.single.blocks.first as WmlParagraph).text, 'B1');
+    expect((table.rows.last.cells.single.blocks.first as WmlParagraph).text, 'B2');
+
+    controller.selectTableBand(table, column: false, from: 0, to: 0);
+    controller.deleteSelectionOr(backward: true);
+    expect(table.rows.length, 1);
+    expect((table.rows.single.cells.single.blocks.first as WmlParagraph).text, 'B2');
+  });
+
   test('insertSectionBreak and header edit target the active section', () {
     final WordEditorController controller = WordEditorController(
       document: WmlDocument(
@@ -1369,6 +1698,41 @@ void main() {
     controller.endHeaderFooterEdit();
     expect(controller.isEditingHeaderFooter, isFalse);
     expect(controller.document.paragraphs.first.text, 'First');
+  });
+
+  test('header edit on a zero-margin then landscape section stays usable', () {
+    final WordEditorController controller = WordEditorController(
+      document: WmlDocument(
+        sections: <WmlSection>[
+          WmlSection(
+            margins: const WmlPageMargins(top: 0, bottom: 0, left: 0, right: 0),
+            blocks: <WmlBlock>[
+              WmlParagraph(inlines: <WmlInline>[WmlRun(text: 'Cover')]),
+            ],
+          ),
+          WmlSection(
+            pageSize: const WmlPageSize().landscape,
+            breakKind: WmlSectionBreakKind.nextPage,
+            blocks: <WmlBlock>[
+              WmlParagraph(inlines: <WmlInline>[WmlRun(text: 'Wide')]),
+            ],
+          ),
+        ],
+      ),
+    );
+    expect(controller.documentLaidOut.pages, isNotEmpty);
+    controller.beginHeaderFooterEdit(0, footer: false);
+    expect(controller.isEditingHeader, isTrue);
+    expect(controller.headerFooterParagraphs, isNotEmpty);
+    expect(controller.documentLaidOut.pages.first.headerBand.height, greaterThan(20));
+    controller.insertText('Title');
+    expect(controller.document.sections.first.header.first.text, 'Title');
+    controller.endHeaderFooterEdit();
+    controller.beginHeaderFooterEdit(1, footer: false);
+    expect(controller.sectionAtCaret.pageSize.isLandscape, isTrue);
+    expect(controller.headerFooterParagraphs, isNotEmpty);
+    controller.endHeaderFooterEdit();
+    expect(controller.isEditingHeaderFooter, isFalse);
   });
 
   test('word delete removes a selected table instead of emptying it', () {
@@ -1549,6 +1913,57 @@ void main() {
     controller.undo();
     expect(shape.transform.x, x0);
     expect(shape.transform.rot, 0);
+  });
+
+  test('slide ctrl-select nudges together and groups as one unit', () {
+    final PmlShape a = PmlShape(
+      id: 2,
+      name: 'A',
+      text: 'A',
+      transform: const PmlTransform(x: 0, y: 0),
+    );
+    final PmlShape b = PmlShape(
+      id: 3,
+      name: 'B',
+      text: 'B',
+      transform: const PmlTransform(x: 254000, y: 0),
+    );
+    final PmlShape c = PmlShape(
+      id: 4,
+      name: 'C',
+      text: 'C',
+      transform: const PmlTransform(x: 508000, y: 0),
+    );
+    final SlideEditorController controller = SlideEditorController(
+      presentation: PmlPresentation(
+        slides: <PmlSlide>[
+          PmlSlide(id: 256, shapes: <PmlShape>[a, b, c]),
+        ],
+      ),
+    );
+    controller.selectShape(a);
+    controller.selectShape(b, additive: true);
+    expect(controller.selectedShapes, <PmlShape>[a, b]);
+    expect(identical(controller.selected, b), isTrue);
+    final int ax = a.transform.x;
+    final int bx = b.transform.x;
+    final int cx = c.transform.x;
+    controller.nudgeSelected(127000, 0);
+    expect(a.transform.x, ax + 127000);
+    expect(b.transform.x, bx + 127000);
+    expect(c.transform.x, cx);
+    expect(controller.groupShapes(), isNotNull);
+    expect(a.groupId, isNotNull);
+    expect(a.groupId, b.groupId);
+    expect(c.groupId, isNull);
+    controller.selectShape(null);
+    controller.selectShape(a);
+    expect(controller.selectedShapes.length, 2);
+    expect(controller.selectedShapes.any((PmlShape s) => identical(s, b)), isTrue);
+    controller.nudgeSelected(0, 127000);
+    expect(a.transform.y, 127000);
+    expect(b.transform.y, 127000);
+    expect(c.transform.y, 0);
   });
 
   test('slide controller edits a picture visual', () {
@@ -2070,16 +2485,302 @@ void main() {
       ),
     );
     expect(
-      OfficeContextMenu.slideSorter(controller: slides, index: 0).single.id,
-      'hideSlide',
+      OfficeContextMenu.slideSorter(controller: slides, index: 0)
+          .map((OfficeContextAction a) => a.id),
+      containsAll(<String>['copySlide', 'pasteSlide', 'duplicateSlide', 'hideSlide']),
     );
     slides.setSlideHidden(0, true);
     expect(slides.presentation.slides.first.hidden, isTrue);
     expect(
-      OfficeContextMenu.slideSorter(controller: slides, index: 0).single.id,
-      'showSlide',
+      OfficeContextMenu.slideSorter(controller: slides, index: 0)
+          .map((OfficeContextAction a) => a.id),
+      contains('showSlide'),
     );
     slides.undo();
     expect(slides.presentation.slides.first.hidden, isFalse);
+  });
+
+  test('slide sorter copy pastes a clone after any thumbnail', () {
+    final SlideEditorController slides = SlideEditorController(
+      presentation: PmlPresentation(
+        slides: <PmlSlide>[
+          PmlSlide(
+            id: 256,
+            notes: 'one',
+            shapes: <PmlShape>[PmlShape(id: 2, name: 'A', text: 'First')],
+          ),
+          PmlSlide(
+            id: 257,
+            notes: 'two',
+            shapes: <PmlShape>[PmlShape(id: 2, name: 'B', text: 'Second')],
+          ),
+        ],
+      ),
+    );
+    expect(slides.canPasteSlide, isFalse);
+    slides.copySlide(0);
+    expect(slides.canPasteSlide, isTrue);
+    slides.pasteSlide(afterIndex: 1);
+    expect(slides.presentation.slides, hasLength(3));
+    expect(slides.activeSlideIndex, 2);
+    expect(slides.presentation.slides[2].notes, 'one');
+    expect(slides.presentation.slides[2].shapes.single.text, 'First');
+    expect(slides.presentation.slides[2].id, isNot(256));
+    slides.undo();
+    expect(slides.presentation.slides, hasLength(2));
+    slides.duplicateSlide(1);
+    expect(slides.presentation.slides, hasLength(3));
+    expect(slides.presentation.slides[2].notes, 'two');
+    OfficeClipboard.instance.clear();
+  });
+
+  test('controllers expose find replace stats print and styles', () {
+    final WordEditorController word = WordEditorController(
+      document: WmlDocument.empty(text: 'Find Quds here'),
+    );
+    expect(word.find(const OfficeFindOptions(query: 'Quds')), hasLength(1));
+    expect(word.findSession.current?.preview, contains('Quds'));
+    expect(word.replaceAll(const OfficeFindOptions(query: 'Quds', replaceWith: 'قدس')), 1);
+    expect(word.document.paragraphs.first.text, contains('قدس'));
+    expect(word.documentStats.words, greaterThan(0));
+    word.applyStyle('Title');
+    expect(WordStyles.ofParagraph(word.document.paragraphs.first).id, 'Title');
+    word.insertFootnote(text: 'Note');
+    expect(word.document.footnotes, hasLength(1));
+    word.insertField(WmlFieldKind.page);
+    expect(
+      word.document.paragraphs.any(
+        (WmlParagraph p) => p.properties.pageNumberField,
+      ),
+      isTrue,
+    );
+    word.setWatermark('DRAFT');
+    expect(word.document.watermark, 'DRAFT');
+    word.insertTable(rows: 2, columns: 2);
+    expect(word.document.sections.first.blocks.whereType<WmlTable>(), isNotEmpty);
+    word.insertTableOfFigures(label: 'Figure');
+    expect(word.document.sections.first.blocks.whereType<WmlToc>(), isNotEmpty);
+    expect(word.exportPdf().take(5).toList(), <int>[37, 80, 68, 70, 45]);
+
+    final SheetEditorController sheet = SheetEditorController();
+    sheet.sheet.cellA1('A1').value = 'Name';
+    sheet.sheet.cellA1('A2').value = 'Zed';
+    sheet.sheet.cellA1('A3').value = 'Ann';
+    sheet.selection
+      ..selectCell(const SmlCellRef(0, 0))
+      ..extendTo(const SmlCellRef(0, 2));
+    sheet.sortSelection();
+    expect(sheet.sheet.cellA1('A2').asString, 'Ann');
+    sheet.defineName('People');
+    expect(sheet.workbook.namedRanges.single.name, 'People');
+
+    final SlideEditorController slides = SlideEditorController();
+    slides.slide.shapes.add(PmlShape(id: 2, name: 'T', text: 'Hello deck'));
+    expect(
+      slides.find(const OfficeFindOptions(query: 'deck')),
+      isNotEmpty,
+    );
+    slides.addSlideSection('Intro');
+    expect(slides.presentation.sections.single.name, 'Intro');
+  });
+
+  test('studio ribbon APIs mutate word sheet and slides', () {
+    final WordEditorController word = WordEditorController(
+      document: WmlDocument.empty(text: 'Dear «Name»,'),
+    );
+    word.insertFootnote(endnote: true, text: 'End');
+    expect(word.document.endnotes, hasLength(1));
+    word.setDropCap(3);
+    expect(word.document.paragraphs.first.properties.dropCapLines, 3);
+    word.setLineNumbers(true);
+    expect(word.sectionAtCaret.lineNumbers, isTrue);
+    word.setParagraphShading('FFF2CC');
+    expect(word.document.paragraphs.first.properties.shadingFill, 'FFF2CC');
+    word.setParagraphBorder('2E75B6');
+    expect(word.document.paragraphs.first.properties.borderColor, '2E75B6');
+    word.insertCitation(
+      WmlCitation(tag: 'Q', author: 'Ada', title: 'Notes', year: '2026'),
+    );
+    expect(word.document.citations, isNotEmpty);
+    word.mergeMail(<String, String>{'Name': 'Ada'});
+    expect(word.document.paragraphs.first.text, contains('Ada'));
+    word.setRestrictEditing(true);
+    expect(word.document.restrictEditing, isTrue);
+    word.setRestrictEditing(false);
+    word.beginHeaderFooterEdit(0, footer: false);
+    expect(word.isEditingHeader, isTrue);
+    word.endHeaderFooterEdit();
+    expect(word.isEditingHeaderFooter, isFalse);
+    word.setTrackRevisions(true);
+    word.insertText('x');
+    expect(word.document.revisions, isNotEmpty);
+    word.acceptAllRevisions();
+    expect(word.document.revisions, isEmpty);
+
+    final SheetEditorController sheet = SheetEditorController();
+    sheet.sheet.cellA1('A1').value = 'R';
+    sheet.sheet.cellA1('B1').value = '1';
+    sheet.setCellComment('Note');
+    expect(sheet.sheet.comments.single.text, 'Note');
+    sheet.protectSheet();
+    expect(sheet.sheet.protection?.enabled, isTrue);
+    sheet.selection
+      ..selectCell(const SmlCellRef(0, 0))
+      ..extendTo(const SmlCellRef(1, 0));
+    sheet.addTable(name: 'Table1');
+    expect(sheet.sheet.tables.single.name, 'Table1');
+    sheet.addValidation(
+      SmlDataValidation(
+        range: sheet.selection.range,
+        kind: SmlValidationKind.list,
+        formula1: 'Yes,No',
+      ),
+    );
+    expect(sheet.sheet.validations, hasLength(1));
+    sheet.insertPivot(
+      source: sheet.selection.range,
+      rowField: 0,
+      dataField: 1,
+    );
+    expect(sheet.sheet.pivots, hasLength(1));
+
+    final SlideEditorController slides = SlideEditorController();
+    slides.slide.shapes.addAll(<PmlShape>[
+      PmlShape(id: 2, name: 'A', text: 'A'),
+      PmlShape(id: 3, name: 'B', text: 'B'),
+    ]);
+    expect(slides.groupShapes(), isNotNull);
+    slides.ungroupShapes();
+    slides.setSpeakerNotes('Say this');
+    expect(slides.slide.notes, 'Say this');
+    slides.setLayoutPlaceholder(layoutName: 'Title Slide', text: 'Title');
+    expect(slides.presentation.layouts, isNotEmpty);
+    slides.setStageKind(SlideStageKind.layout);
+    expect(slides.canvasSlide.shapes, isNotEmpty);
+    slides.setStageKind(SlideStageKind.slide);
+    slides.startShow(from: 0);
+    expect(slides.isPresenting, isTrue);
+    slides.pausePresenter();
+    expect(slides.presenterPaused, isTrue);
+    slides.endShow();
+  });
+
+  test('word notes pane APIs jump and header flags', () {
+    final WordEditorController word = WordEditorController(
+      document: WmlDocument.empty(text: 'Body'),
+    );
+    word.insertFootnote(text: 'Note body');
+    final WmlNote note = word.document.footnotes.single;
+    word.setNoteText(note, 'Edited');
+    expect(note.text, 'Edited');
+    word.jumpToNote(note);
+    expect(word.documentCaret.paragraphIndex, 0);
+    word.setDifferentFirstPage(true);
+    word.setDifferentOddEven(true);
+    word.setLinkToPrevious(false);
+    expect(word.sectionAtCaret.differentFirstPage, isTrue);
+    expect(word.sectionAtCaret.differentOddEven, isTrue);
+    expect(word.sectionAtCaret.linkToPrevious, isFalse);
+    word.setTrackRevisions(true);
+    word.insertText('x');
+    word.insertText('y');
+    expect(word.document.revisions.length, greaterThan(1));
+    word.stepRevision(1);
+    expect(word.selectedRevision, isNotNull);
+    word.acceptRevision(word.selectedRevision!);
+    word.previewMailMerge(<Map<String, String>>[
+      <String, String>{'Name': 'Ada'},
+    ]);
+    expect(word.printPreviewPages(), isNotEmpty);
+    word.setRestrictEditing(true, mode: WmlRestrictMode.forms);
+    expect(word.document.restrictMode, WmlRestrictMode.forms);
+  });
+
+  test('sheet extras and slide media', () {
+    final SheetEditorController sheet = SheetEditorController();
+    sheet.sheet.cellA1('A1').value = 2;
+    sheet.sheet.cellA1('B1').formula = '=A1*3';
+    sheet.recalculateWorkbook();
+    expect(
+      sheet.goalSeek(
+        target: SmlCellRef.parse('B1'),
+        changing: SmlCellRef.parse('A1'),
+        goal: 12,
+      ),
+      isTrue,
+    );
+    sheet.importCsv('A,B\n1,2');
+    sheet.addSparkline(source: SmlRange.parse('A1:B1'));
+    expect(sheet.sheet.sparklines, hasLength(1));
+    sheet.fillSeries(range: SmlRange.parse('A1:A3'));
+
+    final SlideEditorController slides = SlideEditorController();
+    slides.slide.shapes.add(PmlShape(id: 2, name: 'Clip', text: ''));
+    var played = false;
+    slides.onPlayMedia = (_) => played = true;
+    slides.setShapeMedia(slides.slide.shapes.first, name: 'a.mp4', bytes: <int>[1]);
+    expect(slides.slide.shapes.first.hasMedia, isTrue);
+    slides.playShapeMedia(slides.slide.shapes.first);
+    expect(played, isTrue);
+  });
+
+  test('merged cells select as one named origin', () {
+    final SheetEditorController sheet = SheetEditorController();
+    sheet.selection
+      ..selectCell(const SmlCellRef(0, 0))
+      ..extendTo(const SmlCellRef(2, 3));
+    sheet.mergeAndCenter();
+    expect(sheet.sheet.mergeAt(1, 1), isNotNull);
+    expect(sheet.activeCell.a1, 'A1');
+    expect(sheet.selectionAddress, 'A1');
+    expect(sheet.selection.focus.a1, 'A1');
+    sheet.moveSelectionTo(const SmlCellRef(2, 2));
+    expect(sheet.selectionAddress, 'A1');
+    expect(sheet.selection.range.isSingleCell, isTrue);
+  });
+
+  test('find next wraps and revealFindHit moves the word caret', () {
+    final WordEditorController word = WordEditorController(
+      document: WmlDocument.empty(text: 'Quds office Quds suite'),
+    );
+    expect(word.find(const OfficeFindOptions(query: 'Quds')), hasLength(2));
+    expect(word.findSession.index, 0);
+    expect(word.caret.selectionAnchor, 0);
+    expect(word.caret.logicalIndex, 4);
+    word.findNext();
+    expect(word.findSession.index, 1);
+    expect(word.caret.selectionAnchor, greaterThan(4));
+    word.findNext();
+    expect(word.findSession.index, 0);
+    expect(word.replaceCurrent(), 1);
+    expect(word.document.paragraphs.first.text, isNot(startsWith('Quds')));
+  });
+
+  testWidgets('Ctrl+F requests find from the word surface', (
+    WidgetTester tester,
+  ) async {
+    final WordEditorController word = WordEditorController(
+      document: WmlDocument.empty(text: 'Find me'),
+    );
+    var requested = false;
+    word.onFindRequested = () => requested = true;
+    await tester.pumpWidget(
+      Directionality(
+        textDirection: TextDirection.ltr,
+        child: SizedBox(
+          width: 800,
+          height: 600,
+          child: QudsWordEditor(controller: word),
+        ),
+      ),
+    );
+    await tester.tap(find.byType(WordCanvas));
+    await tester.pump();
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyF);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pump();
+    expect(requested, isTrue);
+    expect(word.findSession.active, isTrue);
   });
 }

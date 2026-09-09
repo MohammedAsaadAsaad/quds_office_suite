@@ -47,11 +47,30 @@ class PdfCanvas {
       return;
     }
     _color = hex;
-    final int rgb = int.tryParse(hex.replaceAll('#', ''), radix: 16) ?? 0;
+    final int rgb = _parseRgb(hex);
     final double r = ((rgb >> 16) & 0xFF) / 255.0;
     final double g = ((rgb >> 8) & 0xFF) / 255.0;
     final double b = (rgb & 0xFF) / 255.0;
     _buf.writeln('${_n(r)} ${_n(g)} ${_n(b)} rg');
+  }
+
+  /// Strips `#` and alpha; keeps the last 6 hex digits as RRGGBB.
+  static int _parseRgb(String hex) {
+    final String clean = hex.replaceAll('#', '').trim();
+    if (clean.length >= 8) {
+      return int.tryParse(clean.substring(clean.length - 6), radix: 16) ?? 0;
+    }
+    if (clean.length == 6) {
+      return int.tryParse(clean, radix: 16) ?? 0;
+    }
+    if (clean.length == 3) {
+      final int n = int.tryParse(clean, radix: 16) ?? 0;
+      final int r = (n >> 8) & 0xF;
+      final int g = (n >> 4) & 0xF;
+      final int b = n & 0xF;
+      return (r << 20) | (r << 16) | (g << 12) | (g << 8) | (b << 4) | b;
+    }
+    return int.tryParse(clean, radix: 16) ?? 0;
   }
 
   /// showGlyph API.
@@ -63,10 +82,11 @@ class PdfCanvas {
     required String color,
     bool italic = false,
     bool bold = false,
+    String fontName = 'F1',
   }) {
     beginText();
     setFillColor(color);
-    _setFont('F1', fontSize);
+    _setFont(fontName, fontSize);
     final String hex = glyphId.toRadixString(16).padLeft(4, '0');
     final double shear = italic ? 0.25 : 0;
     // Page CTM is Y-flipped (top-left). Negate d so glyphs grow up the page.
@@ -110,7 +130,7 @@ class PdfCanvas {
 
   /// setStrokeColor API.
   void setStrokeColor(String hex) {
-    final int rgb = int.tryParse(hex.replaceAll('#', ''), radix: 16) ?? 0;
+    final int rgb = _parseRgb(hex);
     final double r = ((rgb >> 16) & 0xFF) / 255.0;
     final double g = ((rgb >> 8) & 0xFF) / 255.0;
     final double b = (rgb & 0xFF) / 255.0;

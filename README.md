@@ -10,12 +10,7 @@
   <a href="https://pub.dev/packages/quds_office_editor"><img alt="editor" src="https://img.shields.io/pub/v/quds_office_editor.svg?label=quds_office_editor&color=217346"/></a>
   <a href="LICENSE"><img alt="license" src="https://img.shields.io/badge/license-MIT-0B1F3A"/></a>
   <img alt="sdk" src="https://img.shields.io/badge/Dart-3.12+-0175C2?logo=dart&logoColor=white"/>
-  <img alt="rtl" src="https://img.shields.io/badge/RTL%20%2F%20Arabic-first-C9A227"/>
-</p>
-
-<p dir="rtl" align="center">
-  محرّك Office خالص بـ Dart، ومحرّرات Flutter مبنية من <code>RenderBox</code> —
-  وورد، إكسل، بوربوينت، وتصدير PDF — مع دعم حقيقي للعربية واتجاه RTL.
+  <img alt="i18n" src="https://img.shields.io/badge/languages%20%26%20directions-LTR%20·%20RTL%20·%20BiDi-C9A227"/>
 </p>
 
 ---
@@ -59,7 +54,7 @@ Most Dart “Office” libraries stop at writing a simple DOCX. Quds goes furthe
 
 - **Round-trip real files** — open Microsoft Office / LibreOffice packages, mutate the model, write them back.
 - **Own the stack** — ZIP, Deflate, CFBF/OLE, XML, fonts, BiDi, and PDF are implemented here. Fewer mystery dependencies.
-- **RTL is not a flag** — UAX #9, Arabic shaping, and logical caret movement are in the engine; the editor paints them.
+- **Many languages, many directions** — UAX #9 BiDi, Arabic shaping, mixed LTR/RTL, and logical caret movement live in the engine; the editor paints them.
 - **Editors that look like Office** — paginated Word, virtualized Excel, a slide stage with Morph, wipe, push, and **reverse** slideshow playback.
 - **Server or UI** — generate reports on a CLI/server with the engine; embed the same models in Flutter with the editor.
 
@@ -102,17 +97,17 @@ void main() {
   );
 
   final docx = (DocxDocumentBuilder(theme: theme)
-        ..heading('تقرير القدس')
-        ..paragraph('محرّك Office خالص بلغة Dart.')
+        ..heading('Quarterly report')
+        ..paragraph('A pure Dart Office engine for many languages and directions.')
         ..table([
-          ['البند', 'القيمة'],
-          ['الملفات', '3'],
+          ['Item', 'Value'],
+          ['Files', '3'],
         ]))
       .build();
 
   final xlsx = (XlsxWorkbookBuilder(theme: theme)
-        ..addSheet('ملخص')
-            .addRow(['الربع', 'الإيراد']))
+        ..addSheet('Summary')
+            .addRow(['Quarter', 'Revenue']))
       .build();
 
   final pptx = (PptxDeckBuilder(theme: theme)
@@ -124,7 +119,7 @@ void main() {
   File('deck.pptx').writeAsBytesSync(pptx);
 
   File('report.pdf').writeAsBytesSync(
-    OfficePdfExport.fromBytes(docx, title: 'تقرير القدس'),
+    OfficePdfExport.fromBytes(docx, title: 'Quarterly report'),
   );
 }
 ```
@@ -149,14 +144,14 @@ class _WordHostState extends State<WordHost> {
   late final WordEditorController controller = WordEditorController(
     config: const OfficeSurfaceConfig(
       textDirection: TextDirection.rtl,
-      strings: OfficeStrings.arabic,
+      strings: OfficeStrings.english,
     ),
   );
 
   @override
   void initState() {
     super.initState();
-    controller.insertHeading(text: 'القدس');
+    controller.insertHeading(text: 'New document');
   }
 
   @override
@@ -181,7 +176,7 @@ Full walkthrough: [`packages/quds_office_editor/README.md`](packages/quds_office
 
 ## Run the studio
 
-The editor example is a bilingual desktop workspace (ribbons, samples, OS window chrome):
+The editor example is a desktop workspace (ribbons, samples, OS window chrome):
 
 ```bash
 cd packages/quds_office_editor/example

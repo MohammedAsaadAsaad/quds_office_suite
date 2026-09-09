@@ -27,5 +27,7 @@ First public release.
 - Password-aware open, repair of damaged packages, isolate open/save for large files.
 - Native PDF 1.7 export for Word, Excel, and PowerPoint (fonts, images, links, notes pages).
 - Fluent builders: `DocxDocumentBuilder`, `XlsxWorkbookBuilder`, `PptxDeckBuilder`, `PdfReportBuilder`.
+- Widget-style Word DSL (`word_widgets.dart`) with independent portrait / landscape sections.
 - `OfficeTextExtractor` for DOCX / XLSX / PPTX / ODF.
-- UAX #9 BiDi, Arabic shaping, and grapheme-aware line breaking.
+- Find / replace, print ranges, text statistics, and document properties.
+- UAX #9 BiDi, Arabic shaping, grapheme-aware line breaking, and mixed writing directions.

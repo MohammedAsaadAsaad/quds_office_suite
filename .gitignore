@@ -23,6 +23,10 @@ pubspec.lock
 
 # Engine gallery output
 packages/quds_office_engine/example/out/
+packages/quds_office_engine/example/example/
+
+# Local PDF comparison fixtures
+tmp_pdf_compare/
 
 # Flutter generated / ephemeral
 **/flutter/ephemeral/

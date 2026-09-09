@@ -9,9 +9,40 @@ import '../editor_sheet/inline_cell_editor.dart';
 import '../editor_sheet/selection_matrix.dart';
 import '../editor_sheet/sheet_scroll_extent.dart';
 import '../editor_word/caret_engine.dart';
+import '../editor_word/office_ruler.dart';
 import '../editor_word/paint_run_text.dart';
 import 'office_clipboard.dart';
 import 'office_theme.dart';
+
+/// Live find/replace cursor shared by every host.
+class OfficeFindSession {
+  /// OfficeFindSession API.
+  OfficeFindSession();
+
+  /// hits API.
+  List<OfficeFindHit> hits = <OfficeFindHit>[];
+
+  /// index API.
+  var index = -1;
+
+  /// options API.
+  OfficeFindOptions? options;
+
+  /// active API.
+  var active = false;
+
+  /// current API.
+  OfficeFindHit? get current =>
+      index >= 0 && index < hits.length ? hits[index] : null;
+
+  /// clear API.
+  void clear() {
+    hits = <OfficeFindHit>[];
+    index = -1;
+    options = null;
+    active = false;
+  }
+}
 
 /// Shared undo, dirty-state, and interaction mode for every embedded editor.
 abstract class OfficeController extends ChangeNotifier {
@@ -26,6 +57,25 @@ abstract class OfficeController extends ChangeNotifier {
 
   /// viewport API.
   final VirtualViewport viewport = VirtualViewport();
+
+  /// findSession API.
+  final OfficeFindSession findSession = OfficeFindSession();
+
+  /// Host chrome: Ctrl+F.
+  VoidCallback? onFindRequested;
+
+  /// Host chrome: Ctrl+H.
+  VoidCallback? onReplaceRequested;
+
+  /// Host chrome: Ctrl+P.
+  VoidCallback? onPrintRequested;
+
+  /// Host chrome: F7.
+  VoidCallback? onSpellCheckRequested;
+
+  /// Fired after [find] / [findNext] updates [findSession].
+  void Function(OfficeFindHit? hit)? onFindResult;
+
   OfficeSurfaceConfig _config;
   var _dirty = false;
   var _disposed = false;
@@ -62,8 +112,15 @@ abstract class OfficeController extends ChangeNotifier {
 
   /// Assigns [value] without notifying listeners (safe during widget build).
   void syncConfig(OfficeSurfaceConfig value) {
+    final bool directionChanged = _config.textDirection != value.textDirection;
     _config = value;
+    if (directionChanged) {
+      onSurfaceDirectionChanged();
+    }
   }
+
+  /// Hook when [OfficeSurfaceConfig.textDirection] changes (e.g. studio language).
+  void onSurfaceDirectionChanged() {}
 
   /// setMode API.
   void setMode(OfficeInteractionMode mode) {
@@ -156,6 +213,168 @@ abstract class OfficeController extends ChangeNotifier {
   /// semanticsValue API.
   String get semanticsValue;
 
+  /// canFind API.
+  bool get canFind => true;
+
+  /// canPrint API.
+  bool get canPrint => true;
+
+  /// hasTrackedChanges API.
+  bool get hasTrackedChanges => false;
+
+  /// documentProperties API.
+  OfficeDocumentProperties get documentProperties;
+
+  /// documentProperties API.
+  set documentProperties(OfficeDocumentProperties value);
+
+  /// documentStats API.
+  OfficeTextStats get documentStats;
+
+  /// selectionStats API.
+  OfficeTextStats get selectionStats => documentStats;
+
+  /// collectFindHits API.
+  List<OfficeFindHit> collectFindHits(OfficeFindOptions options);
+
+  /// applyReplace API.
+  int applyReplace(OfficeFindOptions options, {OfficeFindHit? only});
+
+  /// exportPdf API.
+  Uint8List exportPdf({
+    OfficePrintSettings settings = const OfficePrintSettings(),
+    SfntFont? font,
+  });
+
+  /// revealFindHit API.
+  void revealFindHit(OfficeFindHit hit) {}
+
+  /// find API.
+  List<OfficeFindHit> find(OfficeFindOptions options) {
+    findSession
+      ..active = true
+      ..options = options
+      ..hits = collectFindHits(options)
+      ..index = findSession.hits.isEmpty ? -1 : 0;
+    final OfficeFindHit? hit = findSession.current;
+    if (hit != null) {
+      revealFindHit(hit);
+    }
+    onFindResult?.call(hit);
+    notifyListeners();
+    return findSession.hits;
+  }
+
+  /// findNext API.
+  OfficeFindHit? findNext({bool wrap = true}) {
+    if (findSession.hits.isEmpty) {
+      final OfficeFindOptions? options = findSession.options;
+      if (options != null) {
+        find(options);
+      }
+      return findSession.current;
+    }
+    if (findSession.index + 1 < findSession.hits.length) {
+      findSession.index++;
+    } else if (wrap && findSession.hits.isNotEmpty) {
+      findSession.index = 0;
+    } else {
+      return findSession.current;
+    }
+    final OfficeFindHit? hit = findSession.current;
+    if (hit != null) {
+      revealFindHit(hit);
+    }
+    onFindResult?.call(hit);
+    notifyListeners();
+    return hit;
+  }
+
+  /// findPrevious API.
+  OfficeFindHit? findPrevious({bool wrap = true}) {
+    if (findSession.hits.isEmpty) {
+      return findNext(wrap: wrap);
+    }
+    if (findSession.index > 0) {
+      findSession.index--;
+    } else if (wrap && findSession.hits.isNotEmpty) {
+      findSession.index = findSession.hits.length - 1;
+    }
+    final OfficeFindHit? hit = findSession.current;
+    if (hit != null) {
+      revealFindHit(hit);
+    }
+    onFindResult?.call(hit);
+    notifyListeners();
+    return hit;
+  }
+
+  /// replace API.
+  int replace(OfficeFindOptions options, {OfficeFindHit? only}) {
+    if (!config.allowsMutation) {
+      return 0;
+    }
+    final int count = applyReplace(options, only: only);
+    if (count > 0) {
+      find(options);
+    }
+    return count;
+  }
+
+  /// replaceAll API.
+  int replaceAll(OfficeFindOptions options) {
+    if (!config.allowsMutation) {
+      return 0;
+    }
+    final int count = applyReplace(options);
+    findSession
+      ..options = options
+      ..hits = const <OfficeFindHit>[]
+      ..index = -1;
+    notifyListeners();
+    return count;
+  }
+
+  /// requestFind API.
+  void requestFind() {
+    findSession.active = true;
+    onFindRequested?.call();
+    notifyListeners();
+  }
+
+  /// requestReplace API.
+  void requestReplace() {
+    findSession.active = true;
+    onReplaceRequested?.call();
+    notifyListeners();
+  }
+
+  /// requestPrint API.
+  void requestPrint() {
+    onPrintRequested?.call();
+  }
+
+  /// requestSpellCheck API.
+  void requestSpellCheck() {
+    onSpellCheckRequested?.call();
+  }
+
+  /// closeFind API.
+  void closeFind() {
+    findSession.clear();
+    notifyListeners();
+  }
+
+  /// replaceCurrent API.
+  int replaceCurrent() {
+    final OfficeFindHit? hit = findSession.current;
+    final OfficeFindOptions? options = findSession.options;
+    if (hit == null || options == null) {
+      return 0;
+    }
+    return replace(options, only: hit);
+  }
+
   void _onCommands() {
     _dirty = true;
     notifyListeners();
@@ -247,8 +466,17 @@ class WordEditorController extends OfficeController {
   /// kind API.
   OpcPackageKind get kind => OpcPackageKind.word;
 
+  /// Index into [WmlDocument.revisions], or null.
+  int? selectedRevisionIndex;
+
   /// selectedVisual API.
   WmlVisual? selectedVisual;
+
+  /// selectedFrame API.
+  WmlFrame? selectedFrame;
+
+  /// True after a double-click: text caret only, no move/resize knobs.
+  var editingFrame = false;
 
   /// selectedEquation API.
   WmlEquation? selectedEquation;
@@ -267,6 +495,7 @@ class WordEditorController extends OfficeController {
 
   /// pictureCropMode API.
   var pictureCropMode = false;
+  ({double x, double y, double width, double height})? _frameSnap;
   ({
     double width,
     double height,
@@ -434,6 +663,8 @@ class WordEditorController extends OfficeController {
     _editingFooter = footer;
     _editingHeaderFooter = true;
     selectedVisual = null;
+    selectedFrame = null;
+    editingFrame = false;
     selectedEquation = null;
     selectedTable = null;
     selectedTableBand = null;
@@ -448,9 +679,21 @@ class WordEditorController extends OfficeController {
       paras.length - 1,
     );
     relayout();
+    _revealPage(pageIndex);
     onRequestFocus?.call();
     attachInput();
     notifyListeners();
+  }
+
+  void _revealPage(int pageIndex) {
+    if (documentLaidOut.pages.isEmpty) {
+      return;
+    }
+    final int index = pageIndex.clamp(0, documentLaidOut.pages.length - 1);
+    const double pointsToPixels = 96 / 72;
+    final double scale = viewport.scale * pointsToPixels;
+    final double top = documentLaidOut.pageStackTop(index, scale);
+    viewport.origin = Offset(viewport.origin.dx, top < 0 ? 0 : top);
   }
 
   /// endHeaderFooterEdit API.
@@ -590,17 +833,36 @@ class WordEditorController extends OfficeController {
   void Function(WmlHyperlink link)? onFollowExternalLink;
 
   /// relayout API.
-  void relayout() {
-    WordLink.ensureHeadingBookmarks(document);
-    WordToc.refreshEmpty(document);
-    WordToc.rebindHeadings(document);
+  void relayout({bool localEdit = false}) {
+    _syncEmptyParagraphDirection();
+    if (!localEdit) {
+      WordLink.ensureHeadingBookmarks(document);
+      WordToc.refreshEmpty(document);
+      WordToc.rebindHeadings(document);
+    }
     final WordLayoutEngine engine =
         layoutEngine ?? WordLayoutEngine(font: null);
-    documentLaidOut = engine.layout(document);
-    if (WordToc.syncPageNumbers(document, documentLaidOut)) {
+    final int fromSection = localEdit ? sectionIndexAtCaret : 0;
+    documentLaidOut = engine.layout(
+      document,
+      updateFields: !localEdit,
+      fromSectionIndex: fromSection,
+      reuse: localEdit ? documentLaidOut : null,
+    );
+    if (!localEdit && WordToc.syncPageNumbers(document, documentLaidOut)) {
       documentLaidOut = engine.layout(document);
     }
-    _layoutComment();
+    if (!localEdit || isEditingComment) {
+      _layoutComment();
+    }
+  }
+
+  @override
+  void onSurfaceDirectionChanged() {
+    _syncEmptyParagraphDirection();
+    if (config.allowsMutation) {
+      attachInput();
+    }
   }
 
   /// activeHeadingLevel API.
@@ -1371,10 +1633,8 @@ class WordEditorController extends OfficeController {
     if (!config.allowsMutation) {
       return;
     }
+    input.attach(multiline: true);
     _writeImeValue();
-    if (!input.isAttached) {
-      input.attach(multiline: true);
-    }
   }
 
   @override
@@ -1466,36 +1726,17 @@ class WordEditorController extends OfficeController {
       _crossLaidOutLine(lines, index, toRight: toRight, extend: extend);
       return;
     }
-    final double caretX = _caretXOnLine(line);
-    LaidOutGlyph? next;
-    var best = toRight ? double.infinity : -double.infinity;
-    for (final LaidOutGlyph glyph in line.glyphs) {
-      final double edge = glyph.glyph.level.isOdd
-          ? glyph.x + glyph.advance
-          : glyph.x;
-      if (toRight && edge > caretX + 0.6 && edge < best) {
-        best = edge;
-        next = glyph;
-      } else if (!toRight && edge < caretX - 0.6 && edge > best) {
-        best = edge;
-        next = glyph;
-      }
-    }
+    final int? next = CaretEngine.visualNeighbor(
+      line,
+      caret.logicalIndex,
+      toRight: toRight,
+    );
     if (next != null) {
       caret.paragraphIndex = line.paragraphIndex;
-      caret.logicalIndex = next.glyph.logicalIndex;
+      caret.logicalIndex = next;
     } else {
-      final int end = _lineLogicalEnd(line);
-      if (toRight && caret.logicalIndex < end) {
-        caret.paragraphIndex = line.paragraphIndex;
-        caret.logicalIndex = end;
-      } else if (!toRight && caret.logicalIndex > _lineLogicalStart(line)) {
-        caret.paragraphIndex = line.paragraphIndex;
-        caret.logicalIndex = _lineLogicalStart(line);
-      } else {
-        _crossLaidOutLine(lines, index, toRight: toRight, extend: extend);
-        return;
-      }
+      _crossLaidOutLine(lines, index, toRight: toRight, extend: extend);
+      return;
     }
     if (!extend) {
       caret.collapseSelection();
@@ -1907,6 +2148,7 @@ class WordEditorController extends OfficeController {
         executeFn: () {
           host.remove(target);
           selectedTable = null;
+          selectedTableBand = null;
           _ensureBodyHasParagraph();
         },
         undoFn: () {
@@ -2070,6 +2312,13 @@ class WordEditorController extends OfficeController {
 
   /// deleteTableRow API.
   void deleteTableRow({WmlTable? table, int? row}) {
+    if (table == null &&
+        row == null &&
+        selectedTableBand != null &&
+        !selectedTableBand!.column) {
+      deleteSelectedTableBand();
+      return;
+    }
     final ({WmlTable table, int row, int col})? loc =
         table != null && row != null
         ? (table: table, row: row, col: 0)
@@ -2086,6 +2335,13 @@ class WordEditorController extends OfficeController {
 
   /// deleteTableColumn API.
   void deleteTableColumn({WmlTable? table, int? col}) {
+    if (table == null &&
+        col == null &&
+        selectedTableBand != null &&
+        selectedTableBand!.column) {
+      deleteSelectedTableBand();
+      return;
+    }
     final ({WmlTable table, int row, int col})? loc =
         table != null && col != null
         ? (table: table, row: 0, col: col)
@@ -2102,6 +2358,58 @@ class WordEditorController extends OfficeController {
           loc.row,
           loc.col.clamp(0, WordTable.columnCount(t) - 1),
         );
+      },
+    );
+  }
+
+  /// Deletes the selected full table row(s) or column(s).
+  void deleteSelectedTableBand() {
+    final ({WmlTable table, bool column, int from, int to})? band =
+        selectedTableBand;
+    if (band == null || !config.allowsMutation) {
+      return;
+    }
+    final WmlTable table = band.table;
+    final int a = band.from < band.to ? band.from : band.to;
+    final int b = band.from > band.to ? band.from : band.to;
+    if (band.column) {
+      final int cols = WordTable.columnCount(table);
+      if (cols <= 0 || (a <= 0 && b >= cols - 1)) {
+        deleteTable(table: table);
+        return;
+      }
+      _mutateWordTable(
+        table,
+        () {
+          for (int i = b; i >= a; i--) {
+            WordTable.deleteColumn(table, i);
+          }
+          selectedTableBand = null;
+        },
+        (WmlTable t) {
+          _placeCaretInTable(
+            t,
+            0,
+            a.clamp(0, WordTable.columnCount(t) - 1),
+          );
+        },
+      );
+      return;
+    }
+    if (table.rows.isEmpty || (a <= 0 && b >= table.rows.length - 1)) {
+      deleteTable(table: table);
+      return;
+    }
+    _mutateWordTable(
+      table,
+      () {
+        for (int i = b; i >= a && table.rows.length > 1; i--) {
+          WordTable.deleteRow(table, i);
+        }
+        selectedTableBand = null;
+      },
+      (WmlTable t) {
+        _placeCaretInTable(t, a.clamp(0, t.rows.length - 1), 0);
       },
     );
   }
@@ -2226,7 +2534,10 @@ class WordEditorController extends OfficeController {
   @override
   /// canCopy API.
   bool get canCopy =>
-      selectedVisual != null || selectedTable != null || !caret.isCollapsed;
+      selectedVisual != null ||
+      (selectedFrame != null && !editingFrame) ||
+      selectedTable != null ||
+      !caret.isCollapsed;
 
   @override
   /// copyToClipboard API.
@@ -2247,6 +2558,10 @@ class WordEditorController extends OfficeController {
     await copyToClipboard();
     if (selectedVisual != null) {
       deleteSelectedVisual();
+      return;
+    }
+    if (selectedFrame != null && !editingFrame) {
+      deleteSelectedFrame();
       return;
     }
     deleteSelectionOr(backward: true);
@@ -2972,6 +3287,7 @@ class WordEditorController extends OfficeController {
       _deleteNormalizedSelection();
     }
     final WmlParagraph para = _activeParagraph;
+    _syncParagraphDirection(para, incoming: text);
     final int start = caret.logicalIndex.clamp(0, para.text.length);
     commands.commit(
       InsertTextDelta(
@@ -2982,9 +3298,19 @@ class WordEditorController extends OfficeController {
       ),
     );
     commands.endBatch();
+    if (document.trackRevisions) {
+      WordRevisions.record(
+        document,
+        kind: WmlRevisionKind.insert,
+        paragraphIndex: caret.paragraphIndex,
+        start: start,
+        end: start + text.length,
+        text: text,
+      );
+    }
     caret.logicalIndex = start + text.length;
     caret.collapseSelection();
-    relayout();
+    relayout(localEdit: true);
     _markLocalEdit(previousText: previous);
     _syncImeSelection();
     notifyListeners();
@@ -2997,6 +3323,14 @@ class WordEditorController extends OfficeController {
     }
     if (selectedVisual != null) {
       deleteSelectedVisual();
+      return;
+    }
+    if (selectedFrame != null && !editingFrame) {
+      deleteSelectedFrame();
+      return;
+    }
+    if (selectedTableBand != null) {
+      deleteSelectedTableBand();
       return;
     }
     if (selectedTable != null) {
@@ -3013,7 +3347,7 @@ class WordEditorController extends OfficeController {
       _deleteNormalizedSelection();
       commands.endBatch();
       caret.collapseSelection();
-      relayout();
+      relayout(localEdit: true);
       _markLocalEdit(previousText: previous);
       _syncImeSelection();
       notifyListeners();
@@ -3049,6 +3383,21 @@ class WordEditorController extends OfficeController {
     if (end <= start) {
       return;
     }
+    if (document.trackRevisions) {
+      WordRevisions.record(
+        document,
+        kind: WmlRevisionKind.delete,
+        paragraphIndex: caret.paragraphIndex,
+        start: start,
+        end: end,
+        text: text.substring(start, end),
+      );
+      relayout(localEdit: true);
+      _markLocalEdit(previousText: previous);
+      _syncImeSelection();
+      notifyListeners();
+      return;
+    }
     commands.commit(
       DeleteTextDelta(
         getText: () => _activeParagraph.text,
@@ -3059,7 +3408,7 @@ class WordEditorController extends OfficeController {
     );
     caret.logicalIndex = start;
     caret.collapseSelection();
-    relayout();
+    relayout(localEdit: true);
     _markLocalEdit(previousText: previous);
     _syncImeSelection();
     notifyListeners();
@@ -3099,6 +3448,17 @@ class WordEditorController extends OfficeController {
       final int from = p == startPara ? startIdx : 0;
       final int to = p == endPara ? endIdx : para.text.length;
       if (to > from) {
+        if (document.trackRevisions) {
+          WordRevisions.record(
+            document,
+            kind: WmlRevisionKind.delete,
+            paragraphIndex: p,
+            start: from,
+            end: to,
+            text: para.text.substring(from, to),
+          );
+          continue;
+        }
         commands.commit(
           DeleteTextDelta(
             getText: () => para.text,
@@ -3300,7 +3660,7 @@ class WordEditorController extends OfficeController {
     caret.paragraphIndex++;
     caret.logicalIndex = 0;
     caret.collapseSelection();
-    relayout();
+    relayout(localEdit: true);
     _markLocalEdit(previousText: text);
     attachInput();
     notifyListeners();
@@ -3313,19 +3673,20 @@ class WordEditorController extends OfficeController {
     final String name = selector.endsWith(':')
         ? selector.substring(0, selector.length - 1)
         : selector;
+    final bool extend = HardwareKeyboard.instance.isShiftPressed;
     switch (name) {
       case 'moveLeft':
-        moveCaretVisual(toRight: false);
+        moveCaretVisual(toRight: false, extend: extend);
       case 'moveRight':
-        moveCaretVisual(toRight: true);
+        moveCaretVisual(toRight: true, extend: extend);
       case 'moveUp':
-        moveCaretLine(-1);
+        moveCaretLine(-1, extend: extend);
       case 'moveDown':
-        moveCaretLine(1);
+        moveCaretLine(1, extend: extend);
       case 'moveBackward':
-        moveCaret(-1);
+        moveCaret(-1, extend: extend);
       case 'moveForward':
-        moveCaret(1);
+        moveCaret(1, extend: extend);
       case 'moveLeftAndModifySelection':
         moveCaretVisual(toRight: false, extend: true);
       case 'moveRightAndModifySelection':
@@ -3442,6 +3803,7 @@ class WordEditorController extends OfficeController {
     final String old = para.text;
     if (value.text != old) {
       _applyingIme = true;
+      _syncParagraphDirection(para, incoming: value.text);
       commands.commit(
         _CallbackCommand(
           executeFn: () => _setParagraphText(para, value.text),
@@ -3449,7 +3811,7 @@ class WordEditorController extends OfficeController {
         ),
       );
       _applyingIme = false;
-      relayout();
+      relayout(localEdit: true);
       caret.logicalIndex = value.selection.extentOffset.clamp(
         0,
         value.text.length,
@@ -3748,7 +4110,7 @@ class WordEditorController extends OfficeController {
       caret.paragraphIndex = backward ? otherIndex : currentIndex;
       caret.logicalIndex = backward ? keep.text.length : caret.logicalIndex;
       caret.collapseSelection();
-      relayout();
+      relayout(localEdit: true);
       return true;
     }
     final int join = keep.text.length;
@@ -3792,7 +4154,7 @@ class WordEditorController extends OfficeController {
     caret.paragraphIndex = backward ? otherIndex : currentIndex;
     caret.logicalIndex = join;
     caret.collapseSelection();
-    relayout();
+    relayout(localEdit: true);
     return true;
   }
 
@@ -3879,16 +4241,42 @@ class WordEditorController extends OfficeController {
   void selectVisual(WmlVisual? visual) {
     if (!config.allowsSelection) {
       selectedVisual = null;
+      selectedFrame = null;
       selectedEquation = null;
       notifyListeners();
       return;
     }
     selectedVisual = visual;
     if (visual != null) {
+      selectedFrame = null;
+      editingFrame = false;
       selectedEquation = null;
       caret.collapseSelection();
     } else {
       pictureCropMode = false;
+    }
+    notifyListeners();
+  }
+
+  /// selectFrame API.
+  void selectFrame(WmlFrame? frame, {bool editing = false}) {
+    if (!config.allowsSelection) {
+      selectedFrame = null;
+      editingFrame = false;
+      notifyListeners();
+      return;
+    }
+    selectedFrame = frame;
+    editingFrame = frame != null && editing;
+    if (frame != null) {
+      selectedVisual = null;
+      selectedEquation = null;
+      pictureCropMode = false;
+      if (!editing) {
+        caret.collapseSelection();
+      }
+    } else {
+      editingFrame = false;
     }
     notifyListeners();
   }
@@ -3988,7 +4376,7 @@ class WordEditorController extends OfficeController {
   WmlSection get _pageSection => sectionAtCaret;
 
   /// insertSectionBreak API.
-  void insertSectionBreak() {
+  void insertSectionBreak({WmlSectionBreakKind kind = WmlSectionBreakKind.nextPage}) {
     if (!config.allowsMutation || isEditingComment || isEditingHeaderFooter) {
       return;
     }
@@ -4019,6 +4407,9 @@ class WordEditorController extends OfficeController {
         for (final WmlParagraph para in current.footer)
           WmlClone.paragraph(para),
       ],
+      breakKind: kind,
+      differentFirstPage: current.differentFirstPage,
+      differentOddEven: current.differentOddEven,
     );
     final int at = document.sections.indexOf(current) + 1;
     commands.commit(
@@ -4080,17 +4471,49 @@ class WordEditorController extends OfficeController {
     );
   }
 
+  /// Continuous siblings share one visual section (heading + body columns).
+  List<WmlSection> _pageGeometryGroup() {
+    final List<WmlSection> sections = document.sections;
+    if (sections.isEmpty) {
+      return <WmlSection>[_pageSection];
+    }
+    int start = sections.indexOf(_pageSection);
+    if (start < 0) {
+      return <WmlSection>[_pageSection];
+    }
+    while (start > 0 &&
+        sections[start].breakKind == WmlSectionBreakKind.continuous) {
+      start--;
+    }
+    int end = start;
+    while (end + 1 < sections.length &&
+        sections[end + 1].breakKind == WmlSectionBreakKind.continuous) {
+      end++;
+    }
+    return sections.sublist(start, end + 1);
+  }
+
   /// setPageMargins API.
   void setPageMargins(WmlPageMargins margins) {
     if (!config.allowsMutation) {
       return;
     }
-    final WmlSection section = _pageSection;
-    final WmlPageMargins before = section.margins;
+    final List<WmlSection> group = _pageGeometryGroup();
+    final List<WmlPageMargins> before = <WmlPageMargins>[
+      for (final WmlSection section in group) section.margins,
+    ];
     commands.commit(
       _CallbackCommand(
-        executeFn: () => section.margins = margins,
-        undoFn: () => section.margins = before,
+        executeFn: () {
+          for (final WmlSection section in group) {
+            section.margins = margins;
+          }
+        },
+        undoFn: () {
+          for (int i = 0; i < group.length; i++) {
+            group[i].margins = before[i];
+          }
+        },
       ),
     );
     relayout();
@@ -4102,12 +4525,22 @@ class WordEditorController extends OfficeController {
     if (!config.allowsMutation) {
       return;
     }
-    final WmlSection section = _pageSection;
-    final WmlPageSize before = section.pageSize;
+    final List<WmlSection> group = _pageGeometryGroup();
+    final List<WmlPageSize> before = <WmlPageSize>[
+      for (final WmlSection section in group) section.pageSize,
+    ];
     commands.commit(
       _CallbackCommand(
-        executeFn: () => section.pageSize = size,
-        undoFn: () => section.pageSize = before,
+        executeFn: () {
+          for (final WmlSection section in group) {
+            section.pageSize = size;
+          }
+        },
+        undoFn: () {
+          for (int i = 0; i < group.length; i++) {
+            group[i].pageSize = before[i];
+          }
+        },
       ),
     );
     relayout();
@@ -4158,6 +4591,51 @@ class WordEditorController extends OfficeController {
     );
     relayout();
     notifyListeners();
+  }
+
+  void _syncEmptyParagraphDirection() {
+    final List<WmlParagraph> paras = _paragraphs;
+    if (paras.isEmpty) {
+      return;
+    }
+    final WmlParagraph para =
+        paras[caret.paragraphIndex.clamp(0, paras.length - 1)];
+    if (para.text.trim().isEmpty) {
+      _syncParagraphDirection(para);
+    }
+  }
+
+  void _syncParagraphDirection(WmlParagraph para, {String incoming = ''}) {
+    final String existing = para.text.trim();
+    // Empty paragraphs track studio language / incoming script and may flip.
+    if (existing.isEmpty) {
+      final bool preferRtl =
+          OfficeTypeface.isRtlText(incoming) ||
+          config.textDirection == TextDirection.rtl;
+      if (preferRtl) {
+        para.properties
+          ..rightToLeft = true
+          ..justification = WmlJustification.right;
+      } else {
+        // Drop auto-RTL latch so BiDi / later Arabic input can take over.
+        para.properties.rightToLeft = null;
+        if (para.properties.justification == WmlJustification.right) {
+          para.properties.justification = WmlJustification.left;
+        }
+      }
+      return;
+    }
+    if (para.properties.rightToLeft != null) {
+      return;
+    }
+    if (OfficeTypeface.isRtlText(existing) ||
+        OfficeTypeface.isRtlText(incoming)) {
+      if (para.properties.justification == WmlJustification.left) {
+        para.properties
+          ..rightToLeft = true
+          ..justification = WmlJustification.right;
+      }
+    }
   }
 
   /// setParagraphDirection API.
@@ -4239,8 +4717,8 @@ class WordEditorController extends OfficeController {
       y: y,
       width: width,
       height: height,
-      fillColor: fillColor,
-      strokeColor: 'B0B0B0',
+      fillColor: fillColor ?? 'FFFFFF',
+      strokeColor: '2E75B6',
       blocks: <WmlBlock>[
         WmlParagraph(
           inlines: <WmlInline>[WmlRun(text: text.isEmpty ? 'Text box' : text)],
@@ -4249,8 +4727,146 @@ class WordEditorController extends OfficeController {
     );
     commands.commit(
       _CallbackCommand(
-        executeFn: () => parent.insert(index, frame),
-        undoFn: () => parent.remove(frame),
+        executeFn: () {
+          parent.insert(index, frame);
+          selectedFrame = frame;
+          editingFrame = false;
+          selectedVisual = null;
+        },
+        undoFn: () {
+          parent.remove(frame);
+          if (identical(selectedFrame, frame)) {
+            selectedFrame = null;
+            editingFrame = false;
+          }
+        },
+      ),
+    );
+    relayout();
+    notifyListeners();
+  }
+
+  /// beginFrameTransform API.
+  void beginFrameTransform() {
+    final WmlFrame? frame = selectedFrame;
+    if (frame == null) {
+      return;
+    }
+    _frameSnap = (
+      x: frame.x,
+      y: frame.y,
+      width: frame.width,
+      height: frame.height,
+    );
+  }
+
+  /// previewFrameMove API.
+  void previewFrameMove(double dx, [double dy = 0]) {
+    final WmlFrame? frame = selectedFrame;
+    if (frame == null || !config.allowsMutation) {
+      return;
+    }
+    frame.x = (frame.x + dx).clamp(-80, 2000);
+    frame.y = (frame.y + dy).clamp(-80, 2400);
+    relayout();
+    notifyListeners();
+  }
+
+  /// previewFrameResize API.
+  void previewFrameResize({required double width, required double height}) {
+    final WmlFrame? frame = selectedFrame;
+    if (frame == null || !config.allowsMutation) {
+      return;
+    }
+    frame.width = width.clamp(36, 2400);
+    frame.height = height.clamp(28, 1800);
+    relayout();
+    notifyListeners();
+  }
+
+  /// commitFrameTransform API.
+  void commitFrameTransform() {
+    final WmlFrame? frame = selectedFrame;
+    final ({double x, double y, double width, double height})? snap =
+        _frameSnap;
+    _frameSnap = null;
+    if (frame == null || snap == null || !config.allowsMutation) {
+      return;
+    }
+    final double x = frame.x;
+    final double y = frame.y;
+    final double width = frame.width;
+    final double height = frame.height;
+    if (x == snap.x &&
+        y == snap.y &&
+        width == snap.width &&
+        height == snap.height) {
+      return;
+    }
+    commands.commit(
+      _CallbackCommand(
+        executeFn: () {
+          frame
+            ..x = x
+            ..y = y
+            ..width = width
+            ..height = height;
+        },
+        undoFn: () {
+          frame
+            ..x = snap.x
+            ..y = snap.y
+            ..width = snap.width
+            ..height = snap.height;
+        },
+      ),
+    );
+    relayout();
+    notifyListeners();
+  }
+
+  /// nudgeSelectedFrame API.
+  void nudgeSelectedFrame({double dx = 0, double dy = 0, bool resize = false}) {
+    if (selectedFrame == null || !config.allowsMutation) {
+      return;
+    }
+    beginFrameTransform();
+    if (resize) {
+      previewFrameResize(
+        width: selectedFrame!.width + dx,
+        height: selectedFrame!.height + dy,
+      );
+    } else {
+      previewFrameMove(dx, dy);
+    }
+    commitFrameTransform();
+  }
+
+  /// deleteSelectedFrame API.
+  void deleteSelectedFrame() {
+    final WmlFrame? frame = selectedFrame;
+    if (frame == null || !config.allowsMutation) {
+      return;
+    }
+    final List<WmlBlock>? parent = _parentBlocksOfBlock(frame);
+    if (parent == null) {
+      return;
+    }
+    final int index = parent.indexOf(frame);
+    commands.commit(
+      _CallbackCommand(
+        executeFn: () {
+          parent.remove(frame);
+          selectedFrame = null;
+          editingFrame = false;
+        },
+        undoFn: () {
+          if (!parent.contains(frame)) {
+            parent.insert(index.clamp(0, parent.length), frame);
+          }
+          selectedFrame = frame;
+          editingFrame = false;
+        },
       ),
     );
     relayout();
@@ -5174,17 +5790,21 @@ class WordEditorController extends OfficeController {
   }
 
   double _caretXOnLine(LaidOutLine line) {
-    if (line.glyphs.isEmpty) {
-      return line.x;
-    }
-    for (final LaidOutGlyph glyph in line.glyphs) {
-      if (glyph.glyph.logicalIndex != caret.logicalIndex) {
-        continue;
-      }
-      return glyph.glyph.level.isOdd ? glyph.x + glyph.advance : glyph.x;
-    }
-    final LaidOutGlyph last = line.glyphs.last;
-    return last.glyph.level.isOdd ? last.x : last.x + last.advance;
+    final List<WmlParagraph> paras = _paragraphs;
+    final WmlParagraph? para = paras.isEmpty
+        ? null
+        : paras[line.paragraphIndex.clamp(0, paras.length - 1)];
+    final String paragraph = line.sourceText ?? para?.text ?? '';
+    return PaintRunText.caretXOnLine(
+      line,
+      caret.logicalIndex,
+      paragraph: paragraph,
+      themeFamily: config.theme.fontFamily,
+      paragraphRtl: para?.properties.rightToLeft == true ||
+          para?.properties.justification == WmlJustification.right ||
+          config.textDirection == TextDirection.rtl,
+      contentRight: documentLaidOut.pageSize.width - 72,
+    );
   }
 
   static int _lineLogicalStart(LaidOutLine line) {
@@ -5215,15 +5835,7 @@ class WordEditorController extends OfficeController {
   }
 
   static int _logicalAtX(LaidOutLine line, double x) {
-    if (line.glyphs.isEmpty) {
-      return 0;
-    }
-    for (final LaidOutGlyph glyph in line.glyphs) {
-      if (x <= glyph.x + glyph.advance / 2) {
-        return glyph.glyph.logicalIndex;
-      }
-    }
-    return _lineLogicalEnd(line);
+    return CaretEngine.hitLogicalIndex(line, x);
   }
 
   void _crossLaidOutLine(
@@ -5432,6 +6044,671 @@ class WordEditorController extends OfficeController {
     final int i = caret.logicalIndex.clamp(0, text.length);
     return text.isEmpty ? '' : text.substring(0, i);
   }
+
+  @override
+  /// hasTrackedChanges API.
+  bool get hasTrackedChanges => document.revisions.isNotEmpty;
+
+  @override
+  /// documentProperties API.
+  OfficeDocumentProperties get documentProperties => document.properties;
+
+  @override
+  set documentProperties(OfficeDocumentProperties value) {
+    document.properties = value;
+    notifyListeners();
+  }
+
+  @override
+  /// documentStats API.
+  OfficeTextStats get documentStats =>
+      OfficeTextStats.ofWord(document, laidOut: documentLaidOut);
+
+  @override
+  /// collectFindHits API.
+  List<OfficeFindHit> collectFindHits(OfficeFindOptions options) =>
+      OfficeFind.inWord(document, options);
+
+  @override
+  /// applyReplace API.
+  int applyReplace(OfficeFindOptions options, {OfficeFindHit? only}) {
+    final int count = OfficeFind.replaceWord(document, options, only: only);
+    if (count > 0) {
+      relayout();
+      notifyListeners();
+    }
+    return count;
+  }
+
+  @override
+  /// exportPdf API.
+  Uint8List exportPdf({
+    OfficePrintSettings settings = const OfficePrintSettings(),
+    SfntFont? font,
+  }) {
+    return OfficePrint.word(document, settings: settings, font: font);
+  }
+
+  @override
+  /// revealFindHit API.
+  void revealFindHit(OfficeFindHit hit) {
+    final int para = hit.paragraphIndex ?? 0;
+    caret
+      ..paragraphIndex = para
+      ..logicalIndex = hit.end
+      ..selectionAnchorParagraph = para
+      ..selectionAnchor = hit.start
+      ..resetBlink();
+    _revealParagraph(para);
+    notifyListeners();
+  }
+
+  /// applyStyle API.
+  void applyStyle(String styleId) {
+    if (!config.allowsMutation) {
+      return;
+    }
+    final WmlParagraph paragraph = _activeParagraph;
+    final String? before = paragraph.properties.styleId;
+    commands.commit(
+      _CallbackCommand(
+        executeFn: () => WordStyles.apply(paragraph, styleId),
+        undoFn: () => WordStyles.apply(paragraph, before ?? 'Normal'),
+      ),
+    );
+    relayout();
+    notifyListeners();
+  }
+
+  /// insertFootnote API.
+  void insertFootnote({String text = '', bool endnote = false}) {
+    if (!config.allowsMutation) {
+      return;
+    }
+    final WmlParagraph paragraph = _activeParagraph;
+    late final WmlNote note;
+    commands.commit(
+      _CallbackCommand(
+        executeFn: () {
+          note = WordNotes.insert(
+            document,
+            paragraph,
+            endnote: endnote,
+            text: text,
+          );
+        },
+        undoFn: () => WordNotes.delete(document, note.id, endnote: endnote),
+      ),
+    );
+    relayout();
+    notifyListeners();
+  }
+
+  /// insertCaption API.
+  void insertCaption({String label = 'Figure', String text = ''}) {
+    if (!config.allowsMutation) {
+      return;
+    }
+    final WmlParagraph caption = WordCaptions.create(
+      document,
+      label: label,
+      text: text,
+    );
+    final ({List<WmlBlock> parent, int index})? slot = _hostSlotOf(
+      _activeParagraph,
+    );
+    final List<WmlBlock> parent =
+        slot?.parent ?? document.sections.first.blocks;
+    final int at = slot == null
+        ? parent.length
+        : (slot.index + 1).clamp(0, parent.length);
+    commands.commit(
+      _CallbackCommand(
+        executeFn: () {
+          if (!parent.contains(caption)) {
+            parent.insert(at.clamp(0, parent.length), caption);
+          }
+        },
+        undoFn: () => parent.remove(caption),
+      ),
+    );
+    relayout();
+    notifyListeners();
+  }
+
+  /// insertField API.
+  void insertField(WmlFieldKind kind, {String argument = ''}) {
+    if (!config.allowsMutation) {
+      return;
+    }
+    final WmlParagraph field = WmlParagraph();
+    WordFields.stamp(
+      field,
+      kind,
+      argument: argument,
+      result: WordFields.evaluate(
+        kind,
+        document: document,
+        pageCount: pageCount.clamp(1, 9999),
+        instruction: WordFields.instructionOf(kind, argument: argument),
+      ),
+    );
+    _insertBlocksAfterCurrent(<WmlBlock>[field]);
+  }
+
+  /// updateFields API.
+  void updateFields() {
+    WordFields.update(document, pageCount: pageCount.clamp(1, 9999));
+    relayout();
+    notifyListeners();
+  }
+
+  /// insertCrossReference API.
+  void insertCrossReference(String bookmark) {
+    insertField(WmlFieldKind.ref, argument: bookmark);
+  }
+
+  /// insertPageBreak API.
+  void insertPageBreak() {
+    if (!config.allowsMutation) {
+      return;
+    }
+    insertParagraphBreak();
+    _activeParagraph.properties.pageBreakBefore = true;
+    relayout();
+    notifyListeners();
+  }
+
+  /// insertTable API.
+  void insertTable({int rows = 3, int columns = 3}) {
+    if (!config.allowsMutation) {
+      return;
+    }
+    final int cols = columns.clamp(1, 20);
+    final WmlTable table = WmlTable(
+      grid: List<double>.filled(cols, 96),
+      rows: <WmlTableRow>[
+        for (int r = 0; r < rows.clamp(1, 50); r++)
+          WmlTableRow(
+            cells: <WmlTableCell>[
+              for (int c = 0; c < cols; c++)
+                WmlTableCell(
+                  blocks: <WmlBlock>[
+                    WmlParagraph(inlines: <WmlInline>[WmlRun()]),
+                  ],
+                ),
+            ],
+          ),
+      ],
+    );
+    _insertBlocksAfterCurrent(<WmlBlock>[table]);
+  }
+
+  /// insertPicture API.
+  void insertPicture(OfficeVisual visual) {
+    if (!config.allowsMutation) {
+      return;
+    }
+    _insertBlocksAfterCurrent(<WmlBlock>[WmlVisual(visual: visual)]);
+  }
+
+  /// acceptRevision API.
+  void acceptRevision(WmlRevision revision) {
+    WordRevisions.accept(document, revision);
+    relayout();
+    notifyListeners();
+  }
+
+  /// rejectRevision API.
+  void rejectRevision(WmlRevision revision) {
+    WordRevisions.reject(document, revision);
+    relayout();
+    notifyListeners();
+  }
+
+  /// setDropCap API.
+  void setDropCap(int lines) {
+    if (!config.allowsMutation) {
+      return;
+    }
+    _activeParagraph.properties.dropCapLines = lines.clamp(0, 10);
+    relayout();
+    notifyListeners();
+  }
+
+  /// setParagraphShading API.
+  void setParagraphShading(String? fillRgb) {
+    if (!config.allowsMutation) {
+      return;
+    }
+    _activeParagraph.properties.shadingFill = fillRgb;
+    notifyListeners();
+  }
+
+  /// setParagraphBorder API.
+  void setParagraphBorder(String? color) {
+    if (!config.allowsMutation) {
+      return;
+    }
+    _activeParagraph.properties.borderColor = color;
+    notifyListeners();
+  }
+
+  /// setLineNumbers API.
+  void setLineNumbers(bool value) {
+    if (!config.allowsMutation) {
+      return;
+    }
+    sectionAtCaret.lineNumbers = value;
+    notifyListeners();
+  }
+
+  /// insertTableOfFigures API.
+  void insertTableOfFigures({String label = 'Figure'}) {
+    if (!config.allowsMutation) {
+      return;
+    }
+    final WmlToc toc = WordCaptions.tableOfFigures(document, label: label);
+    _insertBlocksAfterCurrent(<WmlBlock>[toc]);
+  }
+
+  /// insertCitation API.
+  void insertCitation(WmlCitation citation) {
+    if (!config.allowsMutation) {
+      return;
+    }
+    WordCitations.insert(document, _activeParagraph, citation);
+    relayout();
+    notifyListeners();
+  }
+
+  /// insertBibliography API.
+  void insertBibliography() {
+    if (!config.allowsMutation) {
+      return;
+    }
+    _insertBlocksAfterCurrent(<WmlBlock>[
+      WordCitations.bibliography(document),
+    ]);
+  }
+
+  /// markIndexTerm API.
+  void markIndexTerm(String term) {
+    if (!config.allowsMutation) {
+      return;
+    }
+    WordCitations.markIndex(document, _activeParagraph, term);
+    notifyListeners();
+  }
+
+  /// insertIndex API.
+  void insertIndex() {
+    if (!config.allowsMutation) {
+      return;
+    }
+    _insertBlocksAfterCurrent(<WmlBlock>[WordCitations.index(document)]);
+  }
+
+  /// mergeMail API.
+  void mergeMail(Map<String, String> record) {
+    if (!config.allowsMutation) {
+      return;
+    }
+    WordMailMerge.merge(document, record);
+    relayout();
+    notifyListeners();
+  }
+
+  /// compareWith API.
+  void compareWith(WmlDocument other) {
+    WordCompare.compare(other, document);
+    relayout();
+    notifyListeners();
+  }
+
+  /// setRestrictEditing API.
+  void setRestrictEditing(bool value, {WmlRestrictMode? mode}) {
+    document.restrictEditing = value;
+    if (mode != null) {
+      document.restrictMode = mode;
+    }
+    if (!value) {
+      setMode(OfficeInteractionMode.editing);
+    } else if (document.restrictMode == WmlRestrictMode.readOnly) {
+      setMode(OfficeInteractionMode.viewing);
+    }
+    notifyListeners();
+  }
+
+  /// previewMailMerge API.
+  void previewMailMerge(List<Map<String, String>> records, {int index = 0}) {
+    if (!config.allowsMutation) {
+      return;
+    }
+    WordMailMerge.preview(document, records, index);
+    relayout();
+    notifyListeners();
+  }
+
+  /// printPreviewPages API.
+  List<LaidOutPage> printPreviewPages({
+    OfficePrintSettings settings = const OfficePrintSettings(),
+  }) {
+    return OfficePrint.wordPreview(document, settings: settings);
+  }
+
+  /// setWatermark API.
+  void setWatermark(String text) {
+    if (!config.allowsMutation) {
+      return;
+    }
+    final String before = document.watermark;
+    commands.commit(
+      _CallbackCommand(
+        executeFn: () => document.watermark = text,
+        undoFn: () => document.watermark = before,
+      ),
+    );
+    notifyListeners();
+  }
+
+  /// applyList API.
+  void applyList({required bool numbered, int level = 0}) {
+    if (!config.allowsMutation) {
+      return;
+    }
+    WordLists.applyLevel(_activeParagraph, numbered: numbered, level: level);
+    relayout();
+    notifyListeners();
+  }
+
+  /// setParagraphIndent API.
+  void setParagraphIndent({
+    double? left,
+    double? right,
+    double? firstLine,
+    double? hanging,
+  }) {
+    applyParagraphFormat((WmlParagraphProps props) {
+      final WmlIndent current = props.indent;
+      props.indent = WmlIndent(
+        left: left ?? current.left,
+        right: right ?? current.right,
+        firstLine: firstLine ?? current.firstLine,
+        hanging: hanging ?? current.hanging,
+      );
+    });
+  }
+
+  /// addTabStop API.
+  void addTabStop(
+    double position, {
+    WmlTabAlignment alignment = WmlTabAlignment.left,
+  }) {
+    applyParagraphFormat((WmlParagraphProps props) {
+      props.tabs.add(WmlTabStop(position: position, alignment: alignment));
+    });
+  }
+
+  List<WmlParagraph> _rulerTargets = <WmlParagraph>[];
+  final Map<WmlParagraph, WmlParagraphProps> _rulerParaSnap =
+      <WmlParagraph, WmlParagraphProps>{};
+  WmlSection? _rulerSection;
+  WmlPageMargins? _rulerMarginSnap;
+  var _rulerLive = false;
+
+  /// beginRulerEdit API.
+  void beginRulerEdit() {
+    if (!config.allowsMutation) {
+      return;
+    }
+    final List<WmlParagraph> paras = _paragraphs;
+    if (paras.isEmpty) {
+      return;
+    }
+    final int start;
+    final int end;
+    if (caret.isCollapsed) {
+      start = caret.paragraphIndex.clamp(0, paras.length - 1);
+      end = start;
+    } else {
+      final ({int startPara, int startIdx, int endPara, int endIdx}) range =
+          caret.normalizedRange;
+      start = range.startPara.clamp(0, paras.length - 1);
+      end = range.endPara.clamp(0, paras.length - 1);
+    }
+    _rulerTargets = <WmlParagraph>[
+      for (int i = start; i <= end; i++) paras[i],
+    ];
+    _rulerParaSnap
+      ..clear()
+      ..addEntries(
+        _rulerTargets.map(
+          (WmlParagraph p) => MapEntry<WmlParagraph, WmlParagraphProps>(
+            p,
+            p.properties.copy(),
+          ),
+        ),
+      );
+    _rulerSection = sectionAtCaret;
+    _rulerMarginSnap = _rulerSection!.margins;
+    _rulerLive = true;
+  }
+
+  /// previewRulerEdit API.
+  void previewRulerEdit(WordRulerEdit edit) {
+    if (!_rulerLive || !config.allowsMutation) {
+      return;
+    }
+    if (edit.indent != null) {
+      for (final WmlParagraph para in _rulerTargets) {
+        para.properties.indent = edit.indent!;
+      }
+    }
+    if (edit.tabs != null) {
+      for (final WmlParagraph para in _rulerTargets) {
+        para.properties.tabs
+          ..clear()
+          ..addAll(edit.tabs!);
+      }
+    }
+    if (edit.margins != null && _rulerSection != null) {
+      _rulerSection!.margins = edit.margins!;
+    }
+    relayout(localEdit: edit.margins == null);
+    notifyListeners();
+  }
+
+  /// commitRulerEdit API.
+  void commitRulerEdit() {
+    if (!_rulerLive) {
+      return;
+    }
+    final List<WmlParagraph> targets = List<WmlParagraph>.from(_rulerTargets);
+    final Map<WmlParagraph, WmlParagraphProps> before =
+        Map<WmlParagraph, WmlParagraphProps>.from(_rulerParaSnap);
+    final Map<WmlParagraph, WmlParagraphProps> after =
+        <WmlParagraph, WmlParagraphProps>{
+          for (final WmlParagraph p in targets) p: p.properties.copy(),
+        };
+    final WmlSection? section = _rulerSection;
+    final WmlPageMargins? marginBefore = _rulerMarginSnap;
+    final WmlPageMargins? marginAfter = section?.margins;
+    _rulerLive = false;
+    _rulerTargets = <WmlParagraph>[];
+    _rulerParaSnap.clear();
+    _rulerSection = null;
+    _rulerMarginSnap = null;
+    var changed = false;
+    for (final WmlParagraph p in targets) {
+      final WmlParagraphProps? snap = before[p];
+      if (snap == null) {
+        continue;
+      }
+      if (snap.indent.left != p.properties.indent.left ||
+          snap.indent.right != p.properties.indent.right ||
+          snap.indent.firstLine != p.properties.indent.firstLine ||
+          snap.indent.hanging != p.properties.indent.hanging ||
+          snap.tabs.length != p.properties.tabs.length) {
+        changed = true;
+        break;
+      }
+    }
+    if (marginBefore != null &&
+        marginAfter != null &&
+        !marginBefore.matches(marginAfter)) {
+      changed = true;
+    }
+    if (!changed) {
+      return;
+    }
+    commands.commit(
+      _CallbackCommand(
+        executeFn: () {
+          for (final WmlParagraph p in targets) {
+            final WmlParagraphProps? props = after[p];
+            if (props != null) {
+              p.properties = props.copy();
+            }
+          }
+          if (section != null && marginAfter != null) {
+            section.margins = marginAfter;
+          }
+        },
+        undoFn: () {
+          for (final MapEntry<WmlParagraph, WmlParagraphProps> e
+              in before.entries) {
+            e.key.properties = e.value.copy();
+          }
+          if (section != null && marginBefore != null) {
+            section.margins = marginBefore;
+          }
+        },
+      ),
+    );
+    relayout();
+    notifyListeners();
+  }
+
+  /// setTrackRevisions API.
+  void setTrackRevisions(bool value) {
+    document.trackRevisions = value;
+    notifyListeners();
+  }
+
+  /// acceptAllRevisions API.
+  void acceptAllRevisions() {
+    if (!config.allowsMutation) {
+      return;
+    }
+    WordRevisions.acceptAll(document);
+    selectedRevisionIndex = null;
+    relayout();
+    notifyListeners();
+  }
+
+  /// rejectAllRevisions API.
+  void rejectAllRevisions() {
+    if (!config.allowsMutation) {
+      return;
+    }
+    WordRevisions.rejectAll(document);
+    selectedRevisionIndex = null;
+    relayout();
+    notifyListeners();
+  }
+
+  /// selectedRevision API.
+  WmlRevision? get selectedRevision {
+    final int? index = selectedRevisionIndex;
+    if (index == null ||
+        index < 0 ||
+        index >= document.revisions.length) {
+      return document.revisions.isEmpty ? null : document.revisions.first;
+    }
+    return document.revisions[index];
+  }
+
+  /// selectRevision API.
+  void selectRevision(WmlRevision revision) {
+    final int index = document.revisions.indexOf(revision);
+    selectedRevisionIndex = index < 0 ? null : index;
+    notifyListeners();
+  }
+
+  /// stepRevision API.
+  void stepRevision(int delta) {
+    if (document.revisions.isEmpty) {
+      selectedRevisionIndex = null;
+      notifyListeners();
+      return;
+    }
+    final int current = selectedRevisionIndex ?? 0;
+    selectedRevisionIndex =
+        (current + delta) % document.revisions.length;
+    if (selectedRevisionIndex! < 0) {
+      selectedRevisionIndex = document.revisions.length - 1;
+    }
+    notifyListeners();
+  }
+
+  /// setNoteText API.
+  void setNoteText(WmlNote note, String text) {
+    if (!config.allowsMutation) {
+      return;
+    }
+    note.text = text;
+    relayout();
+    notifyListeners();
+  }
+
+  /// jumpToNote API.
+  void jumpToNote(WmlNote note) {
+    final List<WmlParagraph> paras = document.paragraphs.toList();
+    for (int i = 0; i < paras.length; i++) {
+      final WmlParagraph paragraph = paras[i];
+      if (WordNotes.paragraphOf(document, note) == paragraph) {
+        caret
+          ..paragraphIndex = i
+          ..logicalIndex = paragraph.text.length
+          ..collapseSelection();
+        break;
+      }
+    }
+    notifyListeners();
+  }
+
+  /// setDifferentFirstPage API.
+  void setDifferentFirstPage(bool value) {
+    if (!config.allowsMutation) {
+      return;
+    }
+    sectionAtCaret.differentFirstPage = value;
+    notifyListeners();
+  }
+
+  /// setDifferentOddEven API.
+  void setDifferentOddEven(bool value) {
+    if (!config.allowsMutation) {
+      return;
+    }
+    sectionAtCaret.differentOddEven = value;
+    notifyListeners();
+  }
+
+  /// setLinkToPrevious API.
+  void setLinkToPrevious(bool value) {
+    if (!config.allowsMutation) {
+      return;
+    }
+    sectionAtCaret.linkToPrevious = value;
+    notifyListeners();
+  }
+
+  /// checkSpelling API.
+  List<OfficeSpellIssue> checkSpelling({OfficeSpellChecker? checker}) {
+    return OfficeSpell.check(_activeParagraph.text, checker: checker);
+  }
 }
 
 enum _WordBlockCover { none, partial, full }
@@ -5485,6 +6762,9 @@ class SheetEditorController extends OfficeController {
   /// functionSuggestions API.
   List<FormulaFnDoc> functionSuggestions = const <FormulaFnDoc>[];
 
+  /// Last data-validation failure, or null.
+  String? lastValidationError;
+
   /// functionSuggestionIndex API.
   var functionSuggestionIndex = 0;
   var _suppressFunctionSuggestions = false;
@@ -5505,28 +6785,68 @@ class SheetEditorController extends OfficeController {
   /// kind API.
   OpcPackageKind get kind => OpcPackageKind.sheet;
 
+  /// Top-left cell of the selection, or the merge origin when the focus is merged.
+  SmlCellRef get activeCell {
+    final SmlMerge? merge = sheet.mergeAtRef(selection.focus);
+    if (merge != null) {
+      return merge.origin;
+    }
+    final SmlRange range = selection.range;
+    return SmlCellRef(range.minCol, range.minRow);
+  }
+
+  /// Name-box address: a merged block uses its origin cell only.
+  String get selectionAddress {
+    final SmlMerge? merge = sheet.mergeAtRef(activeCell);
+    if (merge != null) {
+      final SmlRange range = selection.range;
+      final bool onlyThisMerge =
+          range.minCol >= merge.c0 &&
+          range.maxCol <= merge.c1 &&
+          range.minRow >= merge.r0 &&
+          range.maxRow <= merge.r1;
+      if (onlyThisMerge) {
+        return merge.origin.a1;
+      }
+    }
+    final SmlRange range = selection.range;
+    if (range.minCol == range.maxCol && range.minRow == range.maxRow) {
+      return SmlCellRef(range.minCol, range.minRow).a1;
+    }
+    return '${SmlCellRef(range.minCol, range.minRow).a1}:${SmlCellRef(range.maxCol, range.maxRow).a1}';
+  }
+
   /// formulaBarText API.
   String get formulaBarText {
     if (cellEditor.editing) {
       return cellEditor.formulaBar;
     }
-    final SmlCell cell = sheet.cell(selection.focus);
+    final SmlCell cell = sheet.cell(activeCell);
     return cell.formula ?? cell.asString;
   }
 
   /// cellDisplayText API.
   String cellDisplayText(SmlCell cell) {
     if (cellEditor.editing &&
-        cell.ref.col == selection.focus.col &&
-        cell.ref.row == selection.focus.row) {
+        cell.ref.col == activeCell.col &&
+        cell.ref.row == activeCell.row) {
       return cellEditor.formulaBar;
     }
     if (cell.formula != null && cell.formula!.isNotEmpty) {
-      return _formatCellValue(
+      return _formatDisplayedValue(
         FormulaEvaluator.evaluateCell(workbook, sheet, cell),
+        cell.styleIndex,
       );
     }
-    return _formatCellValue(cell.value);
+    return _formatDisplayedValue(cell.value, cell.styleIndex);
+  }
+
+  String _formatDisplayedValue(Object? value, int styleIndex) {
+    final SmlStyleSheet? styles = workbook.styles;
+    if (styles != null) {
+      return styles.format(value, styleIndex);
+    }
+    return _formatCellValue(value);
   }
 
   /// recalculateWorkbook API.
@@ -5699,6 +7019,133 @@ class SheetEditorController extends OfficeController {
     sheet.freezeCols = 1;
     clampSheetViewport();
     notifyListeners();
+  }
+
+  /// canMergeAndCenter API.
+  bool get canMergeAndCenter {
+    if (!config.allowsMutation ||
+        selection.isFullRowSelection ||
+        selection.isFullColumnSelection) {
+      return false;
+    }
+    return sheet.canMerge(selection.range) || sheet.canUnmerge(selection.range);
+  }
+
+  /// canUnmergeCells API.
+  bool get canUnmergeCells =>
+      config.allowsMutation && sheet.canUnmerge(selection.range);
+
+  /// True when the selection is (or sits inside) a merged rectangle.
+  bool get hasMergedSelection => sheet.canUnmerge(selection.range);
+
+  /// Excel Merge & Center.
+  void mergeAndCenter() {
+    if (!canMergeAndCenter) {
+      return;
+    }
+    final SmlRange range = selection.range;
+    _mutateSheetGrid(() {
+      if (range.isSingleCell) {
+        sheet.toggleMergeAndCenter(range);
+      } else {
+        sheet.mergeAndCenter(range);
+      }
+    });
+    final SmlMerge? merge = sheet.mergeAt(range.minCol, range.minRow);
+    if (merge != null) {
+      selection.selectCell(merge.origin);
+    }
+    notifyListeners();
+  }
+
+  /// unmergeCells API.
+  void unmergeCells() {
+    if (!canUnmergeCells) {
+      return;
+    }
+    _mutateSheetGrid(() => sheet.unmerge(selection.range));
+    notifyListeners();
+  }
+
+  /// toggleMergeAndCenter API.
+  void toggleMergeAndCenter() {
+    if (!canMergeAndCenter) {
+      return;
+    }
+    if (hasMergedSelection &&
+        (selection.range.isSingleCell ||
+            (sheet.merges.length == 1 &&
+                sheet.merges.first.equalsRange(selection.range)))) {
+      unmergeCells();
+      return;
+    }
+    mergeAndCenter();
+  }
+
+  static const List<String> sheetFillPalette = <String>[
+    '000000',
+    'FFFFFF',
+    'FF0000',
+    '00B050',
+    '0070C0',
+    'FFC000',
+    '7030A0',
+    'F4B183',
+    'BDD7EE',
+    'C6EFCE',
+    '',
+  ];
+
+  /// fillRgb of the active cell.
+  String get selectionFillRgb => sheet.cell(activeCell).fillRgb;
+
+  /// fontRgb of the active cell.
+  String get selectionFontRgb => sheet.cell(activeCell).fontRgb;
+
+  /// setSelectionFillRgb API.
+  void setSelectionFillRgb(String rgb) {
+    if (!config.allowsMutation) {
+      return;
+    }
+    final String next = SmlStyleSheet.normalizeRgb(rgb);
+    _mutateSheetGrid(() {
+      for (final SmlCellRef ref in selection.range.cells) {
+        if (sheet.isCovered(ref.col, ref.row)) {
+          continue;
+        }
+        sheet.cell(ref).fillRgb = next;
+      }
+    });
+    notifyListeners();
+  }
+
+  /// setSelectionFontRgb API.
+  void setSelectionFontRgb(String rgb) {
+    if (!config.allowsMutation) {
+      return;
+    }
+    final String next = SmlStyleSheet.normalizeRgb(rgb);
+    _mutateSheetGrid(() {
+      for (final SmlCellRef ref in selection.range.cells) {
+        if (sheet.isCovered(ref.col, ref.row)) {
+          continue;
+        }
+        sheet.cell(ref).fontRgb = next;
+      }
+    });
+    notifyListeners();
+  }
+
+  /// cycleSelectionFillRgb API.
+  void cycleSelectionFillRgb() {
+    final int i = sheetFillPalette.indexOf(selectionFillRgb.toUpperCase());
+    setSelectionFillRgb(sheetFillPalette[(i + 1) % sheetFillPalette.length]);
+  }
+
+  /// cycleSelectionFontRgb API.
+  void cycleSelectionFontRgb() {
+    final int i = sheetFillPalette.indexOf(selectionFontRgb.toUpperCase());
+    setSelectionFontRgb(sheetFillPalette[(i + 1) % sheetFillPalette.length]);
   }
 
   /// selectedDrawing API.
@@ -6027,10 +7474,22 @@ class SheetEditorController extends OfficeController {
       return;
     }
     selectedDrawingIndex = null;
-    moveSelectionTo(
-      SmlCellRef(selection.focus.col + dc, selection.focus.row + dr),
-      extend: extend,
-    );
+    var col = selection.focus.col + dc;
+    var row = selection.focus.row + dr;
+    final SmlMerge? current = sheet.mergeAtRef(selection.focus);
+    if (current != null && !extend) {
+      if (dc > 0) {
+        col = current.c1 + 1;
+      } else if (dc < 0) {
+        col = current.c0 - 1;
+      }
+      if (dr > 0) {
+        row = current.r1 + 1;
+      } else if (dr < 0) {
+        row = current.r0 - 1;
+      }
+    }
+    moveSelectionTo(SmlCellRef(col, row), extend: extend);
   }
 
   /// jumpSelectionByOccupancy API.
@@ -6056,9 +7515,24 @@ class SheetEditorController extends OfficeController {
       ref.row.clamp(0, SmlWorksheet.excelRowCount - 1),
     );
     if (extend) {
-      selection.extendTo(next);
+      final SmlMerge? merge = sheet.mergeAtRef(next);
+      if (merge == null) {
+        selection.extendTo(next);
+      } else {
+        final bool preferMax =
+            next.col >= selection.anchor.col &&
+            next.row >= selection.anchor.row;
+        selection.extendTo(
+          preferMax ? SmlCellRef(merge.c1, merge.r1) : merge.origin,
+        );
+      }
     } else {
-      selection.selectCell(next);
+      final SmlMerge? merge = sheet.mergeAtRef(next);
+      if (merge == null) {
+        selection.selectCell(next);
+      } else {
+        selection.selectCell(merge.origin);
+      }
     }
     ensureCellVisible();
     notifyListeners();
@@ -6692,13 +8166,19 @@ class SheetEditorController extends OfficeController {
     if (!config.allowsMutation) {
       return;
     }
+    final SmlCell lockedCell = sheet.cell(activeCell);
+    if (sheet.protection?.enabled == true && lockedCell.locked) {
+      lastValidationError = 'The sheet is protected.';
+      notifyListeners();
+      return;
+    }
     if (selectedDrawingIndex != null && initial == null) {
       cycleSelectedDrawingKind();
       return;
     }
     selectedDrawingIndex = null;
     _clearPoint();
-    final SmlCell cell = sheet.cell(selection.focus);
+    final SmlCell cell = sheet.cell(activeCell);
     final String seed =
         initial ?? (replace ? '' : (cell.formula ?? cell.asString));
     cellEditor.begin(seed, caret: caret);
@@ -6928,7 +8408,7 @@ class SheetEditorController extends OfficeController {
   }
 
   void _commitFormula(String text) {
-    final SmlCell cell = sheet.cell(selection.focus);
+    final SmlCell cell = sheet.cell(activeCell);
     final Object? prevValue = cell.value;
     final String? prevFormula = cell.formula;
     final SmlCellType prevType = cell.type;
@@ -6947,6 +8427,16 @@ class SheetEditorController extends OfficeController {
   }
 
   void _applyCellText(SmlCell cell, String text) {
+    if (sheet.protection != null &&
+        sheet.protection!.enabled &&
+        cell.locked) {
+      lastValidationError = 'The sheet is protected.';
+      return;
+    }
+    lastValidationError = SmlAnalysis.validateInput(sheet, cell.ref, text);
+    if (lastValidationError != null) {
+      return;
+    }
     FormulaEvaluator.applyInput(workbook, sheet, cell, text);
   }
 
@@ -6971,9 +8461,321 @@ class SheetEditorController extends OfficeController {
       final OfficeVisual v = drawing.visual;
       return '${v.kind.name} ${v.width.round()}×${v.height.round()}. ${config.strings.pictureHint}';
     }
-    return '${config.strings.cellLabel} ${selection.focus.a1} $formulaBarText';
+    return '${config.strings.cellLabel} $selectionAddress $formulaBarText';
+  }
+
+  @override
+  /// documentProperties API.
+  OfficeDocumentProperties get documentProperties => workbook.properties;
+
+  @override
+  set documentProperties(OfficeDocumentProperties value) {
+    workbook.properties = value;
+    notifyListeners();
+  }
+
+  @override
+  /// documentStats API.
+  OfficeTextStats get documentStats => OfficeTextStats.ofWorkbook(workbook);
+
+  @override
+  /// collectFindHits API.
+  List<OfficeFindHit> collectFindHits(OfficeFindOptions options) =>
+      OfficeFind.inWorkbook(workbook, options);
+
+  @override
+  /// applyReplace API.
+  int applyReplace(OfficeFindOptions options, {OfficeFindHit? only}) {
+    final int count = OfficeFind.replaceWorkbook(
+      workbook,
+      options,
+      only: only,
+    );
+    if (count > 0) {
+      recalculateWorkbook();
+      notifyListeners();
+    }
+    return count;
+  }
+
+  @override
+  /// exportPdf API.
+  Uint8List exportPdf({
+    OfficePrintSettings settings = const OfficePrintSettings(),
+    SfntFont? font,
+  }) {
+    return OfficePrint.workbook(workbook, settings: settings, font: font);
+  }
+
+  @override
+  /// revealFindHit API.
+  void revealFindHit(OfficeFindHit hit) {
+    final String? sheetName = hit.sheetName;
+    if (sheetName != null) {
+      for (int i = 0; i < workbook.sheets.length; i++) {
+        if (workbook.sheets[i].name == sheetName) {
+          setActiveSheet(i);
+          break;
+        }
+      }
+    }
+    final String? a1 = hit.a1;
+    if (a1 != null) {
+      selection.selectCell(SmlCellRef.parse(a1));
+      ensureCellVisible(SmlCellRef.parse(a1));
+    }
+    notifyListeners();
+  }
+
+  /// sortSelection API.
+  void sortSelection({int? column, bool ascending = true}) {
+    if (!config.allowsMutation) {
+      return;
+    }
+    final SmlRange range = selection.range;
+    SmlAnalysis.sort(sheet, range, <SmlSortKey>[
+      SmlSortKey(column: column ?? range.minCol, ascending: ascending),
+    ]);
+    recalculateWorkbook();
+    notifyListeners();
+  }
+
+  /// filterSelection API.
+  void filterSelection({int relativeCol = 0, Set<String>? hide}) {
+    if (!config.allowsMutation) {
+      return;
+    }
+    final SmlAutoFilter filter = sheet.autoFilter ??
+        SmlAutoFilter(range: selection.range);
+    sheet.autoFilter = filter;
+    if (hide != null) {
+      filter.hiddenValues[relativeCol] = hide;
+    }
+    notifyListeners();
+  }
+
+  /// clearFilter API.
+  void clearFilter() {
+    sheet.autoFilter = null;
+    notifyListeners();
+  }
+
+  /// addValidation API.
+  void addValidation(SmlDataValidation rule) {
+    if (!config.allowsMutation) {
+      return;
+    }
+    sheet.validations.add(rule);
+    notifyListeners();
+  }
+
+  /// addConditionalFormat API.
+  void addConditionalFormat(SmlConditionalRule rule) {
+    if (!config.allowsMutation) {
+      return;
+    }
+    sheet.conditionalFormats.add(rule);
+    SmlAnalysis.applyConditional(sheet);
+    notifyListeners();
+  }
+
+  /// defineName API.
+  void defineName(String name, {SmlRange? range, String? sheetName}) {
+    if (!config.allowsMutation) {
+      return;
+    }
+    workbook.namedRanges.add(
+      SmlNamedRange(
+        name: name,
+        sheetName: sheetName ?? sheet.name,
+        range: range ?? selection.range,
+      ),
+    );
+    notifyListeners();
+  }
+
+  /// setPrintArea API.
+  void setPrintArea(SmlRange? range) {
+    if (!config.allowsMutation) {
+      return;
+    }
+    sheet.printArea = range ?? selection.range;
+    notifyListeners();
+  }
+
+  /// removeDuplicatesInSelection API.
+  int removeDuplicatesInSelection() {
+    if (!config.allowsMutation) {
+      return 0;
+    }
+    final int removed = SmlAnalysis.removeDuplicates(sheet, selection.range);
+    if (removed > 0) {
+      recalculateWorkbook();
+      notifyListeners();
+    }
+    return removed;
+  }
+
+  /// setCellComment API.
+  void setCellComment(String text, {SmlCellRef? ref, String author = 'Quds Office'}) {
+    if (!config.allowsMutation) {
+      return;
+    }
+    final SmlCellRef at = ref ?? activeCell;
+    sheet.comments.removeWhere((SmlComment c) => c.ref.a1 == at.a1);
+    if (text.isNotEmpty) {
+      sheet.comments.add(SmlComment(ref: at, text: text, author: author));
+    }
+    notifyListeners();
+  }
+
+  /// protectSheet API.
+  void protectSheet({bool enabled = true, String password = ''}) {
+    if (!config.allowsMutation) {
+      return;
+    }
+    if (!enabled) {
+      final String current = sheet.protection?.password ?? '';
+      if (current.isNotEmpty && current != password) {
+        lastValidationError = 'Incorrect password.';
+        notifyListeners();
+        return;
+      }
+      sheet.protection = SmlSheetProtection(enabled: false, password: '');
+      notifyListeners();
+      return;
+    }
+    sheet.protection = SmlSheetProtection(enabled: true, password: password);
+    notifyListeners();
+  }
+
+  /// setCellLocked API.
+  void setCellLocked(bool locked, {SmlRange? range}) {
+    if (!config.allowsMutation) {
+      return;
+    }
+    final SmlRange target = range ?? selection.range;
+    for (final SmlCellRef ref in target.cells) {
+      sheet.cell(ref).locked = locked;
+    }
+    notifyListeners();
+  }
+
+  /// fillSeries API.
+  void fillSeries({SmlRange? range}) {
+    if (!config.allowsMutation) {
+      return;
+    }
+    SmlAnalysis.fillSeries(sheet, range ?? selection.range);
+    recalculateWorkbook();
+    notifyListeners();
+  }
+
+  /// applyValidationChoice API.
+  void applyValidationChoice(String value) {
+    if (!config.allowsMutation) {
+      return;
+    }
+    _commitFormula(value);
+  }
+
+  /// toggleFilterValue API.
+  void toggleFilterValue(int relativeCol, String value) {
+    if (!config.allowsMutation || sheet.autoFilter == null) {
+      return;
+    }
+    final Set<String> hidden = sheet.autoFilter!.hiddenValues.putIfAbsent(
+      relativeCol,
+      () => <String>{},
+    );
+    if (hidden.contains(value)) {
+      hidden.remove(value);
+    } else {
+      hidden.add(value);
+    }
+    notifyListeners();
+  }
+
+  /// addTable API.
+  void addTable({String name = 'Table1', SmlRange? range}) {
+    if (!config.allowsMutation) {
+      return;
+    }
+    sheet.tables.add(
+      SmlTable(name: name, range: range ?? selection.range),
+    );
+    notifyListeners();
+  }
+
+  /// addSparkline API.
+  void addSparkline({SmlRange? source, SmlCellRef? anchor}) {
+    if (!config.allowsMutation) {
+      return;
+    }
+    sheet.sparklines.add(
+      SmlSparkline(
+        source: source ?? selection.range,
+        anchor: anchor ?? activeCell,
+      ),
+    );
+    notifyListeners();
+  }
+
+  /// goalSeek API.
+  bool goalSeek({
+    required SmlCellRef target,
+    required SmlCellRef changing,
+    required double goal,
+  }) {
+    if (!config.allowsMutation) {
+      return false;
+    }
+    final bool ok = SmlSolver.goalSeek(
+      workbook: workbook,
+      sheet: sheet,
+      target: target,
+      changing: changing,
+      goal: goal,
+    );
+    notifyListeners();
+    return ok;
+  }
+
+  /// importCsv API.
+  SmlRange importCsv(String csv, {SmlCellRef? origin}) {
+    final SmlRange range = SmlPowerQuery.fromCsv(
+      sheet,
+      csv,
+      origin: origin ?? activeCell,
+    );
+    recalculateWorkbook();
+    notifyListeners();
+    return range;
+  }
+
+  /// insertPivot API.
+  void insertPivot({
+    required SmlRange source,
+    required int rowField,
+    required int dataField,
+    SmlCellRef? origin,
+  }) {
+    if (!config.allowsMutation) {
+      return;
+    }
+    final SmlPivotTable pivot = SmlPivotTable(
+      source: source,
+      rowField: rowField,
+      dataField: dataField,
+    );
+    sheet.pivots.add(pivot);
+    pivot.materialize(sheet, origin ?? activeCell);
+    notifyListeners();
   }
 }
+
+/// Which surface the slide editor paints.
+enum SlideStageKind { slide, layout, master }
 
 /// Presentation controller: slide index, shape selection, transforms.
 class SlideEditorController extends OfficeController {
@@ -7000,9 +8802,26 @@ class SlideEditorController extends OfficeController {
   /// presentation API.
   PmlPresentation presentation;
   int _activeSlide;
+  var stageKind = SlideStageKind.slide;
 
-  /// selected API.
-  PmlShape? selected;
+  PmlShape? _selected;
+
+  /// Primary selected shape (last clicked). Use [selectedShapes] for the full set.
+  PmlShape? get selected => _selected;
+
+  set selected(PmlShape? value) {
+    _selected = value;
+    if (value == null) {
+      selectedShapes.clear();
+    } else if (!_containsShape(selectedShapes, value)) {
+      selectedShapes
+        ..clear()
+        ..add(value);
+    }
+  }
+
+  /// All selected shapes, including group mates treated as one unit.
+  final List<PmlShape> selectedShapes = <PmlShape>[];
 
   /// selectedTableRow API.
   int selectedTableRow = 0;
@@ -7134,6 +8953,88 @@ class SlideEditorController extends OfficeController {
     selected = null;
     _selectedAnimationIndex = null;
     notifyListeners();
+  }
+
+  /// Copies [index] so it can be pasted after any other thumbnail.
+  void copySlide(int index) {
+    if (index < 0 || index >= presentation.slides.length) {
+      return;
+    }
+    final PmlSlide slide = presentation.slides[index];
+    OfficeClipboard.instance.writeLocal(
+      OfficeClipboardPayload(
+        kind: OfficeClipboardKind.slide,
+        plain: slide.notes.trim().isEmpty ? 'Slide ${index + 1}' : slide.notes,
+        slide: slide.copy(),
+      ),
+    );
+  }
+
+  /// True when the in-app clipboard holds a whole slide.
+  bool get canPasteSlide {
+    final PmlSlide? slide = OfficeClipboard.instance.local?.slide;
+    return config.allowsMutation && slide != null;
+  }
+
+  /// Pastes the copied slide after [afterIndex] (or after the active slide).
+  void pasteSlide({int? afterIndex}) {
+    if (!canPasteSlide) {
+      return;
+    }
+    final PmlSlide? source = OfficeClipboard.instance.local?.slide;
+    if (source == null) {
+      return;
+    }
+    insertClonedSlide(source, afterIndex: afterIndex ?? activeSlideIndex);
+  }
+
+  /// Duplicates [index] immediately after itself.
+  void duplicateSlide(int index) {
+    if (!config.allowsMutation) {
+      return;
+    }
+    if (index < 0 || index >= presentation.slides.length) {
+      return;
+    }
+    insertClonedSlide(presentation.slides[index], afterIndex: index);
+  }
+
+  /// insertClonedSlide API.
+  void insertClonedSlide(PmlSlide source, {required int afterIndex}) {
+    if (!config.allowsMutation) {
+      return;
+    }
+    final List<PmlSlide> slides = presentation.slides;
+    final int dest = (afterIndex + 1).clamp(0, slides.length);
+    final int previousActive = _activeSlide;
+    final PmlSlide clone = source.copy(id: _allocateSlideId());
+    commands.commit(
+      _CallbackCommand(
+        executeFn: () {
+          if (!slides.contains(clone)) {
+            slides.insert(dest.clamp(0, slides.length), clone);
+          }
+          _activeSlide = dest.clamp(0, slides.length - 1);
+        },
+        undoFn: () {
+          slides.remove(clone);
+          _activeSlide = previousActive.clamp(0, slides.length - 1);
+        },
+      ),
+    );
+    selected = null;
+    _selectedAnimationIndex = null;
+    notifyListeners();
+  }
+
+  int _allocateSlideId() {
+    var maxId = 255;
+    for (final PmlSlide slide in presentation.slides) {
+      if (slide.id > maxId) {
+        maxId = slide.id;
+      }
+    }
+    return maxId + 1;
   }
 
   /// setSlideHidden API.
@@ -7309,12 +9210,14 @@ class SlideEditorController extends OfficeController {
     _activeSlide = _show!.slideIndex;
     if (!previewOnly) {
       selected = null;
+      startPresenter();
     }
     notifyListeners();
   }
 
   /// endShow API.
   void endShow() {
+    stopPresenter();
     if (_show == null) {
       return;
     }
@@ -7513,8 +9416,52 @@ class SlideEditorController extends OfficeController {
     notifyListeners();
   }
 
+  static bool _containsShape(List<PmlShape> list, PmlShape shape) {
+    for (final PmlShape item in list) {
+      if (identical(item, shape)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  void _addUniqueShape(List<PmlShape> list, PmlShape shape) {
+    if (!_containsShape(list, shape)) {
+      list.add(shape);
+    }
+  }
+
+  List<PmlShape> _matesOf(PmlShape shape) {
+    return PmlArrange.mates(slide.shapes, shape);
+  }
+
+  List<PmlShape> _selectionWithMates({PmlShape? extra}) {
+    final List<PmlShape> out = <PmlShape>[];
+    final List<PmlShape> seeds = selectedShapes.isNotEmpty
+        ? selectedShapes
+        : (selected == null ? <PmlShape>[] : <PmlShape>[selected!]);
+    for (final PmlShape seed in seeds) {
+      for (final PmlShape mate in _matesOf(seed)) {
+        _addUniqueShape(out, mate);
+      }
+    }
+    if (extra != null) {
+      for (final PmlShape mate in _matesOf(extra)) {
+        _addUniqueShape(out, mate);
+      }
+    }
+    return out;
+  }
+
+  void _adoptSelection(List<PmlShape> shapes, {PmlShape? primary}) {
+    selectedShapes
+      ..clear()
+      ..addAll(shapes);
+    _selected = primary ?? (selectedShapes.isEmpty ? null : selectedShapes.last);
+  }
+
   /// selectShape API.
-  void selectShape(PmlShape? shape) {
+  void selectShape(PmlShape? shape, {bool additive = false}) {
     if (!config.allowsSelection) {
       selected = null;
       notifyListeners();
@@ -7527,7 +9474,33 @@ class SlideEditorController extends OfficeController {
       selectedTableRow = 0;
       selectedTableCol = 0;
     }
-    selected = shape;
+    if (shape == null) {
+      selected = null;
+      notifyListeners();
+      return;
+    }
+    final List<PmlShape> mates = _matesOf(shape);
+    if (additive) {
+      final bool allIn = mates.every(
+        (PmlShape mate) => _containsShape(selectedShapes, mate),
+      );
+      if (allIn) {
+        selectedShapes.removeWhere(
+          (PmlShape item) => _containsShape(mates, item),
+        );
+        _selected = selectedShapes.isEmpty ? null : selectedShapes.last;
+      } else {
+        for (final PmlShape mate in mates) {
+          _addUniqueShape(selectedShapes, mate);
+        }
+        _selected = shape;
+      }
+    } else if (_containsShape(selectedShapes, shape) &&
+        selectedShapes.length > 1) {
+      _selected = shape;
+    } else {
+      _adoptSelection(mates, primary: shape);
+    }
     notifyListeners();
   }
 
@@ -7539,7 +9512,7 @@ class SlideEditorController extends OfficeController {
     if (textEditor.editing && !identical(selected, shape)) {
       commitTextEdit();
     }
-    selected = shape;
+    selectShape(shape);
     final PmlTable? table = shape.table;
     if (table != null && table.rowCount > 0 && table.colCount > 0) {
       selectedTableRow = row.clamp(0, table.rowCount - 1);
@@ -7806,7 +9779,7 @@ class SlideEditorController extends OfficeController {
     if (slide.shapes.isEmpty) {
       selected = null;
     } else {
-      selected = slide.shapes.last;
+      _adoptSelection(List<PmlShape>.from(slide.shapes));
     }
     notifyListeners();
   }
@@ -7850,6 +9823,10 @@ class SlideEditorController extends OfficeController {
     final OfficeClipboardPayload payload = await OfficeClipboard.instance
         .read();
     if (payload.isEmpty) {
+      return;
+    }
+    if (payload.slide != null && mode != OfficePasteMode.keepTextOnly) {
+      pasteSlide(afterIndex: activeSlideIndex);
       return;
     }
     if (textEditor.editing) {
@@ -8080,30 +10057,57 @@ class SlideEditorController extends OfficeController {
     if (textEditor.editing) {
       return;
     }
-    final PmlShape? shape = selected;
-    if (shape == null || !config.allowsMutation) {
+    if (!config.allowsMutation) {
+      return;
+    }
+    final List<PmlShape> targets = _selectionWithMates();
+    if (targets.isEmpty) {
       return;
     }
     final List<PmlShape> shapes = slide.shapes;
-    final int index = shapes.indexOf(shape);
-    if (index < 0) {
+    final List<({int index, PmlShape shape})> removed =
+        <({int index, PmlShape shape})>[
+          for (final PmlShape shape in targets)
+            if (shapes.contains(shape))
+              (index: shapes.indexOf(shape), shape: shape),
+        ]..sort(
+          (
+            ({int index, PmlShape shape}) a,
+            ({int index, PmlShape shape}) b,
+          ) => a.index.compareTo(b.index),
+        );
+    if (removed.isEmpty) {
       return;
     }
+    final List<PmlShapeAnimation> anims = <PmlShapeAnimation>[
+      for (final PmlShapeAnimation animation in slide.animations)
+        if (targets.any((PmlShape s) => s.id == animation.shapeId)) animation,
+    ];
     commands.commit(
       _CallbackCommand(
         executeFn: () {
-          shapes.remove(shape);
+          for (int i = removed.length - 1; i >= 0; i--) {
+            shapes.remove(removed[i].shape);
+          }
           slide.animations.removeWhere(
-            (PmlShapeAnimation a) => a.shapeId == shape.id,
+            (PmlShapeAnimation a) =>
+                targets.any((PmlShape s) => s.id == a.shapeId),
           );
           selected = null;
           _selectedAnimationIndex = null;
         },
         undoFn: () {
-          if (!shapes.contains(shape)) {
-            shapes.insert(index.clamp(0, shapes.length), shape);
+          for (final ({int index, PmlShape shape}) item in removed) {
+            if (!shapes.contains(item.shape)) {
+              shapes.insert(item.index.clamp(0, shapes.length), item.shape);
+            }
           }
-          selected = shape;
+          for (final PmlShapeAnimation animation in anims) {
+            if (!slide.animations.contains(animation)) {
+              slide.animations.add(animation);
+            }
+          }
+          _adoptSelection(targets);
         },
       ),
     );
@@ -8174,20 +10178,24 @@ class SlideEditorController extends OfficeController {
 
   /// nudgeSelected API.
   void nudgeSelected(int dxEmu, int dyEmu) {
-    final PmlShape? shape = selected;
-    if (shape == null || !config.allowsMutation) {
+    if (!config.allowsMutation) {
       return;
     }
-    applyTransform(
-      shape,
-      PmlTransform(
-        x: shape.transform.x + dxEmu,
-        y: shape.transform.y + dyEmu,
-        cx: shape.transform.cx,
-        cy: shape.transform.cy,
-        rot: shape.transform.rot,
-      ),
-    );
+    final List<PmlShape> targets = _selectionWithMates();
+    if (targets.isEmpty) {
+      return;
+    }
+    final Map<PmlShape, PmlTransform> next = <PmlShape, PmlTransform>{
+      for (final PmlShape shape in targets)
+        shape: PmlTransform(
+          x: shape.transform.x + dxEmu,
+          y: shape.transform.y + dyEmu,
+          cx: shape.transform.cx,
+          cy: shape.transform.cy,
+          rot: shape.transform.rot,
+        ),
+    };
+    applyTransforms(next);
   }
 
   /// updateSelected API.
@@ -8317,15 +10325,224 @@ class SlideEditorController extends OfficeController {
     if (!config.allowsMutation) {
       return;
     }
-    final PmlTransform prev = shape.transform;
+    final int dx = next.x - shape.transform.x;
+    final int dy = next.y - shape.transform.y;
+    final List<PmlShape> mates = _containsShape(selectedShapes, shape)
+        ? _selectionWithMates(extra: shape)
+        : _matesOf(shape);
+    final Map<PmlShape, PmlTransform> nextByShape = <PmlShape, PmlTransform>{
+      for (final PmlShape mate in mates)
+        mate: identical(mate, shape)
+            ? next
+            : PmlTransform(
+                x: mate.transform.x + dx,
+                y: mate.transform.y + dy,
+                cx: mate.transform.cx,
+                cy: mate.transform.cy,
+                rot: mate.transform.rot,
+              ),
+    };
+    applyTransforms(nextByShape);
+  }
+
+  /// Commits a batch of shape transforms as one undo step.
+  void applyTransforms(Map<PmlShape, PmlTransform> nextByShape) {
+    if (!config.allowsMutation || nextByShape.isEmpty) {
+      return;
+    }
+    final Map<PmlShape, PmlTransform> prev = <PmlShape, PmlTransform>{
+      for (final MapEntry<PmlShape, PmlTransform> entry in nextByShape.entries)
+        entry.key: entry.key.transform,
+    };
     commands.commit(
       _CallbackCommand(
-        executeFn: () => shape.transform = next,
-        undoFn: () => shape.transform = prev,
+        executeFn: () {
+          nextByShape.forEach((PmlShape shape, PmlTransform t) {
+            shape.transform = t;
+          });
+        },
+        undoFn: () {
+          prev.forEach((PmlShape shape, PmlTransform t) {
+            shape.transform = t;
+          });
+        },
       ),
     );
     notifyListeners();
   }
+
+  /// groupShapes API.
+  int? groupShapes({List<PmlShape>? shapes}) {
+    if (!config.allowsMutation) {
+      return null;
+    }
+    final List<PmlShape> items;
+    if (shapes != null) {
+      items = shapes;
+    } else if (selectedShapes.length >= 2) {
+      items = List<PmlShape>.from(selectedShapes);
+    } else if (selectedShapes.isEmpty) {
+      items = slide.shapes;
+    } else {
+      return null;
+    }
+    if (items.length < 2) {
+      return null;
+    }
+    final int id = PmlArrange.group(items);
+    _adoptSelection(items, primary: selected ?? items.first);
+    notifyListeners();
+    return id;
+  }
+
+  /// ungroupShapes API.
+  void ungroupShapes({List<PmlShape>? shapes}) {
+    if (!config.allowsMutation) {
+      return;
+    }
+    final List<PmlShape> items = shapes ??
+        (selectedShapes.isNotEmpty ? selectedShapes : slide.shapes);
+    PmlArrange.ungroup(items);
+    notifyListeners();
+  }
+
+  /// setLayoutPlaceholder API.
+  void setLayoutPlaceholder({
+    required String layoutName,
+    required String text,
+    String shapeName = 'Title',
+  }) {
+    if (!config.allowsMutation) {
+      return;
+    }
+    PmlLayout? layout;
+    for (final PmlLayout item in presentation.layouts) {
+      if (item.name == layoutName) {
+        layout = item;
+        break;
+      }
+    }
+    layout ??= PmlLayout(name: layoutName);
+    if (!presentation.layouts.contains(layout)) {
+      presentation.layouts.add(layout);
+    }
+    layout.placeholderText = text;
+    PmlShape? ph;
+    for (final PmlShape shape in layout.placeholders) {
+      if (shape.name == shapeName) {
+        ph = shape;
+        break;
+      }
+    }
+    if (ph == null) {
+      ph = PmlShape(
+        id: layout.placeholders.length + 1,
+        name: shapeName,
+        placeholder: true,
+      );
+      layout.placeholders.add(ph);
+    }
+    ph.text = text;
+    notifyListeners();
+  }
+
+  DateTime? _presenterStarted;
+  var presenterPaused = false;
+  Duration _pausedElapsed = Duration.zero;
+
+  /// presenterElapsed API.
+  Duration get presenterElapsed {
+    if (presenterPaused) {
+      return _pausedElapsed;
+    }
+    return _presenterStarted == null
+        ? Duration.zero
+        : DateTime.now().difference(_presenterStarted!);
+  }
+
+  /// startPresenter API.
+  void startPresenter() {
+    _presenterStarted = DateTime.now();
+    presenterPaused = false;
+    _pausedElapsed = Duration.zero;
+    notifyListeners();
+  }
+
+  /// pausePresenter API.
+  void pausePresenter() {
+    if (_presenterStarted == null) {
+      startPresenter();
+      return;
+    }
+    if (presenterPaused) {
+      _presenterStarted = DateTime.now().subtract(_pausedElapsed);
+      presenterPaused = false;
+    } else {
+      _pausedElapsed = presenterElapsed;
+      presenterPaused = true;
+    }
+    notifyListeners();
+  }
+
+  /// stopPresenter API.
+  void stopPresenter() {
+    _presenterStarted = null;
+    presenterPaused = false;
+    _pausedElapsed = Duration.zero;
+    notifyListeners();
+  }
+
+  /// canvasSlide API.
+  PmlSlide get canvasSlide {
+    if (stageKind == SlideStageKind.master) {
+      return PmlSlide(id: 1, shapes: presentation.master.shapes);
+    }
+    if (stageKind == SlideStageKind.layout) {
+      final PmlLayout layout = _activeLayout;
+      return PmlSlide(id: 1, shapes: layout.placeholders);
+    }
+    return slide;
+  }
+
+  PmlLayout get _activeLayout {
+    for (final PmlLayout layout in presentation.layouts) {
+      if (layout.name == slide.layoutName) {
+        return layout;
+      }
+    }
+    if (presentation.layouts.isEmpty) {
+      presentation.layouts.add(PmlLayout(name: 'Blank'));
+    }
+    return presentation.layouts.first;
+  }
+
+  /// setStageKind API.
+  void setStageKind(SlideStageKind kind) {
+    stageKind = kind;
+    if (kind == SlideStageKind.layout && _activeLayout.placeholders.isEmpty) {
+      _activeLayout.placeholders.add(
+        PmlShape(
+          id: 2,
+          name: 'Title',
+          text: _activeLayout.placeholderText.isEmpty
+              ? 'Click to add title'
+              : _activeLayout.placeholderText,
+          placeholder: true,
+        ),
+      );
+    }
+    if (kind == SlideStageKind.master && presentation.master.shapes.isEmpty) {
+      presentation.master.shapes.add(
+        PmlShape(id: 2, name: 'Master title', text: presentation.master.name),
+      );
+    }
+    selected = canvasSlide.shapes.isEmpty ? null : canvasSlide.shapes.first;
+    notifyListeners();
+  }
+
+  /// nextVisibleSlide API.
+  int? get nextVisibleSlide =>
+      presentation.visibleIndexAfter(_activeSlide, direction: 1);
 
   @override
   /// dispose API.
@@ -8354,6 +10571,141 @@ class SlideEditorController extends OfficeController {
       return '${config.strings.pageLabel} ${_activeSlide + 1}';
     }
     return '${config.strings.shapeLabel} ${shape.name} ${shape.text}';
+  }
+
+  @override
+  /// documentProperties API.
+  OfficeDocumentProperties get documentProperties => presentation.properties;
+
+  @override
+  set documentProperties(OfficeDocumentProperties value) {
+    presentation.properties = value;
+    notifyListeners();
+  }
+
+  @override
+  /// documentStats API.
+  OfficeTextStats get documentStats =>
+      OfficeTextStats.ofPresentation(presentation);
+
+  @override
+  /// collectFindHits API.
+  List<OfficeFindHit> collectFindHits(OfficeFindOptions options) =>
+      OfficeFind.inPresentation(presentation, options);
+
+  @override
+  /// applyReplace API.
+  int applyReplace(OfficeFindOptions options, {OfficeFindHit? only}) {
+    final int count = OfficeFind.replacePresentation(
+      presentation,
+      options,
+      only: only,
+    );
+    if (count > 0) {
+      notifyListeners();
+    }
+    return count;
+  }
+
+  @override
+  /// exportPdf API.
+  Uint8List exportPdf({
+    OfficePrintSettings settings = const OfficePrintSettings(),
+    SfntFont? font,
+    PdfSlideExportMode mode = PdfSlideExportMode.slides,
+  }) {
+    return OfficePrint.presentation(
+      presentation,
+      settings: settings,
+      font: font,
+      mode: mode,
+    );
+  }
+
+  @override
+  /// revealFindHit API.
+  void revealFindHit(OfficeFindHit hit) {
+    final int index = hit.slideIndex ?? _activeSlide;
+    setActiveSlide(index);
+    final int? id = hit.shapeId;
+    if (id != null) {
+      for (final PmlShape shape in slide.shapes) {
+        if (shape.id == id) {
+          selectShape(shape);
+          break;
+        }
+      }
+    }
+  }
+
+  /// setShapeMedia API.
+  void setShapeMedia(PmlShape shape, {String name = 'clip.mp4', List<int>? bytes}) {
+    if (!config.allowsMutation) {
+      return;
+    }
+    shape.mediaName = name;
+    if (bytes != null) {
+      shape.mediaBytes
+        ..clear()
+        ..addAll(bytes);
+    }
+    notifyListeners();
+  }
+
+  /// playShapeMedia API.
+  void playShapeMedia(PmlShape shape) {
+    onPlayMedia?.call(shape);
+    notifyListeners();
+  }
+
+  /// Host hook for video/audio playback.
+  void Function(PmlShape shape)? onPlayMedia;
+
+  /// setSpeakerNotes API.
+  void setSpeakerNotes(String value) {
+    if (!config.allowsMutation) {
+      return;
+    }
+    slide.notes = value;
+    notifyListeners();
+  }
+
+  /// addSlideSection API.
+  PmlSection addSlideSection(String name, {int? startIndex}) {
+    final PmlSection section = PmlSections.add(
+      presentation,
+      name: name,
+      startIndex: startIndex ?? _activeSlide,
+    );
+    notifyListeners();
+    return section;
+  }
+
+  /// alignShapes API.
+  void alignShapes(PmlAlignAxis axis, {List<PmlShape>? shapes}) {
+    if (!config.allowsMutation) {
+      return;
+    }
+    PmlArrange.align(shapes ?? slide.shapes, axis);
+    notifyListeners();
+  }
+
+  /// distributeShapes API.
+  void distributeShapes({required bool horizontal, List<PmlShape>? shapes}) {
+    if (!config.allowsMutation) {
+      return;
+    }
+    PmlArrange.distribute(shapes ?? slide.shapes, horizontal: horizontal);
+    notifyListeners();
+  }
+
+  /// applyMasterBackground API.
+  void applyMasterBackground(String rgb) {
+    if (!config.allowsMutation) {
+      return;
+    }
+    presentation.master.background = rgb;
+    notifyListeners();
   }
 }
 
@@ -8416,6 +10768,7 @@ class _SheetGridSnap {
     required this.cells,
     required this.widths,
     required this.heights,
+    required this.merges,
   });
 
   /// capture API.
@@ -8429,10 +10782,18 @@ class _SheetGridSnap {
             value: cell.value,
             formula: cell.formula,
             styleIndex: cell.styleIndex,
+            horizontalAlign: cell.horizontalAlign,
+            fillRgb: cell.fillRgb,
+            fontRgb: cell.fontRgb,
+            fontBold: cell.fontBold,
+            fontSize: cell.fontSize,
           ),
       ],
       widths: Map<int, double>.from(sheet.columnWidths),
       heights: Map<int, double>.from(sheet.rowHeights),
+      merges: <SmlMerge>[
+        for (final SmlMerge merge in sheet.merges) merge.copy(),
+      ],
     );
   }
 
@@ -8445,6 +10806,9 @@ class _SheetGridSnap {
   /// heights API.
   final Map<int, double> heights;
 
+  /// merges API.
+  final List<SmlMerge> merges;
+
   /// restore API.
   void restore(SmlWorksheet sheet) {
     sheet.rows.clear();
@@ -8454,7 +10818,12 @@ class _SheetGridSnap {
         ..type = cell.type
         ..value = cell.value
         ..formula = cell.formula
-        ..styleIndex = cell.styleIndex;
+        ..styleIndex = cell.styleIndex
+        ..horizontalAlign = cell.horizontalAlign
+        ..fillRgb = cell.fillRgb
+        ..fontRgb = cell.fontRgb
+        ..fontBold = cell.fontBold
+        ..fontSize = cell.fontSize;
     }
     sheet.columnWidths
       ..clear()
@@ -8462,6 +10831,9 @@ class _SheetGridSnap {
     sheet.rowHeights
       ..clear()
       ..addAll(heights);
+    sheet.merges
+      ..clear()
+      ..addAll(merges.map((SmlMerge merge) => merge.copy()));
   }
 }
 

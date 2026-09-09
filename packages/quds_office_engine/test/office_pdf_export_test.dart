@@ -257,6 +257,45 @@ void main() {
     expect(_pageCount(PdfDocument.fromWorkbook(book)), 1);
   });
 
+  test('transparent PNG pictures emit a DeviceGray SMask', () {
+    final Uint8List png = PngBytes.rgba(
+      width: 8,
+      height: 6,
+      plot: (int x, int y, List<int> rgba) {
+        rgba[0] = 255;
+        rgba[1] = 255;
+        rgba[2] = 255;
+        rgba[3] = (x < 3 || y < 2) ? 0 : 255;
+      },
+    );
+    final PdfRaster? raster = PdfImageCodec.decode(png);
+    expect(raster, isNotNull);
+    expect(raster!.alpha, isNotNull);
+    expect(raster.alpha!.first, 0);
+    expect(raster.alpha!.last, 255);
+
+    final WmlDocument doc = WmlDocument(
+      sections: <WmlSection>[
+        WmlSection(
+          blocks: <WmlBlock>[
+            WmlVisual(
+              visual: OfficeVisual(
+                kind: OfficeVisualKind.picture,
+                imageBytes: png,
+                width: 80,
+                height: 60,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+    final Uint8List pdf = OfficePdfExport.word(doc, font: font, title: 'Alpha');
+    final String ascii = _ascii(pdf);
+    expect(ascii, contains('/SMask'));
+    expect(ascii, contains('/ColorSpace /DeviceGray'));
+  });
+
   test('keeps a distinct image XObject for each picture', () {
     final Uint8List red = PngBytes.rgb(
       width: 24,
@@ -376,14 +415,224 @@ void main() {
     expect(ascii, contains('/URI'));
     expect(ascii, contains('https://example.com/docs'));
     expect(ascii, contains('/Link'));
+    expect(ascii, contains('/Outlines'));
+
+    final Uint8List slice = OfficePdfExport.word(
+      doc,
+      font: font,
+      title: 'Slice',
+      pageFrom: 2,
+      pageTo: 2,
+    );
+    expect(_pageCount(slice), 1);
+  });
+
+  test('Excel PDF honors column widths, merges, and print area', () {
+    final SmlWorkbook book = SmlWorkbook();
+    final SmlWorksheet sheet = book.firstSheet;
+    sheet.setColumnWidth(0, 120);
+    sheet.setColumnWidth(1, 40);
+    sheet.setRowHeight(0, 40);
+    sheet.cellA1('A1').value = 'Wide';
+    sheet.cellA1('B1').value = 'Narrow';
+    sheet.cellA1('A2').value = 'Merged';
+    sheet.mergeAndCenter(SmlRange.parse('A2:B2'));
+    sheet.printArea = SmlRange.parse('A1:B2');
+    final Uint8List pdf = OfficePdfExport.workbook(
+      book,
+      font: font,
+      title: 'Geometry',
+    );
+    expect(_header(pdf), startsWith('%PDF-1.7'));
+    expect(_pageCount(pdf), greaterThanOrEqualTo(1));
+    expect(_ascii(pdf), contains('/Outlines'));
+    expect(_ascii(pdf), contains(sheet.name));
+  });
+
+  test('OfficePrint forwards sheet and slide ranges', () {
+    final SmlWorkbook book = SmlWorkbook();
+    book.firstSheet.cellA1('A1').value = 'First';
+    final SmlWorksheet second = SmlWorksheet(name: 'Second', sheetId: 2);
+    second.cellA1('A1').value = 'Only second';
+    book.sheets.add(second);
+    final Uint8List sheets = OfficePrint.workbook(
+      book,
+      settings: const OfficePrintSettings(pageFrom: 2, pageTo: 2, title: 'S'),
+      font: font,
+    );
+    expect(_pageCount(sheets), 1);
+    expect(_ascii(sheets), contains('Second'));
+
+    final PmlPresentation deck = PmlPresentation(
+      slides: <PmlSlide>[
+        PmlSlide(
+          id: 1,
+          shapes: <PmlShape>[
+            PmlShape(
+              id: 1,
+              name: 't1',
+              transform: const PmlTransform(cx: 2000000, cy: 500000),
+              text: 'Alpha',
+            ),
+          ],
+        ),
+        PmlSlide(
+          id: 2,
+          shapes: <PmlShape>[
+            PmlShape(
+              id: 2,
+              name: 't2',
+              transform: const PmlTransform(cx: 2000000, cy: 500000),
+              text: 'Beta',
+            ),
+          ],
+        ),
+      ],
+    );
+    final Uint8List slides = OfficePrint.presentation(
+      deck,
+      settings: const OfficePrintSettings(pageFrom: 2, pageTo: 2, title: 'P'),
+      font: font,
+    );
+    expect(_pageCount(slides), 1);
+    expect(_ascii(slides), contains('/Outlines'));
+  });
+
+  test('PdfReportBuilder remaps subset glyph ids', () {
+    if (font == null) {
+      return;
+    }
+    final Uint8List pdf = (PdfReportBuilder(font: font, title: 'Report')
+          ..titleText('Hello')
+          ..body('World'))
+        .build();
+    expect(_ascii(pdf), contains('/Length1'));
+    final String body = _inflated(pdf).join();
+    expect(RegExp(r'\[<[0-9a-fA-F]+>\] TJ').hasMatch(body), isTrue);
+    expect(body.contains('[<0000>] TJ'), isFalse);
+  });
+
+  test('Excel PDF paints cell borders and header tokens', () {
+    final SmlWorkbook book = SmlWorkbook();
+    final SmlWorksheet sheet = book.firstSheet;
+    sheet.cellA1('A1')
+      ..value = 'Title'
+      ..borderRgb = '000000'
+      ..borderWidth = 1;
+    sheet.cellA1('A2').value = 'Body';
+    sheet.printTitleRows = SmlRange.parse('A1:A1');
+    sheet.headerFooter = SmlHeaderFooter(
+      headerCenter: '&A page &P of &N',
+      footerLeft: 'Confidential',
+    );
+    final Uint8List pdf = OfficePdfExport.workbook(
+      book,
+      font: font,
+      title: 'Borders',
+      options: const PdfSheetPrintOptions(showGridlines: false),
+    );
+    expect(_header(pdf), startsWith('%PDF-1.7'));
+    expect(_pageCount(pdf), 1);
+    final String body = _inflated(pdf).join();
+    // True border stroke when showGridlines is false (width 1 from borderWidth).
+    expect(RegExp(r'(^|\s)1(\.0)?\s+w\b').hasMatch(body), isTrue);
+    expect(RegExp(r'0(\.0+)?\s+0(\.0+)?\s+0(\.0+)?\s+RG').hasMatch(body), isTrue);
+    final SmlWorkbook opened = SheetDeserializer().read(
+      SheetSerializer().write(book),
+    );
+    expect(opened.firstSheet.headerFooter?.footerLeft, 'Confidential');
+    expect(opened.firstSheet.printTitleRows?.minRow, 0);
+  });
+
+  test('PPT PDF strokes shapes and emits URI link annots', () {
+    final PmlPresentation deck = PmlPresentation(
+      slides: <PmlSlide>[
+        PmlSlide(
+          id: 1,
+          shapes: <PmlShape>[
+            PmlShape(
+              id: 2,
+              name: 'LinkBox',
+              transform: const PmlTransform(
+                x: 914400,
+                y: 914400,
+                cx: 2000000,
+                cy: 800000,
+              ),
+              fillColor: '4472C4',
+              strokeColor: 'C00000',
+              strokeWidth: 1.5,
+              hyperlinkUrl: 'https://example.com/docs',
+              text: 'Docs',
+            ),
+          ],
+        ),
+      ],
+    );
+    final Uint8List pdf = OfficePdfExport.presentation(
+      deck,
+      font: font,
+      title: 'Links',
+    );
+    expect(_ascii(pdf), contains('/URI'));
+    expect(_ascii(pdf), contains('https://example.com/docs'));
+  });
+
+  test('chart serializers honor ChartDisplay.rtl', () {
+    final OfficeVisual visual = OfficeVisual(
+      kind: OfficeVisualKind.chartBar,
+      title: 'RTL',
+      points: OfficeVisual.sampleSeries(),
+      chart: ChartDisplay(rtl: true),
+    );
+    final PmlPresentation deck = PmlPresentation(
+      slides: <PmlSlide>[
+        PmlSlide(
+          id: 1,
+          shapes: <PmlShape>[
+            PmlShape(
+              id: 2,
+              name: 'Chart',
+              transform: const PmlTransform(cx: 3000000, cy: 2000000),
+              visual: visual,
+            ),
+          ],
+        ),
+      ],
+    );
+    final OpcPackage package = SlideSerializer().write(deck);
+    final PackagePart? chart = package.getPart('/ppt/charts/chart1.xml');
+    expect(chart, isNotNull);
+    expect(chart!.readText(), contains('rtl="1"'));
   });
 }
 
-SfntFont? _tryFont() =>
-    _tryPath('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf');
+SfntFont? _tryFont() {
+  for (final String path in <String>[
+    r'C:\Windows\Fonts\calibri.ttf',
+    r'C:\Windows\Fonts\arial.ttf',
+    '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+  ]) {
+    final SfntFont? font = _tryPath(path);
+    if (font != null) {
+      return font;
+    }
+  }
+  return null;
+}
 
-SfntFont? _tryNoto() =>
-    _tryPath('/usr/share/fonts/truetype/noto/NotoNaskhArabic-Regular.ttf');
+SfntFont? _tryNoto() {
+  for (final String path in <String>[
+    '/usr/share/fonts/truetype/noto/NotoNaskhArabic-Regular.ttf',
+    r'C:\Windows\Fonts\NotoNaskhArabic-Regular.ttf',
+  ]) {
+    final SfntFont? font = _tryPath(path);
+    if (font != null) {
+      return font;
+    }
+  }
+  return null;
+}
 
 SfntFont? _tryPath(String path) {
   if (!File(path).existsSync()) {

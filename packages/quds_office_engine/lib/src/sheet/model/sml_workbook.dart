@@ -1,6 +1,9 @@
+import '../../office/office_document_properties.dart';
 import '../../opc/opc_archive.dart';
 import '../../visual/office_visual.dart';
 import '../styles/sml_styles.dart';
+import 'sml_analysis.dart';
+import 'sml_sparkline.dart';
 
 /// Enum SmlCellType.
 enum SmlCellType { number, string, boolean, error, formula }
@@ -77,16 +80,105 @@ class SmlRange {
 
   /// cells API.
   Iterable<SmlCellRef> get cells sync* {
-    final int r0 = start.row < end.row ? start.row : end.row;
-    final int r1 = start.row > end.row ? start.row : end.row;
-    final int c0 = start.col < end.col ? start.col : end.col;
-    final int c1 = start.col > end.col ? start.col : end.col;
-    for (int r = r0; r <= r1; r++) {
-      for (int c = c0; c <= c1; c++) {
+    for (int r = minRow; r <= maxRow; r++) {
+      for (int c = minCol; c <= maxCol; c++) {
         yield SmlCellRef(c, r);
       }
     }
   }
+
+  /// minCol API.
+  int get minCol => start.col < end.col ? start.col : end.col;
+
+  /// maxCol API.
+  int get maxCol => start.col > end.col ? start.col : end.col;
+
+  /// minRow API.
+  int get minRow => start.row < end.row ? start.row : end.row;
+
+  /// maxRow API.
+  int get maxRow => start.row > end.row ? start.row : end.row;
+
+  /// True when the range is a single cell.
+  bool get isSingleCell => start.col == end.col && start.row == end.row;
+
+  /// contains API.
+  bool contains(int col, int row) =>
+      col >= minCol && col <= maxCol && row >= minRow && row <= maxRow;
+
+  /// containsRef API.
+  bool containsRef(SmlCellRef ref) => contains(ref.col, ref.row);
+}
+
+/// A merged rectangle (`mergeCell/@ref`), inclusive on every edge.
+class SmlMerge {
+  /// SmlMerge API.
+  SmlMerge({required int c0, required int r0, required int c1, required int r1})
+    : c0 = c0 < c1 ? c0 : c1,
+      r0 = r0 < r1 ? r0 : r1,
+      c1 = c0 > c1 ? c0 : c1,
+      r1 = r0 > r1 ? r0 : r1;
+
+  /// parse API.
+  factory SmlMerge.parse(String a1) {
+    final SmlRange range = SmlRange.parse(a1);
+    return SmlMerge(
+      c0: range.minCol,
+      r0: range.minRow,
+      c1: range.maxCol,
+      r1: range.maxRow,
+    );
+  }
+
+  /// Left column (origin).
+  final int c0;
+
+  /// Top row (origin).
+  final int r0;
+
+  /// Right column.
+  final int c1;
+
+  /// Bottom row.
+  final int r1;
+
+  /// origin API.
+  SmlCellRef get origin => SmlCellRef(c0, r0);
+
+  /// a1 API.
+  String get a1 => c0 == c1 && r0 == r1
+      ? origin.a1
+      : '${origin.a1}:${SmlCellRef(c1, r1).a1}';
+
+  /// isSingle API.
+  bool get isSingle => c0 == c1 && r0 == r1;
+
+  /// contains API.
+  bool contains(int col, int row) =>
+      col >= c0 && col <= c1 && row >= r0 && row <= r1;
+
+  /// containsRef API.
+  bool containsRef(SmlCellRef ref) => contains(ref.col, ref.row);
+
+  /// isOrigin API.
+  bool isOrigin(int col, int row) => col == c0 && row == r0;
+
+  /// Covered non-origin cell inside this merge.
+  bool isCovered(int col, int row) => contains(col, row) && !isOrigin(col, row);
+
+  /// overlaps API.
+  bool overlaps(SmlMerge other) =>
+      c0 <= other.c1 && c1 >= other.c0 && r0 <= other.r1 && r1 >= other.r0;
+
+  /// equalsRange API.
+  bool equalsRange(SmlRange range) =>
+      c0 == range.minCol &&
+      r0 == range.minRow &&
+      c1 == range.maxCol &&
+      r1 == range.maxRow;
+
+  /// copy API.
+  SmlMerge copy() => SmlMerge(c0: c0, r0: r0, c1: c1, r1: r1);
 }
 
 /// Class SmlCell.
@@ -98,6 +190,14 @@ class SmlCell {
     this.value,
     this.formula,
     this.styleIndex = 0,
+    this.horizontalAlign = SmlHAlign.general,
+    this.fillRgb = '',
+    this.fontRgb = '',
+    this.fontBold = false,
+    this.fontSize = 11,
+    this.borderRgb = '',
+    this.borderWidth = 0,
+    this.locked = true,
   });
 
   /// ref API.
@@ -114,6 +214,30 @@ class SmlCell {
 
   /// styleIndex API.
   int styleIndex;
+
+  /// horizontalAlign API.
+  SmlHAlign horizontalAlign;
+
+  /// Solid fill as `RRGGBB`; empty means no fill.
+  String fillRgb;
+
+  /// Font color as `RRGGBB`; empty means the theme default.
+  String fontRgb;
+
+  /// fontBold API.
+  bool fontBold;
+
+  /// Point size from the cell xf font; `11` is Calibri default.
+  double fontSize;
+
+  /// Uniform cell border as `RRGGBB`; empty means no true border.
+  String borderRgb;
+
+  /// Border stroke width in points when [borderRgb] is set (`0` → 0.5 pt).
+  double borderWidth;
+
+  /// Excel default: locked when the sheet is protected.
+  bool locked;
 
   /// asNumber API.
   double? get asNumber {
@@ -162,6 +286,56 @@ class SmlRow {
       cells.putIfAbsent(col, () => SmlCell(ref: SmlCellRef(col, index)));
 }
 
+/// Class SmlHeaderFooter.
+class SmlHeaderFooter {
+  /// SmlHeaderFooter API.
+  SmlHeaderFooter({
+    this.headerLeft = '',
+    this.headerCenter = '',
+    this.headerRight = '',
+    this.footerLeft = '',
+    this.footerCenter = '',
+    this.footerRight = '',
+  });
+
+  /// headerLeft API.
+  String headerLeft;
+
+  /// headerCenter API.
+  String headerCenter;
+
+  /// headerRight API.
+  String headerRight;
+
+  /// footerLeft API.
+  String footerLeft;
+
+  /// footerCenter API.
+  String footerCenter;
+
+  /// footerRight API.
+  String footerRight;
+
+  /// True when any section has text.
+  bool get isEmpty =>
+      headerLeft.isEmpty &&
+      headerCenter.isEmpty &&
+      headerRight.isEmpty &&
+      footerLeft.isEmpty &&
+      footerCenter.isEmpty &&
+      footerRight.isEmpty;
+
+  /// copy API.
+  SmlHeaderFooter copy() => SmlHeaderFooter(
+    headerLeft: headerLeft,
+    headerCenter: headerCenter,
+    headerRight: headerRight,
+    footerLeft: footerLeft,
+    footerCenter: footerCenter,
+    footerRight: footerRight,
+  );
+}
+
 /// Class SmlWorksheet.
 class SmlWorksheet {
   /// SmlWorksheet API.
@@ -175,10 +349,30 @@ class SmlWorksheet {
     List<SmlDrawing>? drawings,
     Map<int, double>? columnWidths,
     Map<int, double>? rowHeights,
+    List<SmlMerge>? merges,
+    List<SmlDataValidation>? validations,
+    List<SmlConditionalRule>? conditionalFormats,
+    this.autoFilter,
+    this.printArea,
+    this.printTitleRows,
+    this.printTitleCols,
+    this.headerFooter,
+    this.protection,
+    List<SmlComment>? comments,
+    List<SmlTable>? tables,
+    List<SmlPivotTable>? pivots,
+    List<SmlSparkline>? sparklines,
   }) : rows = rows ?? <int, SmlRow>{},
        drawings = drawings ?? <SmlDrawing>[],
        columnWidths = columnWidths ?? <int, double>{},
-       rowHeights = rowHeights ?? <int, double>{};
+       rowHeights = rowHeights ?? <int, double>{},
+       merges = merges ?? <SmlMerge>[],
+       validations = validations ?? <SmlDataValidation>[],
+       conditionalFormats = conditionalFormats ?? <SmlConditionalRule>[],
+       comments = comments ?? <SmlComment>[],
+       tables = tables ?? <SmlTable>[],
+       pivots = pivots ?? <SmlPivotTable>[],
+       sparklines = sparklines ?? <SmlSparkline>[];
 
   /// Excel worksheet column count (A … XFD).
   static const int excelColumnCount = 16384;
@@ -234,6 +428,45 @@ class SmlWorksheet {
   /// Custom row heights in CSS pixels, keyed by 0-based row index.
   final Map<int, double> rowHeights;
 
+  /// Merged cell rectangles (`mergeCells`).
+  final List<SmlMerge> merges;
+
+  /// validations API.
+  final List<SmlDataValidation> validations;
+
+  /// conditionalFormats API.
+  final List<SmlConditionalRule> conditionalFormats;
+
+  /// autoFilter API.
+  SmlAutoFilter? autoFilter;
+
+  /// printArea API.
+  SmlRange? printArea;
+
+  /// Rows repeated at the top of each printed page (`printTitles`).
+  SmlRange? printTitleRows;
+
+  /// Columns repeated at the leading edge of each printed page.
+  SmlRange? printTitleCols;
+
+  /// Optional sheet header/footer texts (`headerFooter`).
+  SmlHeaderFooter? headerFooter;
+
+  /// protection API.
+  SmlSheetProtection? protection;
+
+  /// comments API.
+  final List<SmlComment> comments;
+
+  /// tables API.
+  final List<SmlTable> tables;
+
+  /// pivots API.
+  final List<SmlPivotTable> pivots;
+
+  /// sparklines API.
+  final List<SmlSparkline> sparklines;
+
   /// row API.
   SmlRow row(int index) => rows.putIfAbsent(index, () => SmlRow(index));
 
@@ -243,11 +476,126 @@ class SmlWorksheet {
   /// cellA1 API.
   SmlCell cellA1(String a1) => cell(SmlCellRef.parse(a1));
 
+  /// Existing cell, or null when the address has never been materialized.
+  SmlCell? cellOrNull(SmlCellRef ref) => rows[ref.row]?.cells[ref.col];
+
   /// allCells API.
   Iterable<SmlCell> get allCells sync* {
     for (final SmlRow row in rows.values) {
       yield* row.cells.values;
     }
+  }
+
+  /// mergeAt API.
+  SmlMerge? mergeAt(int col, int row) {
+    for (final SmlMerge merge in merges) {
+      if (merge.contains(col, row)) {
+        return merge;
+      }
+    }
+    return null;
+  }
+
+  /// mergeAtRef API.
+  SmlMerge? mergeAtRef(SmlCellRef ref) => mergeAt(ref.col, ref.row);
+
+  /// True when [col]/[row] sits inside a merge but is not the origin.
+  bool isCovered(int col, int row) {
+    final SmlMerge? merge = mergeAt(col, row);
+    return merge != null && merge.isCovered(col, row);
+  }
+
+  /// A rectangle of at least two cells can be merged.
+  bool canMerge(SmlRange range) => !range.isSingleCell;
+
+  /// True when [range] overlaps any merge (Excel Unmerge).
+  bool canUnmerge(SmlRange range) {
+    final SmlMerge probe = SmlMerge(
+      c0: range.minCol,
+      r0: range.minRow,
+      c1: range.maxCol,
+      r1: range.maxRow,
+    );
+    for (final SmlMerge merge in merges) {
+      if (merge.overlaps(probe)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /// Excel Merge & Center: join [range] and center the origin.
+  ///
+  /// Keeps the top-left value. Other cells in the rectangle are cleared.
+  /// Overlapping merges are removed first.
+  void mergeAndCenter(SmlRange range) {
+    if (!canMerge(range)) {
+      return;
+    }
+    unmerge(range);
+    final SmlMerge merge = SmlMerge(
+      c0: range.minCol,
+      r0: range.minRow,
+      c1: range.maxCol,
+      r1: range.maxRow,
+    );
+    final SmlCell origin = cell(merge.origin);
+    if (!origin.hasContent) {
+      for (final SmlCellRef ref in range.cells) {
+        if (ref.col == merge.c0 && ref.row == merge.r0) {
+          continue;
+        }
+        final SmlCell other = cell(ref);
+        if (!other.hasContent) {
+          continue;
+        }
+        origin
+          ..type = other.type
+          ..value = other.value
+          ..formula = other.formula;
+        break;
+      }
+    }
+    for (final SmlCellRef ref in range.cells) {
+      if (ref.col == merge.c0 && ref.row == merge.r0) {
+        continue;
+      }
+      final SmlCell other = cell(ref);
+      other
+        ..value = null
+        ..formula = null
+        ..type = SmlCellType.string
+        ..horizontalAlign = SmlHAlign.general;
+    }
+    origin.horizontalAlign = SmlHAlign.center;
+    merges.add(merge);
+  }
+
+  /// Removes every merge that overlaps [range].
+  void unmerge(SmlRange range) {
+    final SmlMerge probe = SmlMerge(
+      c0: range.minCol,
+      r0: range.minRow,
+      c1: range.maxCol,
+      r1: range.maxRow,
+    );
+    merges.removeWhere((SmlMerge merge) => merge.overlaps(probe));
+  }
+
+  /// Merge & Center when the selection is not already that merge; otherwise unmerge.
+  void toggleMergeAndCenter(SmlRange range) {
+    if (range.isSingleCell) {
+      final SmlMerge? one = mergeAt(range.minCol, range.minRow);
+      if (one != null) {
+        unmerge(SmlRange(one.origin, SmlCellRef(one.c1, one.r1)));
+      }
+      return;
+    }
+    if (merges.length == 1 && merges.first.equalsRange(range)) {
+      unmerge(range);
+      return;
+    }
+    mergeAndCenter(range);
   }
 
   /// columnWidthFromExcel API.
@@ -268,7 +616,12 @@ class SmlWorksheet {
   double columnWidth(int col) => columnWidths[col] ?? defaultColumnWidthPx;
 
   /// rowHeightAt API.
-  double rowHeightAt(int row) => rowHeights[row] ?? defaultRowHeightPx;
+  double rowHeightAt(int row) {
+    if (autoFilter != null && autoFilter!.isRowHidden(this, row)) {
+      return 0;
+    }
+    return rowHeights[row] ?? defaultRowHeightPx;
+  }
 
   /// setColumnWidth API.
   void setColumnWidth(int col, double px) {
@@ -382,6 +735,15 @@ class SmlWorksheet {
       }
       if (cell.ref.row > maxR) {
         maxR = cell.ref.row;
+      }
+    }
+    for (final SmlMerge merge in merges) {
+      any = true;
+      if (merge.c1 > maxC) {
+        maxC = merge.c1;
+      }
+      if (merge.r1 > maxR) {
+        maxR = merge.r1;
       }
     }
     return any ? SmlCellRef(maxC, maxR) : const SmlCellRef(0, 0);
@@ -576,6 +938,7 @@ class SmlWorksheet {
       ..clear()
       ..addAll(next);
     _shiftKeyedMap(rowHeights, index, count, remove: false);
+    _shiftMerges(row: true, index: index, count: count, remove: false);
   }
 
   /// Inserts [count] empty columns starting at [index], shifting existing cells right.
@@ -587,6 +950,7 @@ class SmlWorksheet {
       _shiftRowCells(row, index, count, remove: false);
     }
     _shiftKeyedMap(columnWidths, index, count, remove: false);
+    _shiftMerges(row: false, index: index, count: count, remove: false);
   }
 
   /// Deletes [count] rows starting at [index], shifting remaining cells up.
@@ -610,6 +974,7 @@ class SmlWorksheet {
       ..clear()
       ..addAll(next);
     _shiftKeyedMap(rowHeights, index, count, remove: true);
+    _shiftMerges(row: true, index: index, count: count, remove: true);
   }
 
   /// Deletes [count] columns starting at [index], shifting remaining cells left.
@@ -621,6 +986,7 @@ class SmlWorksheet {
       _shiftRowCells(row, index, -count, remove: true);
     }
     _shiftKeyedMap(columnWidths, index, count, remove: true);
+    _shiftMerges(row: false, index: index, count: count, remove: true);
   }
 
   static SmlRow _moveRow(SmlRow source, int newIndex) {
@@ -679,6 +1045,50 @@ class SmlWorksheet {
       ..clear()
       ..addAll(next);
   }
+
+  void _shiftMerges({
+    required bool row,
+    required int index,
+    required int count,
+    required bool remove,
+  }) {
+    final int last = index + count;
+    final List<SmlMerge> next = <SmlMerge>[];
+    for (final SmlMerge merge in merges) {
+      var a = row ? merge.r0 : merge.c0;
+      var b = row ? merge.r1 : merge.c1;
+      if (remove && b >= index && a < last) {
+        if (a >= index && b < last) {
+          continue;
+        }
+        if (a < index) {
+          b = index - 1;
+        } else {
+          a = last;
+        }
+      }
+      if (a >= (remove ? last : index)) {
+        final int delta = remove ? -count : count;
+        a += delta;
+        b += delta;
+      } else if (!remove && a < index && b >= index) {
+        b += count;
+      } else if (remove && a < index && b >= last) {
+        b -= count;
+      }
+      if (a > b) {
+        continue;
+      }
+      if (row) {
+        next.add(SmlMerge(c0: merge.c0, r0: a, c1: merge.c1, r1: b));
+      } else {
+        next.add(SmlMerge(c0: a, r0: merge.r0, c1: b, r1: merge.r1));
+      }
+    }
+    merges
+      ..clear()
+      ..addAll(next);
+  }
 }
 
 /// Class SmlWorkbook.
@@ -687,17 +1097,27 @@ class SmlWorkbook {
   SmlWorkbook({
     List<SmlWorksheet>? sheets,
     List<String>? sharedStrings,
+    List<SmlNamedRange>? namedRanges,
+    OfficeDocumentProperties? properties,
     this.package,
     this.styles,
   }) : sheets =
            sheets ?? <SmlWorksheet>[SmlWorksheet(name: 'Sheet1', sheetId: 1)],
-       sharedStrings = sharedStrings ?? <String>[];
+       sharedStrings = sharedStrings ?? <String>[],
+       namedRanges = namedRanges ?? <SmlNamedRange>[],
+       properties = properties ?? OfficeDocumentProperties();
 
   /// sheets API.
   List<SmlWorksheet> sheets;
 
   /// sharedStrings API.
   List<String> sharedStrings;
+
+  /// namedRanges API.
+  final List<SmlNamedRange> namedRanges;
+
+  /// properties API.
+  OfficeDocumentProperties properties;
 
   /// package API.
   OpcPackage? package;
@@ -707,6 +1127,17 @@ class SmlWorkbook {
 
   /// firstSheet API.
   SmlWorksheet get firstSheet => sheets.first;
+
+  /// namedRange API.
+  SmlNamedRange? namedRange(String name) {
+    final String key = name.toUpperCase();
+    for (final SmlNamedRange range in namedRanges) {
+      if (range.name.toUpperCase() == key) {
+        return range;
+      }
+    }
+    return null;
+  }
 
   /// sheetByName API.
   SmlWorksheet? sheetByName(String name) {

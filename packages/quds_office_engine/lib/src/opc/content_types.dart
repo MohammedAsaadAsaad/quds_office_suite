@@ -230,6 +230,14 @@ abstract final class OfficeContentTypes {
   static const String wordFooter =
       'application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml';
 
+  /// wordFootnotes API.
+  static const String wordFootnotes =
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml';
+
+  /// wordEndnotes API.
+  static const String wordEndnotes =
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.endnotes+xml';
+
   /// spreadsheetDrawing API.
   static const String spreadsheetDrawing =
       'application/vnd.openxmlformats-officedocument.drawing+xml';

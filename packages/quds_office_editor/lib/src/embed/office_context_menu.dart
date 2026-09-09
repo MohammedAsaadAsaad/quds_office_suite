@@ -422,6 +422,19 @@ abstract final class OfficeContextMenu {
         enabled: mutate,
         separatorBefore: true,
       ),
+      OfficeContextAction(
+        id: 'mergeAndCenter',
+        label: strings.mergeAndCenter,
+        icon: Icons.call_merge,
+        enabled: mutate && controller.canMergeAndCenter,
+        separatorBefore: true,
+      ),
+      OfficeContextAction(
+        id: 'unmergeCells',
+        label: strings.unmergeCells,
+        icon: Icons.call_split,
+        enabled: mutate && controller.canUnmergeCells,
+      ),
     ];
   }
 
@@ -479,12 +492,31 @@ abstract final class OfficeContextMenu {
         controller.presentation.slides[index].hidden;
     return <OfficeContextAction>[
       OfficeContextAction(
+        id: 'copySlide',
+        label: strings.copySlide,
+        icon: Icons.copy_outlined,
+        enabled: index >= 0 && index < controller.presentation.slides.length,
+      ),
+      OfficeContextAction(
+        id: 'pasteSlide',
+        label: strings.pasteSlide,
+        icon: Icons.paste_outlined,
+        enabled: mutate && controller.canPasteSlide,
+      ),
+      OfficeContextAction(
+        id: 'duplicateSlide',
+        label: strings.duplicateSlide,
+        icon: Icons.control_point_duplicate_outlined,
+        enabled: mutate,
+      ),
+      OfficeContextAction(
         id: hidden ? 'showSlide' : 'hideSlide',
         label: hidden ? strings.showSlide : strings.hideSlide,
         icon: hidden
             ? Icons.visibility_outlined
             : Icons.visibility_off_outlined,
         enabled: mutate,
+        separatorBefore: true,
       ),
     ];
   }

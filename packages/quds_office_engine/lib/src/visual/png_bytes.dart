@@ -36,6 +36,37 @@ abstract final class PngBytes {
     return out.toBytes();
   }
 
+  /// RGBA PNG so floating logos keep a true alpha channel.
+  static Uint8List rgba({
+    required int width,
+    required int height,
+    required void Function(int x, int y, List<int> rgba) plot,
+  }) {
+    final Uint8List raw = Uint8List((width * 4 + 1) * height);
+    final List<int> pixel = <int>[0, 0, 0, 255];
+    var i = 0;
+    for (int y = 0; y < height; y++) {
+      raw[i++] = 0;
+      for (int x = 0; x < width; x++) {
+        pixel[0] = 0;
+        pixel[1] = 0;
+        pixel[2] = 0;
+        pixel[3] = 255;
+        plot(x, y, pixel);
+        raw[i++] = pixel[0] & 0xFF;
+        raw[i++] = pixel[1] & 0xFF;
+        raw[i++] = pixel[2] & 0xFF;
+        raw[i++] = pixel[3] & 0xFF;
+      }
+    }
+    final BytesBuilder out = BytesBuilder(copy: false);
+    out.add(<int>[137, 80, 78, 71, 13, 10, 26, 10]);
+    _chunk(out, 'IHDR', _ihdr(width, height, colorType: 6));
+    _chunk(out, 'IDAT', _zlib(raw));
+    _chunk(out, 'IEND', Uint8List(0));
+    return out.toBytes();
+  }
+
   /// Raster of a chart or diagram so Word/LibreOffice can show the visual.
   static Uint8List fromVisual(OfficeVisual visual, {int? width, int? height}) {
     final int w = (width ?? visual.width.round()).clamp(80, 1200);
@@ -338,12 +369,12 @@ abstract final class PngBytes {
     );
   }
 
-  static Uint8List _ihdr(int width, int height) {
+  static Uint8List _ihdr(int width, int height, {int colorType = 2}) {
     final ByteData data = ByteData(13);
     data.setUint32(0, width);
     data.setUint32(4, height);
     data.setUint8(8, 8);
-    data.setUint8(9, 2);
+    data.setUint8(9, colorType);
     return data.buffer.asUint8List();
   }
 

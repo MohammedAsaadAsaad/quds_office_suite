@@ -10,7 +10,9 @@ import '../math/omml_layout.dart';
 import '../model/wml_document.dart';
 import '../model/wml_run_edit.dart';
 import '../model/word_comment.dart';
+import '../model/word_fields.dart';
 import '../model/word_link.dart';
+import '../model/word_notes.dart';
 import '../model/word_table.dart';
 import '../model/word_toc.dart';
 import '../properties/wml_properties.dart';
@@ -96,6 +98,7 @@ class LaidOutLine {
     required this.justification,
     this.paragraphIndex = 0,
     this.listLabel,
+    this.listMarkerX = 0,
     this.isParagraphStart = false,
     this.isFooter = false,
     this.overlayText,
@@ -106,7 +109,16 @@ class LaidOutLine {
     this.tocTargetParagraph,
     this.tocLeader = false,
     this.hyperlink,
+    this.justificationRatio = 0,
+    this.boxX = 0,
+    this.boxWidth = 0,
   });
+
+  /// Inner left/right pad for table-cell text (`tblCellMar` 108 twips).
+  static const double tableCellPad = 5.4;
+
+  /// Inner pad for absolutely placed [WmlFrame] text.
+  static const double framePad = 8;
 
   /// glyphs API.
   final List<LaidOutGlyph> glyphs;
@@ -134,6 +146,9 @@ class LaidOutLine {
 
   /// listLabel API.
   final String? listLabel;
+
+  /// Page X of the list marker (hanging indent / RTL-aware).
+  final double listMarkerX;
 
   /// isParagraphStart API.
   final bool isParagraphStart;
@@ -164,6 +179,52 @@ class LaidOutLine {
 
   /// hyperlink API.
   final WmlHyperlink? hyperlink;
+
+  /// Non-zero on wrapped justified lines. Last lines stay packed.
+  final double justificationRatio;
+
+  /// Page X of the paragraph content box (column / cell / frame origin).
+  final double boxX;
+
+  /// Width of the paragraph content box, before first-line indent.
+  final double boxWidth;
+
+  /// Stretches space glyphs so the line fills [targetWidth].
+  void applyJustification({double? targetWidth}) {
+    if (glyphs.isEmpty) {
+      return;
+    }
+    if (justification != WmlJustification.justify &&
+        justification != WmlJustification.distributed) {
+      return;
+    }
+    if (justificationRatio == 0) {
+      return;
+    }
+    final double target = targetWidth ?? width;
+    var used = 0.0;
+    var spaces = 0;
+    for (final LaidOutGlyph glyph in glyphs) {
+      used += glyph.advance;
+      if (glyph.glyph.isSpace) {
+        spaces++;
+      }
+    }
+    final double slack = target - used;
+    if (spaces <= 0 || slack <= 0.5) {
+      return;
+    }
+    final double extra = slack / spaces;
+    var x = this.x;
+    for (final LaidOutGlyph glyph in glyphs) {
+      glyph.x = x;
+      if (glyph.glyph.isSpace) {
+        glyph.advance += extra;
+      }
+      x += glyph.advance;
+    }
+    width = target;
+  }
 }
 
 /// Enum LaidOutBoxKind.
@@ -176,6 +237,9 @@ enum LaidOutBoxKind {
   tocEntry,
   frame,
   columnSep,
+  paragraphShade,
+  footnote,
+  lineNumber,
 }
 
 /// Decorative box in page coordinates (table cell, picture, chart).
@@ -199,6 +263,11 @@ class LaidOutBox {
     this.tableCol,
     this.tableGridCol,
     this.frame,
+    this.strokeTop = true,
+    this.strokeRight = true,
+    this.strokeBottom = true,
+    this.strokeLeft = true,
+    this.strokeWidth = 0.5,
   });
 
   /// x API.
@@ -251,6 +320,21 @@ class LaidOutBox {
 
   /// frame API.
   WmlFrame? frame;
+
+  /// strokeTop API.
+  bool strokeTop;
+
+  /// strokeRight API.
+  bool strokeRight;
+
+  /// strokeBottom API.
+  bool strokeBottom;
+
+  /// strokeLeft API.
+  bool strokeLeft;
+
+  /// strokeWidth API.
+  double strokeWidth;
 }
 
 /// Class LaidOutBand.
@@ -293,11 +377,13 @@ class LaidOutPage {
     List<LaidOutBox>? frames,
     List<LaidOutLine>? header,
     List<LaidOutLine>? footer,
+    List<LaidOutLine>? notes,
     LaidOutBand? headerBand,
     LaidOutBand? footerBand,
   }) : frames = frames ?? <LaidOutBox>[],
        header = header ?? <LaidOutLine>[],
        footer = footer ?? <LaidOutLine>[],
+       notes = notes ?? <LaidOutLine>[],
        headerBand =
            headerBand ?? LaidOutBand(left: 0, top: 0, width: width, height: 72),
        footerBand =
@@ -328,6 +414,9 @@ class LaidOutPage {
   /// footer API.
   final List<LaidOutLine> footer;
 
+  /// Footnote lines stacked above the footer band.
+  final List<LaidOutLine> notes;
+
   /// headerBand API.
   final LaidOutBand headerBand;
 
@@ -346,7 +435,7 @@ class LaidOutDocument {
   /// pageSize API.
   final WmlPageSize pageSize;
 
-  /// Vertical offset of page [index] in the stacked Word canvas (points × scale).
+  /// Vertical offset of page [index] in the stacked Word canvas (points ? scale).
   double pageStackTop(int index, double scale) {
     var top = 24.0;
     final int last = index < pages.length ? index : pages.length;
@@ -379,7 +468,8 @@ class LaidOutDocument {
 class _Flow {
   _Flow(this.section, this.pages, this.makePage, this.sectionIndex)
     : pageIndex = pages.length,
-      y = section.margins.top;
+      y = section.margins.top,
+      columnTop = section.margins.top;
 
   /// section API.
   final WmlSection section;
@@ -397,6 +487,7 @@ class _Flow {
     List<LaidOutLine> lines,
     List<LaidOutBox> frames, {
     required int sectionIndex,
+    required bool firstInSection,
   })
   /// makePage API.
   makePage;
@@ -415,6 +506,9 @@ class _Flow {
 
   /// y API.
   double y;
+
+  /// Top of every column on the current page (below prior continuous content).
+  double columnTop;
 
   /// originX API.
   double get originX => section.columnOriginX(columnIndex);
@@ -436,13 +530,14 @@ class _Flow {
     pageIndex++;
     columnIndex = 0;
     y = section.margins.top;
+    columnTop = y;
   }
 
   /// nextColumn API.
   void nextColumn() {
     if (columnIndex + 1 < section.resolvedColumnCount) {
       columnIndex++;
-      y = section.margins.top;
+      y = columnTop;
     } else {
       flushPage();
     }
@@ -485,12 +580,16 @@ class _Flow {
 
   LaidOutPage _make() {
     addSeparators();
+    final bool first = pages.every(
+      (LaidOutPage page) => page.sectionIndex != sectionIndex,
+    );
     return makePage(
       section,
       pageIndex,
       current,
       currentFrames,
       sectionIndex: sectionIndex,
+      firstInSection: first,
     );
   }
 
@@ -504,7 +603,10 @@ class _Flow {
   }
 }
 
-/// Flowable pagination: Knuth–Plass lines accumulated into physical pages.
+/// Word's default tab-stop interval (0.5 inch).
+const double kDefaultTabWidth = 36;
+
+/// Flowable pagination: Knuth-Plass lines accumulated into physical pages.
 class WordLayoutEngine {
   /// WordLayoutEngine API.
   WordLayoutEngine({required this.font, this.fallbackWidthFactor = 0.5});
@@ -515,11 +617,78 @@ class WordLayoutEngine {
   /// fallbackWidthFactor API.
   final double fallbackWidthFactor;
 
+  WmlDocument? _layoutDoc;
+
+  /// Tallest header logo height for [section] (0 if none).
+  static double _headerLogoHeight(WmlSection section) {
+    var maxH = 0.0;
+    void consider(List<WmlVisual> visuals) {
+      for (final WmlVisual item in visuals) {
+        maxH = math.max(maxH, item.visual.height);
+      }
+    }
+
+    consider(section.headerVisuals);
+    consider(section.firstHeaderVisuals);
+    consider(section.evenHeaderVisuals);
+    return maxH;
+  }
+
+  /// Body Y that clears a header logo when content would sit underneath it.
+  static double _bodyTopClearingLogo(WmlSection section) {
+    final double logoH = _headerLogoHeight(section);
+    if (logoH <= 0) {
+      return section.margins.top;
+    }
+    return math.max(
+      section.margins.top,
+      section.margins.header + logoH + 2,
+    );
+  }
+
+  /// Top Y for a new table page slice — always below the header logo band.
+  ///
+  /// Word keeps floating header art outside the table; starting a continuation
+  /// row at [WmlPageMargins.top] draws cell borders through the logo.
+  double _tablePageTop(WmlSection section) => _bodyTopClearingLogo(section);
+
   /// layout API.
-  LaidOutDocument layout(WmlDocument document) {
+  LaidOutDocument layout(
+    WmlDocument document, {
+    bool updateFields = true,
+    int fromSectionIndex = 0,
+    LaidOutDocument? reuse,
+  }) {
+    _layoutDoc = document;
+    if (updateFields) {
+      WordFields.update(document);
+    }
     final List<LaidOutPage> pages = <LaidOutPage>[];
     var paragraphIndex = 0;
-    for (int i = 0; i < document.sections.length; i++) {
+    var start = fromSectionIndex.clamp(0, document.sections.length);
+    if (start > 0 && reuse != null && start < document.sections.length) {
+      while (start > 0 &&
+          document.sections[start].breakKind ==
+              WmlSectionBreakKind.continuous) {
+        start--;
+      }
+      for (final LaidOutPage page in reuse.pages) {
+        if (page.sectionIndex >= start) {
+          break;
+        }
+        pages.add(page);
+      }
+      if (start > 0 && pages.isEmpty) {
+        start = 0;
+      } else {
+        for (int i = 0; i < start; i++) {
+          paragraphIndex += _layoutParagraphCount(document.sections[i]);
+        }
+      }
+    } else {
+      start = 0;
+    }
+    for (int i = start; i < document.sections.length; i++) {
       paragraphIndex = _layoutSection(
         document.sections[i],
         pages,
@@ -535,13 +704,29 @@ class WordLayoutEngine {
           <LaidOutLine>[],
           <LaidOutBox>[],
           sectionIndex: 0,
+          firstInSection: true,
         ),
       );
+    }
+    _appendEndnotes(document, pages);
+    if (updateFields) {
+      WordFields.update(document, pageCount: pages.length);
     }
     return LaidOutDocument(
       pages: pages,
       pageSize: document.sections.first.pageSize,
     );
+  }
+
+  static double _contentBottom(LaidOutPage page, {required double fallback}) {
+    var bottom = fallback;
+    for (final LaidOutLine line in page.lines) {
+      bottom = math.max(bottom, line.y + line.height);
+    }
+    for (final LaidOutBox box in page.frames) {
+      bottom = math.max(bottom, box.y + box.height);
+    }
+    return bottom;
   }
 
   int _layoutSection(
@@ -550,7 +735,24 @@ class WordLayoutEngine {
     required int sectionIndex,
     required int paragraphIndex,
   }) {
+    _padSectionBreak(section, pages, sectionIndex);
+    final bool continuous =
+        sectionIndex > 0 && section.breakKind == WmlSectionBreakKind.continuous;
     final _Flow flow = _Flow(section, pages, _makePage, sectionIndex);
+    // Leave room under a floating header logo for title/body on page 1.
+    flow.y = _bodyTopClearingLogo(section);
+    flow.columnTop = flow.y;
+    if (continuous && pages.isNotEmpty) {
+      final LaidOutPage last = pages.removeLast();
+      flow.current.addAll(last.lines);
+      flow.currentFrames.addAll(last.frames);
+      flow.pageIndex = last.index;
+      flow.y = _contentBottom(
+        last,
+        fallback: _bodyTopClearingLogo(section),
+      );
+      flow.columnTop = flow.y;
+    }
     for (final WmlBlock block in section.blocks) {
       switch (block) {
         case WmlParagraph():
@@ -660,6 +862,30 @@ class WordLayoutEngine {
     return false;
   }
 
+  int _layoutParagraphCount(WmlSection section) {
+    return _layoutParagraphCountIn(section.blocks);
+  }
+
+  int _layoutParagraphCountIn(List<WmlBlock> blocks) {
+    var n = 0;
+    for (final WmlBlock block in blocks) {
+      switch (block) {
+        case WmlParagraph():
+          n++;
+        case WmlTable():
+          n += _tableParagraphCount(block);
+        case WmlFrame():
+          n += _layoutParagraphCountIn(block.blocks);
+        case WmlToc():
+          n += 1 + block.itemParagraphs.length;
+        case WmlVisual():
+        case WmlEquation():
+          break;
+      }
+    }
+    return n;
+  }
+
   static int _tableParagraphCount(WmlTable table) {
     var n = 0;
     for (final WmlTableRow row in table.rows) {
@@ -733,26 +959,59 @@ class WordLayoutEngine {
       fontSize,
     );
     final String? listLabel = paragraph.properties.listLabel;
-    final double listPad = listLabel == null ? 0 : 16;
-    final double maxWidth =
-        ((maxWidthOverride ??
-                    (section.contentWidth -
-                        paragraph.properties.indent.left -
-                        paragraph.properties.indent.right)) -
-                listPad)
-            .clamp(12, section.pageSize.width);
-    final String text = paragraph.text.isEmpty ? ' ' : paragraph.text;
+    final double hanging = paragraph.properties.indent.hanging;
+    final double indentLeft = paragraph.properties.indent.left;
+    final double firstLineShift = hanging > 0
+        ? 0
+        : paragraph.properties.indent.firstLine;
+    // Hanging indent: marker sits in [left-hanging, left); text wraps at left.
+    final double markerSlot = listLabel == null
+        ? 0
+        : (hanging > 0 ? hanging : math.min(18, indentLeft > 0 ? indentLeft : 16));
+    final double textLeft = indentLeft > 0
+        ? indentLeft
+        : (listLabel == null ? 0 : markerSlot);
+    // [maxWidthOverride] is the content box (e.g. cell inner width). Indents
+    // still consume that box ? otherwise wrapped text overflows the right edge.
+    final double contentBox = maxWidthOverride ?? section.contentWidth;
+    final double maxWidth = (contentBox -
+            textLeft -
+            paragraph.properties.indent.right)
+        .clamp(12.0, section.pageSize.width);
+    // Empty paragraphs are a full blank line in Word. A tab is content.
+    if (!paragraph.text.contains('\t') &&
+        paragraph.text.trim().isEmpty &&
+        listLabel == null &&
+        !paragraph.properties.pageNumberField &&
+        paragraph.properties.noteId == null) {
+      final double gap =
+          paragraph.properties.spacingBefore +
+          lineHeight +
+          paragraph.properties.spacingAfter;
+      return (y: y + gap, pageIndex: pageIndex);
+    }
+    final String text = paragraph.text;
+    // Constrained boxes (cells / columns) use a wider em so lines wrap
+    // before Flutter's TextPainter paints past the border.
+    final double em = maxWidthOverride != null
+        ? math.max(fallbackWidthFactor, 0.72)
+        : fallbackWidthFactor;
     final List<BrokenLine> broken = LineBreaker.breakLines(
       text: text,
       maxWidth: maxWidth,
-      widthOf: (int cp) =>
-          metrics?.characterWidth(cp) ?? fontSize * fallbackWidthFactor,
+      widthOf: (int cp) => cp == 0x09
+          ? kDefaultTabWidth
+          : (metrics?.characterWidth(cp) ?? fontSize * em),
       glyphIdOf: (int cp) => font?.glyphIdFor(cp) ?? cp,
       baseLevel: paragraph.properties.bidiBaseLevel,
     );
     var cursorY = y + paragraph.properties.spacingBefore;
     var idx = pageIndex;
     var lineOrigin = originX ?? section.margins.left;
+    final int dropLines = paragraph.properties.dropCapLines;
+    final double dropWidth = dropLines > 0 ? fontSize * 2.4 : 0;
+    final int lineStart = current.length;
+    final double paraTop = cursorY;
     for (final BrokenLine line in broken) {
       if (allowBreak &&
           cursorY + lineHeight >
@@ -771,6 +1030,7 @@ class WordLayoutEngine {
               current,
               currentFrames,
               sectionIndex: pages.isEmpty ? 0 : pages.last.sectionIndex,
+              firstInSection: false,
             ),
           );
           current.clear();
@@ -779,7 +1039,8 @@ class WordLayoutEngine {
           cursorY = section.margins.top;
         }
       }
-      final double x0 = lineOrigin + paragraph.properties.indent.left + listPad;
+      final double x0 =
+          lineOrigin + textLeft + (identical(line, broken.first) ? firstLineShift : 0);
       double x = x0;
       if (paragraph.properties.justification == WmlJustification.center) {
         x += (maxWidth - line.width) / 2;
@@ -819,25 +1080,76 @@ class WordLayoutEngine {
         );
         gx += g.advance * scale;
       }
-      current.add(
-        LaidOutLine(
-          glyphs: glyphs,
-          x: x,
-          y: cursorY,
-          width: line.width,
-          height: lineHeight,
-          pageIndex: idx,
-          justification: paragraph.properties.justification,
+      final bool paraRtl = paragraph.properties.rightToLeft == true ||
+          paragraph.properties.bidiBaseLevel == 1;
+      final double markerX = listLabel == null
+          ? 0
+          : (paraRtl
+              ? lineOrigin + textLeft + maxWidth + 2
+              : lineOrigin + textLeft - markerSlot);
+      final LaidOutLine laid = LaidOutLine(
+        glyphs: glyphs,
+        x: x,
+        y: cursorY,
+        width: line.width,
+        height: lineHeight,
+        pageIndex: idx,
+        justification: paragraph.properties.justification,
+        paragraphIndex: paragraphIndex,
+        listLabel: listLabel,
+        listMarkerX: markerX,
+        isParagraphStart: identical(line, broken.first),
+        sourceText: sourceText,
+        tocTargetParagraph: tocTargetParagraph,
+        overlayText: identical(line, broken.last) ? overlayText : null,
+        tocLeader: tocLeader && identical(line, broken.last),
+        justificationRatio: line.justificationRatio,
+        boxX: lineOrigin,
+        boxWidth: contentBox,
+      );
+      laid.applyJustification(targetWidth: maxWidth);
+      current.add(laid);
+      cursorY += lineHeight;
+    }
+    if (dropWidth > 0 && current.length > lineStart) {
+      final LaidOutLine first = current[lineStart];
+      first.x += dropWidth;
+      for (
+        int i = lineStart + 1;
+        i < current.length && i < lineStart + dropLines;
+        i++
+      ) {
+        current[i].x += dropWidth * 0.35;
+      }
+      currentFrames.add(
+        LaidOutBox(
+          x: lineOrigin,
+          y: first.y,
+          width: dropWidth,
+          height: lineHeight * dropLines,
+          fillColor: '',
+          strokeColor: '',
+          kind: LaidOutBoxKind.frame,
           paragraphIndex: paragraphIndex,
-          listLabel: listLabel,
-          isParagraphStart: identical(line, broken.first),
-          sourceText: sourceText,
-          tocTargetParagraph: tocTargetParagraph,
-          overlayText: identical(line, broken.last) ? overlayText : null,
-          tocLeader: tocLeader && identical(line, broken.last),
         ),
       );
-      cursorY += lineHeight;
+    }
+    final String? shade = paragraph.properties.shadingFill;
+    final String? border = paragraph.properties.borderColor;
+    if ((shade != null && shade.isNotEmpty) ||
+        (border != null && border.isNotEmpty)) {
+      currentFrames.add(
+        LaidOutBox(
+          x: lineOrigin,
+          y: paraTop,
+          width: maxWidth,
+          height: math.max(lineHeight, cursorY - paraTop),
+          fillColor: shade,
+          strokeColor: border ?? '',
+          kind: LaidOutBoxKind.paragraphShade,
+          paragraphIndex: paragraphIndex,
+        ),
+      );
     }
     return (y: cursorY + paragraph.properties.spacingAfter, pageIndex: idx);
   }
@@ -932,7 +1244,7 @@ class WordLayoutEngine {
     var cursorY = y + 6;
     var idx = pageIndex;
     var para = paragraphIndex;
-    const double cellPad = 4;
+    const double cellPad = LaidOutLine.tableCellPad;
     final double tableX = originX ?? section.margins.left;
     final double tableWidth = cols.fold<double>(
       0,
@@ -941,16 +1253,28 @@ class WordLayoutEngine {
     final bool rtl = table.properties.rightToLeft;
 
     for (final WmlTableRow row in table.rows) {
-      const double estimated = 22.0;
-      if (cursorY + estimated >
-              section.pageSize.height - section.margins.bottom &&
-          (current.isNotEmpty || currentFrames.isNotEmpty)) {
-        if (flow != null) {
-          flow.y = cursorY;
-          flow.nextColumn();
-          cursorY = flow.y;
-          idx = flow.pageIndex;
-        } else {
+      final int rowIndex = table.rows.indexOf(row);
+      final List<int> nextBlock = List<int>.filled(row.cells.length, 0);
+      var sliceStart = true;
+      while (true) {
+        var remaining = false;
+        for (int c = 0; c < row.cells.length; c++) {
+          if (nextBlock[c] < row.cells[c].blocks.length) {
+            remaining = true;
+            break;
+          }
+        }
+        if (!remaining) {
+          break;
+        }
+
+        final double pageBottom =
+            section.pageSize.height - section.margins.bottom;
+
+        // If the cursor is already past the usable area, advance the page
+        // before opening a new row slice.
+        if ((current.isNotEmpty || currentFrames.isNotEmpty) &&
+            cursorY + cellPad + 12 > pageBottom) {
           pages.add(
             _makePage(
               section,
@@ -958,105 +1282,385 @@ class WordLayoutEngine {
               current,
               currentFrames,
               sectionIndex: pages.isEmpty ? 0 : pages.last.sectionIndex,
+              firstInSection: false,
             ),
           );
           current.clear();
           currentFrames.clear();
           idx++;
-          cursorY = section.margins.top;
+          cursorY = _tablePageTop(section);
         }
-      }
 
-      final double rowStartY = cursorY;
-      var rowBottom = rowStartY;
-      var x = rtl ? tableX + tableWidth : tableX;
-      var gridCol = 0;
-      final List<LaidOutBox> rowFrames = <LaidOutBox>[];
-
-      final int rowIndex = table.rows.indexOf(row);
-      for (int c = 0; c < row.cells.length; c++) {
-        final WmlTableCell cell = row.cells[c];
-        final int span = WordTable.spanOf(cell);
-        var colW = 0.0;
-        for (int k = 0; k < span; k++) {
-          colW += cols[(gridCol + k).clamp(0, cols.length - 1)];
-        }
-        if (rtl) {
-          x -= colW;
-        }
-        final int cellParaStart = para;
-        var cellY = rowStartY + cellPad;
-        for (final WmlBlock block in cell.blocks) {
-          if (block is WmlParagraph) {
-            final ({double y, int pageIndex}) laid = _layoutParagraph(
-              block,
-              section,
-              pages,
-              current,
-              currentFrames,
-              idx,
-              cellY,
-              para,
-              originX: x + cellPad,
-              maxWidthOverride: math.max(12, colW - cellPad * 2),
-            );
-            cellY = laid.y;
-            idx = laid.pageIndex;
-            para++;
-          } else if (block is WmlEquation) {
-            final LaidOutOmml omml = OmmlLayout.layout(
-              block.math,
-              fontSize: 14,
-            );
-            currentFrames.add(
-              LaidOutBox(
-                x: x + cellPad,
-                y: cellY,
-                width: math.min(colW - cellPad * 2, omml.width),
-                height: omml.height,
-                fillColor: 'F7FBFF',
-                strokeColor: '8FAADC',
-                kind: LaidOutBoxKind.equation,
-                equation: block,
-                omml: omml,
+        // When cantSplit is set, move the whole remaining row to the next
+        // page if it will not fit. Otherwise start placing cells and allow
+        // mid-row continuation (Word default for Table Grid).
+        if (sliceStart &&
+            row.cantSplit &&
+            (current.isNotEmpty || currentFrames.isNotEmpty)) {
+          final double estimated = _measureTableRowHeightFrom(
+            row,
+            cols,
+            section,
+            nextBlock: nextBlock,
+            tableX: tableX,
+            tableWidth: tableWidth,
+            rtl: rtl,
+            cellPad: cellPad,
+          );
+          if (cursorY + estimated > pageBottom) {
+            pages.add(
+              _makePage(
+                section,
+                idx,
+                current,
+                currentFrames,
+                sectionIndex: pages.isEmpty ? 0 : pages.last.sectionIndex,
+                firstInSection: false,
               ),
             );
-            cellY += omml.height + 4;
+            current.clear();
+            currentFrames.clear();
+            idx++;
+            cursorY = _tablePageTop(section);
           }
         }
-        rowBottom = math.max(rowBottom, cellY + cellPad);
-        rowFrames.add(
-          LaidOutBox(
-            x: x,
-            y: rowStartY,
-            width: colW,
-            height: 0,
-            fillColor: cell.vMerge == WmlVMerge.cont ? null : cell.fillColor,
-            strokeColor: cell.vMerge == WmlVMerge.cont ? '00000000' : 'B0B0B0',
-            paragraphIndex: cellParaStart,
-            paragraphEnd: para > cellParaStart ? para - 1 : cellParaStart,
-            table: table,
-            tableRow: rowIndex,
-            tableCol: c,
-            tableGridCol: gridCol,
-          ),
-        );
-        if (!rtl) {
-          x += colW;
-        }
-        gridCol += span;
-      }
 
-      final double minH = row.height ?? 20;
-      final double height = math.max(minH, rowBottom - rowStartY);
-      for (final LaidOutBox frame in rowFrames) {
-        frame.height = height;
-        currentFrames.add(frame);
+        final double rowStartY = cursorY;
+        var rowBottom = rowStartY;
+        var x = rtl ? tableX + tableWidth : tableX;
+        var gridCol = 0;
+        final List<LaidOutBox> rowFrames = <LaidOutBox>[];
+        final List<int> placed = List<int>.filled(row.cells.length, 0);
+        var needsContinue = false;
+
+        for (int c = 0; c < row.cells.length; c++) {
+          final WmlTableCell cell = row.cells[c];
+          final int span = WordTable.spanOf(cell);
+          var colW = 0.0;
+          for (int k = 0; k < span; k++) {
+            colW += cols[(gridCol + k).clamp(0, cols.length - 1)];
+          }
+          if (rtl) {
+            x -= colW;
+          }
+          final int cellParaStart = para;
+          var cellY = rowStartY + cellPad;
+          var bi = nextBlock[c];
+          while (bi < cell.blocks.length) {
+            final WmlBlock block = cell.blocks[bi];
+            final double blockH = _estimateCellBlockHeight(
+              block,
+              section,
+              maxWidth: math.max(12, colW - cellPad * 2),
+            );
+            if (!row.cantSplit &&
+                cellY + blockH > pageBottom &&
+                cellY > rowStartY + cellPad + 0.5) {
+              needsContinue = true;
+              break;
+            }
+            // Word-like orphan control for consecutive list items: if this
+            // block fits but the next list sibling does not, break before
+            // this block so the pair moves together (e.g. UN OCHA + CEPs).
+            if (!row.cantSplit &&
+                bi + 1 < cell.blocks.length &&
+                cellY > rowStartY + cellPad + 0.5 &&
+                cellY + blockH <= pageBottom) {
+              final WmlBlock nextBlock = cell.blocks[bi + 1];
+              if (_listOrphanPair(block, nextBlock)) {
+                final double nextH = _estimateCellBlockHeight(
+                  nextBlock,
+                  section,
+                  maxWidth: math.max(12, colW - cellPad * 2),
+                );
+                if (cellY + blockH + nextH > pageBottom) {
+                  needsContinue = true;
+                  break;
+                }
+              }
+            }
+            if (block is WmlParagraph) {
+              final ({double y, int pageIndex}) laid = _layoutParagraph(
+                block,
+                section,
+                pages,
+                current,
+                currentFrames,
+                idx,
+                cellY,
+                para,
+                originX: x + cellPad,
+                maxWidthOverride: math.max(12, colW - cellPad * 2),
+                allowBreak: false,
+              );
+              cellY = laid.y;
+              idx = laid.pageIndex;
+              para++;
+            } else if (block is WmlEquation) {
+              final LaidOutOmml omml = OmmlLayout.layout(
+                block.math,
+                fontSize: 14,
+              );
+              currentFrames.add(
+                LaidOutBox(
+                  x: x + cellPad,
+                  y: cellY,
+                  width: math.min(colW - cellPad * 2, omml.width),
+                  height: omml.height,
+                  fillColor: 'F7FBFF',
+                  strokeColor: '8FAADC',
+                  kind: LaidOutBoxKind.equation,
+                  equation: block,
+                  omml: omml,
+                ),
+              );
+              cellY += omml.height + 4;
+            }
+            bi++;
+          }
+          placed[c] = bi - nextBlock[c];
+          final int previous = nextBlock[c];
+          nextBlock[c] = bi;
+          rowBottom = math.max(rowBottom, cellY + cellPad);
+          final bool firstSlice = sliceStart;
+          final bool lastSlice = bi >= cell.blocks.length;
+          // Skip cells that were empty from the start of the row. On
+          // continuation slices, still emit frames for exhausted cells so the
+          // grid (e.g. empty CHAIN cell beside WORKING RELATIONS) remains.
+          if (!(placed[c] == 0 &&
+              previous >= cell.blocks.length &&
+              sliceStart)) {
+            rowFrames.add(
+              LaidOutBox(
+                x: x,
+                y: rowStartY,
+                width: colW,
+                height: 0,
+                fillColor:
+                    cell.vMerge == WmlVMerge.cont ? null : cell.fillColor,
+                strokeColor: cell.vMerge == WmlVMerge.cont
+                    ? '00000000'
+                    : (table.properties.borderColor ?? '000000'),
+                strokeWidth: table.properties.borderWidth,
+                strokeTop: _cellEdge(
+                  cell.borderTop,
+                  inherit: table.properties.borders && firstSlice,
+                ),
+                strokeBottom: _cellEdge(
+                  cell.borderBottom,
+                  inherit: table.properties.borders && lastSlice,
+                ),
+                strokeLeft: _cellEdge(
+                  cell.borderLeft,
+                  inherit: table.properties.borders,
+                ),
+                strokeRight: _cellEdge(
+                  cell.borderRight,
+                  inherit: table.properties.borders,
+                ),
+                paragraphIndex: cellParaStart,
+                paragraphEnd: para > cellParaStart ? para - 1 : cellParaStart,
+                table: table,
+                tableRow: rowIndex,
+                tableCol: c,
+                tableGridCol: gridCol,
+              ),
+            );
+          }
+          if (!rtl) {
+            x += colW;
+          }
+          gridCol += span;
+        }
+
+        final double minH = sliceStart ? (row.height ?? 0) : 0;
+        final double height = math.max(minH, rowBottom - rowStartY);
+        for (final LaidOutBox frame in rowFrames) {
+          frame.height = height;
+          // Close the bottom edge of a mid-row split on both columns so the
+          // page break matches Word's continuous table grid.
+          if (needsContinue && frame.strokeBottom == false) {
+            final WmlTableCell? cell = frame.tableCol != null &&
+                    frame.tableCol! < row.cells.length
+                ? row.cells[frame.tableCol!]
+                : null;
+            if (cell?.borderBottom != false) {
+              frame.strokeBottom = table.properties.borders;
+            }
+          }
+          currentFrames.add(frame);
+        }
+        cursorY = rowStartY + height;
+        sliceStart = false;
+
+        if (needsContinue) {
+          pages.add(
+            _makePage(
+              section,
+              idx,
+              current,
+              currentFrames,
+              sectionIndex: pages.isEmpty ? 0 : pages.last.sectionIndex,
+              firstInSection: false,
+            ),
+          );
+          current.clear();
+          currentFrames.clear();
+          idx++;
+          cursorY = _tablePageTop(section);
+        }
       }
-      cursorY = rowStartY + height;
     }
     _applyVerticalMerges(table, currentFrames);
-    return (y: cursorY + 8, pageIndex: idx);
+    return (y: cursorY + 4, pageIndex: idx);
+  }
+
+  static bool _cellEdge(bool? explicit, {required bool inherit}) {
+    if (explicit != null) {
+      return explicit;
+    }
+    return inherit;
+  }
+
+  /// True when [a] and [b] are consecutive list paragraphs that should not
+  /// be separated by a page break at the bottom of a cell.
+  static bool _listOrphanPair(WmlBlock a, WmlBlock b) {
+    if (a is! WmlParagraph || b is! WmlParagraph) {
+      return false;
+    }
+    final String? la = a.properties.listLabel;
+    final String? lb = b.properties.listLabel;
+    if (la == null || lb == null) {
+      return false;
+    }
+    if (a.properties.numId == null ||
+        b.properties.numId == null ||
+        a.properties.numId != b.properties.numId) {
+      return false;
+    }
+    return a.properties.ilvl == b.properties.ilvl;
+  }
+
+  double _estimateCellBlockHeight(
+    WmlBlock block,
+    WmlSection section, {
+    required double maxWidth,
+  }) {
+    if (block is WmlParagraph) {
+      final List<LaidOutPage> pages = <LaidOutPage>[];
+      final List<LaidOutLine> lines = <LaidOutLine>[];
+      final List<LaidOutBox> frames = <LaidOutBox>[];
+      final ({double y, int pageIndex}) laid = _layoutParagraph(
+        block,
+        section,
+        pages,
+        lines,
+        frames,
+        0,
+        0,
+        0,
+        originX: 0,
+        maxWidthOverride: maxWidth,
+        allowBreak: false,
+      );
+      return laid.y;
+    }
+    if (block is WmlEquation) {
+      return OmmlLayout.layout(block.math, fontSize: 14).height + 4;
+    }
+    return 18;
+  }
+
+  double _measureTableRowHeightFrom(
+    WmlTableRow row,
+    List<double> cols,
+    WmlSection section, {
+    required List<int> nextBlock,
+    required double tableX,
+    required double tableWidth,
+    required bool rtl,
+    required double cellPad,
+  }) {
+    var rowBottom = 0.0;
+    var gridCol = 0;
+    for (int c = 0; c < row.cells.length; c++) {
+      final WmlTableCell cell = row.cells[c];
+      final int span = WordTable.spanOf(cell);
+      var colW = 0.0;
+      for (int k = 0; k < span; k++) {
+        colW += cols[(gridCol + k).clamp(0, cols.length - 1)];
+      }
+      var cellY = cellPad;
+      for (int bi = nextBlock[c]; bi < cell.blocks.length; bi++) {
+        cellY += _estimateCellBlockHeight(
+          cell.blocks[bi],
+          section,
+          maxWidth: math.max(12, colW - cellPad * 2),
+        );
+      }
+      rowBottom = math.max(rowBottom, cellY + cellPad);
+      gridCol += span;
+    }
+    return math.max(row.height ?? 0, rowBottom);
+  }
+
+  List<LaidOutBox> _chromeVisualFrames(
+    WmlSection section,
+    int pageNumber, {
+    required bool firstInSection,
+    required bool isFooter,
+  }) {
+    final List<WmlVisual> visuals = isFooter
+        ? section.footerVisualsForPage(
+            pageNumber,
+            firstInSection: firstInSection,
+          )
+        : section.headerVisualsForPage(
+            pageNumber,
+            firstInSection: firstInSection,
+          );
+    if (visuals.isEmpty) {
+      return const <LaidOutBox>[];
+    }
+    final double bandTop = isFooter
+        ? section.pageSize.height -
+              math.max(section.margins.footer, section.margins.bottom * 0.55)
+        : section.margins.header;
+    final List<LaidOutBox> frames = <LaidOutBox>[];
+    var x = section.margins.left;
+    for (final WmlVisual item in visuals) {
+      final OfficeVisual visual = item.visual;
+      final double width = visual.width.clamp(16, section.pageSize.width);
+      final double height = visual.height.clamp(12, 120);
+      final double vx = visual.offsetX != 0
+          ? visual.offsetX.clamp(0, section.pageSize.width - width)
+          : x;
+      final double vy = visual.offsetY != 0
+          ? (isFooter
+                ? section.pageSize.height -
+                      section.margins.bottom +
+                      visual.offsetY
+                : visual.offsetY)
+          : bandTop;
+      frames.add(
+        LaidOutBox(
+          x: vx,
+          y: vy,
+          width: width,
+          height: height,
+          fillColor: null,
+          strokeColor: '00000000',
+          kind: LaidOutBoxKind.picture,
+          visual: visual,
+          strokeTop: false,
+          strokeRight: false,
+          strokeBottom: false,
+          strokeLeft: false,
+        ),
+      );
+      x = vx + width + 8;
+    }
+    return frames;
   }
 
   void _applyVerticalMerges(WmlTable table, List<LaidOutBox> frames) {
@@ -1110,7 +1714,7 @@ class WordLayoutEngine {
   ) {
     final double x = frame.pageX(section);
     final double y = frame.pageY(section);
-    const double pad = 8;
+    const double pad = LaidOutLine.framePad;
     flow.currentFrames.add(
       LaidOutBox(
         x: x,
@@ -1246,6 +1850,7 @@ class WordLayoutEngine {
             current,
             currentFrames,
             sectionIndex: pages.isEmpty ? 0 : pages.last.sectionIndex,
+            firstInSection: false,
           ),
         );
         current.clear();
@@ -1307,6 +1912,7 @@ class WordLayoutEngine {
           current,
           currentFrames,
           sectionIndex: pages.isEmpty ? 0 : pages.last.sectionIndex,
+          firstInSection: false,
         ),
       );
       current.clear();
@@ -1338,14 +1944,20 @@ class WordLayoutEngine {
     FontMetrics? metrics,
     double fontSize,
   ) {
-    final double natural = metrics?.lineHeight ?? fontSize * 1.2;
+    // Word's painted single-line box for Calibri/Western text tracks ~115% of
+    // (ascender-descender+lineGap), then multiplies by w:line/240.
+    final double fontLine = metrics == null
+        ? fontSize * 1.2
+        : math.max(fontSize * 1.2, metrics.lineHeight);
+    // Empirically matches Word Calibri line boxes on Table Grid docs.
+    final double single = fontLine * 1.10;
     switch (props.lineSpacingRule) {
       case WmlLineSpacingRule.exact:
         return props.lineSpacing;
       case WmlLineSpacingRule.atLeast:
-        return natural > props.lineSpacing ? natural : props.lineSpacing;
+        return single > props.lineSpacing ? single : props.lineSpacing;
       case WmlLineSpacingRule.auto:
-        return natural * props.lineSpacing;
+        return single * props.lineSpacing;
     }
   }
 
@@ -1355,29 +1967,256 @@ class WordLayoutEngine {
     List<LaidOutLine> lines,
     List<LaidOutBox> frames, {
     required int sectionIndex,
+    required bool firstInSection,
   }) {
-    return LaidOutPage(
+    final List<LaidOutLine> headerLines = _chromeLines(
+      section,
+      index + 1,
+      section.headerForPage(index + 1, firstInSection: firstInSection),
+      isFooter: false,
+    );
+    final List<LaidOutLine> footerLines = _chromeLines(
+      section,
+      index + 1,
+      section.footerForPage(index + 1, firstInSection: firstInSection),
+      isFooter: true,
+    );
+    final double headerH = _chromeBandHeight(
+      lines: headerLines,
+      fallback: math.max(section.margins.header, section.margins.top),
+      pageHeight: section.pageSize.height,
+      footer: false,
+    );
+    final double footerH = _chromeBandHeight(
+      lines: footerLines,
+      fallback: math.max(section.margins.footer, section.margins.bottom),
+      pageHeight: section.pageSize.height,
+      footer: true,
+    );
+    final LaidOutPage page = LaidOutPage(
       index: index,
       sectionIndex: sectionIndex,
       width: section.pageSize.width,
       height: section.pageSize.height,
       lines: List<LaidOutLine>.from(lines),
-      frames: List<LaidOutBox>.from(frames),
-      header: _chromeLines(section, index + 1, section.header, isFooter: false),
-      footer: _chromeLines(section, index + 1, section.footer, isFooter: true),
+      frames: <LaidOutBox>[
+        ...frames,
+        ..._chromeVisualFrames(
+          section,
+          index + 1,
+          firstInSection: firstInSection,
+          isFooter: false,
+        ),
+        ..._chromeVisualFrames(
+          section,
+          index + 1,
+          firstInSection: firstInSection,
+          isFooter: true,
+        ),
+      ],
+      header: headerLines,
+      footer: footerLines,
       headerBand: LaidOutBand(
         left: 0,
         top: 0,
         width: section.pageSize.width,
-        height: section.margins.top,
+        height: headerH,
       ),
       footerBand: LaidOutBand(
         left: 0,
-        top: section.pageSize.height - section.margins.bottom,
+        top: section.pageSize.height - footerH,
         width: section.pageSize.width,
-        height: section.margins.bottom,
+        height: footerH,
       ),
     );
+    _attachNotes(page, section);
+    _attachLineNumbers(page, section);
+    return page;
+  }
+
+  void _padSectionBreak(
+    WmlSection section,
+    List<LaidOutPage> pages,
+    int sectionIndex,
+  ) {
+    if (sectionIndex == 0) {
+      return;
+    }
+    switch (section.breakKind) {
+      case WmlSectionBreakKind.continuous:
+        return;
+      case WmlSectionBreakKind.oddPage:
+        while ((pages.length + 1).isEven) {
+          pages.add(
+            _makePage(
+              section,
+              pages.length,
+              <LaidOutLine>[],
+              <LaidOutBox>[],
+              sectionIndex: sectionIndex,
+              firstInSection: pages.every(
+                (LaidOutPage p) => p.sectionIndex != sectionIndex,
+              ),
+            ),
+          );
+        }
+      case WmlSectionBreakKind.evenPage:
+        while ((pages.length + 1).isOdd) {
+          pages.add(
+            _makePage(
+              section,
+              pages.length,
+              <LaidOutLine>[],
+              <LaidOutBox>[],
+              sectionIndex: sectionIndex,
+              firstInSection: pages.every(
+                (LaidOutPage p) => p.sectionIndex != sectionIndex,
+              ),
+            ),
+          );
+        }
+      case WmlSectionBreakKind.nextPage:
+        return;
+    }
+  }
+
+  void _attachNotes(LaidOutPage page, WmlSection section) {
+    final WmlDocument? document = _layoutDoc;
+    if (document == null || document.footnotes.isEmpty) {
+      return;
+    }
+    final List<WmlParagraph> paras = document.paragraphs.toList();
+    final Set<int> ids = <int>{};
+    for (final LaidOutLine line in page.lines) {
+      if (line.paragraphIndex < 0 || line.paragraphIndex >= paras.length) {
+        continue;
+      }
+      final WmlParagraph paragraph = paras[line.paragraphIndex];
+      final int? id = paragraph.properties.noteId;
+      if (id != null && !paragraph.properties.endnoteRef) {
+        ids.add(id);
+      }
+    }
+    if (ids.isEmpty) {
+      return;
+    }
+    var y = section.pageSize.height - section.margins.bottom - 16.0 * ids.length;
+    page.frames.add(
+      LaidOutBox(
+        x: section.margins.left,
+        y: y - 4,
+        width: section.contentWidth,
+        height: 0.6,
+        fillColor: '888888',
+        strokeColor: '888888',
+        kind: LaidOutBoxKind.footnote,
+      ),
+    );
+    for (final int id in ids.toList()..sort()) {
+      final WmlNote? note = WordNotes.byId(document, id, endnote: false);
+      if (note == null) {
+        continue;
+      }
+      page.notes.add(
+        LaidOutLine(
+          glyphs: const <LaidOutGlyph>[],
+          x: section.margins.left,
+          y: y,
+          width: section.contentWidth,
+          height: 14,
+          pageIndex: page.index,
+          justification: WmlJustification.left,
+          overlayText: '$id. ${note.text}',
+          overlaySize: 9,
+        ),
+      );
+      y += 14;
+    }
+  }
+
+  void _attachLineNumbers(LaidOutPage page, WmlSection section) {
+    if (!section.lineNumbers) {
+      return;
+    }
+    var n = 1;
+    for (final LaidOutLine line in page.lines) {
+      page.frames.add(
+        LaidOutBox(
+          x: math.max(4, section.margins.left - 18),
+          y: line.y,
+          width: 16,
+          height: line.height,
+          fillColor: '',
+          strokeColor: '',
+          kind: LaidOutBoxKind.lineNumber,
+          paragraphIndex: n,
+        ),
+      );
+      n++;
+    }
+  }
+
+  void _appendEndnotes(WmlDocument document, List<LaidOutPage> pages) {
+    final List<WmlNote> notes = <WmlNote>[
+      for (final WmlNote note in document.endnotes)
+        if (note.id > 0 && note.text.trim().isNotEmpty) note,
+    ];
+    if (notes.isEmpty || pages.isEmpty) {
+      return;
+    }
+    final WmlSection section = document.sections.last;
+    final LaidOutPage last = pages.last;
+    var y = last.lines.isEmpty
+        ? section.margins.top
+        : last.lines.last.y + last.lines.last.height + 16;
+    for (final LaidOutBox frame in last.frames) {
+      y = math.max(y, frame.y + frame.height + 12);
+    }
+    if (y > section.pageSize.height - section.margins.bottom - 20) {
+      pages.add(
+        _makePage(
+          section,
+          pages.length,
+          <LaidOutLine>[],
+          <LaidOutBox>[],
+          sectionIndex: document.sections.length - 1,
+          firstInSection: false,
+        ),
+      );
+      y = section.margins.top;
+    }
+    final LaidOutPage target = pages.last;
+    target.notes.add(
+      LaidOutLine(
+        glyphs: const <LaidOutGlyph>[],
+        x: section.margins.left,
+        y: y,
+        width: section.contentWidth,
+        height: 16,
+        pageIndex: target.index,
+        justification: WmlJustification.left,
+        overlayText: 'Endnotes',
+        overlayBold: true,
+        overlaySize: 12,
+      ),
+    );
+    y += 18;
+    for (final WmlNote note in notes) {
+      target.notes.add(
+        LaidOutLine(
+          glyphs: const <LaidOutGlyph>[],
+          x: section.margins.left,
+          y: y,
+          width: section.contentWidth,
+          height: 14,
+          pageIndex: target.index,
+          justification: WmlJustification.left,
+          overlayText: '${note.id}. ${note.text}',
+          overlaySize: 10,
+        ),
+      );
+      y += 14;
+    }
   }
 
   List<LaidOutLine> _chromeLines(
@@ -1391,26 +2230,88 @@ class WordLayoutEngine {
     }
     final double y = isFooter
         ? section.pageSize.height -
-              math.max(22.0, section.margins.bottom * 0.45)
-        : math.max(16.0, math.min(24.0, section.margins.top * 0.38));
+              math.max(
+                22,
+                math.max(section.margins.footer, section.margins.bottom * 0.45),
+              )
+        : math.max(8, section.margins.header);
     final List<LaidOutLine> lines = <LaidOutLine>[];
     var offsetY = 0.0;
     for (int i = 0; i < story.length; i++) {
       final WmlParagraph paragraph = story[i];
       final WmlRunProps run = WmlRunEdit.propsAt(paragraph, 0);
-      final bool pageField = paragraph.properties.pageNumberField;
+      final WmlDocument? doc = _layoutDoc;
       final String raw = paragraph.text.trim();
       final String text;
-      if (pageField) {
-        text = raw.isEmpty || _looksLikePageCache(raw)
-            ? '$pageNumber'
-            : raw.replaceAll(RegExp(r'\b\d+\b'), '$pageNumber');
+      if (doc != null &&
+          (paragraph.properties.pageNumberField ||
+              paragraph.properties.fieldInstruction != null)) {
+        final String resolved = WordFields.chromeText(
+          paragraph,
+          document: doc,
+          pageNumber: pageNumber,
+          pageCount: math.max(pageNumber, 1),
+        );
+        text = resolved.isEmpty ? raw : resolved;
       } else if (_looksLikePageCache(raw)) {
         text = '$pageNumber';
       } else {
         text = raw;
       }
       final double size = run.fontSizePoints.clamp(8, 16);
+      final String overlayColor = run.color.isEmpty
+          ? (isFooter ? '222222' : '6B7280')
+          : run.color;
+      final List<String> tabParts = text.split('\t');
+      if (tabParts.length >= 2) {
+        final List<String> parts = <String>[
+          for (final String part in tabParts)
+            _looksLikePageCache(part.trim()) ? '$pageNumber' : part.trim(),
+        ];
+        final String left = parts.first;
+        final String mid = parts.length >= 3 ? parts[1] : '';
+        final String right = parts.length >= 3
+            ? parts.sublist(2).join(' ')
+            : parts.last;
+        void addPart(String part, WmlJustification align) {
+          if (part.isEmpty) {
+            return;
+          }
+          final double width = part.length * size * 0.52;
+          var x = section.margins.left;
+          if (align == WmlJustification.center) {
+            x = (section.pageSize.width - width) / 2;
+          } else if (align == WmlJustification.right) {
+            x = section.pageSize.width - section.margins.right - width;
+          }
+          lines.add(
+            LaidOutLine(
+              glyphs: <LaidOutGlyph>[],
+              x: x,
+              y: y + offsetY,
+              width: width,
+              height: size + 3,
+              pageIndex: pageNumber - 1,
+              paragraphIndex: i,
+              justification: align,
+              isFooter: isFooter,
+              overlayText: part,
+              overlayColor: overlayColor,
+              overlaySize: size,
+              overlayBold: run.bold,
+              hyperlink: WordLink.firstIn(paragraph),
+              boxX: section.margins.left,
+              boxWidth: section.contentWidth,
+            ),
+          );
+        }
+
+        addPart(left, WmlJustification.left);
+        addPart(mid, WmlJustification.center);
+        addPart(right, WmlJustification.right);
+        offsetY += size + 4;
+        continue;
+      }
       final double width = text.isEmpty
           ? section.contentWidth
           : text.length * size * 0.52;
@@ -1432,12 +2333,12 @@ class WordLayoutEngine {
           justification: paragraph.properties.justification,
           isFooter: isFooter,
           overlayText: text,
-          overlayColor: run.color.isEmpty
-              ? (isFooter ? '222222' : '6B7280')
-              : run.color,
+          overlayColor: overlayColor,
           overlaySize: size,
           overlayBold: run.bold,
           hyperlink: WordLink.firstIn(paragraph),
+          boxX: section.margins.left,
+          boxWidth: section.contentWidth,
         ),
       );
       offsetY += size + 4;
@@ -1447,4 +2348,22 @@ class WordLayoutEngine {
 
   static bool _looksLikePageCache(String text) =>
       RegExp(r'^\d+$').hasMatch(text);
+
+  static double _chromeBandHeight({
+    required List<LaidOutLine> lines,
+    required double fallback,
+    required double pageHeight,
+    required bool footer,
+  }) {
+    var height = math.max(fallback, 28);
+    for (final LaidOutLine line in lines) {
+      height = math.max(
+        height,
+        footer
+            ? pageHeight - line.y + 6
+            : line.y + line.height + 6,
+      );
+    }
+    return height.clamp(28, pageHeight * 0.35).toDouble();
+  }
 }

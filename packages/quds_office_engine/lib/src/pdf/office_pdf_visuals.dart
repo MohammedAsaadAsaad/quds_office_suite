@@ -94,10 +94,10 @@ abstract final class OfficePdfVisuals {
     void Function(String, double, double, double, String) drawText,
     String Function()? nextImageName,
   ) {
-    canvas.fillRect(x, y, w, h, 'F3F6FB');
-    canvas.strokeRect(x, y, w, h, '8FAADC');
     final Uint8List? bytes = visual.imageBytes;
     if (bytes == null) {
+      canvas.fillRect(x, y, w, h, 'F3F6FB');
+      canvas.strokeRect(x, y, w, h, '8FAADC');
       drawText(
         visual.title.isEmpty ? 'Picture' : visual.title,
         x + 8,
@@ -109,6 +109,8 @@ abstract final class OfficePdfVisuals {
     }
     final PdfRaster? raster = PdfImageCodec.decode(bytes);
     if (raster == null) {
+      canvas.fillRect(x, y, w, h, 'F3F6FB');
+      canvas.strokeRect(x, y, w, h, '8FAADC');
       drawText(
         visual.title.isEmpty ? 'Picture' : visual.title,
         x + 8,
@@ -126,9 +128,10 @@ abstract final class OfficePdfVisuals {
         height: raster.height,
         bytes: raster.jpegBytes ?? raster.rgb,
         jpeg: raster.isJpeg,
+        maskBytes: raster.alpha,
       ),
     );
-    canvas.drawImage(name, x + 2, y + 2, w - 4, h - 4);
+    canvas.drawImage(name, x, y, w, h);
   }
 
   static void _column(

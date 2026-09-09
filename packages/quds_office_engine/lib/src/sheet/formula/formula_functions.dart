@@ -1,14 +1,20 @@
+import 'dart:math' as math;
+
+import '../model/sml_analysis.dart';
 import '../model/sml_workbook.dart';
 import 'formula_ast.dart';
 
-/// 150+ Excel-compatible functions.
+/// Broad catalog of spreadsheet functions (Excel-like names; not full Excel).
 abstract final class FormulaFunctions {
   /// call API.
   static Object? call(String name, List<FormulaNode> args, FormulaContext ctx) {
+    final String n = name.toUpperCase();
+    if (n == 'LET') {
+      return _let(args, ctx);
+    }
     final List<Object?> vals = args
         .map((FormulaNode a) => a.eval(ctx))
         .toList();
-    final String n = name.toUpperCase();
     switch (n) {
       case 'SUM':
         return _sum(vals);
@@ -99,11 +105,28 @@ abstract final class FormulaFunctions {
       case 'VARP':
         return _variance(flattenNumbers(vals), n == 'VARP');
       case 'RAND':
-        return 0.5;
+        return math.Random().nextDouble();
       case 'RANDBETWEEN':
         final int lo = _n(vals, 0)?.toInt() ?? 0;
         final int hi = _n(vals, 1)?.toInt() ?? lo;
-        return ((lo + hi) / 2);
+        if (hi <= lo) {
+          return lo.toDouble();
+        }
+        return (lo + math.Random().nextInt(hi - lo + 1)).toDouble();
+      case 'FORMULATEXT':
+        return _formulatext(args, ctx);
+      case 'TRANSPOSE':
+        return _transpose(args, ctx);
+      case 'IRR':
+        return _irr(vals);
+      case 'TIME':
+        return _time(vals);
+      case 'DAYS':
+        return _days(vals);
+      case 'SHEET':
+        return (ctx.workbook.sheets.indexOf(ctx.sheet) + 1).toDouble();
+      case 'SHEETS':
+        return ctx.workbook.sheets.length.toDouble();
       case 'IF':
         return _truth(vals.isEmpty ? null : vals[0])
             ? (vals.length > 1 ? vals[1] : true)
@@ -234,6 +257,113 @@ abstract final class FormulaFunctions {
         return formulaString(vals[0]).replaceAll(RegExp(r'[\x00-\x1F]'), '');
       case 'T':
         return vals[0] is String ? vals[0] : '';
+      case 'HYPERLINK':
+        // Display text is the friendly name when provided; else the link.
+        if (vals.length > 1 && vals[1] != null && '${vals[1]}'.isNotEmpty) {
+          return formulaString(vals[1]);
+        }
+        return formulaString(vals.isEmpty ? null : vals[0]);
+      case 'ADDRESS': {
+        final int row = (_n(vals, 0) ?? 1).toInt();
+        final int col = (_n(vals, 1) ?? 1).toInt();
+        if (row < 1 || col < 1) {
+          return '#VALUE!';
+        }
+        final int abs = (_n(vals, 2) ?? 1).toInt().clamp(1, 4);
+        final bool a1 = vals.length < 4 || _truth(vals[3]);
+        if (!a1) {
+          return 'R${row}C$col';
+        }
+        final String letters = SmlCellRef(col - 1, row - 1).a1.replaceAll(
+          RegExp(r'\d+'),
+          '',
+        );
+        final bool absRow = abs == 1 || abs == 2;
+        final bool absCol = abs == 1 || abs == 3;
+        final String sheet =
+            vals.length > 4 ? formulaString(vals[4]).trim() : '';
+        final String cell =
+            '${absCol ? '\$' : ''}$letters${absRow ? '\$' : ''}$row';
+        if (sheet.isEmpty) {
+          return cell;
+        }
+        final String quoted = sheet.contains(' ') || sheet.contains("'")
+            ? "'${sheet.replaceAll("'", "''")}'"
+            : sheet;
+        return '$quoted!$cell';
+      }
+      case 'CELL': {
+        final String info = formulaString(vals.isEmpty ? null : vals[0])
+            .toLowerCase();
+        SmlCellRef ref = ctx.origin;
+        if (args.length > 1 && args[1] is CellNode) {
+          ref = (args[1] as CellNode).ref;
+        } else if (args.length > 1 && args[1] is RangeNode) {
+          ref = (args[1] as RangeNode).range.start;
+        }
+        return switch (info) {
+          'address' => ref.a1,
+          'col' || 'column' => (ref.col + 1).toDouble(),
+          'row' => (ref.row + 1).toDouble(),
+          'contents' =>
+            args.length > 1 ? vals[1] : ctx.sheet.cell(ref).value,
+          'type' => () {
+            final Object? v = args.length > 1
+                ? vals[1]
+                : ctx.sheet.cell(ref).value;
+            if (v == null || v == '') {
+              return 'b';
+            }
+            if (v is String) {
+              return 'l';
+            }
+            return 'v';
+          }(),
+          _ => '#N/A',
+        };
+      }
+      case 'INFO': {
+        final String type = formulaString(vals.isEmpty ? null : vals[0])
+            .toLowerCase();
+        return switch (type) {
+          'directory' => '',
+          'numfile' => 1.0,
+          'origin' => r'$A:$A$1',
+          'osversion' => 'Quds',
+          'recalc' => 'Automatic',
+          'release' => 'QudsOffice',
+          'system' => 'pcdos',
+          'memavail' || 'memused' || 'totmem' => 0.0,
+          _ => '#N/A',
+        };
+      }
+      case 'FIXED': {
+        final double n = _n(vals, 0) ?? 0;
+        final int decimals = (_n(vals, 1) ?? 2).toInt().clamp(0, 15);
+        final bool noCommas = vals.length > 2 && _truth(vals[2]);
+        var text = n.toStringAsFixed(decimals);
+        if (!noCommas) {
+          text = _withThousands(text);
+        }
+        return text;
+      }
+      case 'DOLLAR':
+      case 'RMB':
+      case 'YEN': {
+        final double n = _n(vals, 0) ?? 0;
+        final int decimals = (_n(vals, 1) ?? 2).toInt().clamp(0, 15);
+        final String upper = name.toUpperCase();
+        final String symbol = (upper == 'YEN' || upper == 'RMB') ? '¥' : r'$';
+        final String body = _withThousands(n.abs().toStringAsFixed(decimals));
+        return n < 0 ? '-$symbol$body' : '$symbol$body';
+      }
+      case 'ASC':
+      case 'PHONETIC':
+        return formulaString(vals.isEmpty ? null : vals[0]);
+      case 'BAHTTEXT':
+        // Limited stub: numeric Thai baht wording is out of scope.
+        final double n = _n(vals, 0) ?? 0;
+        return n.toStringAsFixed(2);
       case 'N':
         return asFormulaNumber(vals[0]) ?? 0;
       case 'TEXTJOIN':
@@ -254,6 +384,12 @@ abstract final class FormulaFunctions {
         return _match(vals);
       case 'XLOOKUP':
         return _xlookup(vals);
+      case 'FILTER':
+        return _filter(vals);
+      case 'UNIQUE':
+        return _unique(vals);
+      case 'SORT':
+        return _sortFn(vals);
       case 'CHOOSE':
         final int i = _n1(vals)?.toInt() ?? 1;
         return (i >= 1 && i < vals.length) ? vals[i] : '#VALUE!';
@@ -341,6 +477,26 @@ abstract final class FormulaFunctions {
         return _fin(n, vals);
       case 'NPV':
         return _npv(vals);
+      case 'SIN':
+        return math.sin(_n1(vals) ?? 0);
+      case 'COS':
+        return math.cos(_n1(vals) ?? 0);
+      case 'TAN':
+        return math.tan(_n1(vals) ?? 0);
+      case 'TEXT':
+        return _textFmt(vals);
+      case 'INDIRECT':
+        return _indirect(ctx, vals);
+      case 'OFFSET':
+        return _offset(ctx, args, vals);
+      case 'EDATE':
+        return _edate(vals);
+      case 'EOMONTH':
+        return _eomonth(vals);
+      case 'NETWORKDAYS':
+        return _networkdays(vals);
+      case 'SEQUENCE':
+        return _sequence(vals);
       default:
         // Aliases that share an implementation.
         if (_aliases.containsKey(n)) {
@@ -370,22 +526,9 @@ abstract final class FormulaFunctions {
     'CONCAT': 'CONCATENATE',
     'UNICHAR': 'UNICHAR',
     'UNICODE': 'UNICODE',
-    'FORMULATEXT': 'T',
     'ERROR.TYPE': 'TYPE',
     'ISERR': 'ISERROR',
-    'SHEET': 'ROW',
-    'SHEETS': 'ROWS',
     'AREAS': 'ROWS',
-    'TRANSPOSE': 'INDEX',
-    'INDIRECT': 'T',
-    'OFFSET': 'INDEX',
-    'HYPERLINK': 'T',
-    'ADDRESS': 'T',
-    'CELL': 'T',
-    'INFO': 'T',
-    'PHONETIC': 'T',
-    'BAHTTEXT': 'T',
-    'ASC': 'T',
     'DBCS': 'UPPER',
     'FINDB': 'FIND',
     'LEFTB': 'LEFT',
@@ -395,27 +538,16 @@ abstract final class FormulaFunctions {
     'REPLACEB': 'REPLACE',
     'SEARCHB': 'SEARCH',
     'NUMBERVALUE': 'VALUE',
-    'FIXED': 'T',
-    'DOLLAR': 'T',
-    'TEXT': 'T',
-    'RMB': 'T',
-    'YEN': 'T',
     'DATEVALUE': 'DATE',
-    'TIME': 'NOW',
     'TIMEVALUE': 'NOW',
-    'EDATE': 'DATE',
-    'EOMONTH': 'DATE',
-    'NETWORKDAYS': 'DAY',
     'WORKDAY': 'DATE',
     'DATEDIF': 'DAY',
     'YEARFRAC': 'YEAR',
-    'DAYS': 'DAY',
     'DAYS360': 'DAY',
     'ISOWEEKNUM': 'WEEKDAY',
     'WEEKNUM': 'WEEKDAY',
     'NPER': 'PMT',
     'RATE': 'PMT',
-    'IRR': 'NPV',
     'MIRR': 'NPV',
     'CUMIPMT': 'PMT',
     'CUMPRINC': 'PMT',
@@ -437,10 +569,9 @@ abstract final class FormulaFunctions {
     'COUNTIFS': 'COUNTIFS',
     'SUMIFS': 'SUMIFS',
     'XMATCH': 'MATCH',
-    'FILTER': 'INDEX',
-    'SORT': 'INDEX',
-    'UNIQUE': 'INDEX',
-    'SEQUENCE': 'ROW',
+    'FILTER': 'FILTER',
+    'SORT': 'SORT',
+    'UNIQUE': 'UNIQUE',
     'RANDARRAY': 'RAND',
   };
 
@@ -475,6 +606,22 @@ abstract final class FormulaFunctions {
     if (v is num) return v != 0;
     if (v is String) return v.isNotEmpty && v != 'FALSE';
     return v != null;
+  }
+
+  static String _withThousands(String fixed) {
+    final bool neg = fixed.startsWith('-');
+    final String raw = neg ? fixed.substring(1) : fixed;
+    final List<String> parts = raw.split('.');
+    final String intPart = parts[0];
+    final StringBuffer out = StringBuffer();
+    for (int i = 0; i < intPart.length; i++) {
+      if (i > 0 && (intPart.length - i) % 3 == 0) {
+        out.write(',');
+      }
+      out.write(intPart[i]);
+    }
+    final String body = parts.length > 1 ? '$out.${parts[1]}' : '$out';
+    return neg ? '-$body' : body;
   }
 
   /// startsWith API.
@@ -839,5 +986,353 @@ abstract final class FormulaFunctions {
     }
     if (a <= 0) return double.nan;
     return _exp(b * _ln(a));
+  }
+
+  static Object? _let(List<FormulaNode> args, FormulaContext ctx) {
+    if (args.length < 3 || args.length.isEven) {
+      return '#VALUE!';
+    }
+    final List<String> added = <String>[];
+    try {
+      for (int i = 0; i < args.length - 1; i += 2) {
+        final FormulaNode nameNode = args[i];
+        final String name = (nameNode is NamedRangeNode
+                ? nameNode.name
+                : formulaString(nameNode.eval(ctx)))
+            .toUpperCase();
+        if (name.isEmpty) {
+          return '#VALUE!';
+        }
+        ctx.lets[name] = args[i + 1].eval(ctx);
+        added.add(name);
+      }
+      return args.last.eval(ctx);
+    } finally {
+      for (final String name in added) {
+        ctx.lets.remove(name);
+      }
+    }
+  }
+
+  static Object? _filter(List<Object?> vals) {
+    if (vals.length < 2) {
+      return '#VALUE!';
+    }
+    final List<Object?> array = flattenValues(vals[0]);
+    final List<Object?> include = flattenValues(vals[1]);
+    if (array.isEmpty) {
+      return '#CALC!';
+    }
+    final List<Object?> out = <Object?>[];
+    for (int i = 0; i < array.length; i++) {
+      final Object? flag = i < include.length
+          ? include[i]
+          : (include.isEmpty ? false : include.last);
+      if (_truth(flag)) {
+        out.add(array[i]);
+      }
+    }
+    if (out.isEmpty) {
+      return '#CALC!';
+    }
+    if (out.length == 1) {
+      return out.first;
+    }
+    return out.map(formulaString).join(',');
+  }
+
+  static Object? _unique(List<Object?> vals) {
+    if (vals.isEmpty) {
+      return '#VALUE!';
+    }
+    final List<Object?> array = flattenValues(vals);
+    final List<Object?> out = <Object?>[];
+    final Set<String> seen = <String>{};
+    for (final Object? item in array) {
+      if (seen.add(formulaString(item).toLowerCase())) {
+        out.add(item);
+      }
+    }
+    if (out.isEmpty) {
+      return '';
+    }
+    if (out.length == 1) {
+      return out.first;
+    }
+    return out.map(formulaString).join(',');
+  }
+
+  static Object? _sortFn(List<Object?> vals) {
+    if (vals.isEmpty) {
+      return '#VALUE!';
+    }
+    final List<Object?> array = flattenValues(vals[0]);
+    final bool ascending = vals.length < 2 || _truth(vals[1]);
+    array.sort((Object? a, Object? b) {
+      final double? an = asFormulaNumber(a);
+      final double? bn = asFormulaNumber(b);
+      final int cmp;
+      if (an != null && bn != null) {
+        cmp = an.compareTo(bn);
+      } else {
+        cmp = formulaString(a).toLowerCase().compareTo(
+          formulaString(b).toLowerCase(),
+        );
+      }
+      return ascending ? cmp : -cmp;
+    });
+    if (array.isEmpty) {
+      return '';
+    }
+    if (array.length == 1) {
+      return array.first;
+    }
+    return array.map(formulaString).join(',');
+  }
+
+  static Object? _textFmt(List<Object?> vals) {
+    if (vals.isEmpty) {
+      return '';
+    }
+    final String fmt = vals.length > 1 ? formulaString(vals[1]) : '0';
+    final double? n = asFormulaNumber(vals[0]);
+    if (n == null) {
+      return formulaString(vals[0]);
+    }
+    final String upper = fmt.toUpperCase();
+    if (fmt.contains('%')) {
+      return '${(n * 100).toStringAsFixed(fmt.contains('0.00') ? 2 : 0)}%';
+    }
+    if (upper.contains('YYYY') || upper.contains('YYYY-MM-DD')) {
+      final DateTime? d = _date(n);
+      if (d == null) {
+        return formulaString(vals[0]);
+      }
+      final String mm = d.month.toString().padLeft(2, '0');
+      final String dd = d.day.toString().padLeft(2, '0');
+      return '${d.year}-$mm-$dd';
+    }
+    if (fmt.contains('0.00') || fmt.contains('#.##')) {
+      return n.toStringAsFixed(2);
+    }
+    if (n == n.roundToDouble()) {
+      return n.toInt().toString();
+    }
+    return n.toString();
+  }
+
+  static Object? _indirect(FormulaContext ctx, List<Object?> vals) {
+    if (vals.isEmpty) {
+      return '#REF!';
+    }
+    final String ref = formulaString(vals[0]).trim();
+    try {
+      if (ref.contains(':')) {
+        return RangeNode(SmlRange.parse(ref)).eval(ctx);
+      }
+      return CellNode(SmlCellRef.parse(ref)).eval(ctx);
+    } on Object {
+      return '#REF!';
+    }
+  }
+
+  static Object? _offset(
+    FormulaContext ctx,
+    List<FormulaNode> args,
+    List<Object?> vals,
+  ) {
+    if (args.isEmpty) {
+      return '#VALUE!';
+    }
+    SmlCellRef? origin;
+    final FormulaNode first = args[0];
+    if (first is CellNode) {
+      origin = first.ref;
+    } else if (first is RangeNode) {
+      origin = first.range.start;
+    } else if (first is NamedRangeNode) {
+      final SmlNamedRange? named = ctx.workbook.namedRange(first.name);
+      origin = named?.range.start;
+    }
+    if (origin == null) {
+      return '#VALUE!';
+    }
+    final int rows = (_n(vals, 1) ?? 0).toInt();
+    final int cols = (_n(vals, 2) ?? 0).toInt();
+    final int height = vals.length > 3 ? (_n(vals, 3) ?? 1).toInt() : 1;
+    final int width = vals.length > 4 ? (_n(vals, 4) ?? 1).toInt() : 1;
+    final SmlCellRef start = SmlCellRef(origin.col + cols, origin.row + rows);
+    if (height <= 1 && width <= 1) {
+      return ctx.valueOf(start);
+    }
+    return RangeNode(
+      SmlRange(
+        start,
+        SmlCellRef(start.col + width - 1, start.row + height - 1),
+      ),
+    ).eval(ctx);
+  }
+
+  static Object? _edate(List<Object?> vals) {
+    final DateTime? d = _date(vals.isEmpty ? null : vals[0]);
+    if (d == null) {
+      return '#VALUE!';
+    }
+    final int months = (_n(vals, 1) ?? 0).toInt();
+    final DateTime next = DateTime.utc(d.year, d.month + months, d.day);
+    return next.millisecondsSinceEpoch / 86400000;
+  }
+
+  static Object? _eomonth(List<Object?> vals) {
+    final DateTime? d = _date(vals.isEmpty ? null : vals[0]);
+    if (d == null) {
+      return '#VALUE!';
+    }
+    final int months = (_n(vals, 1) ?? 0).toInt();
+    final DateTime next = DateTime.utc(d.year, d.month + months + 1, 0);
+    return next.millisecondsSinceEpoch / 86400000;
+  }
+
+  static Object? _networkdays(List<Object?> vals) {
+    final DateTime? start = _date(vals.isEmpty ? null : vals[0]);
+    final DateTime? end = _date(vals.length < 2 ? null : vals[1]);
+    if (start == null || end == null) {
+      return '#VALUE!';
+    }
+    DateTime a = start;
+    DateTime b = end;
+    var sign = 1;
+    if (a.isAfter(b)) {
+      final DateTime tmp = a;
+      a = b;
+      b = tmp;
+      sign = -1;
+    }
+    var count = 0;
+    var cursor = DateTime.utc(a.year, a.month, a.day);
+    final DateTime last = DateTime.utc(b.year, b.month, b.day);
+    while (!cursor.isAfter(last)) {
+      if (cursor.weekday <= DateTime.friday) {
+        count++;
+      }
+      cursor = cursor.add(const Duration(days: 1));
+    }
+    return count * sign;
+  }
+
+  static Object? _formulatext(List<FormulaNode> args, FormulaContext ctx) {
+    if (args.isEmpty) {
+      return '#N/A';
+    }
+    final FormulaNode first = args.first;
+    if (first is CellNode) {
+      final SmlWorksheet? sheet = first.sheetName == null
+          ? ctx.sheet
+          : ctx.workbook.sheetByName(first.sheetName!);
+      final String? formula = sheet?.cell(first.ref).formula;
+      if (formula == null || formula.isEmpty) {
+        return '#N/A';
+      }
+      return formula.startsWith('=') ? formula : '=$formula';
+    }
+    return '#N/A';
+  }
+
+  static Object? _transpose(List<FormulaNode> args, FormulaContext ctx) {
+    if (args.isEmpty) {
+      return '#VALUE!';
+    }
+    final FormulaNode first = args.first;
+    if (first is! RangeNode) {
+      return first.eval(ctx);
+    }
+    final SmlRange range = first.range;
+    final int rows = range.maxRow - range.minRow + 1;
+    final int cols = range.maxCol - range.minCol + 1;
+    final SmlWorksheet? sheet = first.sheetName == null
+        ? ctx.sheet
+        : ctx.workbook.sheetByName(first.sheetName!);
+    final List<List<Object?>> grid = <List<Object?>>[
+      for (int c = 0; c < cols; c++)
+        <Object?>[
+          for (int r = 0; r < rows; r++)
+            ctx.valueOf(
+              SmlCellRef(range.minCol + c, range.minRow + r),
+              onSheet: sheet,
+            ),
+        ],
+    ];
+    if (grid.length == 1 && grid.first.length == 1) {
+      return grid.first.first;
+    }
+    return FormulaSpill(grid);
+  }
+
+  static Object? _irr(List<Object?> vals) {
+    final List<double> flows = flattenNumbers(vals);
+    if (flows.length < 2) {
+      return '#NUM!';
+    }
+    var rate = 0.1;
+    for (int i = 0; i < 40; i++) {
+      var npv = 0.0;
+      var deriv = 0.0;
+      for (int t = 0; t < flows.length; t++) {
+        final double den = math.pow(1 + rate, t).toDouble();
+        npv += flows[t] / den;
+        if (t > 0) {
+          deriv -= t * flows[t] / (den * (1 + rate));
+        }
+      }
+      if (deriv.abs() < 1e-12) {
+        break;
+      }
+      final double next = rate - npv / deriv;
+      if ((next - rate).abs() < 1e-8) {
+        return next;
+      }
+      rate = next;
+    }
+    return rate;
+  }
+
+  static Object? _time(List<Object?> vals) {
+    final double h = _n(vals, 0) ?? 0;
+    final double m = _n(vals, 1) ?? 0;
+    final double s = _n(vals, 2) ?? 0;
+    return ((h + m / 60 + s / 3600) / 24) % 1;
+  }
+
+  static Object? _days(List<Object?> vals) {
+    final DateTime? end = _date(vals.isEmpty ? null : vals[0]);
+    final DateTime? start = _date(vals.length < 2 ? null : vals[1]);
+    if (end == null || start == null) {
+      return '#VALUE!';
+    }
+    return end.difference(start).inDays.toDouble();
+  }
+
+  static Object? _sequence(List<Object?> vals) {
+    final int rows = (_n(vals, 0) ?? 1).toInt().clamp(1, 100);
+    final int cols = (vals.length > 1 ? (_n(vals, 1) ?? 1) : 1).toInt().clamp(
+      1,
+      50,
+    );
+    final double start = _n(vals, 2) ?? 1;
+    final double step = _n(vals, 3) ?? 1;
+    var value = start;
+    final List<List<Object?>> grid = <List<Object?>>[];
+    for (int r = 0; r < rows; r++) {
+      final List<Object?> row = <Object?>[];
+      for (int c = 0; c < cols; c++) {
+        row.add(value);
+        value += step;
+      }
+      grid.add(row);
+    }
+    if (rows == 1 && cols == 1) {
+      return grid.first.first;
+    }
+    return FormulaSpill(grid);
   }
 }

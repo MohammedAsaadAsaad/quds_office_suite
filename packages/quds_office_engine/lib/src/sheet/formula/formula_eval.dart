@@ -157,6 +157,14 @@ class FormulaLexer {
     while (!_done && _isIdentPart(_src.codeUnitAt(_i))) {
       _i++;
     }
+    if (!_done && _src[_i] == '[') {
+      while (!_done && _src[_i] != ']') {
+        _i++;
+      }
+      if (!_done && _src[_i] == ']') {
+        _i++;
+      }
+    }
     return _classifyRef(_src.substring(start, _i), start: rawStart, end: _raw);
   }
 
@@ -321,7 +329,7 @@ class FormulaParser {
           }
           return CallNode(tok.lexeme.toUpperCase(), args);
         }
-        return LiteralNode(tok.lexeme);
+        return NamedRangeNode(tok.lexeme);
       case FormulaTokenKind.lparen:
         final FormulaNode inner = _expr(0);
         if (_cur.kind == FormulaTokenKind.rparen) {
@@ -438,10 +446,18 @@ class FormulaEvaluator {
     if (trimmed.startsWith('=')) {
       cell.formula = trimmed;
       cell.type = SmlCellType.formula;
-      cell.value = evaluateFormula(
+      final Object? result = evaluateFormula(
         trimmed,
         FormulaContext(workbook: book, sheet: sheet, origin: cell.ref),
       );
+      if (result is FormulaSpill) {
+        _writeSpill(sheet, cell.ref, result);
+        cell.value = result.rows.isEmpty || result.rows.first.isEmpty
+            ? 0
+            : result.rows.first.first;
+      } else {
+        cell.value = result;
+      }
       return;
     }
     if (trimmed.isEmpty) {
@@ -472,4 +488,30 @@ class FormulaEvaluator {
   /// recalculate API.
   static List<String> recalculate(SmlWorkbook book) =>
       FormulaDepGraph(book).recalculate();
+
+  static void _writeSpill(
+    SmlWorksheet sheet,
+    SmlCellRef origin,
+    FormulaSpill spill,
+  ) {
+    for (int r = 0; r < spill.rows.length; r++) {
+      for (int c = 0; c < spill.rows[r].length; c++) {
+        if (r == 0 && c == 0) {
+          continue;
+        }
+        final SmlCell target = sheet.cell(
+          SmlCellRef(origin.col + c, origin.row + r),
+        );
+        target.formula = null;
+        final Object? value = spill.rows[r][c];
+        if (value is num) {
+          target.type = SmlCellType.number;
+          target.value = value;
+        } else {
+          target.type = SmlCellType.string;
+          target.value = value?.toString() ?? '';
+        }
+      }
+    }
+  }
 }

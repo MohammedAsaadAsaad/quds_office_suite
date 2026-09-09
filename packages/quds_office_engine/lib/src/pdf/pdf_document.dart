@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import '../fonts/font_subsetter.dart';
+import '../fonts/office_font_set.dart';
 import '../fonts/sfnt_parser.dart';
 import '../opc/zip/crc32.dart';
 import '../sheet/model/sml_workbook.dart';
@@ -9,7 +10,27 @@ import '../slide/model/pml_presentation.dart';
 import '../word/model/wml_document.dart';
 import 'office_pdf_export.dart';
 import 'pdf_font.dart';
+import 'pdf_save_options.dart';
 import 'pdf_stream.dart';
+
+/// One embedded CID face written as `/FontFile2`.
+class PdfEmbeddedFace {
+  /// PdfEmbeddedFace API.
+  const PdfEmbeddedFace({
+    required this.subset,
+    required this.source,
+    required this.resourceName,
+  });
+
+  /// subset API.
+  final FontSubset subset;
+
+  /// source API.
+  final SfntFont source;
+
+  /// PDF resource name such as `F1` or `F3`.
+  final String resourceName;
+}
 
 /// Native PDF 1.7 compiler.
 class PdfDocument {
@@ -25,25 +46,43 @@ class PdfDocument {
   /// pages API.
   final List<PdfPage> pages = <PdfPage>[];
 
+  /// Document outline bookmarks (PDF `/Outlines`).
+  final List<PdfOutlineItem> outlines = <PdfOutlineItem>[];
+
   /// addPage API.
   void addPage(PdfPage page) => pages.add(page);
+
+  /// addOutline API.
+  void addOutline(PdfOutlineItem item) => outlines.add(item);
 
   /// Lays out [document] and emits a PDF with an optional embedded [font].
   static Uint8List fromWord(
     WmlDocument document, {
     SfntFont? font,
+    OfficeFontSet? fonts,
+    PdfSaveOptions saveOptions = const PdfSaveOptions(),
     String title = 'Quds Office',
-  }) => OfficePdfExport.word(document, font: font, title: title);
+  }) => OfficePdfExport.word(
+    document,
+    font: font,
+    fonts: fonts,
+    saveOptions: saveOptions,
+    title: title,
+  );
 
   /// Landscape page per slide from a PPTX archive.
   static Uint8List fromPptx(
     Uint8List bytes, {
     SfntFont? font,
+    OfficeFontSet? fonts,
+    PdfSaveOptions saveOptions = const PdfSaveOptions(),
     String title = 'Quds Office',
     String? password,
   }) => OfficePdfExport.fromBytes(
     bytes,
     font: font,
+    fonts: fonts,
+    saveOptions: saveOptions,
     title: title,
     password: password,
   );
@@ -52,18 +91,50 @@ class PdfDocument {
   static Uint8List fromWorkbook(
     SmlWorkbook book, {
     SfntFont? font,
+    OfficeFontSet? fonts,
+    PdfSaveOptions saveOptions = const PdfSaveOptions(),
     String title = 'Quds Office',
-  }) => OfficePdfExport.workbook(book, font: font, title: title);
+  }) => OfficePdfExport.workbook(
+    book,
+    font: font,
+    fonts: fonts,
+    saveOptions: saveOptions,
+    title: title,
+  );
 
   /// One PDF page per slide from an in-memory deck.
   static Uint8List fromPresentation(
     PmlPresentation deck, {
     SfntFont? font,
+    OfficeFontSet? fonts,
+    PdfSaveOptions saveOptions = const PdfSaveOptions(),
     String title = 'Quds Office',
-  }) => OfficePdfExport.presentation(deck, font: font, title: title);
+  }) => OfficePdfExport.presentation(
+    deck,
+    font: font,
+    fonts: fonts,
+    saveOptions: saveOptions,
+    title: title,
+  );
 
   /// save API.
-  Uint8List save({FontSubset? subset, SfntFont? font}) {
+  Uint8List save({
+    FontSubset? subset,
+    SfntFont? font,
+    List<PdfEmbeddedFace> faces = const <PdfEmbeddedFace>[],
+    PdfSaveOptions options = const PdfSaveOptions(),
+  }) {
+    final List<PdfEmbeddedFace> embed = faces.isNotEmpty
+        ? faces
+        : (subset != null && font != null
+              ? <PdfEmbeddedFace>[
+                  PdfEmbeddedFace(
+                    subset: subset,
+                    source: font,
+                    resourceName: 'F1',
+                  ),
+                ]
+              : const <PdfEmbeddedFace>[]);
     final List<_PdfObj> objects = <_PdfObj>[];
     int nextId = 1;
     int alloc() => nextId++;
@@ -73,22 +144,44 @@ class PdfDocument {
     final int pagesId = alloc();
     final List<int> pageIds = <int>[for (final _ in pages) alloc()];
     final List<int> contentIds = <int>[for (final _ in pages) alloc()];
-    int? fontId;
-    int? cidId;
-    int? descId;
-    int? fileId;
-    int? toUnicodeId;
     final int helveticaId = alloc();
-    if (subset != null) {
-      fontId = alloc();
-      cidId = alloc();
-      descId = alloc();
-      fileId = alloc();
-      toUnicodeId = alloc();
+    final List<({int fontId, int cidId, int descId, int fileId, int toUnicodeId})>
+        faceIds = <({int fontId, int cidId, int descId, int fileId, int toUnicodeId})>[
+      for (final _ in embed)
+        (
+          fontId: alloc(),
+          cidId: alloc(),
+          descId: alloc(),
+          fileId: alloc(),
+          toUnicodeId: alloc(),
+        ),
+    ];
+    int? metadataId;
+    int? outputIntentId;
+    int? outputProfileId;
+    int? structTreeId;
+    int? markInfoId;
+    if (options.pdfA) {
+      metadataId = alloc();
+      outputIntentId = alloc();
+      outputProfileId = alloc();
+    }
+    if (options.tagged || options.pdfA) {
+      markInfoId = alloc();
+    }
+    if (options.tagged && outlines.isNotEmpty) {
+      structTreeId = alloc();
     }
     final List<List<int>> pageImageIds = <List<int>>[
       for (final PdfPage page in pages)
         <int>[for (final PdfEmbeddedImage _ in page.images) alloc()],
+    ];
+    final List<List<int?>> pageMaskIds = <List<int?>>[
+      for (final PdfPage page in pages)
+        <int?>[
+          for (final PdfEmbeddedImage img in page.images)
+            img.maskBytes == null ? null : alloc(),
+        ],
     ];
     final List<List<int>> pageAnnotIds = <List<int>>[
       for (final PdfPage page in pages)
@@ -98,7 +191,9 @@ class PdfDocument {
     objects.add(
       _PdfObj(
         infoId,
-        '<</Title ${_pdfString(title)}/Author ${_pdfString(author)}/Producer ${_pdfString('Quds Office Engine')}>>',
+        '<</Title ${_pdfString(title)}/Author ${_pdfString(author)}'
+        '/Producer ${_pdfString('Quds Office Engine')}'
+        '${options.pdfA ? '/GTS_PDFXVersion ${_pdfString('PDF/A')}' : ''}>>',
       ),
     );
 
@@ -107,24 +202,32 @@ class PdfDocument {
       _PdfObj(pagesId, '<</Type /Pages/Count ${pages.length}/Kids [$kids]>>'),
     );
 
-    if (subset != null &&
-        fontId != null &&
-        cidId != null &&
-        descId != null &&
-        fileId != null &&
-        toUnicodeId != null) {
-      final PdfCidFont cid = PdfCidFont.build(subset, font!);
-      objects.add(_PdfObj(fontId, cid.type0Dict(cidId, toUnicodeId)));
-      objects.add(_PdfObj(cidId, cid.cidFontDict(descId)));
-      objects.add(_PdfObj(descId, cid.descriptorDict(fileId)));
+    int? outlinesId;
+    final List<int> outlineItemIds = <int>[];
+    if (outlines.isNotEmpty && pageIds.isNotEmpty) {
+      outlinesId = alloc();
+      for (final _ in outlines) {
+        outlineItemIds.add(alloc());
+      }
+    }
+
+    for (int i = 0; i < embed.length; i++) {
+      final PdfEmbeddedFace face = embed[i];
+      final ids = faceIds[i];
+      final PdfCidFont cid = PdfCidFont.build(face.subset, face.source);
+      objects.add(_PdfObj(ids.fontId, cid.type0Dict(ids.cidId, ids.toUnicodeId)));
+      objects.add(_PdfObj(ids.cidId, cid.cidFontDict(ids.descId)));
+      objects.add(_PdfObj(ids.descId, cid.descriptorDict(ids.fileId)));
       objects.add(
         _PdfObj.stream(
-          fileId,
+          ids.fileId,
           cid.fontFile,
           extra: '/Length1 ${cid.fontFile.length}',
         ),
       );
-      objects.add(_PdfObj.stream(toUnicodeId, utf8.encode(cid.toUnicodeCmap)));
+      objects.add(
+        _PdfObj.stream(ids.toUnicodeId, utf8.encode(cid.toUnicodeCmap)),
+      );
     }
     objects.add(
       _PdfObj(
@@ -145,6 +248,20 @@ class PdfDocument {
       for (int j = 0; j < page.images.length; j++) {
         final PdfEmbeddedImage img = page.images[j];
         final int id = pageImageIds[i][j];
+        final int? maskId = pageMaskIds[i][j];
+        if (maskId != null && img.maskBytes != null) {
+          objects.add(
+            _PdfObj.stream(
+              maskId,
+              img.maskBytes!,
+              extra:
+                  '/Type /XObject/Subtype /Image/Width ${img.width}'
+                  '/Height ${img.height}/ColorSpace /DeviceGray'
+                  '/BitsPerComponent 8',
+            ),
+          );
+        }
+        final String smask = maskId == null ? '' : '/SMask $maskId 0 R';
         if (img.jpeg) {
           objects.add(
             _PdfObj.rawStream(
@@ -153,7 +270,7 @@ class PdfDocument {
               extra:
                   '/Type /XObject/Subtype /Image/Width ${img.width}'
                   '/Height ${img.height}/ColorSpace /DeviceRGB'
-                  '/BitsPerComponent 8/Filter /DCTDecode',
+                  '/BitsPerComponent 8/Filter /DCTDecode$smask',
             ),
           );
         } else {
@@ -164,7 +281,7 @@ class PdfDocument {
               extra:
                   '/Type /XObject/Subtype /Image/Width ${img.width}'
                   '/Height ${img.height}/ColorSpace /DeviceRGB'
-                  '/BitsPerComponent 8',
+                  '/BitsPerComponent 8$smask',
             ),
           );
         }
@@ -174,8 +291,8 @@ class PdfDocument {
     for (int i = 0; i < pages.length; i++) {
       final PdfPage page = pages[i];
       final StringBuffer fonts = StringBuffer('/F2 $helveticaId 0 R');
-      if (fontId != null) {
-        fonts.write('/F1 $fontId 0 R');
+      for (int f = 0; f < embed.length; f++) {
+        fonts.write('/${embed[f].resourceName} ${faceIds[f].fontId} 0 R');
       }
       final StringBuffer xos = StringBuffer();
       for (int j = 0; j < page.images.length; j++) {
@@ -196,7 +313,116 @@ class PdfDocument {
       objects.add(_PdfObj.stream(contentIds[i], page.content));
     }
 
-    objects.add(_PdfObj(catalogId, '<</Type /Catalog/Pages $pagesId 0 R>>'));
+    if (outlinesId != null && outlineItemIds.isNotEmpty) {
+      for (int i = 0; i < outlines.length; i++) {
+        final PdfOutlineItem item = outlines[i];
+        final int pageIdx = item.pageIndex.clamp(0, pageIds.length - 1);
+        final double destTop =
+            pages[pageIdx].height - item.destY.clamp(0, pages[pageIdx].height);
+        final StringBuffer dict = StringBuffer(
+          '<</Title ${_pdfString(item.title)}/Parent $outlinesId 0 R'
+          '/Dest [${pageIds[pageIdx]} 0 R /XYZ 0 ${_n(destTop)} 0]',
+        );
+        if (i > 0) {
+          dict.write('/Prev ${outlineItemIds[i - 1]} 0 R');
+        }
+        if (i + 1 < outlineItemIds.length) {
+          dict.write('/Next ${outlineItemIds[i + 1]} 0 R');
+        }
+        dict.write('>>');
+        objects.add(_PdfObj(outlineItemIds[i], dict.toString()));
+      }
+      objects.add(
+        _PdfObj(
+          outlinesId,
+          '<</Type /Outlines/First ${outlineItemIds.first} 0 R'
+          '/Last ${outlineItemIds.last} 0 R/Count ${outlineItemIds.length}>>',
+        ),
+      );
+    }
+
+    if (markInfoId != null) {
+      objects.add(_PdfObj(markInfoId, '<</Marked true>>'));
+    }
+    final List<int> structKids = <int>[];
+    if (structTreeId != null && outlinesId != null) {
+      for (final _ in outlines) {
+        structKids.add(alloc());
+      }
+      for (int i = 0; i < outlines.length; i++) {
+        final PdfOutlineItem item = outlines[i];
+        final int pageIdx = item.pageIndex.clamp(0, pageIds.length - 1);
+        objects.add(
+          _PdfObj(
+            structKids[i],
+            '<</Type /StructElem/S /H1/P $structTreeId 0 R'
+            '/Pg ${pageIds[pageIdx]} 0 R'
+            '/Alt ${_pdfString(item.title)}>>',
+          ),
+        );
+      }
+      final String kidsRef = structKids.map((int id) => '$id 0 R').join(' ');
+      objects.add(
+        _PdfObj(
+          structTreeId,
+          '<</Type /StructTreeRoot/K <</Type /StructElem/S /Document'
+          '/K [$kidsRef]>>>>',
+        ),
+      );
+    }
+    if (metadataId != null) {
+      objects.add(
+        _PdfObj.stream(
+          metadataId,
+          utf8.encode(_pdfaXmp(title: title, author: author)),
+          extra: '/Type /Metadata/Subtype /XML',
+          filter: false,
+        ),
+      );
+    }
+    if (outputProfileId != null && outputIntentId != null) {
+      // Minimal sRGB ICC stub referenced by OutputIntent (PDF/A-oriented).
+      objects.add(
+        _PdfObj.stream(
+          outputProfileId,
+          utf8.encode('sRGB'),
+          extra: '/N 3',
+        ),
+      );
+      objects.add(
+        _PdfObj(
+          outputIntentId,
+          '<</Type /OutputIntent/S /GTS_PDFA1'
+          '/OutputConditionIdentifier ${_pdfString('sRGB')}'
+          '/Info ${_pdfString('sRGB IEC61966-2.1')}'
+          '/DestOutputProfile $outputProfileId 0 R>>',
+        ),
+      );
+    }
+
+    final StringBuffer catalog = StringBuffer(
+      '<</Type /Catalog/Pages $pagesId 0 R',
+    );
+    if (outlinesId != null) {
+      catalog.write('/Outlines $outlinesId 0 R');
+    }
+    if (markInfoId != null) {
+      catalog.write('/MarkInfo $markInfoId 0 R');
+    }
+    if (structTreeId != null) {
+      catalog.write('/StructTreeRoot $structTreeId 0 R');
+    }
+    if (metadataId != null) {
+      catalog.write('/Metadata $metadataId 0 R');
+    }
+    if (outputIntentId != null) {
+      catalog.write('/OutputIntents [$outputIntentId 0 R]');
+    }
+    if (options.pdfA) {
+      catalog.write('/Lang ${_pdfString('en-US')}');
+    }
+    catalog.write('>>');
+    objects.add(_PdfObj(catalogId, catalog.toString()));
 
     objects.sort((a, b) => a.id - b.id);
     final BytesBuilder body = BytesBuilder(copy: false);
@@ -226,6 +452,28 @@ class PdfDocument {
     return body.takeBytes();
   }
 
+  static String _pdfaXmp({required String title, required String author}) {
+    final String safeTitle = _xmlEscape(title);
+    final String safeAuthor = _xmlEscape(author);
+    return '<?xpacket begin="" id="W5M0MpCehiHzreSzNTczkc9d"?>'
+        '<x:xmpmeta xmlns:x="adobe:ns:meta/">'
+        '<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">'
+        '<rdf:Description rdf:about="" '
+        'xmlns:dc="http://purl.org/dc/elements/1.1/" '
+        'xmlns:pdfaid="http://www.aiim.org/pdfa/ns/id/">'
+        '<dc:title><rdf:Alt><rdf:li xml:lang="x-default">$safeTitle'
+        '</rdf:li></rdf:Alt></dc:title>'
+        '<dc:creator><rdf:Seq><rdf:li>$safeAuthor</rdf:li></rdf:Seq></dc:creator>'
+        '<pdfaid:part>2</pdfaid:part><pdfaid:conformance>B</pdfaid:conformance>'
+        '</rdf:Description></rdf:RDF></x:xmpmeta><?xpacket end="w"?>';
+  }
+
+  static String _xmlEscape(String value) => value
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;');
+
   static String _n(double v) =>
       v == v.roundToDouble() ? '${v.round()}' : v.toStringAsFixed(3);
 
@@ -254,11 +502,27 @@ class PdfDocument {
   }
 
   static String _pdfString(String value) {
-    final String escaped = value
-        .replaceAll('\\', r'\\')
-        .replaceAll('(', r'\(')
-        .replaceAll(')', r'\)');
-    return '($escaped)';
+    var ascii = true;
+    for (final int unit in value.codeUnits) {
+      if (unit > 127) {
+        ascii = false;
+        break;
+      }
+    }
+    if (ascii) {
+      final String escaped = value
+          .replaceAll('\\', r'\\')
+          .replaceAll('(', r'\(')
+          .replaceAll(')', r'\)');
+      return '($escaped)';
+    }
+    // PDF Unicode string: UTF-16BE with BOM.
+    final StringBuffer hex = StringBuffer('feff');
+    for (final int unit in value.codeUnits) {
+      hex.write((unit >> 8).toRadixString(16).padLeft(2, '0'));
+      hex.write((unit & 0xff).toRadixString(16).padLeft(2, '0'));
+    }
+    return '<$hex>';
   }
 
   static String _pdfUri(String value) {
@@ -288,6 +552,7 @@ class PdfEmbeddedImage {
     required this.height,
     required this.bytes,
     this.jpeg = false,
+    this.maskBytes,
   });
 
   /// name API.
@@ -304,6 +569,28 @@ class PdfEmbeddedImage {
 
   /// jpeg API.
   final bool jpeg;
+
+  /// Soft-mask bytes (`DeviceGray`, same size as [bytes] pixels).
+  final Uint8List? maskBytes;
+}
+
+/// Bookmark entry for the PDF document outline tree.
+class PdfOutlineItem {
+  /// PdfOutlineItem API.
+  const PdfOutlineItem({
+    required this.title,
+    required this.pageIndex,
+    this.destY = 0,
+  });
+
+  /// Visible outline title.
+  final String title;
+
+  /// Zero-based index into [PdfDocument.pages].
+  final int pageIndex;
+
+  /// Destination Y in top-left page space.
+  final double destY;
 }
 
 /// Class PdfLinkAnnot.
@@ -374,17 +661,28 @@ class PdfPage {
 
 class _PdfObj {
   /// stream API.
-  _PdfObj(this.id, this.dict) : stream = null, extra = '';
+  _PdfObj(this.id, this.dict)
+    : stream = null,
+      extra = '',
+      applyFlateFilter = true;
 
   /// stream API.
-  _PdfObj.stream(this.id, List<int> data, {this.extra = ''})
-    : dict = '',
-      stream = PdfFlate.compress(data);
+  _PdfObj.stream(
+    this.id,
+    List<int> data, {
+    this.extra = '',
+    bool filter = true,
+  }) : dict = '',
+       stream = filter
+           ? PdfFlate.compress(data)
+           : (data is Uint8List ? data : Uint8List.fromList(data)),
+       applyFlateFilter = filter;
 
   /// rawStream API.
   _PdfObj.rawStream(this.id, List<int> data, {this.extra = ''})
     : dict = '',
-      stream = data is Uint8List ? data : Uint8List.fromList(data);
+      stream = data is Uint8List ? data : Uint8List.fromList(data),
+      applyFlateFilter = false;
 
   /// id API.
   final int id;
@@ -398,12 +696,15 @@ class _PdfObj {
   /// extra API.
   final String extra;
 
+  /// When false, omit `/Filter /FlateDecode` (e.g. XMP metadata).
+  final bool applyFlateFilter;
+
   /// serialize API.
   Uint8List serialize() {
     if (stream == null) {
       return utf8.encode('$id 0 obj\n$dict\nendobj\n');
     }
-    final String filter = extra.contains('/Filter')
+    final String filter = !applyFlateFilter || extra.contains('/Filter')
         ? ''
         : '/Filter /FlateDecode ';
     final String header =

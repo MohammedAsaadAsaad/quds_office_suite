@@ -4,5 +4,6 @@ build/
 coverage/
 doc/api/
 example/out/
+example/example/
 test/
 tool/

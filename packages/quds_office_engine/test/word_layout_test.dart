@@ -330,4 +330,324 @@ void main() {
     expect(laid.pages.first.lines, isNotEmpty);
     expect(laid.pages.first.lines.first.justification, WmlJustification.right);
   });
+
+  test('justified wrapped lines stretch spaces to the column edge', () {
+    const String text =
+        'Housing conditions in Al Tahreer are critically strained. '
+        'The average household size ranges between 6 and 10 people, '
+        'indicating severe overcrowding particularly within makeshift shelters '
+        'and partially damaged structures across the neighbourhood.';
+    final WmlDocument doc = WmlDocument(
+      sections: <WmlSection>[
+        WmlSection(
+          blocks: <WmlBlock>[
+            WmlParagraph(
+              properties: WmlParagraphProps(
+                justification: WmlJustification.justify,
+              ),
+              inlines: <WmlInline>[WmlRun(text: text)],
+            ),
+          ],
+        ),
+      ],
+    );
+    final LaidOutDocument laid = WordLayoutEngine(font: null).layout(doc);
+    expect(laid.pages.first.lines.length, greaterThan(1));
+    final LaidOutLine first = laid.pages.first.lines.first;
+    expect(first.justification, WmlJustification.justify);
+    expect(first.justificationRatio, isNot(0));
+    expect(first.glyphs, isNotEmpty);
+    final LaidOutGlyph last = first.glyphs.last;
+    expect(last.x + last.advance, closeTo(first.x + first.width, 1.5));
+    expect(laid.pages.first.lines.last.justificationRatio, 0);
+  });
+
+  test('tab occupies the default half-inch stop', () {
+    final WmlDocument doc = WmlDocument(
+      sections: <WmlSection>[
+        WmlSection(
+          blocks: <WmlBlock>[
+            WmlParagraph(inlines: <WmlInline>[WmlRun(text: 'A\tB')]),
+          ],
+        ),
+      ],
+    );
+    final LaidOutDocument laid = WordLayoutEngine(font: null).layout(doc);
+    final List<LaidOutGlyph> glyphs = laid.pages.first.lines.first.glyphs;
+    expect(glyphs, hasLength(3));
+    expect(glyphs[1].glyph.codePoint, 0x09);
+    expect(glyphs[1].advance, closeTo(kDefaultTabWidth, 0.01));
+    expect(
+      glyphs[2].x,
+      closeTo(glyphs[0].x + glyphs[0].advance + kDefaultTabWidth, 0.5),
+    );
+  });
+
+  test('tab-only paragraph still lays out a tab glyph', () {
+    final WmlDocument doc = WmlDocument(
+      sections: <WmlSection>[
+        WmlSection(
+          blocks: <WmlBlock>[
+            WmlParagraph(inlines: <WmlInline>[WmlRun(text: '\t')]),
+          ],
+        ),
+      ],
+    );
+    final LaidOutDocument laid = WordLayoutEngine(font: null).layout(doc);
+    final List<LaidOutGlyph> glyphs = laid.pages.first.lines.first.glyphs;
+    expect(glyphs, hasLength(1));
+    expect(glyphs.single.glyph.codePoint, 0x09);
+    expect(glyphs.single.advance, closeTo(kDefaultTabWidth, 0.01));
+  });
+
+  test('long table cell text wraps inside the column', () {
+    const double colW = 90;
+    final WmlDocument doc = WmlDocument(
+      sections: <WmlSection>[
+        WmlSection(
+          blocks: <WmlBlock>[
+            WmlTable(
+              grid: <double>[colW, colW],
+              rows: <WmlTableRow>[
+                WmlTableRow(
+                  cells: <WmlTableCell>[
+                    WmlTableCell(
+                      blocks: <WmlBlock>[
+                        WmlParagraph(
+                          inlines: <WmlInline>[
+                            WmlRun(
+                              text:
+                                  'نسبة المباني الصالحة والجزئية والمدمرة في الحي',
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    WmlTableCell(
+                      blocks: <WmlBlock>[
+                        WmlParagraph(
+                          inlines: <WmlInline>[WmlRun(text: '1')],
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ],
+        ),
+      ],
+    );
+    final LaidOutDocument laid = WordLayoutEngine(font: null).layout(doc);
+    final LaidOutBox cell = laid.pages.first.frames.first;
+    final List<LaidOutLine> cellLines = laid.pages.first.lines
+        .where((LaidOutLine line) => line.paragraphIndex == 0)
+        .toList();
+    expect(cellLines, isNotEmpty);
+    expect(cellLines.length, greaterThan(1));
+    for (final LaidOutLine line in cellLines) {
+      expect(line.width, lessThanOrEqualTo(cell.width + 0.5));
+      expect(line.x + line.width, lessThanOrEqualTo(cell.x + cell.width + 0.5));
+    }
+  });
+
+  test('incremental layout reuses earlier sections', () {
+    final WmlDocument doc = WmlDocument(
+      sections: <WmlSection>[
+        WmlSection(
+          blocks: <WmlBlock>[
+            WmlParagraph(inlines: <WmlInline>[WmlRun(text: 'Cover page')]),
+          ],
+        ),
+        WmlSection(
+          columnCount: 2,
+          blocks: <WmlBlock>[
+            WmlParagraph(inlines: <WmlInline>[WmlRun(text: 'Body left')]),
+            WmlParagraph(
+              properties: WmlParagraphProps(columnBreakBefore: true),
+              inlines: <WmlInline>[WmlRun(text: 'Body right')],
+            ),
+          ],
+        ),
+      ],
+    );
+    final WordLayoutEngine engine = WordLayoutEngine(font: null);
+    final LaidOutDocument full = engine.layout(doc);
+    doc.sections.last.blocks.add(
+      WmlParagraph(inlines: <WmlInline>[WmlRun(text: 'More body')]),
+    );
+    final LaidOutDocument incremental = engine.layout(
+      doc,
+      updateFields: false,
+      fromSectionIndex: 1,
+      reuse: full,
+    );
+    final LaidOutDocument again = engine.layout(doc);
+    expect(incremental.pages.length, again.pages.length);
+    expect(incremental.pages.first.sectionIndex, 0);
+    expect(
+      incremental.pages.any((LaidOutPage page) => page.sectionIndex == 1),
+      isTrue,
+    );
+  });
+
+  test('paragraph content box matches table cell, column, and frame origins', () {
+    final WmlDocument doc = WmlDocument(
+      sections: <WmlSection>[
+        WmlSection(
+          margins: const WmlPageMargins(left: 54, right: 54),
+          columnCount: 2,
+          columnSpace: 18,
+          blocks: <WmlBlock>[
+            WmlParagraph(inlines: <WmlInline>[WmlRun(text: 'Col A')]),
+            WmlParagraph(
+              properties: WmlParagraphProps(columnBreakBefore: true),
+              inlines: <WmlInline>[WmlRun(text: 'Col B')],
+            ),
+          ],
+        ),
+        WmlSection(
+          margins: const WmlPageMargins(left: 54, right: 54),
+          blocks: <WmlBlock>[
+            WmlTable(
+              grid: <double>[160, 160],
+              rows: <WmlTableRow>[
+                WmlTableRow(
+                  cells: <WmlTableCell>[
+                    WmlTableCell(
+                      blocks: <WmlBlock>[
+                        WmlParagraph(
+                          inlines: <WmlInline>[WmlRun(text: 'Cell L')],
+                        ),
+                      ],
+                    ),
+                    WmlTableCell(
+                      blocks: <WmlBlock>[
+                        WmlParagraph(
+                          inlines: <WmlInline>[WmlRun(text: 'Cell R')],
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            WmlFrame(
+              x: 122,
+              y: 64,
+              width: 200,
+              height: 40,
+              blocks: <WmlBlock>[
+                WmlParagraph(inlines: <WmlInline>[WmlRun(text: 'Framed')]),
+              ],
+            ),
+          ],
+        ),
+      ],
+    );
+    final LaidOutDocument laid = WordLayoutEngine(font: null).layout(doc);
+    final WmlSection cols = doc.sections.first;
+    final List<LaidOutLine> colLines = laid.pages
+        .where((LaidOutPage page) => page.sectionIndex == 0)
+        .expand((LaidOutPage page) => page.lines)
+        .toList();
+    expect(colLines[0].boxX, closeTo(cols.columnOriginX(0), 0.01));
+    expect(colLines[0].boxWidth, closeTo(cols.columnWidth, 1));
+    expect(colLines[1].boxX, closeTo(cols.columnOriginX(1), 0.01));
+
+    final LaidOutPage tablePage = laid.pages.firstWhere(
+      (LaidOutPage page) => page.sectionIndex == 1,
+    );
+    final List<LaidOutBox> cells = tablePage.frames
+        .where((LaidOutBox box) => box.table != null)
+        .toList();
+    expect(cells.length, greaterThanOrEqualTo(2));
+    LaidOutLine cellLineAt(LaidOutBox cell) {
+      return tablePage.lines.firstWhere(
+        (LaidOutLine line) =>
+            (line.boxX - (cell.x + LaidOutLine.tableCellPad)).abs() < 0.5,
+      );
+    }
+
+    expect(cellLineAt(cells[0]).boxX, closeTo(cells[0].x + LaidOutLine.tableCellPad, 0.01));
+    expect(cellLineAt(cells[1]).boxX, closeTo(cells[1].x + LaidOutLine.tableCellPad, 0.01));
+    final LaidOutLine framed = laid.pages
+        .expand((LaidOutPage page) => page.lines)
+        .firstWhere(
+          (LaidOutLine line) =>
+              (line.boxX - (122 + LaidOutLine.framePad)).abs() < 0.5,
+        );
+    expect(framed.boxX, closeTo(122 + LaidOutLine.framePad, 0.01));
+    expect(framed.boxWidth, closeTo(200 - LaidOutLine.framePad * 2, 0.01));
+  });
+
+  test('continuous two-column section starts below a full-width heading', () {
+    const WmlPageMargins margins = WmlPageMargins(
+      top: 56,
+      bottom: 48,
+      left: 54,
+      right: 54,
+    );
+    final WmlDocument doc = WmlDocument(
+      sections: <WmlSection>[
+        WmlSection(
+          margins: margins,
+          blocks: <WmlBlock>[
+            WmlTable(
+              grid: <double>[52, 416],
+              rows: <WmlTableRow>[
+                WmlTableRow(
+                  cells: <WmlTableCell>[
+                    WmlTableCell(
+                      fillColor: 'A8D69F',
+                      blocks: <WmlBlock>[
+                        WmlParagraph(
+                          inlines: <WmlInline>[WmlRun(text: '1.1')],
+                        ),
+                      ],
+                    ),
+                    WmlTableCell(
+                      blocks: <WmlBlock>[
+                        WmlParagraph(
+                          inlines: <WmlInline>[WmlRun(text: 'Heading')],
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ],
+        ),
+        WmlSection(
+          margins: margins,
+          columnCount: 2,
+          columnSpace: 18,
+          breakKind: WmlSectionBreakKind.continuous,
+          blocks: <WmlBlock>[
+            WmlParagraph(
+              inlines: <WmlInline>[WmlRun(text: 'Left column body text')],
+            ),
+            WmlParagraph(
+              properties: WmlParagraphProps(columnBreakBefore: true),
+              inlines: <WmlInline>[WmlRun(text: 'Right column body text')],
+            ),
+          ],
+        ),
+      ],
+    );
+    final LaidOutDocument laid = WordLayoutEngine(font: null).layout(doc);
+    final LaidOutPage page = laid.pages.first;
+    final WmlSection cols = doc.sections[1];
+    final LaidOutLine heading = page.lines.first;
+    final LaidOutLine left = page.lines.firstWhere(
+      (LaidOutLine line) => (line.boxX - cols.columnOriginX(0)).abs() < 1,
+    );
+    final LaidOutLine right = page.lines.firstWhere(
+      (LaidOutLine line) => (line.boxX - cols.columnOriginX(1)).abs() < 1,
+    );
+    expect(left.y, greaterThan(heading.y + heading.height - 0.5));
+    expect(right.y, greaterThan(heading.y + heading.height - 0.5));
+    expect(right.boxX, greaterThan(left.boxX + 20));
+  });
 }

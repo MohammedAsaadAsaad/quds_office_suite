@@ -1,3 +1,4 @@
+import '../../office/office_document_properties.dart';
 import '../../opc/opc_archive.dart';
 import '../../visual/office_visual.dart';
 import '../anim/pml_motion.dart';
@@ -213,7 +214,15 @@ class PmlShape {
     this.table,
     this.rightToLeft,
     this.textAlign = PmlTextAlign.left,
-  }) : path = path ?? <PmlPathPoint>[];
+    this.groupId,
+    this.placeholder = false,
+    this.mediaName = '',
+    List<int>? mediaBytes,
+    this.strokeColor = '',
+    this.strokeWidth = 1,
+    this.hyperlinkUrl = '',
+  }) : path = path ?? <PmlPathPoint>[],
+       mediaBytes = mediaBytes ?? <int>[];
 
   /// id API.
   int id;
@@ -256,6 +265,57 @@ class PmlShape {
 
   /// textAlign API.
   PmlTextAlign textAlign;
+
+  /// Shapes that share a [groupId] move together.
+  int? groupId;
+
+  /// True when this shape is a layout / master placeholder.
+  bool placeholder;
+
+  /// Optional media file name (video/audio).
+  String mediaName;
+
+  /// Optional media payload for playback hosts.
+  List<int> mediaBytes;
+
+  /// Outline stroke as `RRGGBB`; empty means no stroke (fill-only).
+  String strokeColor;
+
+  /// Outline width in points when [strokeColor] is set.
+  double strokeWidth;
+
+  /// External hyperlink URL for the shape (`a:hlinkClick` target).
+  String hyperlinkUrl;
+
+  /// True when this shape has playable media.
+  bool get hasMedia => mediaBytes.isNotEmpty || mediaName.isNotEmpty;
+
+  /// copy API.
+  PmlShape copy({int? id}) {
+    return PmlShape(
+      id: id ?? this.id,
+      name: name,
+      preset: preset,
+      transform: transform,
+      text: text,
+      fillColor: fillColor,
+      textColor: textColor,
+      fontSizePt: fontSizePt,
+      embedRelId: embedRelId,
+      path: <PmlPathPoint>[...path],
+      visual: visual?.copy(),
+      table: table?.copy(),
+      rightToLeft: rightToLeft,
+      textAlign: textAlign,
+      groupId: groupId,
+      placeholder: placeholder,
+      mediaName: mediaName,
+      mediaBytes: <int>[...mediaBytes],
+      strokeColor: strokeColor,
+      strokeWidth: strokeWidth,
+      hyperlinkUrl: hyperlinkUrl,
+    );
+  }
 }
 
 /// Class PmlPathPoint.
@@ -308,30 +368,72 @@ class PmlSlide {
 
   /// PowerPoint `p:sld/@show="0"` — skipped during a slide show.
   bool hidden;
+
+  /// copy API.
+  PmlSlide copy({int? id}) {
+    return PmlSlide(
+      id: id ?? this.id,
+      layoutName: layoutName,
+      masterName: masterName,
+      notes: notes,
+      transition: transition,
+      hidden: hidden,
+      animations: <PmlShapeAnimation>[
+        for (final PmlShapeAnimation anim in animations) anim.copyWith(),
+      ],
+      shapes: <PmlShape>[for (final PmlShape shape in shapes) shape.copy()],
+    );
+  }
 }
 
 /// Class PmlLayout.
 class PmlLayout {
   /// PmlLayout API.
-  PmlLayout({required this.name, this.placeholderText = ''});
+  PmlLayout({
+    required this.name,
+    this.placeholderText = '',
+    List<PmlShape>? placeholders,
+  }) : placeholders = placeholders ?? <PmlShape>[];
 
   /// name API.
   String name;
 
   /// placeholderText API.
   String placeholderText;
+
+  /// Real layout placeholders hosts can edit.
+  final List<PmlShape> placeholders;
 }
 
 /// Class PmlMaster.
 class PmlMaster {
   /// PmlMaster API.
-  PmlMaster({required this.name, this.background = 'FFFFFF'});
+  PmlMaster({
+    required this.name,
+    this.background = 'FFFFFF',
+    List<PmlShape>? shapes,
+  }) : shapes = shapes ?? <PmlShape>[];
 
   /// name API.
   String name;
 
   /// background API.
   String background;
+
+  /// Master shapes / placeholders.
+  final List<PmlShape> shapes;
+}
+
+/// A named group of consecutive slides in the sorter.
+class PmlSection {
+  /// PmlSection API.
+  PmlSection({required this.name, required this.startIndex});
+
+  /// name API.
+  String name;
+
+  /// First slide index in this section (inclusive).
+  int startIndex;
 }
 
 /// Class PmlPresentation.
@@ -341,12 +443,16 @@ class PmlPresentation {
     List<PmlSlide>? slides,
     PmlMaster? master,
     List<PmlLayout>? layouts,
+    List<PmlSection>? sections,
+    OfficeDocumentProperties? properties,
     this.package,
     this.slideWidth = 9144000,
     this.slideHeight = 5143500,
   }) : slides = slides ?? <PmlSlide>[PmlSlide(id: 256)],
        master = master ?? PmlMaster(name: 'Office Theme'),
-       layouts = layouts ?? <PmlLayout>[PmlLayout(name: 'Blank')];
+       layouts = layouts ?? <PmlLayout>[PmlLayout(name: 'Blank')],
+       sections = sections ?? <PmlSection>[],
+       properties = properties ?? OfficeDocumentProperties();
 
   /// slides API.
   List<PmlSlide> slides;
@@ -356,6 +462,12 @@ class PmlPresentation {
 
   /// layouts API.
   List<PmlLayout> layouts;
+
+  /// sections API.
+  final List<PmlSection> sections;
+
+  /// properties API.
+  OfficeDocumentProperties properties;
 
   /// package API.
   OpcPackage? package;
@@ -372,9 +484,21 @@ class PmlPresentation {
       return shape.text;
     }
     for (final PmlLayout layout in layouts) {
-      if (layout.name == slide.layoutName &&
-          layout.placeholderText.isNotEmpty) {
+      if (layout.name != slide.layoutName) {
+        continue;
+      }
+      if (layout.placeholderText.isNotEmpty) {
         return layout.placeholderText;
+      }
+      for (final PmlShape ph in layout.placeholders) {
+        if (ph.name == shape.name && ph.text.isNotEmpty) {
+          return ph.text;
+        }
+      }
+    }
+    for (final PmlShape ph in master.shapes) {
+      if (ph.name == shape.name && ph.text.isNotEmpty) {
+        return ph.text;
       }
     }
     return '';

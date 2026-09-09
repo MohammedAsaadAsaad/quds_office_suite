@@ -1,43 +1,44 @@
 # quds_office_editor
 
 <p>
-  <a href="https://pub.dev/packages/quds_office_editor"><img alt="pub" src="https://img.shields.io/pub/v/quds_office_editor.svg"/></a>
+  <a href="https://pub.dev/packages/quds_office_editor"><img alt="pub package" src="https://img.shields.io/pub/v/quds_office_editor.svg"/></a>
+  <a href="https://pub.dev/packages/quds_office_editor/score"><img alt="pub points" src="https://img.shields.io/pub/points/quds_office_editor"/></a>
   <a href="https://pub.dev/packages/quds_office_editor/score"><img alt="likes" src="https://img.shields.io/pub/likes/quds_office_editor?label=likes"/></a>
-  <a href="../../LICENSE"><img alt="MIT" src="https://img.shields.io/badge/license-MIT-0B1F3A"/></a>
-  <img alt="flutter" src="https://img.shields.io/badge/Flutter-RenderBox-02569B?logo=flutter&logoColor=white"/>
+  <a href="https://github.com/MohammedAsaadAsaad/quds_office_suite/blob/main/LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-0B1F3A"/></a>
+  <img alt="Flutter RenderBox" src="https://img.shields.io/badge/Flutter-RenderBox-02569B?logo=flutter&logoColor=white"/>
 </p>
 
-**Embeddable Word, Excel, and PowerPoint surfaces for Flutter** — built as
-custom `RenderBox` editors, not `TextField` / `ListView` / `InteractiveViewer`.
+**Embeddable Word, Excel, and PowerPoint surfaces for Flutter** — painted as
+custom `RenderBox` editors, not `TextField`, `ListView`, or `InteractiveViewer`.
 
-This is the interaction half of [Quds Office Suite](https://github.com/MohammedAsaadAsaad/quds_office_suite).
-Documents, formulas, layout, and PDF live in
+This is the interaction half of
+[Quds Office Suite](https://github.com/MohammedAsaadAsaad/quds_office_suite).
+Documents, formulas, pagination, and PDF live in
 [`quds_office_engine`](https://pub.dev/packages/quds_office_engine)
 (re-exported from this package).
 
-<p dir="rtl">
-محرّرات وورد وإكسل وبوربوينت لـ Flutter: رسم مخصص، مؤشر ثنائي الاتجاه،
-إدخال IME، معادلات، وعرض شرائح يمكن إرجاعه للخلف كفيديو عكسي.
-</p>
+You draw **your** ribbon, file menu, and window chrome. This package paints the
+document.
+
+![Word editor](example/screenshots/word.png)
+![Excel editor](example/screenshots/excel.png)
+![PowerPoint editor](example/screenshots/powerpoint.png)
 
 ---
 
-## What you embed
+## Why a custom RenderBox
 
-| Widget | Controller | Surface |
+A real Office canvas is one engine: caret, BiDi, IME, pagination, tables,
+selection, and zoom must agree on the same coordinates.
+
+Flutter’s text widgets are excellent for forms. They are the wrong primitive
+for a paginated Word page, a virtualized sheet, or a slide stage with motion.
+
+| Surface widget | Controller | What it paints |
 | --- | --- | --- |
 | `QudsWordEditor` | `WordEditorController` | Paginated pages, caret, tables, comments, headers/footers, OMML, pictures |
-| `QudsSheetEditor` | `SheetEditorController` | Virtualized grid, formula bar, freeze panes, fill, charts |
-| `QudsSlideEditor` | `SlideEditorController` | Slide stage, handles, snap guides, animations, fullscreen slideshow |
-
-You draw **your** ribbon, file menu, and window chrome. The package paints
-the document.
-
-<p align="center">
-  <img src="example/screenshots/word.png" alt="Word editor" width="32%"/>
-  <img src="example/screenshots/excel.png" alt="Excel editor" width="32%"/>
-  <img src="example/screenshots/powerpoint.png" alt="PowerPoint editor" width="32%"/>
-</p>
+| `QudsSheetEditor` | `SheetEditorController` | Virtualized grid, formula bar, freeze panes, fill handle, charts |
+| `QudsSlideEditor` | `SlideEditorController` | Slide stage, transform handles, snap guides, animations, slideshow |
 
 ```text
 ┌─ your Scaffold / desktop frame ──────────────────────────┐
@@ -49,6 +50,37 @@ the document.
 │  statusBarBuilder (optional)                             │
 └──────────────────────────────────────────────────────────┘
 ```
+
+---
+
+## Languages and writing directions
+
+The editor is built for **many languages and many writing directions**, not a
+single locale.
+
+- **IME composition** — Latin, Arabic, Hebrew, CJK, and other system IMEs
+  compose on the custom caret. There is no `EditableText` on the page.
+- **Logical caret + visual runs** — the caret walks grapheme clusters; painting
+  follows the engine’s UAX #9 BiDi and Arabic shaping.
+- **Paragraph and section direction** — LTR, RTL, and mixed-direction
+  documents. Windows/Linux-style Ctrl+Shift side shortcuts flip paragraph
+  direction (`officeParagraphDirectionFromSides`).
+- **Sheet direction** — worksheets can display right-to-left or left-to-right.
+- **Host chrome locale** — `OfficeStrings` is a typed string table. Ship
+  `OfficeStrings.english`, use the bundled second locale, or pass your own
+  translations. The canvas itself does not hardcode UI copy.
+- **Surface direction** — `OfficeSurfaceConfig.textDirection` sets the default
+  for chrome and new content; users can still mix directions inside a file.
+
+```dart
+const OfficeSurfaceConfig(
+  textDirection: TextDirection.rtl,
+  strings: OfficeStrings.english, // or your own OfficeStrings(...)
+);
+```
+
+The same document bytes open with the same layout in any host language. Locale
+only changes chrome labels, not pagination.
 
 ---
 
@@ -78,7 +110,9 @@ import 'package:quds_office_editor/quds_office_editor.dart';
 
 class WordHost extends StatefulWidget {
   const WordHost({super.key, this.bytes});
+
   final Uint8List? bytes;
+
   @override
   State<WordHost> createState() => _WordHostState();
 }
@@ -87,8 +121,8 @@ class _WordHostState extends State<WordHost> {
   late final WordEditorController controller = widget.bytes == null
       ? WordEditorController(
           config: const OfficeSurfaceConfig(
-            textDirection: TextDirection.rtl,
-            strings: OfficeStrings.arabic,
+            textDirection: TextDirection.ltr,
+            strings: OfficeStrings.english,
             theme: OfficeTheme.light,
           ),
         )
@@ -98,7 +132,7 @@ class _WordHostState extends State<WordHost> {
   void initState() {
     super.initState();
     if (widget.bytes == null) {
-      controller.insertHeading(text: 'وثيقة جديدة');
+      controller.insertHeading(text: 'New document');
     }
   }
 
@@ -128,13 +162,23 @@ final Uint8List docx = controller.saveBytes();
 
 The Word canvas supports:
 
-- Logical caret + IME (Arabic, Latin, CJK) without `EditableText`
-- Bold / italic / underline / color / highlight / superscript
-- Alignment, lists, indent, line spacing, RTL / LTR sections
-- Tables (resize, select cells), pictures, charts, SmartArt-like diagrams
-- Comments, hyperlinks, headers & footers, page breaks, TOC
+- Logical caret + IME without `EditableText`
+- Bold / italic / underline / color / highlight / superscript / subscript
+- Alignment, lists, indent, line spacing, LTR / RTL sections
+- Page size and orientation per **section** (portrait and landscape pages in
+  one document; continuous column slices share one paper size)
+- Horizontal pan and side gutters when a landscape page is wider than the view
+- Interactive rulers (margins, indents, tabs)
+- Tables (resize, select cells, merge), pictures, charts, diagrams
+- Comments, footnotes/endnotes pane, hyperlinks, headers & footers
+- Page breaks, section breaks, TOC
 - OMML equations
+- Find / replace, print, text statistics
 - Undo / redo, copy / cut / paste
+
+Orientation is a section property. Toggling landscape updates the caret
+section **and** its continuous siblings (a heading plus a two-column body),
+not a single laid-out page.
 
 ---
 
@@ -155,9 +199,9 @@ The grid is virtualized (`VirtualViewport`) so large sheets stay light.
 - A1 selection, fill handle, row/column insert-delete
 - In-cell editor + formula bar (`showFormulaBar`)
 - Formula engine from the engine package (`SUM`, `IF`, `VLOOKUP`, …)
-- Freeze panes, RTL sheets, number formats
+- Freeze panes, RTL or LTR sheets, number formats
 - Embedded charts from the selection
-- Recalc on edit; isolate open for big workbooks
+- Recalc on edit; isolate open for large workbooks
 
 ```dart
 controller.recalculateWorkbook();
@@ -192,24 +236,27 @@ controller.showPrevious();       // reverse the last motion
 controller.endShow();            // Esc
 ```
 
-`showPrevious()` reverses **that** animation or **that** transition — fly-in
+`showPrevious()` reverses **that** animation or **that** transition — a fly-in
 flies back out, a push slides back, a mid-fade retreats from the current
 frame. It is not a jump to the previous slide’s final state.
 
 ---
 
-## Theming and modes
+## Theming, modes, and chrome
 
 ```dart
 const OfficeSurfaceConfig(
   mode: OfficeInteractionMode.editing, // or selecting, viewing
   theme: OfficeTheme.dark,
-  textDirection: TextDirection.rtl,
-  strings: OfficeStrings.arabic,
+  textDirection: TextDirection.ltr,
+  strings: OfficeStrings.english,
   showRulers: true,
   showFormulaBar: true,
   showGridlines: true,
   showSlideHandles: true,
+  showFindChrome: false,
+  showNotesPane: false,
+  showNavigationPane: false,
   enableUndo: true,
 );
 ```
@@ -221,10 +268,15 @@ const OfficeSurfaceConfig(
 | `viewing` | No | No | No |
 
 `OfficeTheme.light` and `OfficeTheme.dark` ship as starting palettes. Host
-chrome (ribbons, panes) is **your** Material/Cupertino. Only the page, grid,
+chrome (ribbons, panes) is **your** Material or Cupertino. Only the page, grid,
 and stage are custom paint.
 
-Bilingual chrome strings: `OfficeStrings.english` / `OfficeStrings.arabic`.
+`OfficeStrings` is a complete typed table (file, home, insert, layout, review,
+view, find, notes, …). Provide another language by constructing
+`OfficeStrings(...)`. The bundled extras are a starting point, not a limit.
+
+Density (`OfficeDensity`) and form factor (`OfficeFormFactor`) let a host
+tighten chrome on phone vs desktop without changing the document model.
 
 ---
 
@@ -240,8 +292,15 @@ await controller.loadBytesAsync(
 final Uint8List out = controller.saveBytes(password: optionalPassword);
 ```
 
-Heavy opens run through `OfficeIsolateOpen` so a 20 MB deck does not freeze
-the first frame.
+Heavy opens run through `OfficeIsolateOpen` so a large deck does not freeze
+the first frame. Password-protected OOXML packages open when a password is
+supplied.
+
+The engine’s PDF export is one call away from any controller’s model:
+
+```dart
+final Uint8List pdf = OfficePdfExport.fromBytes(controller.saveBytes());
+```
 
 ---
 
@@ -261,15 +320,15 @@ Use those widgets in **your** toolbar. Do not drop them onto the page.
 
 ## Studio example
 
-A full bilingual workspace (File / Home / Insert / Layout / Review / View,
-sample library, OS window frame):
+A full workspace (File / Home / Insert / Layout / Review / View, sample
+library, OS window frame) lives under `example/`:
 
 ```bash
 cd packages/quds_office_editor/example
 flutter run
 ```
 
-See [`example/README.md`](example/README.md) for a guided tour of Word, Excel,
+See [example/README.md](example/README.md) for a guided tour of Word, Excel,
 and PowerPoint.
 
 ---
@@ -297,13 +356,26 @@ flowchart TB
 | --- | --- |
 | `office_editors.dart` | Embeddable widgets + shortcuts + IME |
 | `office_controller.dart` | Commands, selection, undo, load/save |
-| `office_theme.dart` | Tokens, modes, bilingual strings |
+| `office_theme.dart` | Tokens, modes, localizable strings |
+| `office_clipboard.dart` | OOXML-aware copy / cut / paste |
 | `render_word_canvas.dart` | Paginated Word `RenderBox` |
 | `render_sheet_grid.dart` | Virtualized sheet `RenderBox` |
 | `render_slide_stage.dart` | Slide + slideshow `RenderBox` |
+| `office_ruler.dart` | Interactive Word ruler |
+| `word_notes_pane.dart` | Footnotes / endnotes host pane |
+
+---
+
+## Design rules
+
+- **Engine owns the model** — the editor never forks a second document format.
+- **RenderBox only on the canvas** — no scrolling or text widgets as the page.
+- **Host owns chrome** — ribbons, dialogs, and file pickers stay in your app.
+- **Type-safe commands** — undoable mutations go through the controller, not
+  ad-hoc widget state.
 
 ---
 
 ## License
 
-MIT © Mohammed Asaad Asaad
+MIT. See [LICENSE](LICENSE).

@@ -13,6 +13,7 @@ import '../ui_components/office_chrome.dart';
 import '../visual/paint_office_visual.dart';
 import '../editor_slide/transform_handles.dart';
 import 'caret_engine.dart';
+import 'office_ruler.dart';
 import 'paint_equation.dart';
 import 'paint_run_text.dart';
 
@@ -30,12 +31,16 @@ class WordCanvas extends LeafRenderObjectWidget {
     this.semanticsLabel = '',
     this.semanticsValue = '',
     this.selectedVisual,
+    this.selectedFrame,
+    this.editingFrame = false,
     this.selectedEquation,
     this.equationSlot = 0,
     this.equationCaret = 0,
     this.pictureCropMode = false,
     this.onChanged,
     this.onSelectVisual,
+    this.onSelectFrame,
+    this.onEditFrame,
     this.onSelectEquation,
     this.onBeginVisualTransform,
     this.onPreviewVisualMove,
@@ -43,6 +48,10 @@ class WordCanvas extends LeafRenderObjectWidget {
     this.onPreviewVisualCrop,
     this.onPreviewVisualRotate,
     this.onCommitVisualTransform,
+    this.onBeginFrameTransform,
+    this.onPreviewFrameMove,
+    this.onPreviewFrameResize,
+    this.onCommitFrameTransform,
     this.onActivateVisual,
     this.onExtendThroughVisual,
     this.isVisualInSelection,
@@ -66,7 +75,12 @@ class WordCanvas extends LeafRenderObjectWidget {
     this.editingFooter = false,
     this.onBeginHeaderFooterEdit,
     this.onEndHeaderFooterEdit,
+    this.onBeginRulerEdit,
+    this.onPreviewRulerEdit,
+    this.onCommitRulerEdit,
     this.compact = false,
+    this.findHits = const <OfficeFindHit>[],
+    this.activeFindIndex = -1,
   });
 
   /// document API.
@@ -95,6 +109,12 @@ class WordCanvas extends LeafRenderObjectWidget {
 
   /// selectedVisual API.
   final WmlVisual? selectedVisual;
+
+  /// selectedFrame API.
+  final WmlFrame? selectedFrame;
+
+  /// Hide move/resize knobs and edit the frame text.
+  final bool editingFrame;
 
   /// selectedEquation API.
   final WmlEquation? selectedEquation;
@@ -135,11 +155,30 @@ class WordCanvas extends LeafRenderObjectWidget {
   /// onCommitVisualTransform API.
   final VoidCallback? onCommitVisualTransform;
 
+  /// onBeginFrameTransform API.
+  final VoidCallback? onBeginFrameTransform;
+
+  /// Function API.
+  final void Function(double dx, double dy)? onPreviewFrameMove;
+
+  /// Function API.
+  final void Function({required double width, required double height})?
+  onPreviewFrameResize;
+
+  /// onCommitFrameTransform API.
+  final VoidCallback? onCommitFrameTransform;
+
   /// onChanged API.
   final VoidCallback? onChanged;
 
   /// onSelectVisual API.
   final ValueChanged<OfficeVisual?>? onSelectVisual;
+
+  /// onSelectFrame API.
+  final ValueChanged<WmlFrame?>? onSelectFrame;
+
+  /// Double-click enters text edit on a frame.
+  final ValueChanged<WmlFrame>? onEditFrame;
 
   /// Function API.
   final void Function(WmlEquation? equation, int? slot, int? caret)?
@@ -226,8 +265,23 @@ class WordCanvas extends LeafRenderObjectWidget {
   /// onEndHeaderFooterEdit API.
   final VoidCallback? onEndHeaderFooterEdit;
 
+  /// onBeginRulerEdit API.
+  final VoidCallback? onBeginRulerEdit;
+
+  /// onPreviewRulerEdit API.
+  final ValueChanged<WordRulerEdit>? onPreviewRulerEdit;
+
+  /// onCommitRulerEdit API.
+  final VoidCallback? onCommitRulerEdit;
+
   /// compact API.
   final bool compact;
+
+  /// findHits API.
+  final List<OfficeFindHit> findHits;
+
+  /// activeFindIndex API.
+  final int activeFindIndex;
 
   @override
   /// createRenderObject API.
@@ -242,12 +296,16 @@ class WordCanvas extends LeafRenderObjectWidget {
       semanticsLabel: semanticsLabel,
       semanticsValue: semanticsValue,
       selectedVisual: selectedVisual,
+      selectedFrame: selectedFrame,
+      editingFrame: editingFrame,
       selectedEquation: selectedEquation,
       equationSlot: equationSlot,
       equationCaret: equationCaret,
       pictureCropMode: pictureCropMode,
       onChanged: onChanged,
       onSelectVisual: onSelectVisual,
+      onSelectFrame: onSelectFrame,
+      onEditFrame: onEditFrame,
       onSelectEquation: onSelectEquation,
       onBeginVisualTransform: onBeginVisualTransform,
       onPreviewVisualMove: onPreviewVisualMove,
@@ -255,6 +313,10 @@ class WordCanvas extends LeafRenderObjectWidget {
       onPreviewVisualCrop: onPreviewVisualCrop,
       onPreviewVisualRotate: onPreviewVisualRotate,
       onCommitVisualTransform: onCommitVisualTransform,
+      onBeginFrameTransform: onBeginFrameTransform,
+      onPreviewFrameMove: onPreviewFrameMove,
+      onPreviewFrameResize: onPreviewFrameResize,
+      onCommitFrameTransform: onCommitFrameTransform,
       onActivateVisual: onActivateVisual,
       onExtendThroughVisual: onExtendThroughVisual,
       isVisualInSelection: isVisualInSelection,
@@ -278,7 +340,12 @@ class WordCanvas extends LeafRenderObjectWidget {
       editingFooter: editingFooter,
       onBeginHeaderFooterEdit: onBeginHeaderFooterEdit,
       onEndHeaderFooterEdit: onEndHeaderFooterEdit,
+      onBeginRulerEdit: onBeginRulerEdit,
+      onPreviewRulerEdit: onPreviewRulerEdit,
+      onCommitRulerEdit: onCommitRulerEdit,
       compact: compact,
+      findHits: findHits,
+      activeFindIndex: activeFindIndex,
     );
   }
 
@@ -294,12 +361,16 @@ class WordCanvas extends LeafRenderObjectWidget {
       ..semanticsLabel = semanticsLabel
       ..semanticsValue = semanticsValue
       ..selectedVisual = selectedVisual
+      ..selectedFrame = selectedFrame
+      ..editingFrame = editingFrame
       ..selectedEquation = selectedEquation
       ..equationSlot = equationSlot
       ..equationCaret = equationCaret
       ..pictureCropMode = pictureCropMode
       ..onChanged = onChanged
       ..onSelectVisual = onSelectVisual
+      ..onSelectFrame = onSelectFrame
+      ..onEditFrame = onEditFrame
       ..onSelectEquation = onSelectEquation
       ..onBeginVisualTransform = onBeginVisualTransform
       ..onPreviewVisualMove = onPreviewVisualMove
@@ -307,6 +378,10 @@ class WordCanvas extends LeafRenderObjectWidget {
       ..onPreviewVisualCrop = onPreviewVisualCrop
       ..onPreviewVisualRotate = onPreviewVisualRotate
       ..onCommitVisualTransform = onCommitVisualTransform
+      ..onBeginFrameTransform = onBeginFrameTransform
+      ..onPreviewFrameMove = onPreviewFrameMove
+      ..onPreviewFrameResize = onPreviewFrameResize
+      ..onCommitFrameTransform = onCommitFrameTransform
       ..onActivateVisual = onActivateVisual
       ..onExtendThroughVisual = onExtendThroughVisual
       ..isVisualInSelection = isVisualInSelection
@@ -330,7 +405,12 @@ class WordCanvas extends LeafRenderObjectWidget {
       ..editingFooter = editingFooter
       ..onBeginHeaderFooterEdit = onBeginHeaderFooterEdit
       ..onEndHeaderFooterEdit = onEndHeaderFooterEdit
-      ..compact = compact;
+      ..onBeginRulerEdit = onBeginRulerEdit
+      ..onPreviewRulerEdit = onPreviewRulerEdit
+      ..onCommitRulerEdit = onCommitRulerEdit
+      ..compact = compact
+      ..findHits = findHits
+      ..activeFindIndex = activeFindIndex;
     if (viewport != null) {
       renderObject.viewport = viewport!;
     }
@@ -351,12 +431,16 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
     required this.semanticsLabel,
     required this.semanticsValue,
     this.selectedVisual,
+    this.selectedFrame,
+    this.editingFrame = false,
     this.selectedEquation,
     this.equationSlot = 0,
     this.equationCaret = 0,
     this.pictureCropMode = false,
     this.onChanged,
     this.onSelectVisual,
+    this.onSelectFrame,
+    this.onEditFrame,
     this.onSelectEquation,
     this.onBeginVisualTransform,
     this.onPreviewVisualMove,
@@ -364,6 +448,10 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
     this.onPreviewVisualCrop,
     this.onPreviewVisualRotate,
     this.onCommitVisualTransform,
+    this.onBeginFrameTransform,
+    this.onPreviewFrameMove,
+    this.onPreviewFrameResize,
+    this.onCommitFrameTransform,
     this.onActivateVisual,
     this.onExtendThroughVisual,
     this.isVisualInSelection,
@@ -387,7 +475,12 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
     this.editingFooter = false,
     this.onBeginHeaderFooterEdit,
     this.onEndHeaderFooterEdit,
+    this.onBeginRulerEdit,
+    this.onPreviewRulerEdit,
+    this.onCommitRulerEdit,
     this.compact = false,
+    this.findHits = const <OfficeFindHit>[],
+    this.activeFindIndex = -1,
   });
 
   /// document API.
@@ -416,6 +509,12 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
 
   /// selectedVisual API.
   WmlVisual? selectedVisual;
+
+  /// selectedFrame API.
+  WmlFrame? selectedFrame;
+
+  /// Hide move/resize knobs and edit the frame text.
+  bool editingFrame;
 
   /// selectedEquation API.
   WmlEquation? selectedEquation;
@@ -456,11 +555,30 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
   /// onCommitVisualTransform API.
   VoidCallback? onCommitVisualTransform;
 
+  /// onBeginFrameTransform API.
+  VoidCallback? onBeginFrameTransform;
+
+  /// Function API.
+  void Function(double dx, double dy)? onPreviewFrameMove;
+
+  /// Function API.
+  void Function({required double width, required double height})?
+  onPreviewFrameResize;
+
+  /// onCommitFrameTransform API.
+  VoidCallback? onCommitFrameTransform;
+
   /// onChanged API.
   VoidCallback? onChanged;
 
   /// onSelectVisual API.
   ValueChanged<OfficeVisual?>? onSelectVisual;
+
+  /// onSelectFrame API.
+  ValueChanged<WmlFrame?>? onSelectFrame;
+
+  /// Double-click enters text edit on a frame.
+  ValueChanged<WmlFrame>? onEditFrame;
 
   /// Function API.
   void Function(WmlEquation? equation, int? slot, int? caret)? onSelectEquation;
@@ -545,8 +663,23 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
   /// onEndHeaderFooterEdit API.
   VoidCallback? onEndHeaderFooterEdit;
 
+  /// onBeginRulerEdit API.
+  VoidCallback? onBeginRulerEdit;
+
+  /// onPreviewRulerEdit API.
+  ValueChanged<WordRulerEdit>? onPreviewRulerEdit;
+
+  /// onCommitRulerEdit API.
+  VoidCallback? onCommitRulerEdit;
+
   /// compact API.
   bool compact;
+
+  /// findHits API.
+  List<OfficeFindHit> findHits;
+
+  /// activeFindIndex API.
+  int activeFindIndex;
 
   /// editingFooter API.
   bool get _editingHeaderFooter => editingHeader || editingFooter;
@@ -560,13 +693,25 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
   /// VisualImageCache API.
   final VisualImageCache _images = VisualImageCache();
   LaidOutDocument? _fittedLayout;
+  final Set<LaidOutPage> _fittedPages = <LaidOutPage>{};
   int? _visualHandle;
   var _draggingVisual = false;
+  int? _frameHandle;
+  var _draggingFrame = false;
   ({WmlTable table, bool column, int index, double start})? _tableResize;
   ({WmlTable table, bool column, int anchor, int current})? _tableBand;
   Offset? _hoverLocal;
   var _scrollDrag = false;
   int? _scrollPageTip;
+  var _panZoomScale = 1.0;
+  RulerHit? _rulerHover;
+  RulerHit? _rulerDrag;
+  Offset? _rulerDown;
+  WmlIndent? _rulerIndent;
+  List<WmlTabStop>? _rulerTabs;
+  WmlPageMargins? _rulerMargins;
+  String? _rulerReadout;
+  var _rulerCreatedTab = false;
 
   static const double _pointsToPixels = 96 / 72;
   static const double _scrollBar = 14;
@@ -606,8 +751,14 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
     if (window == null || !config.allowsSelection) {
       return SystemMouseCursors.basic;
     }
+    if (_rulerDrag != null || _inRuler(window)) {
+      return WordRuler.cursorFor(_rulerDrag ?? _rulerHit(window));
+    }
     if (_draggingVisual) {
       return _cursorForHandle(_visualHandle ?? 9);
+    }
+    if (_draggingFrame) {
+      return _cursorForHandle(_frameHandle ?? 9);
     }
     if (_tableResize != null) {
       return _tableResize!.column
@@ -633,12 +784,35 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
           selectedBox.width,
           selectedBox.height,
         ),
-      ).hit(local, radius: 12);
+      ).hit(local, radius: 12, showRotate: !pictureCropMode);
       if (handle != null) {
         return _cursorForHandle(handle);
       }
       if (_boxContains(selectedBox, local, pad: 2)) {
         return SystemMouseCursors.move;
+      }
+    }
+    final LaidOutBox? selectedFrameBox = _selectedFrameBoxOn(page);
+    if (selectedFrameBox != null && config.allowsMutation) {
+      if (editingFrame) {
+        if (_boxContains(selectedFrameBox, local, pad: 2)) {
+          return SystemMouseCursors.text;
+        }
+      } else {
+        final int? handle = TransformHandles(
+          Rect.fromLTWH(
+            selectedFrameBox.x,
+            selectedFrameBox.y,
+            selectedFrameBox.width,
+            selectedFrameBox.height,
+          ),
+        ).hit(local, radius: 12, showRotate: false);
+        if (handle != null) {
+          return _cursorForHandle(handle);
+        }
+        if (_boxContains(selectedFrameBox, local, pad: 2)) {
+          return SystemMouseCursors.move;
+        }
       }
     }
     final WmlHyperlink? link = _linkAt(laidPage, local);
@@ -650,6 +824,11 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
     }
     final LaidOutBox? visualBox = _visualAt(laidPage, local);
     if (visualBox != null) {
+      return config.allowsMutation
+          ? SystemMouseCursors.grab
+          : SystemMouseCursors.click;
+    }
+    if (_frameAt(laidPage, local) != null) {
       return config.allowsMutation
           ? SystemMouseCursors.grab
           : SystemMouseCursors.click;
@@ -847,31 +1026,51 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
     if (!compact) {
       _clampViewport();
     }
-    _ensurePaintMetrics();
+    _resetPaintFit();
   }
 
-  Size get _contentSize {
-    final double scale = _viewScale;
+  static const double _pageSideGutter = 64;
+
+  double get _maxPageWidthPt {
     var maxW = laidOut.pageSize.width;
-    var stackH = 24.0;
     for (final LaidOutPage page in laidOut.pages) {
       if (page.width > maxW) {
         maxW = page.width;
       }
+    }
+    return maxW;
+  }
+
+  Size get _contentSize {
+    final double scale = _viewScale;
+    var stackH = 24.0;
+    for (final LaidOutPage page in laidOut.pages) {
       stackH += page.height * scale + 24;
     }
     if (laidOut.pages.isEmpty) {
       stackH += laidOut.pageSize.height * scale + 24;
     }
-    return Size(maxW * scale + 64, stackH);
+    return Size(
+      _maxPageWidthPt * scale + _pageSideGutter * 2 + _scrollBar,
+      stackH,
+    );
   }
 
   void _clampViewport() {
     viewport.clampTo(content: _contentSize, view: size);
   }
 
-  Rect get _vTrack =>
-      Rect.fromLTWH(size.width - _scrollBar, 0, _scrollBar, size.height);
+  double get _rulerInset => config.showRulers ? OfficeChrome.rulerSize : 0;
+
+  Rect get _vTrack {
+    final double top = _rulerInset;
+    return Rect.fromLTWH(
+      size.width - _scrollBar,
+      top,
+      _scrollBar,
+      math.max(0, size.height - top),
+    );
+  }
 
   /// max API.
   double get _maxScrollY => math.max(0, _contentSize.height - size.height);
@@ -988,12 +1187,20 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
           _dragVisual(details.delta);
           return;
         }
+        if (_draggingFrame) {
+          _dragFrame(details.delta);
+          return;
+        }
         if (_tableResize != null) {
           _dragTableEdge(details.delta);
           return;
         }
         if (_tableBand != null) {
           _extendTableBand(details.localPosition);
+          return;
+        }
+        if (_rulerDrag != null) {
+          _dragRuler(details.localPosition);
           return;
         }
         if (_selectEquationAt(details.localPosition)) {
@@ -1014,38 +1221,99 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
           _draggingVisual = false;
           _visualHandle = null;
         }
+        if (_draggingFrame) {
+          onCommitFrameTransform?.call();
+          _draggingFrame = false;
+          _frameHandle = null;
+        }
         if (_tableResize != null) {
           onCommitTableResize?.call(_tableResize!.table);
           _tableResize = null;
+        }
+        if (_rulerDrag != null) {
+          _finishRuler();
         }
         _tableBand = null;
       };
   }
 
+  bool get _zoomKeys =>
+      HardwareKeyboard.instance.isControlPressed ||
+      HardwareKeyboard.instance.isMetaPressed;
+
+  void _finishPointerScroll() {
+    _clampViewport();
+    _scrollPageTip = _pageAtViewport();
+    markNeedsPaint();
+    onChanged?.call();
+  }
+
+  void _applyWheelScroll(PointerScrollEvent event) {
+    if (_zoomKeys) {
+      viewport.setScale(
+        viewport.scale * (event.scrollDelta.dy > 0 ? 0.9 : 1.1),
+      );
+    } else {
+      Offset delta = event.scrollDelta;
+      if (HardwareKeyboard.instance.isShiftPressed &&
+          delta.dx.abs() < delta.dy.abs()) {
+        delta = Offset(delta.dy, 0);
+      }
+      viewport.pan(delta);
+    }
+    _finishPointerScroll();
+  }
+
+  void _applyPanZoom(PointerPanZoomUpdateEvent event) {
+    if (_zoomKeys || (event.scale - _panZoomScale).abs() > 0.02) {
+      final double current = _panZoomScale == 0 ? 1 : _panZoomScale;
+      viewport.setScale(viewport.scale * (event.scale / current));
+      _panZoomScale = event.scale == 0 ? current : event.scale;
+    } else {
+      viewport.pan(-event.localPanDelta);
+    }
+    _finishPointerScroll();
+  }
+
   @override
   /// handleEvent API.
   void handleEvent(PointerEvent event, covariant BoxHitTestEntry entry) {
-    if (compact && event is PointerScrollEvent) {
+    if (compact &&
+        (event is PointerScrollEvent ||
+            event is PointerPanZoomStartEvent ||
+            event is PointerPanZoomUpdateEvent ||
+            event is PointerPanZoomEndEvent)) {
       return;
     }
     if (event is PointerScrollEvent) {
-      final bool zoom =
-          HardwareKeyboard.instance.isControlPressed ||
-          HardwareKeyboard.instance.isMetaPressed;
-      if (zoom) {
-        final double factor = event.scrollDelta.dy > 0 ? 0.9 : 1.1;
-        viewport.setScale(viewport.scale * factor);
-      } else {
-        viewport.pan(event.scrollDelta);
-      }
-      _clampViewport();
-      _scrollPageTip = _pageAtViewport();
+      GestureBinding.instance.pointerSignalResolver.register(event, (
+        PointerSignalEvent signal,
+      ) {
+        if (signal is PointerScrollEvent) {
+          _applyWheelScroll(signal);
+        }
+      });
+      return;
+    }
+    if (event is PointerPanZoomStartEvent) {
+      _panZoomScale = 1;
+      return;
+    }
+    if (event is PointerPanZoomUpdateEvent) {
+      _applyPanZoom(event);
+      return;
+    }
+    if (event is PointerPanZoomEndEvent) {
+      _panZoomScale = 1;
+      _scrollPageTip = null;
       markNeedsPaint();
-      onChanged?.call();
       return;
     }
     if (event is PointerHoverEvent || event is PointerMoveEvent) {
       _hoverLocal = event.localPosition;
+      _rulerHover = _inRuler(event.localPosition)
+          ? _rulerHit(event.localPosition)
+          : null;
       if (!compact && _vTrack.contains(event.localPosition)) {
         _scrollPageTip = _pageAtViewport();
       } else if (!_scrollDrag) {
@@ -1072,6 +1340,11 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
         _handleContext(event);
         return;
       }
+      if (_tryRuler(event.localPosition)) {
+        _ensureRecognizers();
+        _pan!.addPointer(event);
+        return;
+      }
       if (_tryTableHandle(event.localPosition)) {
         return;
       }
@@ -1095,15 +1368,490 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
     }
   }
 
+  bool _inRuler(Offset local) {
+    return config.showRulers &&
+        !compact &&
+        (local.dy <= WordRuler.size || local.dx <= WordRuler.size);
+  }
+
+  List<WmlParagraph> _rulerStory() {
+    return storyParagraphs ?? document.paragraphs.toList();
+  }
+
+  int _visibleRulerPageIndex() {
+    if (laidOut.pages.isEmpty) {
+      return 0;
+    }
+    return laidOut
+        .pageIndexAtContentY(
+          viewport.origin.dy + WordRuler.size + 8,
+          _viewScale,
+        )
+        .clamp(0, laidOut.pages.length - 1);
+  }
+
+  WmlParagraph? _rulerParagraph() {
+    final List<WmlParagraph> paras = _rulerStory();
+    if (paras.isEmpty) {
+      return null;
+    }
+    final LaidOutLine? focus = _rulerFocusLine();
+    if (focus != null) {
+      return paras[focus.paragraphIndex.clamp(0, paras.length - 1)];
+    }
+    return paras[caret.paragraphIndex.clamp(0, paras.length - 1)];
+  }
+
+  WmlSection _rulerSection() {
+    if (laidOut.pages.isEmpty || document.sections.isEmpty) {
+      return document.sections.isEmpty
+          ? WmlSection()
+          : document.sections.first;
+    }
+    final int sectionIndex = laidOut.pages[_visibleRulerPageIndex()].sectionIndex
+        .clamp(0, document.sections.length - 1);
+    return document.sections[sectionIndex];
+  }
+
+  LaidOutLine? _rulerFocusLine() {
+    if (laidOut.pages.isEmpty) {
+      return null;
+    }
+    final int pageIndex = _visibleRulerPageIndex();
+    final LaidOutPage page = laidOut.pages[pageIndex];
+    return WordRuler.pickFocusLine(
+      visiblePageIndex: pageIndex,
+      caretLine: _lineForParagraph(_caretParagraph()),
+      visiblePageLines: _editingHeaderFooter
+          ? (editingFooter ? page.footer : page.header)
+          : page.lines,
+    );
+  }
+
+  WmlParagraph? _caretParagraph() {
+    final List<WmlParagraph> paras = _rulerStory();
+    if (paras.isEmpty) {
+      return null;
+    }
+    return paras[caret.paragraphIndex.clamp(0, paras.length - 1)];
+  }
+
+  _RulerView _rulerView() {
+    final int pageIndex = laidOut.pages.isEmpty ? 0 : _visibleRulerPageIndex();
+    final WmlSection section = _rulerSection();
+    final LaidOutLine? focus = _rulerFocusLine();
+    final WmlParagraph? para = _rulerParagraph();
+    final WmlIndent indent = _rulerIndent ??
+        para?.properties.indent ??
+        const WmlIndent();
+    final List<WmlTabStop> tabs = _rulerTabs ??
+        para?.properties.tabs ??
+        const <WmlTabStop>[];
+    final WmlPageMargins margins = _rulerMargins ?? section.margins;
+    final bool rtl = para?.properties.rightToLeft == true ||
+        para?.properties.bidiBaseLevel == 1;
+    final ({double left, double right}) box = _rulerContentBox(
+      section,
+      para,
+      focus: focus,
+      pageIndex: pageIndex,
+    );
+    return _RulerView(
+      pageLeft: _pageLeftPx() - viewport.origin.dx,
+      pageTop: laidOut.pageStackTop(pageIndex, _viewScale) - viewport.origin.dy,
+      scale: _viewScale,
+      pageWidth: section.pageSize.width,
+      pageHeight: section.pageSize.height,
+      margins: margins,
+      indent: indent,
+      tabs: tabs,
+      rtl: rtl,
+      contentLeft: box.left,
+      contentRight: box.right,
+    );
+  }
+
+  ({double left, double right}) _rulerContentBox(
+    WmlSection section,
+    WmlParagraph? para, {
+    LaidOutLine? focus,
+    required int pageIndex,
+  }) {
+    final LaidOutLine? line = focus ?? _lineForParagraph(para);
+    final int paraIndex = line?.paragraphIndex ?? caret.paragraphIndex;
+    final LaidOutBox? cell = _cellBoxForParagraph(paraIndex);
+    final WmlFrame? selectedOnPage = _frameOnPage(selectedFrame, pageIndex);
+    final WmlFrame? frame = selectedOnPage ?? _frameContaining(para);
+    var columnIndex = 0;
+    if (section.resolvedColumnCount > 1) {
+      final double probe = line != null && line.boxWidth > 0
+          ? line.boxX
+          : line?.x ?? section.margins.left;
+      columnIndex = _columnIndexForX(section, probe);
+    }
+    return WordRuler.paragraphContentBox(
+      margins: section.margins,
+      pageWidth: section.pageSize.width,
+      lineBoxX: line != null && line.boxWidth > 0 ? line.boxX : null,
+      lineBoxWidth: line != null && line.boxWidth > 0 ? line.boxWidth : null,
+      cellX: cell?.x,
+      cellWidth: cell?.width,
+      frameX: frame?.pageX(section),
+      frameWidth: frame?.width,
+      columnCount: section.resolvedColumnCount,
+      columnIndex: columnIndex,
+      columnWidth: section.columnWidth,
+      columnSpace: section.columnSpace,
+      preferFrame: selectedOnPage != null,
+    );
+  }
+
+  WmlFrame? _frameOnPage(WmlFrame? frame, int pageIndex) {
+    if (frame == null ||
+        pageIndex < 0 ||
+        pageIndex >= laidOut.pages.length) {
+      return null;
+    }
+    for (final LaidOutBox box in laidOut.pages[pageIndex].frames) {
+      if (identical(box.frame, frame)) {
+        return frame;
+      }
+    }
+    return null;
+  }
+
+  LaidOutLine? _lineForParagraph(WmlParagraph? para) {
+    if (para == null) {
+      return null;
+    }
+    final int index = caret.paragraphIndex;
+    LaidOutLine? first;
+    for (final LaidOutPage page in laidOut.pages) {
+      final List<LaidOutLine> pool = _editingHeaderFooter
+          ? <LaidOutLine>[
+              if (editingHeader) ...page.header,
+              if (editingFooter) ...page.footer,
+            ]
+          : page.lines;
+      for (final LaidOutLine line in pool) {
+        if (line.paragraphIndex != index) {
+          continue;
+        }
+        first ??= line;
+        final bool last = _isLastParagraphLine(page, line);
+        if (caret.isOnLine(line, lastOfParagraph: last)) {
+          return line;
+        }
+      }
+    }
+    return first;
+  }
+
+  LaidOutBox? _cellBoxForParagraph(int paraIndex) {
+    for (final LaidOutPage page in laidOut.pages) {
+      for (final LaidOutBox box in page.frames) {
+        if (box.table == null) {
+          continue;
+        }
+        final int? start = box.paragraphIndex;
+        if (start == null) {
+          continue;
+        }
+        final int end = box.paragraphEnd ?? start;
+        if (paraIndex >= start && paraIndex <= end) {
+          return box;
+        }
+      }
+    }
+    return null;
+  }
+
+  int _columnIndexForX(WmlSection section, double pageX) {
+    var best = 0;
+    for (int i = 0; i < section.resolvedColumnCount; i++) {
+      if (pageX >= section.columnOriginX(i) - 1) {
+        best = i;
+      }
+    }
+    return best;
+  }
+
+  WmlFrame? _frameContaining(WmlParagraph? target) {
+    if (target == null) {
+      return null;
+    }
+    WmlFrame? walk(List<WmlBlock> blocks) {
+      for (final WmlBlock block in blocks) {
+        if (block is WmlFrame) {
+          if (_paragraphIn(block.blocks, target)) {
+            return block;
+          }
+          final WmlFrame? nested = walk(block.blocks);
+          if (nested != null) {
+            return nested;
+          }
+        } else if (block is WmlTable) {
+          for (final WmlTableRow row in block.rows) {
+            for (final WmlTableCell cell in row.cells) {
+              final WmlFrame? found = walk(cell.blocks);
+              if (found != null) {
+                return found;
+              }
+            }
+          }
+        }
+      }
+      return null;
+    }
+
+    for (final WmlSection section in document.sections) {
+      final WmlFrame? found = walk(section.blocks);
+      if (found != null) {
+        return found;
+      }
+    }
+    return null;
+  }
+
+  bool _paragraphIn(List<WmlBlock> blocks, WmlParagraph target) {
+    for (final WmlBlock block in blocks) {
+      if (identical(block, target)) {
+        return true;
+      }
+      if (block is WmlFrame && _paragraphIn(block.blocks, target)) {
+        return true;
+      }
+      if (block is WmlTable) {
+        for (final WmlTableRow row in block.rows) {
+          for (final WmlTableCell cell in row.cells) {
+            if (_paragraphIn(cell.blocks, target)) {
+              return true;
+            }
+          }
+        }
+      }
+    }
+    return false;
+  }
+
+  RulerHit? _rulerHit(Offset local) {
+    final _RulerView view = _rulerView();
+    return WordRuler.hit(
+      local: local,
+      view: size,
+      pageLeft: view.pageLeft,
+      pageTop: view.pageTop,
+      scale: view.scale,
+      pageWidth: view.pageWidth,
+      pageHeight: view.pageHeight,
+      margins: view.margins,
+      indent: view.indent,
+      tabs: view.tabs,
+      rtl: view.rtl,
+      contentLeft: view.contentLeft,
+      contentRight: view.contentRight,
+    );
+  }
+
+  bool _tryRuler(Offset local) {
+    if (!_inRuler(local) || !config.allowsMutation) {
+      return false;
+    }
+    final RulerHit? hit = _rulerHit(local);
+    if (hit == null) {
+      return false;
+    }
+    final _RulerView view = _rulerView();
+    _rulerDown = local;
+    _rulerIndent = view.indent;
+    _rulerTabs = List<WmlTabStop>.from(view.tabs);
+    _rulerMargins = view.margins;
+    onBeginRulerEdit?.call();
+    if (hit.kind == RulerHitKind.track && local.dy <= WordRuler.size) {
+      final bool snapOff = HardwareKeyboard.instance.isAltPressed;
+      final double px = WordRuler.snap(
+        WordRuler.pageX(local.dx, pageLeft: view.pageLeft, scale: view.scale),
+        disable: snapOff,
+      );
+      final double pos = WordRuler.tabPosition(
+        pageX: px,
+        margins: view.margins,
+        pageWidth: view.pageWidth,
+        rtl: view.rtl,
+        contentLeft: view.contentLeft,
+        contentRight: view.contentRight,
+      );
+      _rulerTabs = <WmlTabStop>[
+        ..._rulerTabs!,
+        WmlTabStop(position: pos),
+      ];
+      _rulerCreatedTab = true;
+      _rulerDrag = RulerHit(RulerHitKind.tab, tabIndex: _rulerTabs!.length - 1);
+      onPreviewRulerEdit?.call(WordRulerEdit(tabs: _rulerTabs));
+    } else {
+      _rulerCreatedTab = false;
+      _rulerDrag = hit;
+    }
+    markNeedsPaint();
+    return true;
+  }
+
+  void _dragRuler(Offset local) {
+    final RulerHit? drag = _rulerDrag;
+    if (drag == null) {
+      return;
+    }
+    final _RulerView view = _rulerView();
+    final bool snapOff = HardwareKeyboard.instance.isAltPressed;
+    if (drag.kind == RulerHitKind.tab) {
+      if ((local.dy - WordRuler.size).abs() > 28 && local.dy > WordRuler.size) {
+        final int? i = drag.tabIndex;
+        if (i != null && _rulerTabs != null && i >= 0 && i < _rulerTabs!.length) {
+          _rulerTabs = <WmlTabStop>[
+            for (int t = 0; t < _rulerTabs!.length; t++)
+              if (t != i) _rulerTabs![t],
+          ];
+          _rulerDrag = const RulerHit(RulerHitKind.track);
+          _rulerReadout = null;
+          onPreviewRulerEdit?.call(WordRulerEdit(tabs: _rulerTabs));
+        }
+        markNeedsPaint();
+        return;
+      }
+      final double px = WordRuler.snap(
+        WordRuler.pageX(local.dx, pageLeft: view.pageLeft, scale: view.scale),
+        disable: snapOff,
+      );
+      final double pos = WordRuler.tabPosition(
+        pageX: px,
+        margins: view.margins,
+        pageWidth: view.pageWidth,
+        rtl: view.rtl,
+        contentLeft: view.contentLeft,
+        contentRight: view.contentRight,
+      );
+      final int i = drag.tabIndex ?? 0;
+      if (_rulerTabs != null && i >= 0 && i < _rulerTabs!.length) {
+        final WmlTabStop old = _rulerTabs![i];
+        _rulerTabs = <WmlTabStop>[
+          for (int t = 0; t < _rulerTabs!.length; t++)
+            if (t == i)
+              WmlTabStop(
+                position: pos,
+                alignment: old.alignment,
+                leader: old.leader,
+              )
+            else
+              _rulerTabs![t],
+        ];
+        _rulerReadout = WordRuler.inchLabel(pos);
+        onPreviewRulerEdit?.call(WordRulerEdit(tabs: _rulerTabs));
+      }
+      markNeedsPaint();
+      return;
+    }
+    if (drag.kind == RulerHitKind.marginLeft ||
+        drag.kind == RulerHitKind.marginRight ||
+        drag.kind == RulerHitKind.marginTop ||
+        drag.kind == RulerHitKind.marginBottom) {
+      final double pos = drag.kind == RulerHitKind.marginTop ||
+              drag.kind == RulerHitKind.marginBottom
+          ? WordRuler.snap(
+              WordRuler.pageY(
+                local.dy,
+                pageTop: view.pageTop,
+                scale: view.scale,
+              ),
+              disable: snapOff,
+            )
+          : WordRuler.snap(
+              WordRuler.pageX(
+                local.dx,
+                pageLeft: view.pageLeft,
+                scale: view.scale,
+              ),
+              disable: snapOff,
+            );
+      _rulerMargins = WordRuler.applyMarginDrag(
+        margins: _rulerMargins ?? view.margins,
+        kind: drag.kind,
+        pagePos: pos,
+        pageWidth: view.pageWidth,
+        pageHeight: view.pageHeight,
+      );
+      _rulerReadout = WordRuler.inchLabel(pos);
+      onPreviewRulerEdit?.call(WordRulerEdit(margins: _rulerMargins));
+      markNeedsPaint();
+      return;
+    }
+    final double px = WordRuler.snap(
+      WordRuler.pageX(local.dx, pageLeft: view.pageLeft, scale: view.scale),
+      disable: snapOff,
+    );
+    _rulerIndent = WordRuler.applyIndentDrag(
+      indent: _rulerIndent ?? view.indent,
+      kind: drag.kind,
+      pageX: px,
+      margins: view.margins,
+      pageWidth: view.pageWidth,
+      rtl: view.rtl,
+      contentLeft: view.contentLeft,
+      contentRight: view.contentRight,
+    );
+    _rulerReadout = WordRuler.inchLabel(
+      view.rtl ? view.contentRight - px : px - view.contentLeft,
+    );
+    onPreviewRulerEdit?.call(WordRulerEdit(indent: _rulerIndent));
+    markNeedsPaint();
+  }
+
+  void _finishRuler() {
+    final RulerHit? drag = _rulerDrag;
+    final Offset? down = _rulerDown;
+    if (!_rulerCreatedTab &&
+        drag?.kind == RulerHitKind.tab &&
+        down != null &&
+        _hoverLocal != null &&
+        (_hoverLocal! - down).distance < 3 &&
+        _rulerTabs != null &&
+        drag!.tabIndex != null &&
+        drag.tabIndex! < _rulerTabs!.length) {
+      final WmlTabStop old = _rulerTabs![drag.tabIndex!];
+      _rulerTabs = <WmlTabStop>[
+        for (int t = 0; t < _rulerTabs!.length; t++)
+          if (t == drag.tabIndex)
+            WmlTabStop(
+              position: old.position,
+              alignment: WordRuler.cycleAlignment(old.alignment),
+              leader: old.leader,
+            )
+          else
+            _rulerTabs![t],
+      ];
+      onPreviewRulerEdit?.call(WordRulerEdit(tabs: _rulerTabs));
+    }
+    onCommitRulerEdit?.call();
+    _rulerDrag = null;
+    _rulerDown = null;
+    _rulerIndent = null;
+    _rulerTabs = null;
+    _rulerMargins = null;
+    _rulerReadout = null;
+    _rulerCreatedTab = false;
+    markNeedsPaint();
+    onChanged?.call();
+  }
+
   double _pageLeftPx() {
     if (compact) {
       return 0;
     }
-    final double pageW = laidOut.pageSize.width * _viewScale;
-    if (size.width > pageW + 64) {
-      return (size.width - pageW) / 2;
+    final double pageW = _maxPageWidthPt * _viewScale;
+    final double viewW = math.max(0, size.width - _scrollBar);
+    if (viewW > pageW + _pageSideGutter * 2) {
+      return (viewW - pageW) / 2;
     }
-    return 32;
+    return _pageSideGutter;
   }
 
   (int, Offset) _hitPage(Offset window) {
@@ -1127,8 +1875,8 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
   void _handleClick(Offset window) {
     final bool extend = HardwareKeyboard.instance.isShiftPressed;
     final int taps = extend ? 1 : _countTap(window);
-    _ensurePaintMetrics();
     final (int page, Offset local) = _hitPage(window);
+    _fitPageAt(page);
     if (page >= 0 && page < laidOut.pages.length) {
       final bool? chromeFooter = _chromeHit(laidOut.pages[page], local);
       if (taps >= 2 && chromeFooter != null && config.allowsMutation) {
@@ -1166,6 +1914,9 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
       if (_trySelectedVisualHandle(page, local)) {
         return;
       }
+      if (_trySelectedFrameHandle(page, local)) {
+        return;
+      }
       final LaidOutBox? visualBox = _visualAt(laidOut.pages[page], local);
       final OfficeVisual? visual = visualBox?.visual;
       if (visual != null) {
@@ -1193,8 +1944,37 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
         onChanged?.call();
         return;
       }
+      final LaidOutBox? frameBox = _frameAt(laidOut.pages[page], local);
+      final WmlFrame? frame = frameBox?.frame;
+      if (frame != null) {
+        if (taps >= 2) {
+          onEditFrame?.call(frame);
+          _placeCaret(window, extend: extend, notify: false);
+        } else if (editingFrame && identical(frame, selectedFrame)) {
+          _placeCaret(window, extend: extend, notify: false);
+        } else {
+          onSelectFrame?.call(frame);
+          if (config.allowsMutation && !extend) {
+            final int? handle = TransformHandles(
+              Rect.fromLTWH(
+                frameBox!.x,
+                frameBox.y,
+                frameBox.width,
+                frameBox.height,
+              ),
+            ).hit(local, radius: 14, showRotate: false);
+            _frameHandle = handle ?? 9;
+            _draggingFrame = true;
+            onBeginFrameTransform?.call();
+          }
+        }
+        markNeedsPaint();
+        onChanged?.call();
+        return;
+      }
     }
     onSelectVisual?.call(null);
+    onSelectFrame?.call(null);
     onSelectEquation?.call(null, null, null);
     onSelectTable?.call(null);
     _placeCaret(window, extend: extend, notify: false);
@@ -1296,8 +2076,8 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
 
   /// notify API.
   void _placeCaret(Offset window, {required bool extend, bool notify = true}) {
-    _ensurePaintMetrics();
     final (int page, Offset local) = _hitPage(window);
+    _fitPageAt(page);
     if (page < 0 || page >= laidOut.pages.length) {
       return;
     }
@@ -1440,7 +2220,7 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
         selectedBox.width,
         selectedBox.height,
       ),
-    ).hit(local, radius: 14);
+    ).hit(local, radius: 14, showRotate: !pictureCropMode);
     if (handle == null) {
       return false;
     }
@@ -1588,6 +2368,116 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
       }
     }
     return null;
+  }
+
+  LaidOutBox? _frameAt(LaidOutPage page, Offset local) {
+    LaidOutBox? best;
+    var bestArea = double.infinity;
+    for (final LaidOutBox box in page.frames) {
+      if (box.kind != LaidOutBoxKind.frame || box.frame == null) {
+        continue;
+      }
+      if (_boxContains(box, local)) {
+        final double area = box.width * box.height;
+        if (area < bestArea) {
+          bestArea = area;
+          best = box;
+        }
+      }
+    }
+    return best;
+  }
+
+  LaidOutBox? _selectedFrameBoxOn(int page) {
+    final WmlFrame? selected = selectedFrame;
+    if (selected == null || page < 0 || page >= laidOut.pages.length) {
+      return null;
+    }
+    for (final LaidOutBox box in laidOut.pages[page].frames) {
+      if (box.frame != null && identical(box.frame, selected)) {
+        return box;
+      }
+    }
+    return null;
+  }
+
+  bool _trySelectedFrameHandle(int page, Offset local) {
+    if (!config.allowsMutation || editingFrame) {
+      return false;
+    }
+    final LaidOutBox? selectedBox = _selectedFrameBoxOn(page);
+    if (selectedBox == null) {
+      return false;
+    }
+    final int? handle = TransformHandles(
+      Rect.fromLTWH(
+        selectedBox.x,
+        selectedBox.y,
+        selectedBox.width,
+        selectedBox.height,
+      ),
+    ).hit(local, radius: 14, showRotate: false);
+    if (handle == null) {
+      return false;
+    }
+    _frameHandle = handle;
+    _draggingFrame = true;
+    onBeginFrameTransform?.call();
+    markNeedsPaint();
+    onChanged?.call();
+    return true;
+  }
+
+  void _dragFrame(Offset delta) {
+    final int? handle = _frameHandle;
+    final WmlFrame? frame = selectedFrame;
+    if (handle == null || frame == null) {
+      return;
+    }
+    final Offset pageDelta = Offset(
+      delta.dx / _viewScale,
+      delta.dy / _viewScale,
+    );
+    if (handle == 9 || handle == 8) {
+      onPreviewFrameMove?.call(pageDelta.dx, pageDelta.dy);
+      return;
+    }
+    var width = frame.width;
+    var height = frame.height;
+    var shiftX = 0.0;
+    var shiftY = 0.0;
+    switch (handle) {
+      case 0:
+        shiftX = pageDelta.dx;
+        shiftY = pageDelta.dy;
+        width -= pageDelta.dx;
+        height -= pageDelta.dy;
+      case 1:
+        shiftY = pageDelta.dy;
+        height -= pageDelta.dy;
+      case 2:
+        shiftY = pageDelta.dy;
+        width += pageDelta.dx;
+        height -= pageDelta.dy;
+      case 3:
+        width += pageDelta.dx;
+      case 4:
+        width += pageDelta.dx;
+        height += pageDelta.dy;
+      case 5:
+        height += pageDelta.dy;
+      case 6:
+        shiftX = pageDelta.dx;
+        width -= pageDelta.dx;
+        height += pageDelta.dy;
+      case 7:
+        shiftX = pageDelta.dx;
+        width -= pageDelta.dx;
+    }
+    onPreviewFrameResize?.call(width: width, height: height);
+    if (shiftX != 0 || shiftY != 0) {
+      onPreviewFrameMove?.call(shiftX, shiftY);
+    }
   }
 
   LaidOutBox? _visualAt(LaidOutPage page, Offset local) {
@@ -2187,37 +3077,81 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
     return line.x >= cell.x - 1 && line.x <= cell.x + cell.width;
   }
 
+  LaidOutBox? _cellForLine(LaidOutPage page, LaidOutLine line) {
+    LaidOutBox? best;
+    var bestArea = double.infinity;
+    for (final LaidOutBox box in page.frames) {
+      if (box.kind != LaidOutBoxKind.tableCell || !_lineInCell(line, box)) {
+        continue;
+      }
+      final double area = box.width * box.height;
+      if (area < bestArea) {
+        bestArea = area;
+        best = box;
+      }
+    }
+    return best;
+  }
+
   int _hitOffsetOnLine(LaidOutLine line, Offset local) {
     if (line.glyphs.isEmpty) {
       final String text = line.overlayText ?? '';
       if (text.isEmpty || line.width <= 0) {
         return 0;
       }
+      final bool rtl = CaretEngine.resolveRtl(
+        paragraphRtl: _paragraphRtl(line.paragraphIndex),
+        nearbyText: text,
+      );
       final double t = ((local.dx - line.x) / line.width).clamp(0.0, 1.0);
-      return (t * text.length).round();
+      final double visual = rtl ? 1 - t : t;
+      return (visual * text.length).round();
     }
-    for (final LaidOutGlyph g in line.glyphs) {
-      if (local.dx <= g.x + g.advance / 2) {
-        return g.glyph.logicalIndex;
-      }
-    }
-    return line.glyphs.last.glyph.logicalIndex + 1;
+    return PaintRunText.hitLogicalIndexOnLine(
+      line,
+      local.dx,
+      paragraph: line.sourceText ?? _paragraphTextAt(line.paragraphIndex),
+      themeFamily: _theme.fontFamily,
+    );
   }
 
-  void _ensurePaintMetrics() {
+  void _resetPaintFit() {
     if (identical(_fittedLayout, laidOut)) {
       return;
     }
-    for (final LaidOutPage page in laidOut.pages) {
-      for (final LaidOutLine line in page.lines) {
-        PaintRunText.fitLine(
-          line,
-          _paragraphTextAt(line.paragraphIndex),
-          themeFamily: _theme.fontFamily,
-        );
-      }
-    }
     _fittedLayout = laidOut;
+    _fittedPages.clear();
+  }
+
+  void _fitPageAt(int pageIndex) {
+    if (pageIndex < 0 || pageIndex >= laidOut.pages.length) {
+      return;
+    }
+    _fitPage(laidOut.pages[pageIndex]);
+  }
+
+  void _fitPage(LaidOutPage page) {
+    _resetPaintFit();
+    if (!_fittedPages.add(page)) {
+      return;
+    }
+    void fit(LaidOutLine line) {
+      PaintRunText.fitLine(
+        line,
+        _paragraphTextAt(line.paragraphIndex),
+        themeFamily: _theme.fontFamily,
+      );
+    }
+
+    for (final LaidOutLine line in page.lines) {
+      fit(line);
+    }
+    for (final LaidOutLine line in page.header) {
+      fit(line);
+    }
+    for (final LaidOutLine line in page.footer) {
+      fit(line);
+    }
   }
 
   @override
@@ -2236,7 +3170,7 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
   @override
   /// paint API.
   void paint(PaintingContext context, Offset offset) {
-    _ensurePaintMetrics();
+    _resetPaintFit();
     final Canvas canvas = context.canvas;
     canvas.save();
     canvas.translate(offset.dx, offset.dy);
@@ -2247,23 +3181,18 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
     );
     if (compact) {
       if (laidOut.pages.isNotEmpty) {
+        _fitPage(laidOut.pages.first);
         _paintFrames(canvas, laidOut.pages.first);
         for (final LaidOutLine line in laidOut.pages.first.lines) {
           if (_paintsLineSelection(line, laidOut.pages.first)) {
-            final BrokenLine broken = _broken(line);
-            for (final Rect r in caret.selectionRects(
-              broken,
-              line.y,
-              line.height,
-              paragraph: line.paragraphIndex,
-            )) {
-              canvas.drawRect(
-                r.shift(Offset(line.x, 0)),
-                Paint()..color = _theme.selectionFill,
-              );
-            }
+            _paintLineSelection(canvas, line);
           }
-          _drawLine(canvas, line);
+          _drawLine(
+            canvas,
+            line,
+            pageWidth: laidOut.pages.first.width,
+            marginRight: _marginRightOf(laidOut.pages.first),
+          );
           if (config.showsCaret &&
               hasFocus &&
               caret.visible &&
@@ -2275,10 +3204,7 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
                   line,
                 ),
               )) {
-            canvas.drawRect(
-              _caretPaintRect(line),
-              Paint()..color = _theme.caret,
-            );
+            _paintCaret(canvas, line);
           }
         }
       }
@@ -2315,6 +3241,7 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
       if (!viewport.intersects(pageRect)) {
         continue;
       }
+      _fitPage(page);
       canvas.drawShadow(
         Path()..addRect(pageRect.inflate(1)),
         const Color(0x66000000),
@@ -2333,11 +3260,17 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
       canvas.translate(pageLeft, top);
       canvas.scale(scale);
       canvas.clipRect(Rect.fromLTWH(0, 0, page.width, page.height));
+      _paintWatermark(canvas, page);
       _paintFrames(canvas, page, paintHandles: false);
       _paintSelectedTables(canvas, page);
       _paintTableBandChrome(canvas, page);
       for (final LaidOutLine line in page.header) {
-        _drawOverlay(canvas, line, pageWidth: page.width);
+        _drawOverlay(
+          canvas,
+          line,
+          pageWidth: page.width,
+          marginRight: _marginRightOf(page),
+        );
       }
       if (_editingHeaderFooter) {
         canvas.drawRect(
@@ -2351,21 +3284,23 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
         );
       }
       for (final LaidOutLine line in page.lines) {
-        if (!_editingHeaderFooter && _paintsLineSelection(line, page)) {
-          final BrokenLine broken = _broken(line);
-          for (final Rect r in caret.selectionRects(
-            broken,
-            line.y,
-            line.height,
-            paragraph: line.paragraphIndex,
-          )) {
-            canvas.drawRect(
-              r.shift(Offset(line.x, 0)),
-              Paint()..color = _theme.selectionFill,
-            );
-          }
+        final LaidOutBox? cell = _cellForLine(page, line);
+        if (cell != null) {
+          canvas.save();
+          canvas.clipRect(
+            Rect.fromLTWH(cell.x, cell.y, cell.width, cell.height),
+          );
         }
-        _drawLine(canvas, line);
+        if (!_editingHeaderFooter && _paintsLineSelection(line, page)) {
+          _paintLineSelection(canvas, line);
+        }
+        _paintRevisionMarkup(canvas, line);
+        _drawLine(
+          canvas,
+          line,
+          pageWidth: page.width,
+          marginRight: _marginRightOf(page),
+        );
         if (!_editingHeaderFooter &&
             config.showsCaret &&
             hasFocus &&
@@ -2375,11 +3310,27 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
               line,
               lastOfParagraph: _isLastParagraphLine(page, line),
             )) {
-          canvas.drawRect(_caretPaintRect(line), Paint()..color = _theme.caret);
+          _paintCaret(canvas, line);
+        }
+        if (cell != null) {
+          canvas.restore();
         }
       }
       for (final LaidOutLine line in page.footer) {
-        _drawOverlay(canvas, line, pageWidth: page.width);
+        _drawOverlay(
+          canvas,
+          line,
+          pageWidth: page.width,
+          marginRight: _marginRightOf(page),
+        );
+      }
+      for (final LaidOutLine line in page.notes) {
+        _drawOverlay(
+          canvas,
+          line,
+          pageWidth: page.width,
+          marginRight: _marginRightOf(page),
+        );
       }
       if (_editingHeaderFooter) {
         _paintHeaderFooterChrome(canvas, page);
@@ -2397,8 +3348,26 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
     _paintScrollBar(canvas);
     _paintLinkHint(canvas);
     if (config.showRulers) {
-      OfficeChrome.paintRuler(canvas, size, vertical: false, theme: _theme);
-      OfficeChrome.paintRuler(canvas, size, vertical: true, theme: _theme);
+      final _RulerView ruler = _rulerView();
+      WordRuler.paint(
+        canvas,
+        size,
+        pageLeft: ruler.pageLeft,
+        pageTop: ruler.pageTop,
+        scale: ruler.scale,
+        pageWidth: ruler.pageWidth,
+        pageHeight: ruler.pageHeight,
+        margins: ruler.margins,
+        indent: ruler.indent,
+        tabs: ruler.tabs,
+        rtl: ruler.rtl,
+        theme: _theme,
+        hover: _rulerHover,
+        active: _rulerDrag,
+        readout: _rulerReadout,
+        contentLeft: ruler.contentLeft,
+        contentRight: ruler.contentRight,
+      );
     }
     if (hasFocus) {
       canvas.drawRect(
@@ -2467,6 +3436,74 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
       grid += span;
     }
     return 1;
+  }
+
+  void _paintFindHits(Canvas canvas, LaidOutLine line) {
+    if (findHits.isEmpty) {
+      return;
+    }
+    for (int i = 0; i < findHits.length; i++) {
+      final OfficeFindHit hit = findHits[i];
+      if (hit.paragraphIndex != line.paragraphIndex) {
+        continue;
+      }
+      final Color fill = i == activeFindIndex
+          ? const Color(0x99F4B183)
+          : const Color(0x66FFE699);
+      for (final Rect r in CaretEngine.rangeRectsOnLine(
+        line,
+        line.y,
+        line.height,
+        hit.start,
+        hit.end,
+      )) {
+        canvas.drawRect(r, Paint()..color = fill);
+      }
+    }
+  }
+
+  void _paintLineSelection(Canvas canvas, LaidOutLine line) {
+    _paintFindHits(canvas, line);
+    for (final Rect r in caret.selectionRectsOnLine(
+      line,
+      line.y,
+      line.height,
+      paragraph: line.paragraphIndex,
+    )) {
+      final Rect box = r.inflate(0.6);
+      final Color fill = _selectionFillFor(line, box);
+      canvas.drawRect(box, Paint()..color = fill);
+      canvas.drawRect(
+        box,
+        Paint()
+          ..color = fill.withValues(alpha: 1)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 0.9,
+      );
+    }
+  }
+
+  Color _selectionFillFor(LaidOutLine line, Rect box) {
+    var ink = const Color(0xFF222222);
+    if (line.glyphs.isNotEmpty) {
+      for (final LaidOutGlyph glyph in line.glyphs) {
+        if (glyph.x + glyph.advance >= box.left && glyph.x <= box.right) {
+          ink = _colorFromHex(glyph.color);
+          break;
+        }
+      }
+    } else if (line.overlayColor != null && line.overlayColor!.isNotEmpty) {
+      ink = _colorFromHex(line.overlayColor!);
+    }
+    return _invertInk(ink);
+  }
+
+  static Color _invertInk(Color color) {
+    final int argb = color.toARGB32();
+    final int r = 255 - ((argb >> 16) & 0xFF);
+    final int g = 255 - ((argb >> 8) & 0xFF);
+    final int b = 255 - (argb & 0xFF);
+    return Color.fromARGB(230, r, g, b);
   }
 
   bool _paintsLineSelection(LaidOutLine line, LaidOutPage page) {
@@ -2641,6 +3678,21 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
 
   void _paintVisualHandles(Canvas canvas, LaidOutPage page) {
     for (final LaidOutBox box in page.frames) {
+      if (box.kind == LaidOutBoxKind.frame &&
+          box.frame != null &&
+          identical(box.frame, selectedFrame)) {
+        TransformHandles(
+          Rect.fromLTWH(box.x, box.y, box.width, box.height),
+        ).paint(
+          canvas,
+          strokeColor: _theme.focusRing,
+          fillColor: _theme.pageBackground,
+          showKnobs: !editingFrame,
+          showRotate: false,
+          knobSize: 9,
+        );
+        continue;
+      }
       final OfficeVisual? visual = box.visual;
       if (visual == null || box.kind == LaidOutBoxKind.tableCell) {
         continue;
@@ -2657,14 +3709,79 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
       ).paint(
         canvas,
         strokeColor: pictureCropMode
-            ? const Color(0xFFC45911)
+            ? const Color(0xFFFF8C1A)
             : _theme.focusRing,
         fillColor: _theme.pageBackground,
         showKnobs: true,
         showRotate: !pictureCropMode,
+        cropMode: pictureCropMode && visual.isPicture,
         knobSize: 9,
       );
     }
+  }
+
+  void _paintRevisionMarkup(Canvas canvas, LaidOutLine line) {
+    if (document.revisions.isEmpty || line.glyphs.isEmpty) {
+      return;
+    }
+    for (final WmlRevision revision in document.revisions) {
+      if (revision.paragraphIndex != line.paragraphIndex) {
+        continue;
+      }
+      for (final LaidOutGlyph glyph in line.glyphs) {
+        final int at = glyph.glyph.logicalIndex;
+        if (at < revision.start || at >= revision.end) {
+          continue;
+        }
+        final double x = glyph.x;
+        final double w = glyph.advance;
+        if (revision.kind == WmlRevisionKind.insert) {
+          canvas.drawLine(
+            Offset(x, line.y + line.height - 1),
+            Offset(x + w, line.y + line.height - 1),
+            Paint()
+              ..color = const Color(0xFF1B7A3A)
+              ..strokeWidth = 1.1,
+          );
+        } else {
+          canvas.drawLine(
+            Offset(x, line.y + line.height * 0.55),
+            Offset(x + w, line.y + line.height * 0.55),
+            Paint()
+              ..color = const Color(0xFFC0392B)
+              ..strokeWidth = 1.1,
+          );
+        }
+      }
+    }
+  }
+
+  void _paintWatermark(Canvas canvas, LaidOutPage page) {
+    final String text = document.watermark.trim();
+    if (text.isEmpty) {
+      return;
+    }
+    final TextPainter painter = TextPainter(
+      text: TextSpan(
+        text: text,
+        style: TextStyle(
+          color: const Color(0x33888888),
+          fontSize: (page.width * 0.12).clamp(22.0, 64.0),
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+      textDirection: PaintRunText.looksRtl(text)
+          ? TextDirection.rtl
+          : TextDirection.ltr,
+    )..layout();
+    canvas.save();
+    canvas.translate(page.width / 2, page.height / 2);
+    canvas.rotate(-0.6);
+    painter.paint(
+      canvas,
+      Offset(-painter.width / 2, -painter.height / 2),
+    );
+    canvas.restore();
   }
 
   void _paintFrames(
@@ -2676,19 +3793,69 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
       if (box.kind == LaidOutBoxKind.tocEntry) {
         continue;
       }
+      if (box.kind == LaidOutBoxKind.paragraphShade) {
+        final Rect shade = Rect.fromLTWH(box.x, box.y, box.width, box.height);
+        if (box.fillColor != null && box.fillColor!.isNotEmpty) {
+          canvas.drawRect(shade, Paint()..color = _colorFromHex(box.fillColor!));
+        }
+        if (box.strokeColor.isNotEmpty) {
+          canvas.drawRect(
+            shade,
+            Paint()
+              ..color = _colorFromHex(box.strokeColor)
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = 0.8,
+          );
+        }
+        continue;
+      }
+      if (box.kind == LaidOutBoxKind.lineNumber) {
+        final TextPainter painter = TextPainter(
+          text: TextSpan(
+            text: '${box.paragraphIndex ?? ''}',
+            style: const TextStyle(color: Color(0xFF888888), fontSize: 8),
+          ),
+          textDirection: TextDirection.ltr,
+        )..layout();
+        painter.paint(canvas, Offset(box.x, box.y));
+        continue;
+      }
+      if (box.kind == LaidOutBoxKind.footnote) {
+        canvas.drawRect(
+          Rect.fromLTWH(box.x, box.y, box.width, 0.7),
+          Paint()..color = const Color(0xFF888888),
+        );
+        continue;
+      }
       final Rect rect = Rect.fromLTWH(box.x, box.y, box.width, box.height);
       if (box.kind == LaidOutBoxKind.frame ||
           box.kind == LaidOutBoxKind.columnSep) {
         if (box.fillColor != null && box.fillColor!.isNotEmpty) {
           canvas.drawRect(rect, Paint()..color = _colorFromHex(box.fillColor!));
         }
+        final bool frameSelected =
+            box.frame != null && identical(box.frame, selectedFrame);
         if (box.strokeColor.isNotEmpty && box.strokeColor != '00000000') {
           canvas.drawRect(
             rect,
             Paint()
-              ..color = _colorFromHex(box.strokeColor)
+              ..color = frameSelected
+                  ? _theme.focusRing
+                  : _colorFromHex(box.strokeColor)
               ..style = PaintingStyle.stroke
-              ..strokeWidth = box.kind == LaidOutBoxKind.columnSep ? 0.7 : 0.8,
+              ..strokeWidth = frameSelected
+                  ? 1.8
+                  : (box.kind == LaidOutBoxKind.columnSep ? 0.7 : 0.8),
+          );
+        }
+        if (frameSelected && paintHandles && !editingFrame) {
+          TransformHandles(rect).paint(
+            canvas,
+            strokeColor: _theme.focusRing,
+            fillColor: _theme.pageBackground,
+            showKnobs: true,
+            showRotate: false,
+            knobSize: 9,
           );
         }
         continue;
@@ -2718,6 +3885,11 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
           fontFamily: _theme.fontFamily ?? PaintRunText.fontFallbacks.first,
           images: _images,
           onImageReady: markNeedsPaint,
+          cropPreview:
+              pictureCropMode &&
+              visual.isPicture &&
+              selectedVisual != null &&
+              identical(visual, selectedVisual!.visual),
         );
         if (paintHandles) {
           final bool selected =
@@ -2729,11 +3901,12 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
             TransformHandles(rect).paint(
               canvas,
               strokeColor: pictureCropMode
-                  ? const Color(0xFFC45911)
+                  ? const Color(0xFFFF8C1A)
                   : _theme.focusRing,
               fillColor: _theme.pageBackground,
               showKnobs: true,
               showRotate: !pictureCropMode,
+              cropMode: pictureCropMode && visual.isPicture,
               knobSize: 9,
             );
           }
@@ -2765,9 +3938,9 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
       band.left,
       band.top,
       band.width,
-      band.height,
+      math.max(band.height, 28),
     );
-    canvas.drawRect(rect, Paint()..color = const Color(0x142E75B6));
+    canvas.drawRect(rect, Paint()..color = const Color(0xFFF7F9FC));
     canvas.drawRect(
       rect,
       Paint()
@@ -2797,7 +3970,7 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
           hasFocus &&
           caret.visible &&
           caret.isOnLine(line, lastOfParagraph: identical(line, story.last))) {
-        canvas.drawRect(_caretPaintRect(line), Paint()..color = _theme.caret);
+        _paintCaret(canvas, line);
       }
     }
     final TextPainter label = TextPainter(
@@ -2814,7 +3987,20 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
     label.paint(canvas, Offset(band.left + 8, band.top + 4));
   }
 
-  void _drawOverlay(Canvas canvas, LaidOutLine line, {double? pageWidth}) {
+  double _marginRightOf(LaidOutPage page) {
+    if (page.sectionIndex < 0 ||
+        page.sectionIndex >= document.sections.length) {
+      return 72;
+    }
+    return document.sections[page.sectionIndex].margins.right;
+  }
+
+  void _drawOverlay(
+    Canvas canvas,
+    LaidOutLine line, {
+    double? pageWidth,
+    double? marginRight,
+  }) {
     final String? text = line.overlayText;
     if (text == null || text.isEmpty) {
       return;
@@ -2847,16 +4033,29 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
       maxLines: 1,
     )..layout();
     var x = line.x;
-    final double width = pageWidth ?? laidOut.pageSize.width;
-    if (line.tocLeader || line.justification == WmlJustification.right) {
-      x = width - 72 - painter.width;
+    if (line.tocLeader) {
+      x = WordToc.pageNumberX(
+        pageWidth: pageWidth ?? laidOut.pageSize.width,
+        marginRight: marginRight ?? 72,
+        numberWidth: painter.width,
+      );
+    } else if (line.justification == WmlJustification.right) {
+      final double rightEdge = line.width > 1
+          ? line.x + line.width
+          : (pageWidth ?? laidOut.pageSize.width);
+      x = rightEdge - painter.width;
     } else if (line.justification == WmlJustification.center) {
-      x = (width - painter.width) / 2;
+      x = line.x + (line.width - painter.width) / 2;
     }
     painter.paint(canvas, Offset(x, line.y));
   }
 
-  void _drawLine(Canvas canvas, LaidOutLine line) {
+  void _drawLine(
+    Canvas canvas,
+    LaidOutLine line, {
+    double? pageWidth,
+    double? marginRight,
+  }) {
     if (line.isParagraphStart &&
         line.listLabel != null &&
         line.listLabel!.isNotEmpty) {
@@ -2877,7 +4076,12 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
       marker.paint(canvas, Offset(line.x - marker.width - 4, line.y));
     }
     if (line.glyphs.isEmpty) {
-      _drawOverlay(canvas, line);
+      _drawOverlay(
+        canvas,
+        line,
+        pageWidth: pageWidth,
+        marginRight: marginRight,
+      );
       return;
     }
     final String paragraph =
@@ -2914,46 +4118,110 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
             ..color = _colorFromHex(first.highlight!).withValues(alpha: 0.45),
         );
       }
-      final String text = PaintRunText.runText(paragraph, run);
-      if (text.isEmpty) {
-        start = end;
-        continue;
+      final bool splitWords =
+          (line.justification == WmlJustification.justify ||
+              line.justification == WmlJustification.distributed) &&
+          line.justificationRatio != 0;
+      if (splitWords) {
+        var i = start;
+        while (i < end) {
+          if (line.glyphs[i].glyph.isSpace) {
+            i++;
+            continue;
+          }
+          var j = i + 1;
+          while (j < end && !line.glyphs[j].glyph.isSpace) {
+            j++;
+          }
+          _paintTextRun(
+            canvas,
+            line,
+            paragraph,
+            line.glyphs.sublist(i, j),
+          );
+          i = j;
+        }
+      } else {
+        _paintTextRun(canvas, line, paragraph, run);
       }
-      final TextPainter painter = PaintRunText.painterFor(
-        text: text,
-        first: first,
-        themeFamily: _theme.fontFamily,
-        color: _colorFromHex(first.color),
-        decoration: first.underline == WmlUnderline.none
-            ? TextDecoration.none
-            : TextDecoration.underline,
-      )..layout();
-      painter.paint(
-        canvas,
-        Offset(
-          first.x,
-          first.vertAlign.paintTop(
-            lineY: line.y,
-            lineHeight: line.height,
-            fontSize: first.fontSize,
-          ),
-        ),
-      );
       start = end;
     }
     if (line.overlayText != null && line.overlayText!.isNotEmpty) {
-      _drawTocLeader(canvas, line);
-      _drawOverlay(canvas, line);
+      _drawTocLeader(
+        canvas,
+        line,
+        pageWidth: pageWidth,
+        marginRight: marginRight,
+      );
+      _drawOverlay(
+        canvas,
+        line,
+        pageWidth: pageWidth,
+        marginRight: marginRight,
+      );
     }
   }
 
-  void _drawTocLeader(Canvas canvas, LaidOutLine line) {
+  void _paintTextRun(
+    Canvas canvas,
+    LaidOutLine line,
+    String paragraph,
+    List<LaidOutGlyph> run,
+  ) {
+    if (run.isEmpty) {
+      return;
+    }
+    final LaidOutGlyph first = run.first;
+    final String text = PaintRunText.runText(paragraph, run);
+    if (text.isEmpty) {
+      return;
+    }
+    final TextPainter painter = PaintRunText.painterFor(
+      text: text,
+      first: first,
+      themeFamily: _theme.fontFamily,
+      color: _colorFromHex(first.color),
+      decoration: first.underline == WmlUnderline.none
+          ? TextDecoration.none
+          : TextDecoration.underline,
+    )..layout();
+    final double paintX = PaintRunText.runPaintOrigin(
+      run,
+      painter,
+      text,
+      paragraph,
+    );
+    painter.paint(
+      canvas,
+      Offset(
+        paintX,
+        first.vertAlign.paintTop(
+          lineY: line.y,
+          lineHeight: line.height,
+          fontSize: first.fontSize,
+        ),
+      ),
+    );
+  }
+
+  void _drawTocLeader(
+    Canvas canvas,
+    LaidOutLine line, {
+    double? pageWidth,
+    double? marginRight,
+  }) {
     if (!line.tocLeader || line.glyphs.isEmpty) {
       return;
     }
     final LaidOutGlyph last = line.glyphs.last;
     final double from = last.x + last.advance + 6;
-    final double to = laidOut.pageSize.width - 72 - 18;
+    final double numberWidth = (line.overlayText?.length ?? 1) *
+        (line.overlaySize * 0.56);
+    final double to = WordToc.leaderEndX(
+      pageWidth: pageWidth ?? laidOut.pageSize.width,
+      marginRight: marginRight ?? 72,
+      numberWidth: numberWidth,
+    );
     if (to <= from + 8) {
       return;
     }
@@ -2967,12 +4235,41 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
     }
   }
 
-  String _paragraphTextAt(int index) {
-    final List<WmlParagraph> paras = document.paragraphs.toList();
+  String _paragraphTextAt(int index, {LaidOutLine? line}) {
+    final List<WmlParagraph> paras = _storyForLine(line);
     if (paras.isEmpty) {
       return '';
     }
     return paras[index.clamp(0, paras.length - 1)].text;
+  }
+
+  List<WmlParagraph> _storyForLine(LaidOutLine? line) {
+    if (storyParagraphs != null &&
+        _editingHeaderFooter &&
+        (line == null ||
+            (editingFooter && line.isFooter) ||
+            (editingHeader && !line.isFooter))) {
+      return storyParagraphs!;
+    }
+    if (line != null &&
+        (line.isFooter || (line.overlayText != null && line.glyphs.isEmpty))) {
+      final WmlSection? section = _pageSectionForLine(line);
+      if (section != null) {
+        return line.isFooter ? section.footer : section.header;
+      }
+    }
+    return document.paragraphs.toList();
+  }
+
+  WmlSection? _pageSectionForLine(LaidOutLine line) {
+    if (line.pageIndex < 0 || line.pageIndex >= laidOut.pages.length) {
+      return document.sections.isEmpty ? null : document.sections.first;
+    }
+    final int sectionIndex = laidOut.pages[line.pageIndex].sectionIndex;
+    if (sectionIndex < 0 || sectionIndex >= document.sections.length) {
+      return null;
+    }
+    return document.sections[sectionIndex];
   }
 
   Color _colorFromHex(String hex) {
@@ -3006,49 +4303,69 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
     return true;
   }
 
-  Rect _caretPaintRect(LaidOutLine line) {
-    if (line.glyphs.isEmpty) {
-      final String text = line.overlayText ?? '';
-      final double t = text.isEmpty
-          ? 0
-          : (caret.logicalIndex / text.length).clamp(0.0, 1.0);
-      return Rect.fromLTWH(line.x + line.width * t, line.y, 1.5, line.height);
-    }
-    for (final LaidOutGlyph glyph in line.glyphs) {
-      if (glyph.glyph.logicalIndex != caret.logicalIndex) {
-        continue;
-      }
-      final double x = glyph.glyph.level.isOdd
-          ? glyph.x + glyph.advance
-          : glyph.x;
-      return Rect.fromLTWH(x, line.y, 1.5, line.height);
-    }
-    final LaidOutGlyph last = line.glyphs.last;
-    final double x = last.glyph.level.isOdd ? last.x : last.x + last.advance;
-    return Rect.fromLTWH(x, line.y, 1.5, line.height);
+  void _paintCaret(Canvas canvas, LaidOutLine line) {
+    final bool paragraphRtl = _paragraphRtl(line.paragraphIndex);
+    final String paragraph =
+        line.sourceText ?? _paragraphTextAt(line.paragraphIndex);
+    CaretEngine.paintFlagged(
+      canvas,
+      stem: _caretPaintRect(line, paragraphRtl: paragraphRtl),
+      color: _theme.caret,
+      rtl: caret.rtlAtLaidOut(
+        line,
+        paragraphRtl: paragraphRtl,
+        nearbyText: paragraph,
+      ),
+    );
   }
 
-  BrokenLine _broken(LaidOutLine line) {
-    return BrokenLine(
-      glyphs: <ShapedGlyph>[
-        for (final LaidOutGlyph g in line.glyphs)
-          ShapedGlyph(
-            codePoint: g.glyph.codePoint,
-            glyphId: g.glyph.glyphId,
-            advance: g.advance,
-            logicalIndex: g.glyph.logicalIndex,
-            level: g.glyph.level,
-            isSpace: g.glyph.isSpace,
-          ),
-      ],
-      width: line.width,
-      logicalStart: line.glyphs.isEmpty
-          ? 0
-          : line.glyphs.first.glyph.logicalIndex,
-      logicalEnd: line.glyphs.isEmpty
-          ? 0
-          : line.glyphs.last.glyph.logicalIndex + 1,
-      justificationRatio: 0,
+  bool _paragraphRtl(int paragraphIndex, {LaidOutLine? line}) {
+    final List<WmlParagraph> paras = _storyForLine(line);
+    if (paras.isEmpty) {
+      return config.textDirection == TextDirection.rtl ||
+          CaretEngine.deviceRtl();
+    }
+    final WmlParagraph para =
+        paras[paragraphIndex.clamp(0, paras.length - 1)];
+    if (para.properties.rightToLeft == true) {
+      return true;
+    }
+    if (para.properties.rightToLeft == false) {
+      return false;
+    }
+    return para.properties.justification == WmlJustification.right ||
+        OfficeTypeface.isRtlText(para.text) ||
+        config.textDirection == TextDirection.rtl ||
+        CaretEngine.deviceRtl();
+  }
+
+  Rect _caretPaintRect(LaidOutLine line, {required bool paragraphRtl}) {
+    final String paragraph =
+        line.sourceText ?? _paragraphTextAt(line.paragraphIndex);
+    final double x = PaintRunText.caretXOnLine(
+      line,
+      caret.logicalIndex,
+      paragraph: paragraph,
+      themeFamily: _theme.fontFamily,
+      paragraphRtl: paragraphRtl,
+      contentRight: laidOut.pageSize.width - 72,
+    );
+    if (line.glyphs.isNotEmpty) {
+      final LaidOutGlyph marker = line.glyphs.first;
+      final double size = marker.fontSize <= 0 ? 12 : marker.fontSize;
+      final double ascent = size * 0.80;
+      final double descent = size * 0.22;
+      return Rect.fromLTWH(x, marker.y - ascent, 1.0, ascent + descent);
+    }
+    final double height = math.min(
+      line.height,
+      math.max(11.0, line.height * 0.78),
+    );
+    return Rect.fromLTWH(
+      x,
+      line.y + (line.height - height) * 0.08,
+      1.0,
+      height,
     );
   }
 }
@@ -3247,3 +4564,35 @@ class _TableGeom {
     return current == null || next > current ? next : current;
   }
 }
+
+class _RulerView {
+  const _RulerView({
+    required this.pageLeft,
+    required this.pageTop,
+    required this.scale,
+    required this.pageWidth,
+    required this.pageHeight,
+    required this.margins,
+    required this.indent,
+    required this.tabs,
+    required this.rtl,
+    required this.contentLeft,
+    required this.contentRight,
+  });
+
+  final double pageLeft;
+  final double pageTop;
+  final double scale;
+  final double pageWidth;
+  final double pageHeight;
+  final WmlPageMargins margins;
+  final WmlIndent indent;
+  final List<WmlTabStop> tabs;
+  final bool rtl;
+  final double contentLeft;
+  final double contentRight;
+}
+
+
+
+

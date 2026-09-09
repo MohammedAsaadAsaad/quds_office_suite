@@ -289,16 +289,25 @@ abstract final class WordToc {
     if (titleText.isNotEmpty) {
       toc.title = titleText;
     }
-    final List<WmlParagraph> headingParas = <WmlParagraph>[
-      for (final WmlParagraph paragraph in document.paragraphs)
-        if (_isCollectibleHeading(
-          document,
-          paragraph,
-          minLevel: toc.minLevel,
-          maxLevel: toc.maxLevel,
-        ))
-          paragraph,
-    ];
+    final String? caption = toc.captionLabel;
+    final List<WmlParagraph> headingParas = caption == null
+        ? <WmlParagraph>[
+            for (final WmlParagraph paragraph in document.paragraphs)
+              if (_isCollectibleHeading(
+                document,
+                paragraph,
+                minLevel: toc.minLevel,
+                maxLevel: toc.maxLevel,
+              ))
+                paragraph,
+          ]
+        : <WmlParagraph>[
+            for (final WmlParagraph paragraph in document.paragraphs)
+              if (paragraph.properties.styleId == 'Caption' &&
+                  paragraph.text.startsWith(caption) &&
+                  paragraph.text.trim().isNotEmpty)
+                paragraph,
+          ];
     final Map<(String, int), int> previousPages = <(String, int), int>{
       for (final WmlTocEntry entry in toc.entries)
         (entry.text, entry.level): entry.pageNumber,
@@ -309,12 +318,12 @@ abstract final class WordToc {
         for (final WmlParagraph heading in headingParas)
           WmlTocEntry(
             text: heading.text.trim(),
-            level: headingLevelOf(heading)!,
+            level: caption == null ? headingLevelOf(heading)! : 1,
             headingParagraphIndex: 0,
             pageNumber:
                 previousPages[(
                   heading.text.trim(),
-                  headingLevelOf(heading)!,
+                  caption == null ? headingLevelOf(heading)! : 1,
                 )] ??
                 1,
           ),
@@ -440,6 +449,25 @@ abstract final class WordToc {
     if (at > 0) {
       WmlRunEdit.replaceRange(paragraph, 0, at, '');
     }
+  }
+
+  /// Right-aligned X of a TOC page number.
+  static double pageNumberX({
+    required double pageWidth,
+    required double marginRight,
+    required double numberWidth,
+  }) {
+    return (pageWidth - marginRight - numberWidth).clamp(0, pageWidth);
+  }
+
+  /// Where dotted leaders stop — just before the page number.
+  static double leaderEndX({
+    required double pageWidth,
+    required double marginRight,
+    required double numberWidth,
+    double gap = 4,
+  }) {
+    return (pageWidth - marginRight - numberWidth - gap).clamp(0, pageWidth);
   }
 }
 

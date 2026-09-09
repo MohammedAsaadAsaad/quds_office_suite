@@ -185,6 +185,7 @@ class ChartDisplay {
     this.gapWidth = 120,
     this.firstSliceAng = 0,
     this.holeSize = 50,
+    this.rtl = false,
   });
 
   /// showLegend API.
@@ -223,6 +224,9 @@ class ChartDisplay {
   /// holeSize API.
   int holeSize;
 
+  /// When true, chart XML is written with `c:chart/@rtl`.
+  bool rtl;
+
   /// copy API.
   ChartDisplay copy() => ChartDisplay(
     showLegend: showLegend,
@@ -237,6 +241,7 @@ class ChartDisplay {
     gapWidth: gapWidth,
     firstSliceAng: firstSliceAng,
     holeSize: holeSize,
+    rtl: rtl,
   );
 }
 

@@ -7,7 +7,7 @@ You are implementing a two-package Office suite:
 
 ## Architecture
 
-Follow the layout and Phase 1–5 roadmap in the original mission spec.
+Follow the layout and Phase 1–5 roadmap in [docs/MISSION.md](docs/MISSION.md).
 Do not skip phases. Do not leave `TODO` stubs or placeholder return values.
 100% type safety: no `dynamic`, no untyped maps.
 

@@ -10,6 +10,7 @@ import 'package:quds_office_engine/quds_office_engine.dart';
 import '../core/virtual_viewport.dart';
 import '../embed/office_context_menu.dart';
 import '../embed/office_theme.dart';
+import '../editor_word/caret_engine.dart';
 import '../editor_word/paint_run_text.dart';
 import '../editor_slide/transform_handles.dart';
 import '../ui_components/office_chrome.dart';
@@ -65,6 +66,8 @@ class SheetGrid extends LeafRenderObjectWidget {
     this.onContextMenu,
     this.onInsertRowAt,
     this.onInsertColAt,
+    this.findHits = const <OfficeFindHit>[],
+    this.activeFindIndex = -1,
   });
 
   /// sheet API.
@@ -194,6 +197,12 @@ class SheetGrid extends LeafRenderObjectWidget {
   /// onInsertColAt API.
   final ValueChanged<int>? onInsertColAt;
 
+  /// findHits API.
+  final List<OfficeFindHit> findHits;
+
+  /// activeFindIndex API.
+  final int activeFindIndex;
+
   @override
   /// createRenderObject API.
   RenderSheetGrid createRenderObject(BuildContext context) {
@@ -238,6 +247,8 @@ class SheetGrid extends LeafRenderObjectWidget {
       onContextMenu: onContextMenu,
       onInsertRowAt: onInsertRowAt,
       onInsertColAt: onInsertColAt,
+      findHits: findHits,
+      activeFindIndex: activeFindIndex,
     );
   }
 
@@ -283,7 +294,9 @@ class SheetGrid extends LeafRenderObjectWidget {
       ..onCommitDrawingTransform = onCommitDrawingTransform
       ..onContextMenu = onContextMenu
       ..onInsertRowAt = onInsertRowAt
-      ..onInsertColAt = onInsertColAt;
+      ..onInsertColAt = onInsertColAt
+      ..findHits = findHits
+      ..activeFindIndex = activeFindIndex;
     if (viewport != null) {
       renderObject.viewport = viewport!;
     }
@@ -335,6 +348,8 @@ class RenderSheetGrid extends RenderBox implements MouseTrackerAnnotation {
     this.onContextMenu,
     this.onInsertRowAt,
     this.onInsertColAt,
+    this.findHits = const <OfficeFindHit>[],
+    this.activeFindIndex = -1,
   });
 
   /// sheet API.
@@ -463,6 +478,12 @@ class RenderSheetGrid extends RenderBox implements MouseTrackerAnnotation {
 
   /// onInsertColAt API.
   ValueChanged<int>? onInsertColAt;
+
+  /// findHits API.
+  List<OfficeFindHit> findHits;
+
+  /// activeFindIndex API.
+  int activeFindIndex;
   DateTime? _lastTap;
   Rect? _functionListRect;
   PanGestureRecognizer? _pan;
@@ -475,6 +496,7 @@ class RenderSheetGrid extends RenderBox implements MouseTrackerAnnotation {
   var _drawingMove = false;
   var _scrollH = false;
   var _scrollV = false;
+  var _panZoomScale = 1.0;
 
   /// none API.
   var _headerDrag = _HeaderDrag.none;
@@ -594,8 +616,21 @@ class RenderSheetGrid extends RenderBox implements MouseTrackerAnnotation {
     );
   }
 
-  Rect get _frozenRowBand {
-    return Rect.fromLTWH(0, _barH + _headH, size.width, _frozenH);
+  Rect get _frozenRowScrollRect {
+    if (_rtl) {
+      return Rect.fromLTRB(
+        0,
+        _barH + _headH,
+        size.width - _headW - _frozenW,
+        _barH + _headH + _frozenH,
+      );
+    }
+    return Rect.fromLTRB(
+      _headW + _frozenW,
+      _barH + _headH,
+      size.width,
+      _barH + _headH + _frozenH,
+    );
   }
 
   Rect get _frozenColBand {
@@ -615,6 +650,64 @@ class RenderSheetGrid extends RenderBox implements MouseTrackerAnnotation {
     );
   }
 
+  Rect get _frozenCornerRect {
+    if (_rtl) {
+      return Rect.fromLTWH(
+        size.width - _headW - _frozenW,
+        _barH + _headH,
+        _frozenW,
+        _frozenH,
+      );
+    }
+    return Rect.fromLTWH(_headW, _barH + _headH, _frozenW, _frozenH);
+  }
+
+  Rect get _scrollColHeaderRect {
+    if (_rtl) {
+      return Rect.fromLTWH(0, _barH, size.width - _headW - _frozenW, _headH);
+    }
+    return Rect.fromLTWH(_headW + _frozenW, _barH, size.width, _headH);
+  }
+
+  Rect get _frozenColHeaderRect {
+    if (_rtl) {
+      return Rect.fromLTWH(
+        size.width - _headW - _frozenW,
+        _barH,
+        _frozenW,
+        _headH,
+      );
+    }
+    return Rect.fromLTWH(_headW, _barH, _frozenW, _headH);
+  }
+
+  Rect get _scrollRowHeaderRect {
+    return Rect.fromLTWH(
+      _rowHeadLeft,
+      _barH + _headH + _frozenH,
+      _headW,
+      size.height,
+    );
+  }
+
+  int _findHitIndex(int col, int row) {
+    if (findHits.isEmpty) {
+      return -1;
+    }
+    final String a1 = SmlCellRef(col, row).a1;
+    for (int i = 0; i < findHits.length; i++) {
+      final OfficeFindHit hit = findHits[i];
+      if (hit.a1 != a1) {
+        continue;
+      }
+      if (hit.sheetName != null && hit.sheetName != sheet.name) {
+        continue;
+      }
+      return i;
+    }
+    return -1;
+  }
+
   void _paintCellRange(
     Canvas canvas, {
     required int r0,
@@ -622,33 +715,61 @@ class RenderSheetGrid extends RenderBox implements MouseTrackerAnnotation {
     required int c0,
     required int c1,
     required List<(FormulaRefSpan, Color)> formulaRefs,
-    bool frozen = false,
   }) {
     if (r1 <= r0 || c1 <= c0) {
       return;
     }
     for (int r = r0; r < r1; r++) {
       for (int c = c0; c < c1; c++) {
-        final ui.Rect cell = _cellRect(c, r);
-        if (frozen) {
-          canvas.drawRect(cell, ui.Paint()..color = _theme.frozenFill);
+        final SmlMerge? merge = sheet.mergeAt(c, r);
+        if (merge != null && !_mergePaintOrigin(merge, c, r, c0, r0)) {
+          continue;
         }
-        final bool focusCell =
-            selection.focus.col == c && selection.focus.row == r;
+        final ui.Rect cell = merge == null
+            ? _cellRect(c, r)
+            : _fullMergeRect(merge);
+        if (cell.width <= 0 || cell.height <= 0) {
+          continue;
+        }
+        final SmlCell? styled = sheet.cellOrNull(
+          SmlCellRef(merge?.c0 ?? c, merge?.r0 ?? r),
+        );
+        final Color? fill = _rgbColor(styled?.fillRgb);
+        final Color? band = fill == null ? _tableBand(c, r) : null;
+        if (fill != null) {
+          canvas.drawRect(cell, ui.Paint()..color = fill);
+        } else if (band != null) {
+          canvas.drawRect(cell, ui.Paint()..color = band);
+        }
+        final bool focusCell = _isEditCell(c, r, merge);
         final bool isEdit = editing && focusCell;
         if (isEdit) {
           canvas.drawRect(cell, ui.Paint()..color = _theme.pageBackground);
         } else if (config.allowsSelection &&
-            selection.contains(SmlCellRef(c, r))) {
+            (merge == null
+                ? selection.contains(SmlCellRef(c, r))
+                : _mergeSelected(merge))) {
           canvas.drawRect(cell, ui.Paint()..color = _theme.selectionFill);
         }
-        if (config.showGridlines) {
+        final int findIndex = _findHitIndex(merge?.c0 ?? c, merge?.r0 ?? r);
+        if (findIndex >= 0) {
           canvas.drawRect(
             cell,
             ui.Paint()
-              ..color = isEdit ? _theme.focusRing : _theme.gridLine
+              ..color = findIndex == activeFindIndex
+                  ? const Color(0x99F4B183)
+                  : const Color(0x66FFE699),
+          );
+        }
+        if (config.showGridlines || focusCell) {
+          canvas.drawRect(
+            cell,
+            ui.Paint()
+              ..color = focusCell
+                  ? _theme.selectionStroke
+                  : _theme.gridLine
               ..style = ui.PaintingStyle.stroke
-              ..strokeWidth = isEdit ? 1.6 : 1,
+              ..strokeWidth = focusCell ? 1.8 : 1,
           );
         }
       }
@@ -656,10 +777,10 @@ class RenderSheetGrid extends RenderBox implements MouseTrackerAnnotation {
     if (formulaRefs.isNotEmpty) {
       _paintFormulaRefs(canvas, refs: formulaRefs, borders: false);
       if (editing) {
-        final ui.Rect editCell = _cellRect(
-          selection.focus.col,
-          selection.focus.row,
-        );
+        final SmlMerge? editMerge = sheet.mergeAtRef(selection.focus);
+        final ui.Rect editCell = editMerge == null
+            ? _cellRect(selection.focus.col, selection.focus.row)
+            : _fullMergeRect(editMerge);
         canvas.drawRect(editCell, ui.Paint()..color = _theme.pageBackground);
         if (config.showGridlines) {
           canvas.drawRect(
@@ -674,16 +795,40 @@ class RenderSheetGrid extends RenderBox implements MouseTrackerAnnotation {
     }
     for (int r = r0; r < r1; r++) {
       for (int c = c0; c < c1; c++) {
-        final ui.Rect cell = _cellRect(c, r);
-        final bool isEdit =
-            editing && selection.focus.col == c && selection.focus.row == r;
-        final SmlCell data = sheet.cell(SmlCellRef(c, r));
+        final SmlMerge? merge = sheet.mergeAt(c, r);
+        if (merge != null && !_mergePaintOrigin(merge, c, r, c0, r0)) {
+          continue;
+        }
+        final int textCol = merge?.c0 ?? c;
+        final int textRow = merge?.r0 ?? r;
+        final ui.Rect cell = merge == null
+            ? _cellRect(c, r)
+            : _fullMergeRect(merge);
+        if (cell.width <= 0 || cell.height <= 0) {
+          continue;
+        }
+        final bool isEdit = editing && _isEditCell(c, r, merge);
+        final SmlCell data = sheet.cell(SmlCellRef(textCol, textRow));
         final String label = isEdit
             ? editText
             : (cellLabel?.call(data) ?? data.asString);
-        if (label.isNotEmpty || isEdit) {
-          _paintCellText(canvas, cell, label, isEdit: isEdit);
+        final Color? fill = _rgbColor(data.fillRgb);
+        if (!isEdit && fill != null && _isFillMark(label)) {
+          continue;
         }
+        if (label.isNotEmpty || isEdit) {
+          _paintCellText(
+            canvas,
+            cell,
+            label,
+            isEdit: isEdit,
+            align: data.horizontalAlign,
+            color: _rgbColor(data.fontRgb),
+            bold: data.fontBold,
+            fontSize: data.fontSize,
+          );
+        }
+        _paintCellChrome(canvas, cell, textCol, textRow);
       }
     }
     if (formulaRefs.isNotEmpty) {
@@ -731,6 +876,52 @@ class RenderSheetGrid extends RenderBox implements MouseTrackerAnnotation {
     return row.clamp(firstRow + 1, _excelRows);
   }
 
+  bool _handleFilterOrValidationTap(Offset local) {
+    if (!config.allowsMutation) {
+      return false;
+    }
+    final SmlCellRef? ref = _hitCell(local);
+    if (ref == null) {
+      return false;
+    }
+    if (_isFilterHeader(ref.col, ref.row) &&
+        _filterArrowRect(ref.col, ref.row).inflate(2).contains(local)) {
+      final SmlAutoFilter filter = sheet.autoFilter!;
+      final int relative = ref.col - filter.range.minCol;
+      final List<String> values = filter.uniqueValues(sheet, relative);
+      if (values.isEmpty) {
+        return true;
+      }
+      final Set<String> hidden = filter.hiddenValues.putIfAbsent(
+        relative,
+        () => <String>{},
+      );
+      if (hidden.isEmpty) {
+        hidden.addAll(values.skip(1));
+      } else {
+        hidden.clear();
+      }
+      return true;
+    }
+    final SmlDataValidation? rule = _listValidationAt(ref.col, ref.row);
+    if (rule != null &&
+        _validationArrowRect(ref.col, ref.row).inflate(2).contains(local)) {
+      final List<String> items = rule.listItems;
+      if (items.isEmpty) {
+        return true;
+      }
+      final SmlCell cell = sheet.cell(ref);
+      final int at = items.indexOf(cell.asString);
+      final String next = items[(at + 1) % items.length];
+      cell
+        ..formula = null
+        ..type = SmlCellType.string
+        ..value = next;
+      return true;
+    }
+    return false;
+  }
+
   int? _hitFunctionAssist(Offset local) {
     final Rect? box = _functionListRect;
     if (box == null || functionSuggestions.isEmpty || !box.contains(local)) {
@@ -756,7 +947,7 @@ class RenderSheetGrid extends RenderBox implements MouseTrackerAnnotation {
         ? functionSuggestions.length
         : 8;
     final double listH = visible * rowH;
-    final Rect edit = _cellRect(selection.focus.col, selection.focus.row);
+    final Rect edit = _displayRect(selection.focus.col, selection.focus.row);
     var left = edit.left;
     var top = edit.bottom + 2;
     if (top + listH > size.height - 4) {
@@ -885,19 +1076,52 @@ class RenderSheetGrid extends RenderBox implements MouseTrackerAnnotation {
       return;
     }
     if (event is PointerScrollEvent) {
-      if (HardwareKeyboard.instance.isControlPressed ||
-          HardwareKeyboard.instance.isMetaPressed) {
-        viewport.setScale(
-          viewport.scale * (event.scrollDelta.dy > 0 ? 0.9 : 1.1),
-        );
+      GestureBinding.instance.pointerSignalResolver.register(event, (
+        PointerSignalEvent signal,
+      ) {
+        if (signal is! PointerScrollEvent) {
+          return;
+        }
+        if (HardwareKeyboard.instance.isControlPressed ||
+            HardwareKeyboard.instance.isMetaPressed) {
+          viewport.setScale(
+            viewport.scale * (signal.scrollDelta.dy > 0 ? 0.9 : 1.1),
+          );
+        } else if (HardwareKeyboard.instance.isShiftPressed) {
+          viewport.pan(Offset(signal.scrollDelta.dy, signal.scrollDelta.dx));
+        } else {
+          viewport.pan(Offset(signal.scrollDelta.dx, signal.scrollDelta.dy));
+        }
+        _clampViewport();
+        markNeedsPaint();
+        onChanged?.call();
+      });
+      return;
+    }
+    if (event is PointerPanZoomStartEvent) {
+      _panZoomScale = 1;
+      return;
+    }
+    if (event is PointerPanZoomUpdateEvent) {
+      final bool zoomKeys =
+          HardwareKeyboard.instance.isControlPressed ||
+          HardwareKeyboard.instance.isMetaPressed;
+      if (zoomKeys || (event.scale - _panZoomScale).abs() > 0.02) {
+        final double current = _panZoomScale == 0 ? 1 : _panZoomScale;
+        viewport.setScale(viewport.scale * (event.scale / current));
+        _panZoomScale = event.scale == 0 ? current : event.scale;
       } else if (HardwareKeyboard.instance.isShiftPressed) {
-        viewport.pan(Offset(event.scrollDelta.dy, event.scrollDelta.dx));
+        viewport.pan(Offset(-event.localPanDelta.dy, -event.localPanDelta.dx));
       } else {
-        viewport.pan(Offset(event.scrollDelta.dx, event.scrollDelta.dy));
+        viewport.pan(-event.localPanDelta);
       }
       _clampViewport();
       markNeedsPaint();
       onChanged?.call();
+      return;
+    }
+    if (event is PointerPanZoomEndEvent) {
+      _panZoomScale = 1;
       return;
     }
     if (!config.allowsSelection) {
@@ -915,6 +1139,11 @@ class RenderSheetGrid extends RenderBox implements MouseTrackerAnnotation {
         } else {
           onInsertRowAt?.call(insert.index);
         }
+        markNeedsPaint();
+        onChanged?.call();
+        return;
+      }
+      if (_handleFilterOrValidationTap(event.localPosition)) {
         markNeedsPaint();
         onChanged?.call();
         return;
@@ -1033,7 +1262,7 @@ class RenderSheetGrid extends RenderBox implements MouseTrackerAnnotation {
           if (editing) {
             onCommitEdit?.call();
           }
-          selection.extendTo(ref);
+          _selectHit(ref, extend: true);
         }
       } else {
         final DateTime now = DateTime.now();
@@ -1041,8 +1270,7 @@ class RenderSheetGrid extends RenderBox implements MouseTrackerAnnotation {
             _lastTap != null && now.difference(_lastTap!).inMilliseconds < 400;
         _lastTap = now;
         if (editing &&
-            ref.col == selection.focus.col &&
-            ref.row == selection.focus.row) {
+            _isEditCell(ref.col, ref.row, sheet.mergeAtRef(ref))) {
           onPlaceEditCaret?.call(_hitEditIndex(event.localPosition, ref));
         } else if (_canPointRefs) {
           onPointRef?.call(ref, extend: false);
@@ -1051,7 +1279,7 @@ class RenderSheetGrid extends RenderBox implements MouseTrackerAnnotation {
             onCommitEdit?.call();
           }
           _headerDrag = _HeaderDrag.none;
-          selection.selectCell(ref);
+          _selectHit(ref, extend: false);
           if (doubleTap && config.allowsMutation) {
             onActivate?.call();
           }
@@ -1131,7 +1359,7 @@ class RenderSheetGrid extends RenderBox implements MouseTrackerAnnotation {
             } else if (selection.isFullColumnSelection) {
               selection.extendColumnsTo(ref.col);
             } else {
-              selection.extendTo(ref);
+              _selectHit(ref, extend: true);
             }
         }
         markNeedsPaint();
@@ -1356,26 +1584,153 @@ class RenderSheetGrid extends RenderBox implements MouseTrackerAnnotation {
     );
   }
 
+  bool _mergePaintOrigin(SmlMerge merge, int c, int r, int c0, int r0) {
+    final int visC = merge.c0 < c0 ? c0 : merge.c0;
+    final int visR = merge.r0 < r0 ? r0 : merge.r0;
+    return c == visC && r == visR;
+  }
+
+  Rect _fullMergeRect(SmlMerge merge) {
+    return _cellRect(merge.c0, merge.r0).expandToInclude(
+      _cellRect(merge.c1, merge.r1),
+    );
+  }
+
+  bool _isFillMark(String label) {
+    if (label.isEmpty) {
+      return false;
+    }
+    for (int i = 0; i < label.length; i++) {
+      final int u = label.codeUnitAt(i);
+      if (u != 0x2588 && u != 0x2589 && u != 0x258A && u != 0x25A0) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  bool _mergeSelected(SmlMerge merge) {
+    for (int r = merge.r0; r <= merge.r1; r++) {
+      for (int c = merge.c0; c <= merge.c1; c++) {
+        if (selection.contains(SmlCellRef(c, r))) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  bool _isEditCell(int c, int r, SmlMerge? merge) {
+    if (merge != null) {
+      return merge.contains(selection.focus.col, selection.focus.row);
+    }
+    return selection.focus.col == c && selection.focus.row == r;
+  }
+
+  void _selectHit(SmlCellRef ref, {required bool extend}) {
+    final SmlMerge? merge = sheet.mergeAtRef(ref);
+    if (extend) {
+      if (merge == null) {
+        selection.extendTo(ref);
+        return;
+      }
+      final bool preferMax =
+          ref.col >= selection.anchor.col && ref.row >= selection.anchor.row;
+      selection.extendTo(
+        preferMax ? SmlCellRef(merge.c1, merge.r1) : merge.origin,
+      );
+      return;
+    }
+    if (merge == null) {
+      selection.selectCell(ref);
+      return;
+    }
+    selection.selectCell(merge.origin);
+  }
+
   int _hitEditIndex(Offset local, SmlCellRef ref) {
-    final Rect cell = _cellRect(ref.col, ref.row);
+    final Rect cell = _displayRect(ref.col, ref.row);
     final TextPainter painter = _textPainter(editText, colored: true)
-      ..layout(maxWidth: _colWAt(ref.col) > 12 ? _colWAt(ref.col) - 4 : 8);
+      ..layout(maxWidth: cell.width > 12 ? cell.width - 4 : 8);
+    final bool rtl = _rtl || PaintRunText.looksRtl(editText);
+    final double textX = rtl
+        ? cell.right - 2 - painter.width
+        : cell.left + 2;
     return PaintRunText.hitIndex(
       painter,
-      Offset(local.dx - cell.left - 2, 0),
+      Offset(local.dx - textX, 0),
       editText.length,
     );
   }
 
-  TextPainter _textPainter(String text, {required bool colored}) {
+  Rect _displayRect(int col, int row) {
+    final SmlMerge? merge = sheet.mergeAt(col, row);
+    return merge == null ? _cellRect(col, row) : _fullMergeRect(merge);
+  }
+
+  (int c0, int c1, int r0, int r1) _selectionBounds() {
+    var c0 = selection.anchor.col < selection.focus.col
+        ? selection.anchor.col
+        : selection.focus.col;
+    var c1 = selection.anchor.col > selection.focus.col
+        ? selection.anchor.col
+        : selection.focus.col;
+    var r0 = selection.anchor.row < selection.focus.row
+        ? selection.anchor.row
+        : selection.focus.row;
+    var r1 = selection.anchor.row > selection.focus.row
+        ? selection.anchor.row
+        : selection.focus.row;
+    for (final SmlMerge merge in sheet.merges) {
+      if (c1 < merge.c0 || c0 > merge.c1 || r1 < merge.r0 || r0 > merge.r1) {
+        continue;
+      }
+      if (merge.c0 < c0) {
+        c0 = merge.c0;
+      }
+      if (merge.c1 > c1) {
+        c1 = merge.c1;
+      }
+      if (merge.r0 < r0) {
+        r0 = merge.r0;
+      }
+      if (merge.r1 > r1) {
+        r1 = merge.r1;
+      }
+    }
+    return (c0, c1, r0, r1);
+  }
+
+  Color? _rgbColor(String? hex) {
+    final String rgb = SmlStyleSheet.normalizeRgb(hex ?? '');
+    if (rgb.isEmpty) {
+      return null;
+    }
+    return Color(0xFF000000 | int.parse(rgb, radix: 16));
+  }
+
+  TextPainter _textPainter(
+    String text, {
+    required bool colored,
+    SmlHAlign horizontal = SmlHAlign.general,
+    Color? color,
+    bool bold = false,
+    double fontSize = 11,
+  }) {
     final bool rtl = _rtl || PaintRunText.looksRtl(text);
-    final TextAlign align = rtl ? TextAlign.right : TextAlign.left;
+    final TextAlign align = switch (horizontal) {
+      SmlHAlign.center => TextAlign.center,
+      SmlHAlign.right => TextAlign.right,
+      SmlHAlign.left => TextAlign.left,
+      SmlHAlign.general => rtl ? TextAlign.right : TextAlign.left,
+    };
+    final Color ink = color ?? _theme.chromeText;
     if (colored && FormulaRefScanner.scan(text).isNotEmpty) {
       return TextPainter(
         text: FormulaRefStyle.textSpan(
           text,
-          baseColor: _theme.chromeText,
-          fontSize: 11,
+          baseColor: ink,
+          fontSize: fontSize,
           fontFamily: PaintRunText.familyFor(
             text: text,
             themeFamily: _theme.fontFamily,
@@ -1389,10 +1744,11 @@ class RenderSheetGrid extends RenderBox implements MouseTrackerAnnotation {
     }
     return PaintRunText.plain(
       text: text,
-      fontSize: 11,
-      color: _theme.chromeText,
+      fontSize: fontSize,
+      color: ink,
       themeFamily: _theme.fontFamily,
       align: align,
+      bold: bold,
     );
   }
 
@@ -1436,11 +1792,161 @@ class RenderSheetGrid extends RenderBox implements MouseTrackerAnnotation {
     }
   }
 
+  Color? _tableBand(int col, int row) {
+    for (final SmlTable table in sheet.tables) {
+      if (!table.bandedRows || !table.range.contains(col, row)) {
+        continue;
+      }
+      if (table.headerRow && row == table.range.minRow) {
+        return const Color(0xFFD6DCE4);
+      }
+      if ((row - table.range.minRow).isEven) {
+        return const Color(0xFFF2F2F2);
+      }
+    }
+    return null;
+  }
+
+  Rect _filterArrowRect(int col, int row) {
+    final Rect cell = _cellRect(col, row);
+    return Rect.fromLTWH(cell.right - 14, cell.top + 2, 12, 12);
+  }
+
+  Rect _validationArrowRect(int col, int row) {
+    final Rect cell = _cellRect(col, row);
+    return Rect.fromLTWH(cell.right - 14, cell.bottom - 14, 12, 12);
+  }
+
+  bool _isFilterHeader(int col, int row) {
+    final SmlAutoFilter? filter = sheet.autoFilter;
+    return filter != null &&
+        row == filter.range.minRow &&
+        col >= filter.range.minCol &&
+        col <= filter.range.maxCol;
+  }
+
+  SmlDataValidation? _listValidationAt(int col, int row) {
+    for (final SmlDataValidation rule in sheet.validations) {
+      if (rule.kind == SmlValidationKind.list &&
+          rule.range.contains(col, row)) {
+        return rule;
+      }
+    }
+    return null;
+  }
+
+  void _paintCellChrome(Canvas canvas, Rect cell, int col, int row) {
+    for (final SmlComment comment in sheet.comments) {
+      if (comment.ref.col == col && comment.ref.row == row) {
+        final Path mark = Path()
+          ..moveTo(cell.right - 8, cell.top)
+          ..lineTo(cell.right, cell.top)
+          ..lineTo(cell.right, cell.top + 8)
+          ..close();
+        canvas.drawPath(mark, Paint()..color = const Color(0xFFE67E22));
+        break;
+      }
+    }
+    if (_isFilterHeader(col, row)) {
+      final Rect arrow = _filterArrowRect(col, row);
+      final Path chevron = Path()
+        ..moveTo(arrow.left + 2, arrow.top + 3)
+        ..lineTo(arrow.center.dx, arrow.bottom - 3)
+        ..lineTo(arrow.right - 2, arrow.top + 3);
+      canvas.drawPath(
+        chevron,
+        Paint()
+          ..color = const Color(0xFF217346)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.4,
+      );
+    }
+    for (final SmlSparkline spark in sheet.sparklines) {
+      if (spark.anchor.col == col && spark.anchor.row == row) {
+        _paintSparkline(canvas, cell, spark);
+        break;
+      }
+    }
+    if (_listValidationAt(col, row) != null) {
+      final Rect arrow = _validationArrowRect(col, row);
+      canvas.drawRect(arrow, Paint()..color = const Color(0xFFE8E8E8));
+      canvas.drawRect(
+        arrow,
+        Paint()
+          ..color = const Color(0xFF666666)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1,
+      );
+      canvas.drawPath(
+        Path()
+          ..moveTo(arrow.left + 2, arrow.top + 4)
+          ..lineTo(arrow.center.dx, arrow.bottom - 3)
+          ..lineTo(arrow.right - 2, arrow.top + 4),
+        Paint()..color = const Color(0xFF333333),
+      );
+    }
+  }
+
+  void _paintSparkline(Canvas canvas, Rect cell, SmlSparkline spark) {
+    final List<double> values = spark.samples(sheet);
+    if (values.isEmpty) {
+      return;
+    }
+    var min = values.first;
+    var max = values.first;
+    for (final double n in values) {
+      if (n < min) {
+        min = n;
+      }
+      if (n > max) {
+        max = n;
+      }
+    }
+    final double span = (max - min).abs() < 1e-9 ? 1 : max - min;
+    final double left = cell.left + 3;
+    final double right = cell.right - 3;
+    final double top = cell.top + 3;
+    final double bottom = cell.bottom - 3;
+    final double width = (right - left).clamp(1, cell.width);
+    if (spark.kind == SmlSparklineKind.column) {
+      final double barW = width / values.length;
+      for (int i = 0; i < values.length; i++) {
+        final double h = ((values[i] - min) / span) * (bottom - top);
+        canvas.drawRect(
+          Rect.fromLTWH(left + i * barW, bottom - h, barW - 1, h),
+          Paint()..color = const Color(0xFF217346),
+        );
+      }
+      return;
+    }
+    final Path path = Path();
+    for (int i = 0; i < values.length; i++) {
+      final double x = left + width * (values.length == 1 ? 0 : i / (values.length - 1));
+      final double y = bottom - ((values[i] - min) / span) * (bottom - top);
+      if (i == 0) {
+        path.moveTo(x, y);
+      } else {
+        path.lineTo(x, y);
+      }
+    }
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = const Color(0xFF217346)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.2,
+    );
+  }
+
   void _paintCellText(
     Canvas canvas,
     Rect cell,
     String label, {
     required bool isEdit,
+    SmlHAlign align = SmlHAlign.general,
+    Color? color,
+    bool bold = false,
+    double fontSize = 11,
   }) {
     canvas.save();
     canvas.clipRect(cell);
@@ -1449,33 +1955,54 @@ class RenderSheetGrid extends RenderBox implements MouseTrackerAnnotation {
       canvas.restore();
       return;
     }
-    final TextPainter painter = _textPainter(label, colored: isEdit)
-      ..layout(maxWidth: maxW);
+    final TextPainter painter = _textPainter(
+      label,
+      colored: isEdit,
+      horizontal: align,
+      color: color,
+      bold: bold,
+      fontSize: fontSize,
+    )..layout(maxWidth: maxW);
     final double textY = cell.top + (cell.height - painter.height) / 2;
+    final double textX = switch (align) {
+      SmlHAlign.center => cell.left + (cell.width - painter.width) / 2,
+      SmlHAlign.right => cell.right - 2 - painter.width,
+      SmlHAlign.left || SmlHAlign.general =>
+        (_rtl || PaintRunText.looksRtl(label))
+            ? cell.right - 2 - painter.width
+            : cell.left + 2,
+    };
     if (isEdit) {
       final int start = editBase < editCaret ? editBase : editCaret;
       final int end = editBase > editCaret ? editBase : editCaret;
-      if (start != end) {
-        final double x0 = cell.left + 2 + PaintRunText.caretDx(painter, start);
-        final double x1 = cell.left + 2 + PaintRunText.caretDx(painter, end);
+        if (start != end) {
+        final double x0 = textX + PaintRunText.caretDx(painter, start);
+        final double x1 = textX + PaintRunText.caretDx(painter, end);
         canvas.drawRect(
           Rect.fromLTRB(
             x0 < x1 ? x0 : x1,
-            cell.top + 1,
+            textY,
             x0 < x1 ? x1 : x0,
-            cell.bottom - 1,
+            textY + painter.height,
           ),
           Paint()..color = _theme.selectionFill,
         );
       }
     }
-    painter.paint(canvas, Offset(cell.left + 2, textY));
+    painter.paint(canvas, Offset(textX, textY));
     if (isEdit && config.showsCaret && hasFocus) {
-      final double caretX =
-          cell.left + 2 + PaintRunText.caretDx(painter, editCaret);
-      canvas.drawRect(
-        Rect.fromLTWH(caretX, cell.top + 2, 1.2, cell.height - 4),
-        Paint()..color = _theme.caret,
+      final double caretH = painter.height < 2 ? fontSize * 1.25 : painter.height;
+      final double caretY = painter.height < 2
+          ? cell.top + (cell.height - caretH) / 2
+          : textY;
+      final double caretX = textX + PaintRunText.caretDx(painter, editCaret);
+      CaretEngine.paintFlagged(
+        canvas,
+        stem: Rect.fromLTWH(caretX, caretY, 1.0, caretH),
+        color: _theme.caret,
+        rtl: _rtl ||
+            config.textDirection == TextDirection.rtl ||
+            PaintRunText.looksRtl(label),
       );
     }
     canvas.restore();
@@ -1488,6 +2015,63 @@ class RenderSheetGrid extends RenderBox implements MouseTrackerAnnotation {
       drawing.visual.width * viewport.scale,
       drawing.visual.height * viewport.scale,
     );
+  }
+
+  void _paintSheetDrawings(Canvas canvas) {
+    void paintPane(Rect clip, bool Function(SmlDrawing drawing) include) {
+      if (clip.width <= 0 || clip.height <= 0) {
+        return;
+      }
+      canvas.save();
+      canvas.clipRect(clip);
+      for (int i = 0; i < sheet.drawings.length; i++) {
+        final SmlDrawing drawing = sheet.drawings[i];
+        if (!include(drawing)) {
+          continue;
+        }
+        final Rect box = _drawingRect(drawing);
+        PaintOfficeVisual.paint(
+          canvas,
+          box,
+          drawing.visual,
+          fontFamily: _theme.fontFamily ?? PaintRunText.fontFallbacks.first,
+          images: _images,
+          onImageReady: markNeedsPaint,
+        );
+        if (config.allowsSelection && selectedDrawingIndex == i) {
+          TransformHandles(box).paint(
+            canvas,
+            strokeColor: _theme.focusRing,
+            fillColor: _theme.handleFill,
+            showRotate: false,
+          );
+        }
+      }
+      canvas.restore();
+    }
+
+    paintPane(
+      _unfrozenRect,
+      (SmlDrawing drawing) => drawing.col >= _fc && drawing.row >= _fr,
+    );
+    if (_fr > 0) {
+      paintPane(
+        _frozenRowScrollRect,
+        (SmlDrawing drawing) => drawing.row < _fr && drawing.col >= _fc,
+      );
+    }
+    if (_fc > 0) {
+      paintPane(
+        _frozenColBand,
+        (SmlDrawing drawing) => drawing.col < _fc && drawing.row >= _fr,
+      );
+    }
+    if (_fr > 0 && _fc > 0) {
+      paintPane(
+        _frozenCornerRect,
+        (SmlDrawing drawing) => drawing.col < _fc && drawing.row < _fr,
+      );
+    }
   }
 
   int? _hitDrawingHandle(Offset local) {
@@ -1669,9 +2253,24 @@ class RenderSheetGrid extends RenderBox implements MouseTrackerAnnotation {
     );
   }
 
+  bool _drawingVisibleAt(SmlDrawing drawing, Offset local) {
+    if (drawing.col >= _fc && drawing.row >= _fr) {
+      return _unfrozenRect.contains(local);
+    }
+    if (drawing.row < _fr && drawing.col >= _fc) {
+      return _frozenRowScrollRect.contains(local);
+    }
+    if (drawing.col < _fc && drawing.row >= _fr) {
+      return _frozenColBand.contains(local);
+    }
+    return _frozenCornerRect.contains(local);
+  }
+
   int? _hitDrawing(Offset local) {
     for (int i = sheet.drawings.length - 1; i >= 0; i--) {
-      if (_drawingRect(sheet.drawings[i]).contains(local)) {
+      final SmlDrawing drawing = sheet.drawings[i];
+      if (_drawingVisibleAt(drawing, local) &&
+          _drawingRect(drawing).contains(local)) {
         return i;
       }
     }
@@ -1701,7 +2300,8 @@ class RenderSheetGrid extends RenderBox implements MouseTrackerAnnotation {
     }
     final int col = sheet.columnAt(x / viewport.scale).clamp(0, _excelCols - 1);
     final int row = sheet.rowAt(y / viewport.scale).clamp(0, _excelRows - 1);
-    return SmlCellRef(col, row);
+    final SmlCellRef hit = SmlCellRef(col, row);
+    return sheet.mergeAtRef(hit)?.origin ?? hit;
   }
 
   @override
@@ -1752,18 +2352,7 @@ class RenderSheetGrid extends RenderBox implements MouseTrackerAnnotation {
     final int lastRow = _lastVisibleRow(firstRow);
     final int scrollCol0 = firstCol < _fc ? _fc : firstCol;
     final int scrollRow0 = firstRow < _fr ? _fr : firstRow;
-    final int selC0 = selection.anchor.col < selection.focus.col
-        ? selection.anchor.col
-        : selection.focus.col;
-    final int selC1 = selection.anchor.col > selection.focus.col
-        ? selection.anchor.col
-        : selection.focus.col;
-    final int selR0 = selection.anchor.row < selection.focus.row
-        ? selection.anchor.row
-        : selection.focus.row;
-    final int selR1 = selection.anchor.row > selection.focus.row
-        ? selection.anchor.row
-        : selection.focus.row;
+    final (int selC0, int selC1, int selR0, int selR1) = _selectionBounds();
     canvas.save();
     canvas.clipRect(Rect.fromLTWH(0, _barH, size.width, size.height - _barH));
     canvas.save();
@@ -1779,16 +2368,7 @@ class RenderSheetGrid extends RenderBox implements MouseTrackerAnnotation {
     canvas.restore();
     if (_fr > 0) {
       canvas.save();
-      canvas.clipRect(_frozenRowBand);
-      _paintCellRange(
-        canvas,
-        r0: 0,
-        r1: _fr,
-        c0: 0,
-        c1: _fc,
-        formulaRefs: formulaRefs,
-        frozen: true,
-      );
+      canvas.clipRect(_frozenRowScrollRect);
       _paintCellRange(
         canvas,
         r0: 0,
@@ -1796,7 +2376,6 @@ class RenderSheetGrid extends RenderBox implements MouseTrackerAnnotation {
         c0: scrollCol0,
         c1: lastCol,
         formulaRefs: formulaRefs,
-        frozen: true,
       );
       canvas.restore();
     }
@@ -1810,30 +2389,23 @@ class RenderSheetGrid extends RenderBox implements MouseTrackerAnnotation {
         c0: 0,
         c1: _fc,
         formulaRefs: formulaRefs,
-        frozen: true,
       );
       canvas.restore();
     }
-    for (int i = 0; i < sheet.drawings.length; i++) {
-      final SmlDrawing drawing = sheet.drawings[i];
-      final Rect box = _drawingRect(drawing);
-      PaintOfficeVisual.paint(
+    if (_fr > 0 && _fc > 0) {
+      canvas.save();
+      canvas.clipRect(_frozenCornerRect);
+      _paintCellRange(
         canvas,
-        box,
-        drawing.visual,
-        fontFamily: _theme.fontFamily ?? PaintRunText.fontFallbacks.first,
-        images: _images,
-        onImageReady: markNeedsPaint,
+        r0: 0,
+        r1: _fr,
+        c0: 0,
+        c1: _fc,
+        formulaRefs: formulaRefs,
       );
-      if (config.allowsSelection && selectedDrawingIndex == i) {
-        TransformHandles(box).paint(
-          canvas,
-          strokeColor: _theme.focusRing,
-          fillColor: _theme.handleFill,
-          showRotate: false,
-        );
-      }
+      canvas.restore();
     }
+    _paintSheetDrawings(canvas);
     if (config.showGridHeaders) {
       void paintColHeader(int c) {
         OfficeChrome.paintSheetHeader(
@@ -1847,6 +2419,9 @@ class RenderSheetGrid extends RenderBox implements MouseTrackerAnnotation {
       }
 
       void paintRowHeader(int r) {
+        if (_rowHAt(r) <= 0) {
+          return;
+        }
         OfficeChrome.paintSheetHeader(
           canvas,
           rect: Rect.fromLTWH(_rowHeadLeft, _rowTopY(r), _headW, _rowHAt(r)),
@@ -1858,27 +2433,19 @@ class RenderSheetGrid extends RenderBox implements MouseTrackerAnnotation {
       }
 
       canvas.save();
-      canvas.clipRect(
-        _rtl
-            ? Rect.fromLTWH(0, _barH, size.width - _headW - _frozenW, _headH)
-            : Rect.fromLTWH(_headW + _frozenW, _barH, size.width, _headH),
-      );
+      canvas.clipRect(_scrollColHeaderRect);
       for (int c = scrollCol0; c < lastCol; c++) {
         paintColHeader(c);
       }
       canvas.restore();
+      canvas.save();
+      canvas.clipRect(_frozenColHeaderRect);
       for (int c = 0; c < _fc; c++) {
         paintColHeader(c);
       }
+      canvas.restore();
       canvas.save();
-      canvas.clipRect(
-        Rect.fromLTWH(
-          _rowHeadLeft,
-          _barH + _headH + _frozenH,
-          _headW,
-          size.height,
-        ),
-      );
+      canvas.clipRect(_scrollRowHeaderRect);
       for (int r = scrollRow0; r < lastRow; r++) {
         paintRowHeader(r);
       }
@@ -1893,8 +2460,8 @@ class RenderSheetGrid extends RenderBox implements MouseTrackerAnnotation {
     }
     if (_fr > 0 || _fc > 0) {
       final Paint freezeLine = Paint()
-        ..color = _theme.gridLine
-        ..strokeWidth = 2;
+        ..color = _theme.chromeText.withValues(alpha: 0.55)
+        ..strokeWidth = 2.5;
       if (_fr > 0) {
         final double y = _barH + _headH + _frozenH;
         canvas.drawLine(Offset(0, y), Offset(size.width, y), freezeLine);

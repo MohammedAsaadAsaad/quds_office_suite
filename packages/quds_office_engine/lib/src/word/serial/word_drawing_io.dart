@@ -14,6 +14,8 @@ import '../../visual/png_bytes.dart';
 import '../../xml/namespaces.dart';
 import '../../xml/xml_reader.dart';
 import '../../xml/xml_writer.dart';
+import '../model/wml_document.dart';
+import '../properties/wml_properties.dart';
 
 /// Word inline pictures (`w:drawing` / `wp:inline` / `pic:pic`).
 abstract final class WordDrawingIo {
@@ -46,6 +48,14 @@ abstract final class WordDrawingIo {
   /// pointsToEmu API.
   static int pointsToEmu(double points) =>
       (points.clamp(8, 2000) * emuPerPoint).round();
+
+  /// Position offsets may be 0 (page edge) and as tall as A4.
+  static int offsetToEmu(double points) =>
+      (points.clamp(-2000, 4000) * emuPerPoint).round();
+
+  /// Shape / picture extent — allows a full A4 edge.
+  static int sizeToEmu(double points) =>
+      (points.clamp(1, 4000) * emuPerPoint).round();
 
   /// emuToPoints API.
   static double emuToPoints(int emu) => emu / emuPerPoint;
@@ -192,8 +202,8 @@ abstract final class WordDrawingIo {
     required OfficeVisual visual,
     required int docPrId,
   }) {
-    final int cx = pointsToEmu(visual.width);
-    final int cy = pointsToEmu(visual.height);
+    final int cx = sizeToEmu(visual.width);
+    final int cy = sizeToEmu(visual.height);
     final PictureAdjust adj = visual.picture;
     final String name = adj.altTitle.isNotEmpty
         ? adj.altTitle
@@ -313,9 +323,14 @@ abstract final class WordDrawingIo {
       attributes: <String, String>{'x': '0', 'y': '0'},
     );
     w.writeStartElement('positionH', prefix: 'wp');
-    w.writeAttribute('relativeFrom', 'column');
+    w.writeAttribute(
+      'relativeFrom',
+      adj.wrap == PictureWrap.behind || adj.wrap == PictureWrap.inFront
+          ? 'page'
+          : 'column',
+    );
     w.writeStartElement('posOffset', prefix: 'wp');
-    w.writeText('${pointsToEmu(visual.offsetX)}');
+    w.writeText('${offsetToEmu(visual.offsetX)}');
     w.writeEndElement();
     w.writeEndElement();
     w.writeStartElement('positionV', prefix: 'wp');
@@ -327,7 +342,7 @@ abstract final class WordDrawingIo {
           : 'paragraph',
     );
     w.writeStartElement('posOffset', prefix: 'wp');
-    w.writeText('${pointsToEmu(visual.offsetY)}');
+    w.writeText('${offsetToEmu(visual.offsetY)}');
     w.writeEndElement();
     w.writeEndElement();
   }
@@ -372,8 +387,8 @@ abstract final class WordDrawingIo {
     required OfficeVisual visual,
     required int docPrId,
   }) {
-    final int cx = pointsToEmu(visual.width);
-    final int cy = pointsToEmu(visual.height);
+    final int cx = sizeToEmu(visual.width);
+    final int cy = sizeToEmu(visual.height);
     final String name = visual.title.isEmpty ? 'Chart' : visual.title;
     w.writeStartElement('p', prefix: 'w');
     w.writeStartElement('r', prefix: 'w');
@@ -412,6 +427,17 @@ abstract final class WordDrawingIo {
     OpcPackage package,
     String docUri,
   ) {
+    final WmlBlock? block = readBlock(reader, package, docUri);
+    return block is WmlVisual ? block.visual : null;
+  }
+
+  /// Reads a picture, chart, or absolutely positioned frame.
+  static WmlBlock? readBlock(
+    XmlPullReader reader,
+    OpcPackage package,
+    String docUri, {
+    WmlParagraph Function(XmlPullReader reader)? readParagraph,
+  }) {
     if (reader.localName != 'drawing') {
       return null;
     }
@@ -426,12 +452,33 @@ abstract final class WordDrawingIo {
     var verticalPos = false;
     var behindDoc = false;
     var wrap = PictureWrap.inline;
+    var sawShape = false;
+    var inSolidFill = false;
+    var inLine = false;
+    var frameAnchor = WmlFrameAnchor.page;
+    var frameWrap = WmlFrameWrap.none;
+    String? fill;
+    String? stroke;
+    final List<WmlBlock> frameBlocks = <WmlBlock>[];
     final PictureAdjust adj = PictureAdjust();
     if (!reader.isEmptyElement) {
       final int depth = reader.depth;
       while (reader.next() && reader.depth >= depth) {
+        if (reader.eventType == XmlEventType.endElement) {
+          if (reader.localName == 'solidFill') {
+            inSolidFill = false;
+          } else if (reader.localName == 'ln') {
+            inLine = false;
+          }
+          continue;
+        }
         if (reader.eventType != XmlEventType.startElement) {
           continue;
+        }
+        if (reader.localName == 'wsp' ||
+            reader.localName == 'txbx' ||
+            reader.localName == 'txbxContent') {
+          sawShape = true;
         }
         if (reader.localName == 'inline') {
           wrap = PictureWrap.inline;
@@ -445,8 +492,16 @@ abstract final class WordDrawingIo {
             localName: reader.localName,
             behindDoc: behindDoc,
           );
+          if (reader.localName == 'wrapSquare' ||
+              reader.localName == 'wrapTight' ||
+              reader.localName == 'wrapTopAndBottom') {
+            frameWrap = WmlFrameWrap.square;
+          }
         } else if (reader.localName == 'positionH') {
           verticalPos = false;
+          if (reader.getAttribute('relativeFrom') == 'margin') {
+            frameAnchor = WmlFrameAnchor.margin;
+          }
         } else if (reader.localName == 'positionV') {
           verticalPos = true;
         } else if (reader.localName == 'posOffset') {
@@ -473,13 +528,30 @@ abstract final class WordDrawingIo {
           );
         } else if (reader.localName == 'outerShdw') {
           adj.shadow = true;
+        } else if (reader.localName == 'solidFill') {
+          inSolidFill = true;
         } else if (reader.localName == 'ln') {
+          inLine = true;
           final int? wEmu = int.tryParse(reader.getAttribute('w') ?? '');
           if (wEmu != null) {
             adj.borderWidth = DrawingmlVisualIo.emuToBorder(wEmu);
           }
-        } else if (reader.localName == 'srgbClr' && adj.borderWidth > 0) {
-          adj.borderColor = reader.getAttribute('val') ?? adj.borderColor;
+        } else if (reader.localName == 'srgbClr') {
+          final String? val = reader.getAttribute('val');
+          if (val != null && val.isNotEmpty) {
+            if (inLine) {
+              stroke = val.toUpperCase();
+              if (adj.borderWidth > 0) {
+                adj.borderColor = val;
+              }
+            } else if (inSolidFill) {
+              fill = val.toUpperCase();
+            }
+          }
+        } else if (reader.localName == 'p' &&
+            reader.namespaceUri == OfficeNamespaces.w &&
+            readParagraph != null) {
+          frameBlocks.add(readParagraph(reader));
         } else if (reader.localName == 'graphicFrameLocks' ||
             reader.localName == 'picLocks') {
           final String? lock = reader.getAttribute('noChangeAspect');
@@ -509,37 +581,61 @@ abstract final class WordDrawingIo {
       ..altTitle = name
       ..altDescription = descr;
     if (chartId != null) {
-      return _readChart(package, docUri, chartId, name: name, cx: cx, cy: cy);
+      final OfficeVisual? chart = _readChart(
+        package,
+        docUri,
+        chartId,
+        name: name,
+        cx: cx,
+        cy: cy,
+      );
+      return chart == null ? null : WmlVisual(visual: chart);
     }
-    if (embed == null) {
-      return null;
+    if (embed != null) {
+      final PackageRelationship? rel = package
+          .relationshipsFor(docUri)
+          .byId(embed);
+      if (rel != null && rel.targetMode == RelationshipTargetMode.internal) {
+        final String target = package.relationshipsFor(docUri).resolve(rel);
+        final PackagePart? part = package.getPart(target);
+        if (part != null) {
+          final Uint8List bytes = part.readBytes();
+          if (bytes.isNotEmpty) {
+            final ImageSize? size = ImageFit.readSize(bytes);
+            return WmlVisual(
+              visual: OfficeVisual(
+                kind: OfficeVisualKind.picture,
+                title: name,
+                imageBytes: bytes,
+                width: cx > 0
+                    ? emuToPoints(cx)
+                    : (size?.widthPx.toDouble() ?? 240),
+                height: cy > 0
+                    ? emuToPoints(cy)
+                    : (size?.heightPx.toDouble() ?? 140),
+                offsetX: offsetX,
+                offsetY: offsetY,
+                picture: adj,
+              ),
+            );
+          }
+        }
+      }
     }
-    final PackageRelationship? rel = package
-        .relationshipsFor(docUri)
-        .byId(embed);
-    if (rel == null || rel.targetMode != RelationshipTargetMode.internal) {
-      return null;
+    if (sawShape) {
+      return WmlFrame(
+        x: offsetX,
+        y: offsetY,
+        width: cx > 0 ? emuToPoints(cx) : 200,
+        height: cy > 0 ? emuToPoints(cy) : 120,
+        anchor: frameAnchor,
+        wrap: frameWrap,
+        fillColor: fill,
+        strokeColor: stroke,
+        blocks: frameBlocks,
+      );
     }
-    final String target = package.relationshipsFor(docUri).resolve(rel);
-    final PackagePart? part = package.getPart(target);
-    if (part == null) {
-      return null;
-    }
-    final Uint8List bytes = part.readBytes();
-    if (bytes.isEmpty) {
-      return null;
-    }
-    final ImageSize? size = ImageFit.readSize(bytes);
-    return OfficeVisual(
-      kind: OfficeVisualKind.picture,
-      title: name,
-      imageBytes: bytes,
-      width: cx > 0 ? emuToPoints(cx) : (size?.widthPx.toDouble() ?? 240),
-      height: cy > 0 ? emuToPoints(cy) : (size?.heightPx.toDouble() ?? 140),
-      offsetX: offsetX,
-      offsetY: offsetY,
-      picture: adj,
-    );
+    return null;
   }
 
   static void _readWrapDist(PictureAdjust adj, XmlPullReader reader) {

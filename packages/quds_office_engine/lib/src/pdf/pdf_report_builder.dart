@@ -114,6 +114,7 @@ class PdfReportBuilder {
   /// footer API.
   final String? footer;
   final List<_PdfBlock> _blocks = <_PdfBlock>[];
+  FontSubset? _activeSubset;
 
   /// widthPoints API.
   double get _width => page.widthPoints;
@@ -201,6 +202,18 @@ class PdfReportBuilder {
 
     final PdfDocument pdf = PdfDocument(title: title, author: author);
     final Set<int> cps = <int>{};
+    _collectReportCodepoints(pages, cps);
+    if (header != null) {
+      cps.addAll(header!.runes);
+    }
+    if (footer != null) {
+      cps.addAll(footer!.runes);
+    }
+    FontSubset? subset;
+    if (font != null && cps.isNotEmpty && font!.hasTable('glyf')) {
+      subset = FontSubsetter(font!).subset(cps);
+    }
+    _activeSubset = subset;
     var imgSeq = 0;
     for (int i = 0; i < pages.length; i++) {
       final PdfCanvas canvas = PdfCanvas(_width, _height);
@@ -229,11 +242,36 @@ class PdfReportBuilder {
         ),
       );
     }
-    FontSubset? subset;
-    if (font != null && cps.isNotEmpty) {
-      subset = FontSubsetter(font!).subset(cps);
-    }
+    _activeSubset = null;
     return pdf.save(subset: subset, font: font);
+  }
+
+  void _collectReportCodepoints(List<List<_PdfBlock>> pages, Set<int> cps) {
+    for (final List<_PdfBlock> page in pages) {
+      for (final _PdfBlock block in page) {
+        if (block.text != null) {
+          cps.addAll(block.text!.runes);
+        }
+        if (block.rows != null) {
+          for (final List<String> row in block.rows!) {
+            for (final String cell in row) {
+              cps.addAll(cell.runes);
+            }
+          }
+        }
+        if (block.cards != null) {
+          for (final ({String label, String value}) card in block.cards!) {
+            cps.addAll(card.label.runes);
+            cps.addAll(card.value.runes);
+          }
+        }
+        if (block.points != null) {
+          for (final ChartPoint point in block.points!) {
+            cps.addAll(point.label.runes);
+          }
+        }
+      }
+    }
   }
 
   void _paintChrome(PdfCanvas canvas, int n, int total) {
@@ -459,6 +497,7 @@ class PdfReportBuilder {
         height: raster.height,
         bytes: raster.jpegBytes ?? raster.rgb,
         jpeg: raster.isJpeg,
+        maskBytes: raster.alpha,
       ),
     );
     final double x = margin + (_contentWidth - w) / 2;
@@ -618,7 +657,8 @@ class PdfReportBuilder {
       );
       for (final int cp in text.runes) {
         cps.add(cp);
-        final int gid = font!.glyphIdFor(cp);
+        final int oldGid = font!.glyphIdFor(cp);
+        final int gid = _activeSubset?.unicodeToNewGlyph[cp] ?? oldGid;
         canvas.showGlyph(
           x: cx,
           y: y,

@@ -95,7 +95,7 @@ class OfficeTheme {
     canvasBackground: Color(0xFF5B5B5B),
     pageBackground: Color(0xFFFFFFFF),
     pageBorder: Color(0xFFB0B0B0),
-    caret: Color(0xFF000000),
+    caret: Color(0xC8000000),
     selectionFill: Color(0x332E75B6),
     selectionStroke: Color(0xFF2E75B6),
     gridLine: Color(0xFFD0D0D0),
@@ -116,7 +116,7 @@ class OfficeTheme {
     canvasBackground: Color(0xFF1E1E1E),
     pageBackground: Color(0xFF2B2B2B),
     pageBorder: Color(0xFF555555),
-    caret: Color(0xFFF2F2F2),
+    caret: Color(0xC8F2F2F2),
     selectionFill: Color(0x664478C4),
     selectionStroke: Color(0xFF5B9BD5),
     gridLine: Color(0xFF3F3F3F),
@@ -197,6 +197,12 @@ class OfficeTheme {
   }
 }
 
+/// Target form-factor. [automatic] is resolved from layout constraints.
+enum OfficeFormFactor { phone, tablet, desktop, automatic }
+
+/// Control spacing for host chrome (ribbons stay in the host).
+enum OfficeDensity { compact, comfortable, spacious }
+
 /// Host-facing chrome and interaction flags for an embedded surface.
 class OfficeSurfaceConfig {
   /// OfficeSurfaceConfig API.
@@ -212,6 +218,13 @@ class OfficeSurfaceConfig {
     this.autofocus = false,
     this.textDirection = TextDirection.ltr,
     this.strings = OfficeStrings.english,
+    this.formFactor = OfficeFormFactor.automatic,
+    this.density = OfficeDensity.comfortable,
+    this.adaptiveChrome = true,
+    this.showFindChrome = false,
+    this.interactiveRulers = true,
+    this.showNavigationPane = false,
+    this.showNotesPane = false,
   });
 
   /// mode API.
@@ -247,6 +260,77 @@ class OfficeSurfaceConfig {
   /// strings API.
   final OfficeStrings strings;
 
+  /// formFactor API.
+  final OfficeFormFactor formFactor;
+
+  /// density API.
+  final OfficeDensity density;
+
+  /// When true, phone widths hide rulers / side panes unless the host forces them.
+  final bool adaptiveChrome;
+
+  /// showFindChrome API.
+  final bool showFindChrome;
+
+  /// interactiveRulers API.
+  final bool interactiveRulers;
+
+  /// showNavigationPane API.
+  final bool showNavigationPane;
+
+  /// showNotesPane API.
+  final bool showNotesPane;
+
+  /// resolveFormFactor API.
+  OfficeFormFactor resolveFormFactor(Size size) {
+    if (formFactor != OfficeFormFactor.automatic) {
+      return formFactor;
+    }
+    if (size.shortestSide < 600) {
+      return OfficeFormFactor.phone;
+    }
+    if (size.shortestSide < 840) {
+      return OfficeFormFactor.tablet;
+    }
+    return OfficeFormFactor.desktop;
+  }
+
+  /// touchPreferred API.
+  bool touchPreferred(Size size) {
+    final OfficeFormFactor factor = resolveFormFactor(size);
+    return factor == OfficeFormFactor.phone ||
+        factor == OfficeFormFactor.tablet;
+  }
+
+  /// chromeScale API.
+  double get chromeScale => switch (density) {
+    OfficeDensity.compact => 0.85,
+    OfficeDensity.comfortable => 1,
+    OfficeDensity.spacious => 1.2,
+  };
+
+  /// effectiveShowRulers API.
+  bool effectiveShowRulers(Size size) {
+    if (!showRulers) {
+      return false;
+    }
+    if (!adaptiveChrome) {
+      return true;
+    }
+    return resolveFormFactor(size) != OfficeFormFactor.phone;
+  }
+
+  /// effectiveShowNavigationPane API.
+  bool effectiveShowNavigationPane(Size size) {
+    if (!showNavigationPane) {
+      return false;
+    }
+    if (!adaptiveChrome) {
+      return true;
+    }
+    return resolveFormFactor(size) == OfficeFormFactor.desktop;
+  }
+
   /// allowsMutation API.
   bool get allowsMutation => mode == OfficeInteractionMode.editing;
 
@@ -271,6 +355,13 @@ class OfficeSurfaceConfig {
     bool? autofocus,
     TextDirection? textDirection,
     OfficeStrings? strings,
+    OfficeFormFactor? formFactor,
+    OfficeDensity? density,
+    bool? adaptiveChrome,
+    bool? showFindChrome,
+    bool? interactiveRulers,
+    bool? showNavigationPane,
+    bool? showNotesPane,
   }) {
     return OfficeSurfaceConfig(
       mode: mode ?? this.mode,
@@ -284,6 +375,13 @@ class OfficeSurfaceConfig {
       autofocus: autofocus ?? this.autofocus,
       textDirection: textDirection ?? this.textDirection,
       strings: strings ?? this.strings,
+      formFactor: formFactor ?? this.formFactor,
+      density: density ?? this.density,
+      adaptiveChrome: adaptiveChrome ?? this.adaptiveChrome,
+      showFindChrome: showFindChrome ?? this.showFindChrome,
+      interactiveRulers: interactiveRulers ?? this.interactiveRulers,
+      showNavigationPane: showNavigationPane ?? this.showNavigationPane,
+      showNotesPane: showNotesPane ?? this.showNotesPane,
     );
   }
 }
@@ -338,10 +436,20 @@ class OfficeStrings {
     this.deleteSheetRow = 'Delete row',
     this.deleteSheetColumn = 'Delete column',
     this.clearCells = 'Clear contents',
+    this.mergeAndCenter = 'Merge & Center',
+    this.unmergeCells = 'Unmerge Cells',
     this.deleteShape = 'Delete',
     this.followLink = 'Open link',
     this.hideSlide = 'Hide Slide',
     this.showSlide = 'Show Slide',
+    this.copySlide = 'Copy Slide',
+    this.pasteSlide = 'Paste Slide',
+    this.duplicateSlide = 'Duplicate Slide',
+    this.find = 'Find',
+    this.replace = 'Replace',
+    this.print = 'Print',
+    this.properties = 'Properties',
+    this.wordCount = 'Word count',
   });
 
   /// wordEditor API.
@@ -479,6 +587,12 @@ class OfficeStrings {
   /// clearCells API.
   final String clearCells;
 
+  /// mergeAndCenter API.
+  final String mergeAndCenter;
+
+  /// unmergeCells API.
+  final String unmergeCells;
+
   /// deleteShape API.
   final String deleteShape;
 
@@ -490,6 +604,30 @@ class OfficeStrings {
 
   /// showSlide API.
   final String showSlide;
+
+  /// copySlide API.
+  final String copySlide;
+
+  /// pasteSlide API.
+  final String pasteSlide;
+
+  /// duplicateSlide API.
+  final String duplicateSlide;
+
+  /// find API.
+  final String find;
+
+  /// replace API.
+  final String replace;
+
+  /// print API.
+  final String print;
+
+  /// properties API.
+  final String properties;
+
+  /// wordCount API.
+  final String wordCount;
 
   /// english API.
   static const OfficeStrings english = OfficeStrings(
@@ -539,10 +677,20 @@ class OfficeStrings {
     deleteSheetRow: 'Delete row',
     deleteSheetColumn: 'Delete column',
     clearCells: 'Clear contents',
+    mergeAndCenter: 'Merge & Center',
+    unmergeCells: 'Unmerge Cells',
     deleteShape: 'Delete',
     followLink: 'Open link',
     hideSlide: 'Hide Slide',
     showSlide: 'Show Slide',
+    copySlide: 'Copy Slide',
+    pasteSlide: 'Paste Slide',
+    duplicateSlide: 'Duplicate Slide',
+    find: 'Find',
+    replace: 'Replace',
+    print: 'Print',
+    properties: 'Properties',
+    wordCount: 'Word count',
   );
 
   /// arabic API.
@@ -593,9 +741,19 @@ class OfficeStrings {
     deleteSheetRow: 'حذف الصف',
     deleteSheetColumn: 'حذف العمود',
     clearCells: 'مسح المحتوى',
+    mergeAndCenter: 'دمج وتوسيط',
+    unmergeCells: 'إلغاء الدمج',
     deleteShape: 'حذف',
     followLink: 'فتح الرابط',
     hideSlide: 'إخفاء الشريحة',
     showSlide: 'إظهار الشريحة',
+    copySlide: 'نسخ الشريحة',
+    pasteSlide: 'لصق الشريحة',
+    duplicateSlide: 'تكرار الشريحة',
+    find: 'بحث',
+    replace: 'استبدال',
+    print: 'طباعة',
+    properties: 'خصائص',
+    wordCount: 'عدد الكلمات',
   );
 }

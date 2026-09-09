@@ -39,10 +39,18 @@ abstract final class PaintOfficeVisual {
     required String fontFamily,
     VisualImageCache? images,
     VoidCallback? onImageReady,
+    bool cropPreview = false,
   }) {
     switch (visual.kind) {
       case OfficeVisualKind.picture:
-        _picture(canvas, rect, visual, images, onImageReady);
+        _picture(
+          canvas,
+          rect,
+          visual,
+          images,
+          onImageReady,
+          cropPreview: cropPreview,
+        );
       case OfficeVisualKind.chartColumn:
         _column(canvas, rect, visual, fontFamily);
       case OfficeVisualKind.chartBar:
@@ -65,35 +73,35 @@ abstract final class PaintOfficeVisual {
     Rect rect,
     OfficeVisual visual,
     VisualImageCache? images,
-    VoidCallback? onImageReady,
-  ) {
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(rect, const Radius.circular(4)),
-      Paint()..color = const Color(0xFFF3F6FB),
-    );
+    VoidCallback? onImageReady, {
+    bool cropPreview = false,
+  }) {
     final Uint8List? bytes = visual.imageBytes;
-    if (bytes == null || images == null) {
+    if (bytes == null || bytes.isEmpty) {
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(rect, const Radius.circular(4)),
+        Paint()..color = const Color(0xFFF3F6FB),
+      );
       _label(
         canvas,
         rect,
         visual.title.isEmpty ? 'Picture' : visual.title,
         fontSize: 12,
       );
+      return;
+    }
+    if (images == null) {
       return;
     }
     final ui.Image? image = images.get(bytes);
     if (image == null) {
       images.load(bytes, onImageReady ?? () {});
-      _label(
-        canvas,
-        rect,
-        visual.title.isEmpty ? 'Picture' : visual.title,
-        fontSize: 12,
-      );
       return;
     }
     final PictureAdjust adj = visual.picture;
-    final Rect dest = rect.deflate(2 + adj.borderWidth);
+    final Rect dest = adj.borderWidth > 0
+        ? rect.deflate(adj.borderWidth)
+        : rect;
     canvas.save();
     final Offset c = dest.center;
     if (adj.shadow) {
@@ -110,7 +118,10 @@ abstract final class PaintOfficeVisual {
       canvas.scale(adj.flipH ? -1 : 1, adj.flipV ? -1 : 1);
       canvas.translate(-c.dx, -c.dy);
     }
-    final Paint paint = Paint();
+    final Paint paint = Paint()
+      ..filterQuality = FilterQuality.high
+      ..isAntiAlias = true
+      ..blendMode = BlendMode.srcOver;
     if (adj.transparency > 0.01) {
       paint.color = Color.fromRGBO(255, 255, 255, 1 - adj.transparency);
     }
@@ -147,6 +158,22 @@ abstract final class PaintOfficeVisual {
       0,
       image.height / 2,
     );
+    if (cropPreview) {
+      final double keepW = (1 - adj.cropLeft - adj.cropRight).clamp(0.12, 1);
+      final double keepH = (1 - adj.cropTop - adj.cropBottom).clamp(0.12, 1);
+      final Rect full = Rect.fromLTWH(
+        dest.left - dest.width * adj.cropLeft / keepW,
+        dest.top - dest.height * adj.cropTop / keepH,
+        dest.width / keepW,
+        dest.height / keepH,
+      );
+      canvas.drawImageRect(
+        image,
+        Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
+        full,
+        Paint()..color = const Color(0x99FFFFFF),
+      );
+    }
     canvas.drawImageRect(
       image,
       Rect.fromLTWH(

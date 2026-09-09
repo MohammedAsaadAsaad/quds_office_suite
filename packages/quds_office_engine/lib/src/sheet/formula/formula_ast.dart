@@ -1,3 +1,4 @@
+import '../model/sml_analysis.dart';
 import '../model/sml_workbook.dart';
 import 'formula_eval.dart';
 import 'formula_functions.dart';
@@ -74,6 +75,9 @@ class FormulaContext {
   final void Function(SmlCellRef ref)? onCircular;
   final Set<String> _stack = <String>{};
 
+  /// LET bindings (uppercase name → value).
+  final Map<String, Object?> lets = <String, Object?>{};
+
   /// valueOf API.
   Object? valueOf(SmlCellRef ref, {SmlWorksheet? onSheet}) {
     final SmlWorksheet target = onSheet ?? sheet;
@@ -106,7 +110,60 @@ class LiteralNode extends FormulaNode {
 
   @override
   /// eval API.
-  Object? eval(FormulaContext ctx) => value;
+  Object? eval(FormulaContext ctx) {
+    if (value is String) {
+      final String key = (value as String).toUpperCase();
+      if (ctx.lets.containsKey(key)) {
+        return ctx.lets[key];
+      }
+    }
+    return value;
+  }
+}
+
+/// A spilled array written into adjacent cells (SEQUENCE).
+class FormulaSpill {
+  /// FormulaSpill API.
+  FormulaSpill(this.rows);
+
+  /// rows API.
+  final List<List<Object?>> rows;
+}
+
+/// Resolves a workbook defined name.
+class NamedRangeNode extends FormulaNode {
+  /// NamedRangeNode API.
+  NamedRangeNode(this.name);
+
+  /// name API.
+  final String name;
+
+  @override
+  Object? eval(FormulaContext ctx) {
+    final String key = name.toUpperCase();
+    if (ctx.lets.containsKey(key)) {
+      return ctx.lets[key];
+    }
+    final SmlRange? table = SmlTable.resolveRef(ctx.sheet, name);
+    if (table != null) {
+      if (table.isSingleCell) {
+        return ctx.valueOf(table.start);
+      }
+      return RangeNode(table).eval(ctx);
+    }
+    final SmlNamedRange? found = ctx.workbook.namedRange(name);
+    if (found == null) {
+      return '#NAME?';
+    }
+    final SmlWorksheet? sheet = ctx.workbook.sheetByName(found.sheetName);
+    if (sheet == null) {
+      return '#REF!';
+    }
+    if (found.range.isSingleCell) {
+      return ctx.valueOf(found.range.start, onSheet: sheet);
+    }
+    return RangeNode(found.range, sheetName: found.sheetName).eval(ctx);
+  }
 }
 
 /// Class CellNode.

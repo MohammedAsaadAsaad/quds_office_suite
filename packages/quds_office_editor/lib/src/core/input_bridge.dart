@@ -24,17 +24,23 @@ class OfficeInputBridge with TextInputClient {
   /// value API.
   TextEditingValue get value => _value;
 
-  /// isAttached API.
-  bool get isAttached => _connection != null;
+  /// True only while this client is Flutter's current [TextInput] connection.
+  bool get isAttached => _connection?.attached ?? false;
 
-  /// attach API.
+  /// Attaches, or re-attaches if another client stole the IME.
   void attach({
     bool multiline = false,
     TextInputAction action = TextInputAction.newline,
     bool autocorrect = true,
   }) {
+    if (isAttached) {
+      _connection!
+        ..show()
+        ..setEditingState(_value);
+      return;
+    }
     detach();
-    _connection = TextInput.attach(
+    final TextInputConnection connection = TextInput.attach(
       this,
       TextInputConfiguration(
         inputType: multiline ? TextInputType.multiline : TextInputType.text,
@@ -42,21 +48,32 @@ class OfficeInputBridge with TextInputClient {
         autocorrect: autocorrect,
         enableSuggestions: autocorrect,
       ),
-    )..show();
-    _connection!.setEditingState(_value);
+    );
+    _connection = connection;
+    if (connection.attached) {
+      connection
+        ..show()
+        ..setEditingState(_value);
+    }
   }
 
   /// detach API.
   void detach() {
-    _connection?.close();
+    final TextInputConnection? connection = _connection;
     _connection = null;
+    if (connection != null && connection.attached) {
+      connection.close();
+    }
   }
 
-  /// setValue API.
+  /// Updates the local value, and the system IME only when still attached.
   void setValue(TextEditingValue value) {
     _value = value;
     composing = value.composing;
-    _connection?.setEditingState(_value);
+    final TextInputConnection? connection = _connection;
+    if (connection != null && connection.attached) {
+      connection.setEditingState(_value);
+    }
   }
 
   @override

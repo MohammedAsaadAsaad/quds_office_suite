@@ -1,6 +1,6 @@
 # Quds Office Studio
 
-Host example for `quds_office_editor`: a bilingual Word / Excel / PowerPoint workspace
+Host example for `quds_office_editor`: a Word / Excel / PowerPoint workspace
 with ribbons, sample documents, and the custom RenderBox canvases.
 
 ## Run

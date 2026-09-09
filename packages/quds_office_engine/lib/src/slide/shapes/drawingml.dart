@@ -23,6 +23,9 @@ List<PmlShape> parseSlideShapes(String xml) {
   /// textFillPending API.
   var textFillPending = false;
 
+  /// strokePending API.
+  var strokePending = false;
+
   /// inSpPr API.
   var inSpPr = false;
 
@@ -43,6 +46,8 @@ List<PmlShape> parseSlideShapes(String xml) {
 
   /// currentCell API.
   PmlTableCell? currentCell;
+  int? currentGroupId;
+  var nextGroupId = 1;
   while (reader.next()) {
     if (reader.eventType == XmlEventType.endElement) {
       if (reader.localName == 'spPr') {
@@ -67,6 +72,8 @@ List<PmlShape> parseSlideShapes(String xml) {
         currentRow = null;
         currentCell = null;
         inTcPr = false;
+      } else if (reader.localName == 'grpSp') {
+        currentGroupId = null;
       } else if (reader.localName == 'sp' ||
           reader.localName == 'cxnSp' ||
           reader.localName == 'pic' ||
@@ -87,14 +94,22 @@ List<PmlShape> parseSlideShapes(String xml) {
     if (reader.eventType != XmlEventType.startElement) {
       continue;
     }
-    if (reader.localName == 'sp' ||
+    if (reader.localName == 'grpSp') {
+      currentGroupId = nextGroupId++;
+    } else if (reader.localName == 'sp' ||
         reader.localName == 'cxnSp' ||
         reader.localName == 'pic' ||
         reader.localName == 'graphicFrame') {
-      current = PmlShape(id: shapes.length + 2, name: 'Shape', fillColor: '');
+      current = PmlShape(
+        id: shapes.length + 2,
+        name: 'Shape',
+        fillColor: '',
+        groupId: currentGroupId,
+      );
       shapes.add(current);
       fillPending = false;
       textFillPending = false;
+      strokePending = false;
       inSpPr = false;
       inTxBody = false;
       inLn = false;
@@ -103,6 +118,13 @@ List<PmlShape> parseSlideShapes(String xml) {
       inLn = false;
     } else if (reader.localName == 'ln' && inSpPr) {
       inLn = true;
+      final String? w = reader.getAttribute('w');
+      if (w != null && current != null) {
+        final int? emu = int.tryParse(w);
+        if (emu != null && emu > 0) {
+          current.strokeWidth = emu / 12700.0;
+        }
+      }
     } else if (reader.localName == 'txBody') {
       inTxBody = current != null;
     } else if (reader.localName == 'rPr' && current != null) {
@@ -113,6 +135,21 @@ List<PmlShape> parseSlideShapes(String xml) {
     } else if (reader.localName == 'cNvPr' && current != null) {
       current.id = int.parse(reader.getAttribute('id') ?? '${current.id}');
       current.name = reader.getAttribute('name') ?? current.name;
+      final String? descr = reader.getAttribute('descr');
+      if (descr != null &&
+          (descr.startsWith('http://') ||
+              descr.startsWith('https://') ||
+              descr.startsWith('mailto:'))) {
+        current.hyperlinkUrl = descr;
+      }
+    } else if (reader.localName == 'hlinkClick' && current != null) {
+      final String? target = reader.getAttribute('target');
+      if (target != null && target.isNotEmpty) {
+        current.hyperlinkUrl = target;
+      }
+    } else if (reader.localName == 'solidFill' && inSpPr && inLn) {
+      strokePending = current != null;
+      fillPending = false;
     } else if (reader.localName == 'srcRect' && current != null) {
       current.visual ??= OfficeVisual(kind: OfficeVisualKind.picture);
       DrawingmlVisualIo.applySrcRect(current.visual!.picture, reader);
@@ -192,6 +229,8 @@ List<PmlShape> parseSlideShapes(String xml) {
       if (val != null && val.isNotEmpty) {
         if (inTcPr && currentCell != null) {
           currentCell.fillColor = val;
+        } else if (strokePending) {
+          current.strokeColor = val;
         } else if (fillPending) {
           current.fillColor = val;
         } else if (textFillPending) {
@@ -202,6 +241,7 @@ List<PmlShape> parseSlideShapes(String xml) {
       }
       fillPending = false;
       textFillPending = false;
+      strokePending = false;
     } else if ((reader.localName == 'blip' || reader.localName == 'chart') &&
         current != null) {
       current.embedRelId =
@@ -318,7 +358,30 @@ String slideToXml(PmlSlide slide, {Map<PmlShape, String>? embedIds}) {
 
   /// writeEmptyElement API.
   w.writeEmptyElement('grpSpPr', prefix: 'p');
+  int? openGroup;
   for (final PmlShape shape in slide.shapes) {
+    if (shape.groupId != openGroup) {
+      if (openGroup != null) {
+        w.writeEndElement();
+      }
+      if (shape.groupId != null) {
+        w.writeStartElement('grpSp', prefix: 'p');
+        w.writeStartElement('nvGrpSpPr', prefix: 'p');
+        w.writeEmptyElement(
+          'cNvPr',
+          prefix: 'p',
+          attributes: <String, String>{
+            'id': '${shape.groupId}',
+            'name': 'Group ${shape.groupId}',
+          },
+        );
+        w.writeEmptyElement('cNvGrpSpPr', prefix: 'p');
+        w.writeEmptyElement('nvPr', prefix: 'p');
+        w.writeEndElement();
+        w.writeEmptyElement('grpSpPr', prefix: 'p');
+      }
+      openGroup = shape.groupId;
+    }
     final OfficeVisual? visual = shape.visual;
     final String? embed = embedIds?[shape] ?? shape.embedRelId;
     if (shape.table != null) {
@@ -332,6 +395,9 @@ String slideToXml(PmlSlide slide, {Map<PmlShape, String>? embedIds}) {
     } else {
       _writeSlideShape(w, shape);
     }
+  }
+  if (openGroup != null) {
+    w.writeEndElement();
   }
 
   /// writeEndElement API.
@@ -355,12 +421,14 @@ void _writeSlideShape(XmlWriter w, PmlShape shape) {
   /// writeStartElement API.
   w.writeStartElement('nvSpPr', prefix: 'p');
 
-  /// writeEmptyElement API.
-  w.writeEmptyElement(
-    'cNvPr',
-    prefix: 'p',
-    attributes: <String, String>{'id': '${shape.id}', 'name': shape.name},
-  );
+  final Map<String, String> cNvPrAttrs = <String, String>{
+    'id': '${shape.id}',
+    'name': shape.name,
+  };
+  if (shape.hyperlinkUrl.isNotEmpty) {
+    cNvPrAttrs['descr'] = shape.hyperlinkUrl;
+  }
+  w.writeEmptyElement('cNvPr', prefix: 'p', attributes: cNvPrAttrs);
 
   /// writeEmptyElement API.
   w.writeEmptyElement('cNvSpPr', prefix: 'p');
@@ -425,6 +493,18 @@ void _writeSlideShape(XmlWriter w, PmlShape shape) {
       prefix: 'a',
       attributes: <String, String>{'val': shape.fillColor},
     );
+    w.writeEndElement();
+  }
+  if (shape.strokeColor.isNotEmpty) {
+    w.writeStartElement('ln', prefix: 'a');
+    w.writeAttribute('w', '${(shape.strokeWidth * 12700).round()}');
+    w.writeStartElement('solidFill', prefix: 'a');
+    w.writeEmptyElement(
+      'srgbClr',
+      prefix: 'a',
+      attributes: <String, String>{'val': shape.strokeColor},
+    );
+    w.writeEndElement();
     w.writeEndElement();
   }
 

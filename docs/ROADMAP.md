@@ -1,0 +1,36 @@
+# Quds Office Suite — Roadmap (post Wave 4)
+
+Waves 1–4 are implemented in-tree. Later work should keep [STANDARDS.md](STANDARDS.md)
+and [MISSION.md](MISSION.md) honest as coverage changes.
+
+## Wave 1 — PDF correctness (done)
+
+- Print ranges, Excel geometry, outline bookmarks, notes links, list/TOC paint
+- See [STANDARDS.md](STANDARDS.md)
+
+## Wave 2 — Word depth (done)
+
+- Fields: `HYPERLINK`, `FILENAME`, `FILESIZE`, `AUTHOR`, `TITLE`, `MERGEFIELD`
+- Deeper `numbering.xml` (multi-level counters, restart, `%1`…`%9` labels)
+- Richer `styles.xml` (`basedOn`, fonts, document.styles round-trip, table grid-like styles)
+- Justified caret/selection regression coverage in the editor
+
+## Wave 3 — Excel & PowerPoint print (done)
+
+- Excel PDF: print titles / repeating rows, true cell borders vs gridlines, header/footer tokens
+- Formula stubs: `HYPERLINK`, `ADDRESS`, `CELL`, `INFO`, `FIXED`/`DOLLAR`, limited `ASC`/`BAHTTEXT`
+- Pivot/PowerQuery naming kept honest (simple SUM pivot; CSV helper only)
+- PPT: stroke outlines, hyperlink URI annots, chart `rtl` write from `ChartDisplay` / sheet RTL
+
+## Wave 4 — Platform (done)
+
+- Multi-face glyf embed via `OfficeFontSet` / `OfficeFontResolver` (CFF/`FontFile3` deferred)
+- Optional `PdfSaveOptions` (`pdfA`, `tagged`) — no PDF file-encryption API (OOXML crypto remains)
+- Optional PPT media package IO: `package:quds_office_engine/quds_office_engine_optional.dart`
+- Mission Phase 1–5 restored in [MISSION.md](MISSION.md)
+
+## Architecture reminder
+
+- `quds_office_engine` — pure Dart, no `dart:ui`
+- `quds_office_editor` — Flutter `RenderBox` / `LeafRenderObjectWidget` only
+- No `TODO` stubs; no `dynamic`; general-purpose fixtures only in tests

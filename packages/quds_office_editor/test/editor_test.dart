@@ -164,6 +164,254 @@ void main() {
     expect(CaretEngine.paragraphBounds(box, 13), (start: 12, end: 21));
   });
 
+  test('flagged caret points with the writing direction', () {
+    final BrokenLine arabic = BrokenLine(
+      glyphs: const <ShapedGlyph>[
+        ShapedGlyph(
+          codePoint: 0x0627,
+          glyphId: 1,
+          advance: 8,
+          logicalIndex: 0,
+          level: 1,
+        ),
+      ],
+      width: 8,
+      logicalStart: 0,
+      logicalEnd: 1,
+      justificationRatio: 0,
+    );
+    final BrokenLine latin = BrokenLine(
+      glyphs: const <ShapedGlyph>[
+        ShapedGlyph(
+          codePoint: 0x41,
+          glyphId: 1,
+          advance: 8,
+          logicalIndex: 0,
+          level: 0,
+        ),
+      ],
+      width: 8,
+      logicalStart: 0,
+      logicalEnd: 1,
+      justificationRatio: 0,
+    );
+    final CaretEngine caret = CaretEngine();
+    expect(caret.rtlAtCaret(arabic), isTrue);
+    expect(caret.rtlAtCaret(latin), isFalse);
+    expect(CaretEngine.resolveRtl(nearbyText: 'مرحبا', logicalIndex: 2), isTrue);
+    expect(CaretEngine.resolveRtl(nearbyText: 'Hello', logicalIndex: 2), isFalse);
+    expect(CaretEngine.resolveRtl(paragraphRtl: true), isTrue);
+    expect(
+      CaretEngine.resolveRtl(nearbyText: 'Hello مرحبا', logicalIndex: 2),
+      isFalse,
+    );
+    expect(
+      CaretEngine.resolveRtl(nearbyText: 'Hello مرحبا', logicalIndex: 8),
+      isTrue,
+    );
+    expect(
+      CaretEngine().rtlAtLaidOut(
+        LaidOutLine(
+          glyphs: const <LaidOutGlyph>[],
+          x: 0,
+          y: 0,
+          width: 0,
+          height: 14,
+          pageIndex: 0,
+          justification: WmlJustification.right,
+        ),
+        paragraphRtl: true,
+      ),
+      isTrue,
+    );
+    const Rect stem = Rect.fromLTWH(10, 20, 1.0, 14);
+    expect(
+      CaretEngine.flaggedPath(stem, rtl: false).getBounds().right,
+      lessThanOrEqualTo(stem.right + 0.5),
+    );
+    expect(
+      CaretEngine.flaggedPath(stem, rtl: false).getBounds().left,
+      greaterThanOrEqualTo(stem.left - 0.5),
+    );
+    expect(
+      CaretEngine.flaggedPath(stem, rtl: true).getBounds().left,
+      lessThan(stem.left - 1),
+    );
+    expect(
+      CaretEngine.flaggedPath(stem, rtl: true).getBounds().top,
+      lessThanOrEqualTo(stem.top + 0.5),
+    );
+    expect(CaretEngine.deviceRtl(locale: const Locale('ar')), isTrue);
+    expect(CaretEngine.deviceRtl(locale: const Locale('en')), isFalse);
+  });
+
+  test('justified caret and selection share the same word X', () {
+    const String text =
+        'Nations concerning the delimitation of maritime boundaries and '
+        'other related matters that imply the need for careful drafting.';
+    final WmlDocument doc = WmlDocument(
+      sections: <WmlSection>[
+        WmlSection(
+          blocks: <WmlBlock>[
+            WmlParagraph(
+              properties: WmlParagraphProps(
+                justification: WmlJustification.justify,
+              ),
+              inlines: <WmlInline>[WmlRun(text: text)],
+            ),
+          ],
+        ),
+      ],
+    );
+    final LaidOutDocument laid = WordLayoutEngine(font: null).layout(doc);
+    expect(laid.pages.first.lines.length, greaterThan(1));
+    final LaidOutLine line = laid.pages.first.lines.first;
+    PaintRunText.fitLine(line, text);
+    expect(line.justificationRatio, isNot(0));
+
+    final int theStart = text.indexOf('the');
+    expect(theStart, greaterThan(0));
+    LaidOutGlyph? theGlyph;
+    for (final LaidOutGlyph g in line.glyphs) {
+      if (g.glyph.logicalIndex == theStart) {
+        theGlyph = g;
+        break;
+      }
+    }
+    expect(theGlyph, isNotNull);
+
+    final double caretAtThe = PaintRunText.caretXOnLine(
+      line,
+      theStart,
+      paragraph: text,
+    );
+    expect(caretAtThe, closeTo(theGlyph!.x, 1.2));
+
+    final int hit = PaintRunText.hitLogicalIndexOnLine(
+      line,
+      theGlyph.x + theGlyph.advance * 0.4,
+      paragraph: text,
+    );
+    expect(hit, inInclusiveRange(theStart, theStart + 3));
+
+    final CaretEngine caret = CaretEngine()
+      ..selectionAnchor = theStart
+      ..logicalIndex = theStart + 3;
+    final List<Rect> boxes = caret.selectionRectsOnLine(
+      line,
+      line.y,
+      line.height,
+    );
+    expect(boxes, isNotEmpty);
+    expect(boxes.first.left, closeTo(theGlyph.x, 1.2));
+  });
+
+  test('justified hitTest and range rects stay on word edges', () {
+    const String text =
+        'alpha bravo charlie delta echo foxtrot golf hotel india '
+        'juliet kilo lima mike november oscar papa';
+    final WmlDocument doc = WmlDocument(
+      sections: <WmlSection>[
+        WmlSection(
+          blocks: <WmlBlock>[
+            WmlParagraph(
+              properties: WmlParagraphProps(
+                justification: WmlJustification.justify,
+              ),
+              inlines: <WmlInline>[WmlRun(text: text)],
+            ),
+          ],
+        ),
+      ],
+    );
+    final LaidOutDocument laid = WordLayoutEngine(font: null).layout(doc);
+    final LaidOutLine line = laid.pages.first.lines.first;
+    PaintRunText.fitLine(line, text);
+    expect(line.justificationRatio, isNot(0));
+
+    final int deltaStart = text.indexOf('delta');
+    LaidOutGlyph? deltaGlyph;
+    for (final LaidOutGlyph g in line.glyphs) {
+      if (g.glyph.logicalIndex == deltaStart) {
+        deltaGlyph = g;
+        break;
+      }
+    }
+    expect(deltaGlyph, isNotNull);
+
+    final int hit = PaintRunText.hitLogicalIndexOnLine(
+      line,
+      deltaGlyph!.x + 0.5,
+      paragraph: text,
+    );
+    expect(hit, deltaStart);
+
+    final List<Rect> range = CaretEngine.rangeRectsOnLine(
+      line,
+      line.y,
+      line.height,
+      deltaStart,
+      deltaStart + 5,
+    );
+    expect(range, isNotEmpty);
+    expect(range.first.left, closeTo(deltaGlyph.x, 1.5));
+  });
+
+  test('caret X snaps to TextPainter glyph edges after fitLine', () {
+    const String text = 'production';
+    final List<LaidOutGlyph> glyphs = <LaidOutGlyph>[
+      for (int i = 0; i < text.length; i++)
+        LaidOutGlyph(
+          glyph: ShapedGlyph(
+            codePoint: text.codeUnitAt(i),
+            glyphId: i,
+            advance: 7,
+            logicalIndex: i,
+            level: 0,
+          ),
+          x: 72 + i * 7.0,
+          y: 20,
+          color: '000000',
+          fontSize: 14,
+          bold: false,
+          underline: WmlUnderline.none,
+        ),
+    ];
+    final LaidOutLine line = LaidOutLine(
+      glyphs: glyphs,
+      x: 72,
+      y: 72,
+      width: text.length * 7.0,
+      height: 16,
+      pageIndex: 0,
+      justification: WmlJustification.left,
+      sourceText: text,
+    );
+    PaintRunText.fitLine(line, text);
+    final TextPainter painter = PaintRunText.painterFor(
+      text: text,
+      first: line.glyphs.first,
+    )..layout();
+    for (int i = 0; i <= text.length; i++) {
+      final double expected =
+          PaintRunText.runPaintOrigin(line.glyphs, painter, text, text) +
+          PaintRunText.caretDx(painter, i);
+      expect(
+        PaintRunText.caretXOnLine(line, i, paragraph: text),
+        closeTo(expected, 0.6),
+        reason: 'caret at logical $i',
+      );
+    }
+    // Mid-glyph X must not be reported as a caret stop for 'n' (index 8).
+    final double beforeN = PaintRunText.caretXOnLine(line, 8, paragraph: text);
+    final double afterN = PaintRunText.caretXOnLine(line, 9, paragraph: text);
+    final double midN = (beforeN + afterN) / 2;
+    expect(
+      (PaintRunText.caretXOnLine(line, 8, paragraph: text) - midN).abs(),
+      greaterThan(0.4),
+    );
+  });
+
   test('caret stays on an RTL line whose visual order is reversed', () {
     final List<LaidOutGlyph> glyphs = <LaidOutGlyph>[
       for (int i = 5; i >= 0; i--)
@@ -198,6 +446,11 @@ void main() {
     expect(caret.isOnLine(line, lastOfParagraph: true), isTrue);
     caret.logicalIndex = 6;
     expect(caret.isOnLine(line, lastOfParagraph: false), isFalse);
+    expect(CaretEngine.caretX(line, 0, paragraphRtl: true), 48);
+    expect(CaretEngine.caretX(line, 6, paragraphRtl: true), 0);
+    expect(CaretEngine.caretX(line, 3, paragraphRtl: true), 24);
+    expect(CaretEngine.hitLogicalIndex(line, 4), 6);
+    expect(CaretEngine.hitLogicalIndex(line, 46), 0);
   });
 
   test('caret covers a contiguous range of table paragraphs', () {
@@ -286,6 +539,88 @@ void main() {
       ),
     );
     expect(tester.renderObject(find.byType(SheetGrid)), isA<RenderSheetGrid>());
+  });
+
+  testWidgets('header edit paints a usable header band', (
+    WidgetTester tester,
+  ) async {
+    final WordEditorController word = WordEditorController(
+      document: WmlDocument(
+        sections: <WmlSection>[
+          WmlSection(
+            margins: const WmlPageMargins(top: 0, bottom: 0, left: 0, right: 0),
+            blocks: <WmlBlock>[
+              WmlParagraph(inlines: <WmlInline>[WmlRun(text: 'Cover')]),
+            ],
+          ),
+        ],
+      ),
+    );
+    word.beginHeaderFooterEdit(0, footer: false);
+    await tester.pumpWidget(
+      Directionality(
+        textDirection: TextDirection.ltr,
+        child: SizedBox(
+          width: 900,
+          height: 800,
+          child: WordCanvas(
+            document: word.document,
+            laidOut: word.laidOut,
+            caret: word.caret,
+            storyParagraphs: word.headerFooterParagraphs,
+            editingHeader: true,
+            config: const OfficeSurfaceConfig(showRulers: true),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+    expect(word.laidOut.pages.first.header, isNotEmpty);
+    expect(word.isEditingHeader, isTrue);
+  });
+
+  testWidgets('Word canvas pans from a trackpad swipe', (
+    WidgetTester tester,
+  ) async {
+    final WmlDocument doc = WmlDocument(
+      sections: <WmlSection>[
+        WmlSection(
+          blocks: <WmlBlock>[
+            for (int i = 0; i < 40; i++)
+              WmlParagraph(
+                inlines: <WmlInline>[WmlRun(text: 'Line $i of the sample')],
+              ),
+          ],
+        ),
+      ],
+    );
+    final VirtualViewport viewport = VirtualViewport();
+    final LaidOutDocument laid = WordLayoutEngine(font: null).layout(doc);
+    await tester.pumpWidget(
+      Directionality(
+        textDirection: TextDirection.ltr,
+        child: SizedBox(
+          width: 520,
+          height: 280,
+          child: WordCanvas(
+            document: doc,
+            laidOut: laid,
+            caret: CaretEngine(),
+            viewport: viewport,
+          ),
+        ),
+      ),
+    );
+    final Offset center = tester.getCenter(find.byType(WordCanvas));
+    final TestPointer pointer = TestPointer(1, PointerDeviceKind.trackpad);
+    await tester.sendEventToBinding(pointer.panZoomStart(center));
+    await tester.sendEventToBinding(
+      pointer.panZoomUpdate(center, pan: const Offset(0, -90)),
+    );
+    await tester.sendEventToBinding(pointer.panZoomEnd());
+    await tester.pump();
+    expect(viewport.origin.dy, greaterThan(1));
   });
 
   testWidgets('Word canvas cursor follows handles, objects, and text', (
@@ -678,6 +1013,45 @@ void main() {
     expect(selection.focus.row, greaterThan(0));
   });
 
+  testWidgets('frozen column stays put and hides scrolled columns under it', (
+    WidgetTester tester,
+  ) async {
+    final SelectionMatrix selection = SelectionMatrix();
+    final VirtualViewport viewport = VirtualViewport();
+    final SmlWorksheet sheet = SmlWorkbook().firstSheet
+      ..freezeCols = 1
+      ..freezeRows = 1;
+    await tester.pumpWidget(
+      Directionality(
+        textDirection: TextDirection.ltr,
+        child: SizedBox(
+          width: 400,
+          height: 300,
+          child: SheetGrid(
+            sheet: sheet,
+            selection: selection,
+            viewport: viewport,
+          ),
+        ),
+      ),
+    );
+    viewport.origin = const Offset(96, 0);
+    await tester.pump();
+    final Offset origin = tester.getTopLeft(find.byType(SheetGrid));
+    await tester.tapAt(origin + const Offset(28 + 32, 28 + 20 + 10));
+    await tester.pump();
+    expect(selection.focus.col, 0);
+    expect(selection.focus.row, 0);
+    await tester.tapAt(origin + const Offset(28 + 64 + 32, 28 + 20 + 10));
+    await tester.pump();
+    expect(selection.focus.col, greaterThan(1));
+    expect(selection.focus.row, 0);
+    await tester.tapAt(origin + const Offset(28 + 32, 28 + 20 + 20 + 10));
+    await tester.pump();
+    expect(selection.focus.col, 0);
+    expect(selection.focus.row, greaterThan(0));
+  });
+
   testWidgets('dragging a column header edge resizes the column', (
     WidgetTester tester,
   ) async {
@@ -873,6 +1247,45 @@ void main() {
     }
   });
 
+  test('paint fit keeps justified wrapped lines flush to the column', () {
+    const String text =
+        'Housing conditions in Al Tahreer are critically strained. '
+        'The average household size ranges between 6 and 10 people, '
+        'indicating severe overcrowding particularly within makeshift shelters '
+        'and partially damaged structures across the neighbourhood.';
+    final WmlDocument doc = WmlDocument(
+      sections: <WmlSection>[
+        WmlSection(
+          blocks: <WmlBlock>[
+            WmlParagraph(
+              properties: WmlParagraphProps(
+                justification: WmlJustification.justify,
+              ),
+              inlines: <WmlInline>[WmlRun(text: text)],
+            ),
+          ],
+        ),
+      ],
+    );
+    final LaidOutDocument laid = WordLayoutEngine(font: null).layout(doc);
+    expect(laid.pages.first.lines.length, greaterThan(1));
+    for (final LaidOutLine line in laid.pages.first.lines) {
+      PaintRunText.fitLine(line, text);
+    }
+    final LaidOutLine first = laid.pages.first.lines.first;
+    expect(first.justificationRatio, isNot(0));
+    expect(
+      first.glyphs.last.x + first.glyphs.last.advance,
+      closeTo(first.x + first.width, 1.5),
+    );
+    for (int i = 1; i < first.glyphs.length; i++) {
+      final double gap =
+          first.glyphs[i].x -
+          (first.glyphs[i - 1].x + first.glyphs[i - 1].advance);
+      expect(gap.abs(), lessThan(1.5));
+    }
+  });
+
   test('paint fit places glyphs next to each other without justify gaps', () {
     final WmlDocument doc = WmlDocument(
       sections: <WmlSection>[
@@ -1021,6 +1434,41 @@ void main() {
     word.applyImeText('${before}k');
     expect(word.equationEditingText(), contains('k'));
     expect(OmmlLinear.write(word.selectedEquation!.math.root), contains('k'));
+  });
+
+  test('Word text frame can be selected, moved, and resized', () {
+    final WordEditorController word = WordEditorController();
+    word.insertTextFrame(text: 'Box', x: 80, y: 90, width: 160, height: 80);
+    expect(word.selectedFrame, isNotNull);
+    expect(word.selectedFrame!.x, 80);
+    expect(word.selectedFrame!.fillColor, 'FFFFFF');
+    word.beginFrameTransform();
+    word.previewFrameMove(24, 16);
+    word.previewFrameResize(width: 200, height: 100);
+    word.commitFrameTransform();
+    expect(word.selectedFrame!.x, 104);
+    expect(word.selectedFrame!.y, 106);
+    expect(word.selectedFrame!.width, 200);
+    expect(word.selectedFrame!.height, 100);
+    word.undo();
+    expect(word.selectedFrame!.x, 80);
+    word.nudgeSelectedFrame(dx: 8);
+    expect(word.selectedFrame!.x, 88);
+    word.deleteSelectedFrame();
+    expect(word.selectedFrame, isNull);
+  });
+
+  test('Word text frame edit mode keeps the box and hides transform', () {
+    final WordEditorController word = WordEditorController();
+    word.insertTextFrame(text: 'Box', x: 80, y: 90, width: 160, height: 80);
+    final WmlFrame frame = word.selectedFrame!;
+    expect(word.editingFrame, isFalse);
+    word.selectFrame(frame, editing: true);
+    expect(word.editingFrame, isTrue);
+    expect(word.selectedFrame, same(frame));
+    word.selectFrame(frame);
+    expect(word.editingFrame, isFalse);
+    expect(word.selectedFrame, same(frame));
   });
 
   test('Word picture handles resize, move, and crop on the canvas', () {
@@ -1270,5 +1718,277 @@ void main() {
       ),
     );
     expect(word.caret.paragraphIndex, 0);
+  });
+
+  test('ruler first-line drag sets firstLine and hanging stays exclusive', () {
+    const WmlPageMargins margins = WmlPageMargins();
+    const double pageW = 612;
+    final WmlIndent first = WordRuler.applyIndentDrag(
+      indent: const WmlIndent(),
+      kind: RulerHitKind.firstLine,
+      pageX: margins.left + 36,
+      margins: margins,
+      pageWidth: pageW,
+      rtl: false,
+    );
+    expect(first.firstLine, 36);
+    expect(first.hanging, 0);
+    final WmlIndent hang = WordRuler.applyIndentDrag(
+      indent: const WmlIndent(left: 36, firstLine: 36),
+      kind: RulerHitKind.firstLine,
+      pageX: margins.left + 18,
+      margins: margins,
+      pageWidth: pageW,
+      rtl: false,
+    );
+    expect(hang.left, 36);
+    expect(hang.firstLine, 0);
+    expect(hang.hanging, 18);
+  });
+
+  test('ruler hanging drag keeps the first-line page position', () {
+    const WmlPageMargins margins = WmlPageMargins();
+    const WmlIndent start = WmlIndent(left: 36, firstLine: 18);
+    final WmlIndent moved = WordRuler.applyIndentDrag(
+      indent: start,
+      kind: RulerHitKind.hanging,
+      pageX: margins.left + 72,
+      margins: margins,
+      pageWidth: 612,
+      rtl: false,
+    );
+    expect(moved.left, 72);
+    expect(moved.firstLine, 0);
+    expect(moved.hanging, 18);
+    expect(moved.left + moved.firstLine - moved.hanging, 54);
+  });
+
+  test('ruler left-indent square moves both markers together', () {
+    const WmlIndent start = WmlIndent(left: 18, firstLine: 18);
+    final WmlIndent moved = WordRuler.applyIndentDrag(
+      indent: start,
+      kind: RulerHitKind.leftIndent,
+      pageX: 72 + 54,
+      margins: const WmlPageMargins(),
+      pageWidth: 612,
+      rtl: false,
+    );
+    expect(moved.left, 54);
+    expect(moved.firstLine, 18);
+    expect(moved.hanging, 0);
+  });
+
+  test('ruler tab alignment cycles left-center-right-decimal', () {
+    expect(WordRuler.cycleAlignment(WmlTabAlignment.left), WmlTabAlignment.center);
+    expect(WordRuler.cycleAlignment(WmlTabAlignment.decimal), WmlTabAlignment.left);
+  });
+
+  test('ruler zero sits at the content origin', () {
+    const WmlPageMargins margins = WmlPageMargins(left: 54, right: 72, top: 36);
+    expect(
+      WordRuler.contentOriginX(margins: margins, pageWidth: 612, rtl: false),
+      54,
+    );
+    expect(
+      WordRuler.contentOriginX(margins: margins, pageWidth: 612, rtl: true),
+      612 - 72,
+    );
+    expect(WordRuler.contentOriginY(margins: margins), 36);
+    expect(
+      WordRuler.contentOriginX(
+        margins: margins,
+        pageWidth: 595,
+        rtl: false,
+        contentLeft: 130,
+      ),
+      130,
+    );
+    expect(
+      WordRuler.firstLinePageX(
+        margins: margins,
+        indent: const WmlIndent(),
+        pageWidth: 595,
+        rtl: false,
+        contentLeft: 62,
+      ),
+      62,
+    );
+  });
+
+  test('ruler drag guide follows the active marker', () {
+    const WmlPageMargins margins = WmlPageMargins(left: 54, top: 72);
+    final (double? x, double? y) = WordRuler.guideLocal(
+      active: const RulerHit(RulerHitKind.marginLeft),
+      pageLeft: 100,
+      pageTop: 40,
+      scale: 1,
+      pageWidth: 612,
+      pageHeight: 792,
+      margins: margins,
+      indent: const WmlIndent(),
+      tabs: const <WmlTabStop>[],
+      rtl: false,
+    );
+    expect(x, 154);
+    expect(y, isNull);
+    final (double? gx, double? gy) = WordRuler.guideLocal(
+      active: const RulerHit(RulerHitKind.marginTop),
+      pageLeft: 100,
+      pageTop: 40,
+      scale: 1,
+      pageWidth: 612,
+      pageHeight: 792,
+      margins: margins,
+      indent: const WmlIndent(),
+      tabs: const <WmlTabStop>[],
+      rtl: false,
+    );
+    expect(gx, isNull);
+    expect(gy, 112);
+    final (double? fx, double? fy) = WordRuler.guideLocal(
+      active: const RulerHit(RulerHitKind.firstLine),
+      pageLeft: 10,
+      pageTop: 0,
+      scale: 2,
+      pageWidth: 612,
+      pageHeight: 792,
+      margins: margins,
+      indent: const WmlIndent(firstLine: 18),
+      tabs: const <WmlTabStop>[],
+      rtl: false,
+    );
+    expect(fx, 10 + (54 + 18) * 2);
+    expect(fy, isNull);
+  });
+
+  test('ruler paragraph box follows page, cell, column, and frame', () {
+    const WmlPageMargins margins = WmlPageMargins(left: 54, right: 54);
+    const double pageW = 595.28;
+    expect(
+      WordRuler.paragraphContentBox(margins: margins, pageWidth: pageW),
+      (left: 54, right: pageW - 54),
+    );
+    expect(
+      WordRuler.paragraphContentBox(
+        margins: margins,
+        pageWidth: pageW,
+        cellX: 54,
+        cellWidth: 160,
+      ),
+      (
+        left: 54 + LaidOutLine.tableCellPad,
+        right: 214 - LaidOutLine.tableCellPad,
+      ),
+    );
+    expect(
+      WordRuler.paragraphContentBox(
+        margins: margins,
+        pageWidth: pageW,
+        frameX: 122,
+        frameWidth: 280,
+      ),
+      (
+        left: 122 + LaidOutLine.framePad,
+        right: 402 - LaidOutLine.framePad,
+      ),
+    );
+    expect(
+      WordRuler.paragraphContentBox(
+        margins: margins,
+        pageWidth: pageW,
+        columnCount: 2,
+        columnIndex: 1,
+        columnWidth: 234.64,
+        columnSpace: 18,
+      ).left,
+      closeTo(54 + 234.64 + 18, 0.01),
+    );
+    expect(
+      WordRuler.paragraphContentBox(
+        margins: margins,
+        pageWidth: pageW,
+        lineBoxX: 200,
+        lineBoxWidth: 80,
+        cellX: 54,
+        cellWidth: 160,
+      ),
+      (left: 200, right: 280),
+    );
+    expect(
+      WordRuler.paragraphContentBox(
+        margins: margins,
+        pageWidth: pageW,
+        preferFrame: true,
+        frameX: 122,
+        frameWidth: 56,
+        lineBoxX: 54,
+        lineBoxWidth: 400,
+      ),
+      (
+        left: 122 + LaidOutLine.framePad,
+        right: 178 - LaidOutLine.framePad,
+      ),
+    );
+    expect(
+      WordRuler.contentOriginX(
+        margins: margins,
+        pageWidth: pageW,
+        rtl: false,
+        contentLeft: 59.4,
+      ),
+      59.4,
+    );
+    expect(
+      WordRuler.firstLinePageX(
+        margins: margins,
+        indent: const WmlIndent(),
+        pageWidth: pageW,
+        rtl: false,
+        contentLeft: 59.4,
+      ),
+      59.4,
+    );
+  });
+
+  test('ruler focus line stays on the visible page', () {
+    final LaidOutLine cover = LaidOutLine(
+      glyphs: const <LaidOutGlyph>[],
+      x: 8,
+      y: 20,
+      width: 40,
+      height: 14,
+      pageIndex: 0,
+      justification: WmlJustification.left,
+      boxX: 0,
+      boxWidth: 595,
+    );
+    final LaidOutLine credits = LaidOutLine(
+      glyphs: const <LaidOutGlyph>[],
+      x: 54,
+      y: 80,
+      width: 200,
+      height: 14,
+      pageIndex: 1,
+      justification: WmlJustification.left,
+      paragraphIndex: 4,
+      boxX: 54,
+      boxWidth: 487,
+    );
+    expect(
+      WordRuler.pickFocusLine(
+        visiblePageIndex: 1,
+        caretLine: cover,
+        visiblePageLines: <LaidOutLine>[credits],
+      ),
+      credits,
+    );
+    expect(
+      WordRuler.pickFocusLine(
+        visiblePageIndex: 1,
+        caretLine: credits,
+        visiblePageLines: <LaidOutLine>[credits],
+      ),
+      credits,
+    );
   });
 }

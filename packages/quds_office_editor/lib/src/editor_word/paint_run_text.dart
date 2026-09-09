@@ -1,5 +1,10 @@
+import 'dart:math' as math;
+import 'dart:ui' as ui;
+
 import 'package:flutter/painting.dart';
 import 'package:quds_office_engine/quds_office_engine.dart';
+
+import 'caret_engine.dart';
 
 /// Rebuilds a logical string for Flutter/HarfBuzz painting.
 ///
@@ -105,8 +110,20 @@ abstract final class PaintRunText {
     return paragraph.substring(start, end);
   }
 
+  /// Justified lines paint each word at [LaidOutGlyph.x]; caret/hit must too.
+  static bool splitsWordsForPaint(LaidOutLine line) {
+    return (line.justification == WmlJustification.justify ||
+            line.justification == WmlJustification.distributed) &&
+        line.justificationRatio != 0;
+  }
+
+  static bool _isTab(LaidOutGlyph glyph) => glyph.glyph.codePoint == 0x09;
+
   /// samePaintRun API.
   static bool samePaintRun(LaidOutGlyph a, LaidOutGlyph b) {
+    if (_isTab(a) || _isTab(b)) {
+      return false;
+    }
     return a.color == b.color &&
         a.fontSize == b.fontSize &&
         a.bold == b.bold &&
@@ -119,11 +136,45 @@ abstract final class PaintRunText {
         a.glyph.level.isOdd == b.glyph.level.isOdd;
   }
 
+  /// Runs painted as a single [TextPainter] (word-split when justified).
+  static Iterable<List<LaidOutGlyph>> paintSegments(LaidOutLine line) sync* {
+    var start = 0;
+    final bool splitWords = splitsWordsForPaint(line);
+    while (start < line.glyphs.length) {
+      final LaidOutGlyph first = line.glyphs[start];
+      var end = start + 1;
+      while (end < line.glyphs.length &&
+          samePaintRun(first, line.glyphs[end])) {
+        end++;
+      }
+      if (!splitWords) {
+        yield line.glyphs.sublist(start, end);
+        start = end;
+        continue;
+      }
+      var i = start;
+      while (i < end) {
+        if (line.glyphs[i].glyph.isSpace) {
+          yield <LaidOutGlyph>[line.glyphs[i]];
+          i++;
+          continue;
+        }
+        var j = i + 1;
+        while (j < end && !line.glyphs[j].glyph.isSpace) {
+          j++;
+        }
+        yield line.glyphs.sublist(i, j);
+        i = j;
+      }
+      start = end;
+    }
+  }
+
   /// Measures each paint run and places it after the previous one.
   ///
-  /// Glyph X is always the left of the run plus a share of [TextPainter.width].
-  /// Using caret offsets inside the painter put later runs on top of earlier
-  /// ones (styled words and mixed LTR/RTL).
+  /// Run origins stay sequential (so mixed styles never overlap). Within a
+  /// run, each glyph box comes from [TextPainter] selection boxes / caret
+  /// offsets so the caret lands on real ink edges, not proportional shares.
   static void fitLine(
     LaidOutLine line,
     String paragraph, {
@@ -145,7 +196,7 @@ abstract final class PaintRunText {
       }
       final List<LaidOutGlyph> run = line.glyphs.sublist(start, end);
       final String text = runText(paragraph, run);
-      if (text.isEmpty) {
+      if (text.isEmpty || run.every(_isTab)) {
         for (final LaidOutGlyph glyph in run) {
           glyph.x = x;
           x += glyph.advance;
@@ -158,12 +209,13 @@ abstract final class PaintRunText {
         first: first,
         themeFamily: themeFamily,
       )..layout();
-      _placeRun(run, painter.width, x);
+      _placeRun(run, painter, text, paragraph, x);
       x += painter.width;
       start = end;
     }
     line.width = (x - line.x).clamp(0, double.infinity);
     _realignAfterFit(line, origin, previousWidth);
+    line.applyJustification(targetWidth: previousWidth);
   }
 
   static void _realignAfterFit(
@@ -255,7 +307,89 @@ abstract final class PaintRunText {
     return buffer.toString();
   }
 
-  static void _placeRun(List<LaidOutGlyph> run, double width, double originX) {
+  /// Page X where [painter] should be painted for [run].
+  static double runPaintOrigin(
+    List<LaidOutGlyph> run,
+    TextPainter painter,
+    String text,
+    String paragraph,
+  ) {
+    if (run.isEmpty) {
+      return 0;
+    }
+    final LaidOutGlyph first = run.first;
+    if (text.isEmpty) {
+      return first.x;
+    }
+    final int base = _runTextBase(paragraph, run, text);
+    final int offset = (first.glyph.logicalIndex - base).clamp(0, text.length);
+    final int extent = math.min(
+      text.length,
+      offset + _utf16Len(text, offset),
+    );
+    final List<ui.TextBox> boxes = extent > offset
+        ? painter.getBoxesForSelection(
+            TextSelection(baseOffset: offset, extentOffset: extent),
+          )
+        : const <ui.TextBox>[];
+    if (boxes.isNotEmpty) {
+      var left = boxes.first.left;
+      for (final ui.TextBox box in boxes) {
+        left = math.min(left, box.left);
+      }
+      return first.x - left;
+    }
+    return first.x - caretDx(painter, offset);
+  }
+
+  static void _placeRun(
+    List<LaidOutGlyph> run,
+    TextPainter painter,
+    String text,
+    String paragraph,
+    double originX,
+  ) {
+    final double width = painter.width;
+    if (text.isEmpty || width <= 0) {
+      _placeRunProportional(run, width, originX);
+      return;
+    }
+    final int base = _runTextBase(paragraph, run, text);
+    for (final LaidOutGlyph glyph in run) {
+      final int li = glyph.glyph.logicalIndex;
+      final int offset = (li - base).clamp(0, text.length);
+      final int extent = math.min(
+        text.length,
+        offset + _utf16Len(text, offset),
+      );
+      final List<ui.TextBox> boxes = extent > offset
+          ? painter.getBoxesForSelection(
+              TextSelection(baseOffset: offset, extentOffset: extent),
+            )
+          : const <ui.TextBox>[];
+      if (boxes.isNotEmpty) {
+        var left = boxes.first.left;
+        var right = boxes.first.right;
+        for (final ui.TextBox box in boxes) {
+          left = math.min(left, box.left);
+          right = math.max(right, box.right);
+        }
+        glyph.x = originX + left;
+        glyph.advance = math.max(0, right - left);
+        continue;
+      }
+      final double x0 = caretDx(painter, offset);
+      final double x1 = caretDx(painter, extent);
+      glyph.x = originX + math.min(x0, x1);
+      glyph.advance = (x0 - x1).abs();
+    }
+  }
+
+  static void _placeRunProportional(
+    List<LaidOutGlyph> run,
+    double width,
+    double originX,
+  ) {
     var weight = 0.0;
     for (final LaidOutGlyph glyph in run) {
       weight += glyph.glyph.advance;
@@ -270,9 +404,210 @@ abstract final class PaintRunText {
           ? originX + width - x
           : width * (glyph.glyph.advance / weight);
       glyph.x = x;
-      glyph.advance = share.clamp(0.4, width);
+      glyph.advance = share.clamp(0, width);
       x += glyph.advance;
     }
+  }
+
+  static int _runTextBase(
+    String paragraph,
+    List<LaidOutGlyph> run,
+    String text,
+  ) {
+    if (paragraph.isEmpty || run.isEmpty || text.isEmpty) {
+      return 0;
+    }
+    var min = run.first.glyph.logicalIndex;
+    for (final LaidOutGlyph glyph in run) {
+      if (glyph.glyph.logicalIndex < min) {
+        min = glyph.glyph.logicalIndex;
+      }
+    }
+    if (min >= 0 &&
+        min < paragraph.length &&
+        paragraph.startsWith(text, min)) {
+      return min;
+    }
+    final int at = paragraph.indexOf(text);
+    return at >= 0 ? at : min;
+  }
+
+  static int _utf16Len(String text, int offset) {
+    if (offset < 0 || offset >= text.length) {
+      return 0;
+    }
+    final int cu = text.codeUnitAt(offset);
+    if (cu >= 0xD800 && cu <= 0xDBFF && offset + 1 < text.length) {
+      return 2;
+    }
+    return 1;
+  }
+
+  /// Page X of the insertion point using the same [TextPainter] as ink.
+  static double caretXOnLine(
+    LaidOutLine line,
+    int logicalIndex, {
+    required String paragraph,
+    String? themeFamily,
+    bool paragraphRtl = false,
+    double? contentRight,
+  }) {
+    if (line.glyphs.isEmpty) {
+      return CaretEngine.caretX(
+        line,
+        logicalIndex,
+        paragraphRtl: paragraphRtl,
+        contentRight: contentRight,
+      );
+    }
+    final double? fromPainter = _caretXFromPainters(
+      line,
+      logicalIndex,
+      paragraph: paragraph,
+      themeFamily: themeFamily,
+    );
+    if (fromPainter != null) {
+      return fromPainter;
+    }
+    return CaretEngine.caretX(
+      line,
+      logicalIndex,
+      paragraphRtl: paragraphRtl,
+      contentRight: contentRight,
+    );
+  }
+
+  static double? _caretXFromPainters(
+    LaidOutLine line,
+    int logicalIndex, {
+    required String paragraph,
+    String? themeFamily,
+  }) {
+    final List<List<LaidOutGlyph>> segments =
+        paintSegments(line).toList(growable: false);
+    for (int s = 0; s < segments.length; s++) {
+      final List<LaidOutGlyph> run = segments[s];
+      final LaidOutGlyph first = run.first;
+      final (:int min, :int max) = _runSpan(run);
+      final bool lastRun = s == segments.length - 1;
+      final bool inRun = logicalIndex >= min &&
+          (logicalIndex < max || (logicalIndex == max && lastRun));
+      if (!inRun) {
+        continue;
+      }
+      if (logicalIndex == max && !lastRun) {
+        continue;
+      }
+      if (run.length == 1 && first.glyph.isSpace) {
+        return logicalIndex <= first.glyph.logicalIndex
+            ? first.x
+            : first.x + first.advance;
+      }
+      final String text = runText(paragraph, run);
+      if (text.isEmpty) {
+        continue;
+      }
+      final TextPainter painter = painterFor(
+        text: text,
+        first: first,
+        themeFamily: themeFamily,
+      )..layout();
+      final int base = _runTextBase(paragraph, run, text);
+      final int offset = (logicalIndex - base).clamp(0, text.length);
+      final double origin = runPaintOrigin(run, painter, text, paragraph);
+      return origin + caretDx(painter, offset);
+    }
+    return null;
+  }
+
+  /// Logical index for a click using shaped run painters.
+  static int hitLogicalIndexOnLine(
+    LaidOutLine line,
+    double x, {
+    required String paragraph,
+    String? themeFamily,
+  }) {
+    if (line.glyphs.isEmpty) {
+      return 0;
+    }
+    TextPainter? bestPainter;
+    String bestText = '';
+    var bestBase = 0;
+    var bestOrigin = line.x;
+    var bestDist = double.infinity;
+    for (final List<LaidOutGlyph> run in paintSegments(line)) {
+      final LaidOutGlyph first = run.first;
+      if (run.length == 1 && first.glyph.isSpace) {
+        final double left = first.x;
+        final double right = first.x + first.advance;
+        if (x >= left && x <= right) {
+          return x <= left + first.advance / 2
+              ? first.glyph.logicalIndex
+              : first.glyph.logicalIndex + 1;
+        }
+        final double dist = x < left ? left - x : x - right;
+        if (dist < bestDist) {
+          bestDist = dist;
+          bestPainter = null;
+          bestText = '';
+          bestBase = first.glyph.logicalIndex;
+          bestOrigin = left;
+        }
+        continue;
+      }
+      final String text = runText(paragraph, run);
+      if (text.isEmpty) {
+        continue;
+      }
+      final TextPainter painter = painterFor(
+        text: text,
+        first: first,
+        themeFamily: themeFamily,
+      )..layout();
+      final double origin = runPaintOrigin(run, painter, text, paragraph);
+      final double left = origin;
+      final double right = origin + painter.width;
+      if (x >= left && x <= right) {
+        final int local = hitIndex(painter, Offset(x - left, 0), text.length);
+        final int base = _runTextBase(paragraph, run, text);
+        final int max = paragraph.isEmpty ? 0 : paragraph.length;
+        return (base + local).clamp(0, max);
+      }
+      final double dist = x < left ? left - x : x - right;
+      if (dist < bestDist) {
+        bestDist = dist;
+        bestPainter = painter;
+        bestText = text;
+        bestBase = _runTextBase(paragraph, run, text);
+        bestOrigin = left;
+      }
+    }
+    if (bestPainter == null) {
+      return CaretEngine.hitLogicalIndex(line, x);
+    }
+    final double localX = (x - bestOrigin).clamp(0.0, bestPainter.width);
+    final int local = hitIndex(
+      bestPainter,
+      Offset(localX, 0),
+      bestText.length,
+    );
+    final int max = paragraph.isEmpty ? 0 : paragraph.length;
+    return (bestBase + local).clamp(0, max);
+  }
+
+  static ({int min, int max}) _runSpan(List<LaidOutGlyph> run) {
+    var min = run.first.glyph.logicalIndex;
+    var max = min + 1;
+    for (final LaidOutGlyph glyph in run) {
+      if (glyph.glyph.logicalIndex < min) {
+        min = glyph.glyph.logicalIndex;
+      }
+      final int end = glyph.glyph.logicalIndex + 1;
+      if (end > max) {
+        max = end;
+      }
+    }
+    return (min: min, max: max);
   }
 
   /// plain API.
@@ -284,6 +619,7 @@ abstract final class PaintRunText {
     int maxLines = 1,
     TextAlign? align,
     bool? rtl,
+    bool bold = false,
   }) {
     final bool useRtl = rtl ?? looksRtl(text);
     return TextPainter(
@@ -292,6 +628,7 @@ abstract final class PaintRunText {
         style: TextStyle(
           fontSize: fontSize,
           height: 1.0,
+          fontWeight: bold ? FontWeight.bold : FontWeight.normal,
           fontFamily: familyFor(text: text, themeFamily: themeFamily),
           fontFamilyFallback: fallbacksFor(text),
           color: color,

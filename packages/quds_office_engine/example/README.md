@@ -30,8 +30,8 @@ Optional output directory:
 dart run example/rich_export_gallery.dart /tmp/quds-gallery
 ```
 
-Arabic glyphs need a system UI font (DejaVu / Liberation / Noto). The script
-embeds a subset when it finds one.
+Non-Latin glyphs need a covering TrueType face (DejaVu / Liberation / Noto).
+The script embeds a subset when it finds one.
 
 ## What is written
 

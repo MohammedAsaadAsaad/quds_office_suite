@@ -10,6 +10,7 @@ class PdfRaster {
     required this.height,
     required this.rgb,
     this.jpegBytes,
+    this.alpha,
   });
 
   /// width API.
@@ -23,6 +24,9 @@ class PdfRaster {
 
   /// jpegBytes API.
   final Uint8List? jpegBytes;
+
+  /// Per-pixel opacity when the source PNG had an alpha channel.
+  final Uint8List? alpha;
 
   /// isJpeg API.
   bool get isJpeg => jpegBytes != null;
@@ -87,6 +91,7 @@ abstract final class PdfImageCodec {
     var colorType = 2;
     final BytesBuilder idat = BytesBuilder(copy: false);
     List<int>? palette;
+    List<int>? trns;
     while (offset + 12 <= bytes.length) {
       final int len = _u32(bytes, offset);
       final String type = String.fromCharCodes(
@@ -104,6 +109,8 @@ abstract final class PdfImageCodec {
         colorType = data[9];
       } else if (type == 'PLTE') {
         palette = data;
+      } else if (type == 'tRNS') {
+        trns = data;
       } else if (type == 'IDAT') {
         idat.add(data);
       } else if (type == 'IEND') {
@@ -134,9 +141,15 @@ abstract final class PdfImageCodec {
     }
     final int stride = width * channels;
     final Uint8List rgb = Uint8List(width * height * 3);
+    final bool keyed =
+        trns != null && (colorType == 0 || colorType == 2 || colorType == 3);
+    final Uint8List? alpha = (colorType == 4 || colorType == 6 || keyed)
+        ? Uint8List(width * height)
+        : null;
     final List<int> prev = List<int>.filled(stride, 0);
-    var src = 0;
+      var src = 0;
     var dst = 0;
+    var dstA = 0;
     for (int y = 0; y < height; y++) {
       if (src >= raw.length) {
         return null;
@@ -167,10 +180,18 @@ abstract final class PdfImageCodec {
         switch (colorType) {
           case 0:
             r = g = b = row[x];
+            if (alpha != null && keyed && trns.length >= 2) {
+              alpha[dstA++] = row[x] == trns[1] ? 0 : 255;
+            }
           case 2:
             r = row[x * 3];
             g = row[x * 3 + 1];
             b = row[x * 3 + 2];
+            if (alpha != null && keyed && trns.length >= 6) {
+              final bool match =
+                  r == trns[1] && g == trns[3] && b == trns[5];
+              alpha[dstA++] = match ? 0 : 255;
+            }
           case 3:
             final int idx = row[x] * 3;
             if (palette == null || idx + 2 >= palette.length) {
@@ -180,13 +201,17 @@ abstract final class PdfImageCodec {
               g = palette[idx + 1];
               b = palette[idx + 2];
             }
+            if (alpha != null && keyed) {
+              alpha[dstA++] = row[x] < trns.length ? trns[row[x]] : 255;
+            }
           case 4:
             r = g = b = row[x * 2];
+            alpha?[dstA++] = row[x * 2 + 1];
           case 6:
-            final int a = row[x * 4 + 3];
-            r = _blend(row[x * 4], a);
-            g = _blend(row[x * 4 + 1], a);
-            b = _blend(row[x * 4 + 2], a);
+            r = row[x * 4];
+            g = row[x * 4 + 1];
+            b = row[x * 4 + 2];
+            alpha?[dstA++] = row[x * 4 + 3];
           default:
             r = g = b = 0;
         }
@@ -196,11 +221,11 @@ abstract final class PdfImageCodec {
       }
       prev.setAll(0, row);
     }
-    return PdfRaster(width: width, height: height, rgb: rgb);
-  }
-
-  static int _blend(int channel, int alpha) {
-    return ((channel * alpha) + 255 * (255 - alpha)) ~/ 255;
+    Uint8List? mask = alpha;
+    if (mask != null && mask.every((int a) => a == 255)) {
+      mask = null;
+    }
+    return PdfRaster(width: width, height: height, rgb: rgb, alpha: mask);
   }
 
   static int _paeth(int a, int b, int c) {

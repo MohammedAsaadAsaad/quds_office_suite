@@ -62,6 +62,10 @@ abstract final class OfficeNamespaces {
   static const String wp =
       'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing';
 
+  /// Word 2010 text box / shape (`wps:`).
+  static const String wps =
+      'http://schemas.microsoft.com/office/word/2010/wordprocessingShape';
+
   /// DrawingML Chart (`c:`).
   static const String c =
       'http://schemas.openxmlformats.org/drawingml/2006/chart';
@@ -119,6 +123,7 @@ abstract final class OfficeNamespaces {
     'mc': mc,
     'w14': w14,
     'wp': wp,
+    'wps': wps,
     'c': c,
     'pic': pic,
     'xdr': xdr,
@@ -143,6 +148,7 @@ abstract final class OfficeNamespaces {
     mc: 'mc',
     w14: 'w14',
     wp: 'wp',
+    wps: 'wps',
     c: 'c',
     pic: 'pic',
     xdr: 'xdr',
@@ -200,6 +206,10 @@ abstract final class RelationshipTypes {
   /// image API.
   static const String image =
       'http://schemas.openxmlformats.org/officeDocument/2006/relationships/image';
+
+  /// media API (audio/video binary parts).
+  static const String media =
+      'http://schemas.microsoft.com/office/2007/relationships/media';
 
   /// hyperlink API.
   static const String hyperlink =
@@ -280,4 +290,12 @@ abstract final class RelationshipTypes {
   /// drawing API.
   static const String drawing =
       'http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing';
+
+  /// footnotes API.
+  static const String footnotes =
+      'http://schemas.openxmlformats.org/officeDocument/2006/relationships/footnotes';
+
+  /// endnotes API.
+  static const String endnotes =
+      'http://schemas.openxmlformats.org/officeDocument/2006/relationships/endnotes';
 }

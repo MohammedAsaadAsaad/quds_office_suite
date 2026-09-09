@@ -110,6 +110,8 @@ class WmlPageMargins {
     this.bottom = 72,
     this.left = 72,
     this.right = 72,
+    this.header = 36,
+    this.footer = 36,
   });
 
   /// Word Normal: 1" on every side.
@@ -151,6 +153,12 @@ class WmlPageMargins {
   /// right API.
   final double right;
 
+  /// Distance from page top to the header band (`w:pgMar/@w:header`).
+  final double header;
+
+  /// Distance from page bottom to the footer band (`w:pgMar/@w:footer`).
+  final double footer;
+
   /// matches API.
   bool matches(WmlPageMargins other) =>
       (top - other.top).abs() < 0.5 &&
@@ -164,11 +172,15 @@ class WmlPageMargins {
     double? bottom,
     double? left,
     double? right,
+    double? header,
+    double? footer,
   }) => WmlPageMargins(
     top: top ?? this.top,
     bottom: bottom ?? this.bottom,
     left: left ?? this.left,
     right: right ?? this.right,
+    header: header ?? this.header,
+    footer: footer ?? this.footer,
   );
 }
 
@@ -193,6 +205,19 @@ class WmlIndent {
 
   /// hanging API.
   final double hanging;
+
+  /// copyWith API.
+  WmlIndent copyWith({
+    double? left,
+    double? right,
+    double? firstLine,
+    double? hanging,
+  }) => WmlIndent(
+    left: left ?? this.left,
+    right: right ?? this.right,
+    firstLine: firstLine ?? this.firstLine,
+    hanging: hanging ?? this.hanging,
+  );
 }
 
 /// Class WmlTabStop.
@@ -242,6 +267,9 @@ class WmlParagraphProps {
     this.lineSpacingRule = WmlLineSpacingRule.auto,
     this.spacingBefore = 0,
     this.spacingAfter = 8,
+    this.explicitLineSpacing = false,
+    this.explicitSpacingBefore = false,
+    this.explicitSpacingAfter = false,
     this.indent = const WmlIndent(),
     List<WmlTabStop>? tabs,
     this.keepTogether = false,
@@ -250,6 +278,7 @@ class WmlParagraphProps {
     this.numId,
     this.ilvl = 0,
     this.listLabel,
+    this.listRestart,
     this.pageNumberField = false,
     this.headingLevel,
     this.styleId,
@@ -258,6 +287,11 @@ class WmlParagraphProps {
     this.fieldEnd = false,
     this.bookmarkName,
     this.rightToLeft,
+    this.dropCapLines = 0,
+    this.shadingFill,
+    this.borderColor,
+    this.noteId,
+    this.endnoteRef = false,
   }) : tabs = tabs ?? <WmlTabStop>[];
 
   /// justification API.
@@ -274,6 +308,15 @@ class WmlParagraphProps {
 
   /// spacingAfter API.
   double spacingAfter;
+
+  /// True when `w:spacing/@w:line` was set on this paragraph.
+  bool explicitLineSpacing;
+
+  /// True when `w:spacing/@w:before` was set on this paragraph.
+  bool explicitSpacingBefore;
+
+  /// True when `w:spacing/@w:after` was set on this paragraph.
+  bool explicitSpacingAfter;
 
   /// indent API.
   WmlIndent indent;
@@ -299,6 +342,9 @@ class WmlParagraphProps {
   /// listLabel API.
   String? listLabel;
 
+  /// Restart value for multilevel numbering (`null` = continue).
+  int? listRestart;
+
   /// pageNumberField API.
   bool pageNumberField;
 
@@ -323,6 +369,21 @@ class WmlParagraphProps {
   /// Word `w:bidi`. `null` lets UAX #9 pick the paragraph level.
   bool? rightToLeft;
 
+  /// Drop-cap line count; 0 is none.
+  int dropCapLines;
+
+  /// Paragraph shading RRGGBB.
+  String? shadingFill;
+
+  /// Paragraph border RRGGBB.
+  String? borderColor;
+
+  /// Footnote / endnote id referenced by this paragraph mark.
+  int? noteId;
+
+  /// endnoteRef API.
+  bool endnoteRef;
+
   /// Embedding level for [LineBreaker]: 1 RTL, 0 LTR, `null` auto.
   int? get bidiBaseLevel {
     if (rightToLeft == true) {
@@ -341,6 +402,9 @@ class WmlParagraphProps {
     lineSpacingRule: lineSpacingRule,
     spacingBefore: spacingBefore,
     spacingAfter: spacingAfter,
+    explicitLineSpacing: explicitLineSpacing,
+    explicitSpacingBefore: explicitSpacingBefore,
+    explicitSpacingAfter: explicitSpacingAfter,
     indent: indent,
     tabs: List<WmlTabStop>.from(tabs),
     keepTogether: keepTogether,
@@ -349,6 +413,7 @@ class WmlParagraphProps {
     numId: numId,
     ilvl: ilvl,
     listLabel: listLabel,
+    listRestart: listRestart,
     pageNumberField: pageNumberField,
     headingLevel: headingLevel,
     styleId: styleId,
@@ -357,6 +422,11 @@ class WmlParagraphProps {
     fieldEnd: fieldEnd,
     bookmarkName: bookmarkName,
     rightToLeft: rightToLeft,
+    dropCapLines: dropCapLines,
+    shadingFill: shadingFill,
+    borderColor: borderColor,
+    noteId: noteId,
+    endnoteRef: endnoteRef,
   );
 }
 
@@ -421,7 +491,7 @@ class WmlRunProps {
     this.color = '000000',
     this.highlight,
     this.fontSizeHalfPoints = 22,
-    this.asciiFont = 'Calibri',
+    this.asciiFont = 'Arial',
     this.csFont = 'Arial',
     this.vertAlign = WmlVertAlign.baseline,
   });
@@ -482,6 +552,10 @@ class WmlTableProps {
     this.floating = false,
     this.cellMargin = 4,
     this.rightToLeft = false,
+    this.borders = true,
+    this.borderColor,
+    this.borderWidth = 0.5,
+    this.styleId,
   });
 
   /// alignment API.
@@ -496,12 +570,28 @@ class WmlTableProps {
   /// Word `w:bidiVisual` — first column is drawn on the right.
   bool rightToLeft;
 
+  /// When false, no `tblBorders` are written (borderless layout rows).
+  bool borders;
+
+  /// RRGGBB stroke for table borders.
+  String? borderColor;
+
+  /// Stroke width in points (Word `w:sz` is eighths of a point).
+  double borderWidth;
+
+  /// `w:tblStyle` id (e.g. TableGrid).
+  String? styleId;
+
   /// copy API.
   WmlTableProps copy() => WmlTableProps(
     alignment: alignment,
     floating: floating,
     cellMargin: cellMargin,
     rightToLeft: rightToLeft,
+    borders: borders,
+    borderColor: borderColor,
+    borderWidth: borderWidth,
+    styleId: styleId,
   );
 }
 

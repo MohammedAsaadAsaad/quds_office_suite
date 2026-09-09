@@ -35,6 +35,37 @@ void main() {
     );
   });
 
+  test('footer PAGE field keeps the title suffix', () {
+    final WmlDocument doc = WmlDocument(
+      sections: <WmlSection>[
+        WmlSection(
+          footer: <WmlParagraph>[
+            WmlParagraph(
+              properties: WmlParagraphProps(pageNumberField: true),
+              inlines: <WmlInline>[
+                WmlRun(text: '1  |  Al Tahreer Neighborhood Profile'),
+              ],
+            ),
+          ],
+          blocks: <WmlBlock>[
+            WmlParagraph(inlines: <WmlInline>[WmlRun(text: 'Body')]),
+          ],
+        ),
+      ],
+    );
+    final Uint8List bytes = WordSerializer().writeBytes(doc);
+    final String footer = OpcPackage.openBytes(bytes)
+        .getPart('/word/footer1.xml')!
+        .readText();
+    expect(footer.contains('PAGE'), isTrue);
+    expect(footer.contains('Al Tahreer Neighborhood Profile'), isTrue);
+    final LaidOutDocument laid = WordLayoutEngine(font: null).layout(doc);
+    expect(
+      laid.pages.first.footer.single.overlayText,
+      '1  |  Al Tahreer Neighborhood Profile',
+    );
+  });
+
   test('named Word highlights map to RGB', () {
     expect(WmlHighlight.toRgb('yellow'), 'FFFF00');
     expect(WmlHighlight.toRgb('green'), '00FF00');
@@ -560,6 +591,12 @@ void main() {
       ],
     );
     final Uint8List bytes = WordSerializer().writeBytes(doc);
+    final String xml = OpcPackage.openBytes(bytes)
+        .getPart('/word/document.xml')!
+        .readText();
+    expect(xml.contains('wps:wsp'), isTrue);
+    expect(xml.contains('v:rect'), isTrue);
+    expect(xml.contains('qudsFrame:'), isFalse);
     final WmlDocument copy = WordDeserializer().readBytes(bytes);
     expect(copy.sections.first.columnCount, 2);
     expect(copy.sections.first.columnSpace, 24);
@@ -571,6 +608,7 @@ void main() {
     expect(frame.y, 60);
     expect(frame.fillColor, '1F4E79');
     expect(frame.blocks.whereType<WmlParagraph>().first.text, 'Boxed');
+    expect(frame.width, 160);
     expect(
       copy.paragraphs.any(
         (WmlParagraph p) => p.properties.columnBreakBefore || p.text == 'Right',
@@ -602,14 +640,75 @@ void main() {
       ],
     );
     final Uint8List bytes = WordSerializer().writeBytes(doc);
+    final String xml = OpcPackage.openBytes(
+      bytes,
+    ).getPart('/word/document.xml')!.readText();
+    final int firstSect = xml.indexOf('<w:sectPr');
+    final int firstPPr = xml.lastIndexOf('<w:pPr>', firstSect);
+    expect(firstPPr, greaterThan(-1));
+    expect(xml.substring(firstPPr, firstSect).contains('</w:p>'), isFalse);
+    expect(xml.split('<w:sectPr').length - 1, 2);
+    expect(
+      xml.contains('<w:cols w:num="1"') || xml.contains("w:num=\"1\""),
+      isTrue,
+    );
     final WmlDocument copy = WordDeserializer().readBytes(bytes);
     expect(copy.sections.length, 2);
     expect(copy.sections.first.margins.top, 48);
+    expect(copy.sections.first.columnCount, 1);
     expect(copy.sections.last.columnCount, 2);
     expect(copy.paragraphs.map((WmlParagraph p) => p.text).toList(), <String>[
       'Section A',
       'Section B',
     ]);
+  });
+
+  test('Word columns stay on their own section after a single-column page', () {
+    final WmlDocument doc = WmlDocument(
+      sections: <WmlSection>[
+        WmlSection(
+          blocks: <WmlBlock>[
+            WmlParagraph(inlines: <WmlInline>[WmlRun(text: 'Cover')]),
+          ],
+        ),
+        WmlSection(
+          columnCount: 2,
+          blocks: <WmlBlock>[
+            WmlParagraph(inlines: <WmlInline>[WmlRun(text: 'Disclaimer')]),
+          ],
+        ),
+        WmlSection(
+          blocks: <WmlBlock>[
+            WmlParagraph(inlines: <WmlInline>[WmlRun(text: 'Back')]),
+          ],
+        ),
+      ],
+    );
+    final WmlDocument copy = WordDeserializer().readBytes(
+      WordSerializer().writeBytes(doc),
+    );
+    expect(copy.sections, hasLength(3));
+    expect(copy.sections[0].columnCount, 1);
+    expect(copy.sections[1].columnCount, 2);
+    expect(copy.sections[2].columnCount, 1);
+  });
+
+  test('inline tabs serialize as w:tab and round-trip', () {
+    final WmlDocument doc = WmlDocument(
+      sections: <WmlSection>[
+        WmlSection(
+          blocks: <WmlBlock>[
+            WmlParagraph(inlines: <WmlInline>[WmlRun(text: 'A\tB')]),
+          ],
+        ),
+      ],
+    );
+    final OpcPackage package = WordSerializer().write(doc);
+    final String xml = package.getPart('/word/document.xml')!.readText();
+    expect(xml, contains('<w:tab'));
+    expect(xml.contains('A\tB'), isFalse);
+    final WmlDocument copy = WordDeserializer().read(package);
+    expect(copy.paragraphs.first.text, 'A\tB');
   });
 
   test('round-trips paragraph w:bidi and justification', () {

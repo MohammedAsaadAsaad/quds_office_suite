@@ -229,6 +229,33 @@ void main() {
     expect(toc.entries[1].pageNumber, 2);
   });
 
+  test('TOC page numbers sit on the right margin, not the title', () {
+    expect(
+      WordToc.pageNumberX(
+        pageWidth: 595.28,
+        marginRight: 54,
+        numberWidth: 12,
+      ),
+      closeTo(529.28, 0.01),
+    );
+    expect(
+      WordToc.leaderEndX(
+        pageWidth: 595.28,
+        marginRight: 54,
+        numberWidth: 12,
+      ),
+      closeTo(525.28, 0.01),
+    );
+    expect(
+      WordToc.pageNumberX(
+        pageWidth: 595.28,
+        marginRight: 54,
+        numberWidth: 12,
+      ),
+      greaterThan(200),
+    );
+  });
+
   test('Docx builder heading writes outline level', () {
     final WmlDocument doc = WordDeserializer().readBytes(
       (DocxDocumentBuilder()..heading('Title', level: 2)).build(),

@@ -1,10 +1,10 @@
 import 'dart:typed_data';
 
+import '../../office/office_document_properties.dart';
 import '../../opc/ole/embedded_part.dart';
 import '../../opc/opc_archive.dart';
 import '../../opc/package_part.dart';
 import '../../opc/relationships.dart';
-import '../../visual/office_visual.dart';
 import '../../xml/namespaces.dart';
 import '../../xml/xml_reader.dart';
 import '../math/omml_document.dart';
@@ -12,6 +12,9 @@ import '../math/omml_io.dart';
 import '../model/wml_document.dart';
 import '../model/word_comment.dart';
 import '../model/word_link.dart';
+import '../model/word_notes.dart';
+import '../model/word_revision.dart';
+import '../model/word_styles.dart';
 import '../model/word_toc.dart';
 import '../properties/wml_properties.dart';
 import 'word_drawing_io.dart';
@@ -20,10 +23,12 @@ import 'word_drawing_io.dart';
 class WordDeserializer {
   final List<WmlEquation> _pendingEquations = <WmlEquation>[];
   final List<WmlVisual> _pendingVisuals = <WmlVisual>[];
+  final List<WmlFrame> _pendingFrames = <WmlFrame>[];
   final List<int> _openCommentIds = <int>[];
   OpcPackage? _package;
   String? _docUri;
   WmlSection? _pendingParagraphSectPr;
+  WmlDocument? _document;
 
   /// read API.
   WmlDocument read(OpcPackage package) {
@@ -34,15 +39,20 @@ class WordDeserializer {
         : package.packageRelationships.resolve(office);
     final PackagePart? part = package.getPart(docUri);
     if (part == null) {
-      return WmlDocument(package: package);
+      return WmlDocument(
+        package: package,
+        properties: OfficeDocumentProperties.fromPackage(package),
+      );
     }
     final XmlPullReader reader = XmlPullReader(part.readText());
     final WmlDocument document = WmlDocument(
       package: package,
       sections: <WmlSection>[],
+      properties: OfficeDocumentProperties.fromPackage(package),
     );
     _package = package;
     _docUri = docUri;
+    _document = document;
     _pendingParagraphSectPr = null;
     WmlSection section = WmlSection();
     while (reader.next()) {
@@ -77,10 +87,16 @@ class WordDeserializer {
       document.sections.add(section);
     }
     _ensureHeadersFooters(document, package, docUri);
+    _readStyles(document, package, docUri);
+    _applyDocumentStyles(document);
     _applyNumbering(document, package, docUri);
     _collapseTocFields(document);
     _readComments(document, package, docUri);
     _readCommentsExtended(document, package, docUri);
+    _readWatermark(document, package);
+    _readNotes(document, package, docUri);
+    _readCitations(document, package);
+    _readSettingsFlags(document, package, docUri);
     return document;
   }
 
@@ -154,13 +170,20 @@ class WordDeserializer {
   void _addParagraph(List<WmlBlock> blocks, WmlParagraph paragraph) {
     final bool mathOnly =
         paragraph.inlines.isEmpty && _pendingEquations.isNotEmpty;
-    if (!mathOnly) {
+    final bool drawingHost =
+        paragraph.text.trim().isEmpty &&
+        (_pendingVisuals.isNotEmpty || _pendingFrames.isNotEmpty);
+    if (!mathOnly && !drawingHost) {
       blocks.add(paragraph);
     }
     _flushPending(blocks);
   }
 
   void _flushPending(List<WmlBlock> blocks) {
+    if (_pendingFrames.isNotEmpty) {
+      blocks.addAll(_pendingFrames);
+      _pendingFrames.clear();
+    }
     if (_pendingVisuals.isNotEmpty) {
       blocks.addAll(_pendingVisuals);
       _pendingVisuals.clear();
@@ -172,14 +195,36 @@ class WordDeserializer {
   }
 
   bool _takeDrawing(XmlPullReader reader, OpcPackage package, String docUri) {
+    if (reader.localName == 'Fallback' &&
+        (reader.prefix == 'mc' ||
+            reader.namespaceUri == OfficeNamespaces.mc)) {
+      _skipElement(reader);
+      return true;
+    }
     if (reader.localName != 'drawing') {
       return false;
     }
-    final OfficeVisual? visual = WordDrawingIo.read(reader, package, docUri);
-    if (visual != null) {
-      _pendingVisuals.add(WmlVisual(visual: visual));
+    final WmlBlock? block = WordDrawingIo.readBlock(
+      reader,
+      package,
+      docUri,
+      readParagraph: (XmlPullReader inner) =>
+          _readParagraph(inner, package, docUri),
+    );
+    if (block is WmlVisual) {
+      _pendingVisuals.add(block);
+    } else if (block is WmlFrame) {
+      _pendingFrames.add(block);
     }
     return true;
+  }
+
+  void _skipElement(XmlPullReader reader) {
+    if (reader.isEmptyElement) {
+      return;
+    }
+    final int depth = reader.depth;
+    while (reader.next() && reader.depth >= depth) {}
   }
 
   WmlParagraph _readParagraph(
@@ -202,6 +247,8 @@ class WordDeserializer {
         paragraph.inlines.addAll(
           _readRunInlines(reader, package, docUri, paragraph),
         );
+      } else if (reader.localName == 'ins' || reader.localName == 'del') {
+        _readTracked(reader, package, docUri, paragraph);
       } else if (reader.localName == 'hyperlink') {
         paragraph.inlines.addAll(
           _readHyperlinkInlines(reader, package, docUri, paragraph),
@@ -242,6 +289,10 @@ class WordDeserializer {
         if (type == 'column') {
           paragraph.properties.columnBreakBefore = true;
         }
+      } else if (reader.localName == 'Fallback' &&
+          (reader.prefix == 'mc' ||
+              reader.namespaceUri == OfficeNamespaces.mc)) {
+        _skipElement(reader);
       } else if (reader.localName == 'object' ||
           reader.localName == 'drawing') {
         if (!_takeDrawing(reader, package, docUri)) {
@@ -279,13 +330,27 @@ class WordDeserializer {
       }
       if (reader.localName == 'rPr') {
         _readRPr(reader, run.properties);
-      } else if (reader.localName == 't') {
+      } else if (reader.localName == 't' || reader.localName == 'delText') {
         final String text = _elementText(reader);
         if (paragraph.properties.pageNumberField &&
             _cachedPageResult.hasMatch(text)) {
           continue;
         }
         run.text += text;
+      } else if (reader.localName == 'footnoteReference' ||
+          reader.localName == 'endnoteReference') {
+        final int id =
+            int.tryParse(
+              reader.getAttribute('id', namespaceUri: OfficeNamespaces.w) ?? '',
+            ) ??
+            1;
+        run.noteRefId = id;
+        run.noteRefEndnote = reader.localName == 'endnoteReference';
+        if (run.text.isEmpty) {
+          run.text = '$id';
+        }
+        paragraph.properties.noteId = id;
+        paragraph.properties.endnoteRef = run.noteRefEndnote;
       } else if (reader.localName == 'instrText') {
         final String instr = _elementText(reader);
         paragraph.properties.fieldInstruction =
@@ -307,6 +372,10 @@ class WordDeserializer {
         continue;
       } else if (reader.localName == 'tab') {
         run.text += '\t';
+      } else if (reader.localName == 'Fallback' &&
+          (reader.prefix == 'mc' ||
+              reader.namespaceUri == OfficeNamespaces.mc)) {
+        _skipElement(reader);
       } else if (reader.localName == 'object' ||
           reader.localName == 'drawing' ||
           reader.localName == 'OLEObject') {
@@ -322,11 +391,58 @@ class WordDeserializer {
         }
       }
     }
-    if (run.text.isNotEmpty) {
+    if (run.text.isNotEmpty || run.noteRefId != null) {
       run.commentIds.addAll(_openCommentIds);
       inlines.add(run);
     }
     return inlines;
+  }
+
+  void _readTracked(
+    XmlPullReader reader,
+    OpcPackage package,
+    String docUri,
+    WmlParagraph paragraph,
+  ) {
+    final bool deleted = reader.localName == 'del';
+    final String author =
+        reader.getAttribute('author', namespaceUri: OfficeNamespaces.w) ??
+        'Quds Office';
+    final String date =
+        reader.getAttribute('date', namespaceUri: OfficeNamespaces.w) ?? '';
+    final int start = paragraph.text.length;
+    if (reader.isEmptyElement) {
+      return;
+    }
+    final int depth = reader.depth;
+    while (reader.next() && reader.depth >= depth) {
+      if (reader.eventType == XmlEventType.startElement &&
+          reader.localName == 'r') {
+        paragraph.inlines.addAll(
+          _readRunInlines(reader, package, docUri, paragraph),
+        );
+      }
+    }
+    final WmlDocument? document = _document;
+    if (document == null) {
+      return;
+    }
+    final String text = paragraph.text.substring(start);
+    if (text.isEmpty) {
+      return;
+    }
+    final WmlRevision revision = WordRevisions.record(
+      document,
+      kind: deleted ? WmlRevisionKind.delete : WmlRevisionKind.insert,
+      paragraphIndex: document.paragraphs.length,
+      start: start,
+      end: start + text.length,
+      text: text,
+      author: author,
+    );
+    if (date.isNotEmpty) {
+      revision.dateIso = date;
+    }
   }
 
   void _readPPr(XmlPullReader reader, WmlParagraphProps props) {
@@ -366,11 +482,14 @@ class WordDeserializer {
           );
           if (before != null) {
             props.spacingBefore = twipsToPoints(int.parse(before));
+            props.explicitSpacingBefore = true;
           }
           if (after != null) {
             props.spacingAfter = twipsToPoints(int.parse(after));
+            props.explicitSpacingAfter = true;
           }
           if (line != null) {
+            props.explicitLineSpacing = true;
             if (rule == 'exact' || rule == 'atLeast') {
               props.lineSpacing = twipsToPoints(int.parse(line));
               props.lineSpacingRule = rule == 'exact'
@@ -378,6 +497,7 @@ class WordDeserializer {
                   : WmlLineSpacingRule.atLeast;
             } else {
               props.lineSpacing = int.parse(line) / 240.0;
+              props.lineSpacingRule = WmlLineSpacingRule.auto;
             }
           }
         case 'ind':
@@ -393,6 +513,26 @@ class WordDeserializer {
           props.pageBreakBefore = true;
         case 'numPr':
           _readNumPr(reader, props);
+        case 'shd':
+          props.shadingFill = reader.getAttribute(
+            'fill',
+            namespaceUri: OfficeNamespaces.w,
+          );
+        case 'pBdr':
+          _readParagraphBorders(reader, props);
+        case 'framePr':
+          final String? lines = reader.getAttribute(
+            'lines',
+            namespaceUri: OfficeNamespaces.w,
+          );
+          if (reader.getAttribute(
+                    'dropCap',
+                    namespaceUri: OfficeNamespaces.w,
+                  ) !=
+                  null &&
+              lines != null) {
+            props.dropCapLines = int.tryParse(lines) ?? 3;
+          }
         case 'tabs':
           _readTabs(reader, props);
         case 'pStyle':
@@ -435,11 +575,18 @@ class WordDeserializer {
     section.columnCount = pending.columnCount;
     section.columnSpace = pending.columnSpace;
     section.columnSep = pending.columnSep;
+    section.breakKind = pending.breakKind;
     if (section.header.isEmpty) {
       section.header.addAll(pending.header);
     }
     if (section.footer.isEmpty) {
       section.footer.addAll(pending.footer);
+    }
+    if (section.headerVisuals.isEmpty) {
+      section.headerVisuals.addAll(pending.headerVisuals);
+    }
+    if (section.footerVisuals.isEmpty) {
+      section.footerVisuals.addAll(pending.footerVisuals);
     }
     document.sections.add(section);
     return WmlSection();
@@ -724,7 +871,20 @@ class WordDeserializer {
       if (reader.eventType != XmlEventType.startElement) {
         continue;
       }
-      if (reader.localName == 'bidiVisual') {
+      if (reader.localName == 'tblStyle') {
+        table.properties.styleId = reader.getAttribute(
+          'val',
+          namespaceUri: OfficeNamespaces.w,
+        );
+        // Table Grid (and most bordered table styles) zero paragraph after
+        // spacing and use single line spacing inside cells.
+        if (_tableStyleLooksGrid(table.properties.styleId)) {
+          table.properties.borderColor ??= '000000';
+          table.properties.borderWidth = 0.5;
+        }
+      } else if (reader.localName == 'tblBorders') {
+        _readTblBorders(reader, table.properties);
+      } else if (reader.localName == 'bidiVisual') {
         table.properties.rightToLeft = true;
       } else if (reader.localName == 'gridCol') {
         final String? w = reader.getAttribute(
@@ -733,16 +893,89 @@ class WordDeserializer {
         );
         table.grid.add(w == null ? 100 : twipsToPoints(int.parse(w)));
       } else if (reader.localName == 'tr') {
-        table.rows.add(_readRow(reader, package, docUri));
+        table.rows.add(_readRow(reader, package, docUri, table));
       }
     }
+    _applyTableStyleToCells(table);
     return table;
+  }
+
+  void _readTblBorders(XmlPullReader reader, WmlTableProps props) {
+    if (reader.isEmptyElement) {
+      return;
+    }
+    final int depth = reader.depth;
+    while (reader.next() && reader.depth >= depth) {
+      if (reader.eventType != XmlEventType.startElement) {
+        continue;
+      }
+      final String? val = reader.getAttribute(
+        'val',
+        namespaceUri: OfficeNamespaces.w,
+      );
+      if (val == 'nil' || val == 'none') {
+        continue;
+      }
+      final String? sz = reader.getAttribute(
+        'sz',
+        namespaceUri: OfficeNamespaces.w,
+      );
+      final String? color = reader.getAttribute(
+        'color',
+        namespaceUri: OfficeNamespaces.w,
+      );
+      if (sz != null) {
+        props.borderWidth = (int.tryParse(sz) ?? 4) / 8.0;
+      }
+      if (color != null && color.isNotEmpty && color.toLowerCase() != 'auto') {
+        props.borderColor = color;
+      }
+      props.borders = true;
+    }
+  }
+
+  static bool _tableStyleLooksGrid(String? styleId) {
+    if (styleId == null || styleId.isEmpty) {
+      return true;
+    }
+    final String lower = styleId.toLowerCase();
+    return lower == 'tablegrid' ||
+        lower == 'tablenormal' ||
+        lower.contains('grid') ||
+        lower.contains('listtable') ||
+        lower.startsWith('table');
+  }
+
+  void _applyTableStyleToCells(WmlTable table) {
+    final bool gridLike = _tableStyleLooksGrid(table.properties.styleId);
+    if (!gridLike) {
+      return;
+    }
+    for (final WmlTableRow row in table.rows) {
+      for (final WmlTableCell cell in row.cells) {
+        for (final WmlBlock block in cell.blocks) {
+          if (block is! WmlParagraph) {
+            continue;
+          }
+          // TableGrid pPr: after=0, line=240. Never clobber direct pPr spacing
+          // (e.g. line=278) — the old 1.15≈278 heuristic wrongly crushed it.
+          if (!block.properties.explicitSpacingAfter) {
+            block.properties.spacingAfter = 0;
+          }
+          if (!block.properties.explicitLineSpacing &&
+              block.properties.lineSpacingRule == WmlLineSpacingRule.auto) {
+            block.properties.lineSpacing = 1.0;
+          }
+        }
+      }
+    }
   }
 
   WmlTableRow _readRow(
     XmlPullReader reader,
     OpcPackage package,
     String docUri,
+    WmlTable table,
   ) {
     final WmlTableRow row = WmlTableRow();
     if (reader.isEmptyElement) {
@@ -794,6 +1027,8 @@ class WordDeserializer {
           namespaceUri: OfficeNamespaces.w,
         );
         cell.vMerge = val == 'restart' ? WmlVMerge.restart : WmlVMerge.cont;
+      } else if (reader.localName == 'tcBorders') {
+        _readTcBorders(reader, cell);
       } else if (reader.localName == 'shd') {
         final String? fill = reader.getAttribute(
           'fill',
@@ -820,6 +1055,37 @@ class WordDeserializer {
     return cell;
   }
 
+  void _readTcBorders(XmlPullReader reader, WmlTableCell cell) {
+    if (reader.isEmptyElement) {
+      return;
+    }
+    final int depth = reader.depth;
+    while (reader.next() && reader.depth >= depth) {
+      if (reader.eventType != XmlEventType.startElement) {
+        continue;
+      }
+      final String? val = reader.getAttribute(
+        'val',
+        namespaceUri: OfficeNamespaces.w,
+      );
+      final bool? edge = switch (val) {
+        'nil' || 'none' => false,
+        null => null,
+        _ => true,
+      };
+      switch (reader.localName) {
+        case 'top':
+          cell.borderTop = edge;
+        case 'bottom':
+          cell.borderBottom = edge;
+        case 'left':
+          cell.borderLeft = edge;
+        case 'right':
+          cell.borderRight = edge;
+      }
+    }
+  }
+
   void _readSectPr(
     XmlPullReader reader,
     WmlSection section,
@@ -828,6 +1094,10 @@ class WordDeserializer {
   ) {
     String? headerRid;
     String? footerRid;
+    String? firstHeaderRid;
+    String? firstFooterRid;
+    String? evenHeaderRid;
+    String? evenFooterRid;
     if (!reader.isEmptyElement) {
       final int depth = reader.depth;
       while (reader.next() && reader.depth >= depth) {
@@ -845,6 +1115,8 @@ class WordDeserializer {
             bottom: _twipAttr(reader, 'bottom', fallback: 72),
             left: _twipAttr(reader, 'left', fallback: 72),
             right: _twipAttr(reader, 'right', fallback: 72),
+            header: _twipAttr(reader, 'header', fallback: 36),
+            footer: _twipAttr(reader, 'footer', fallback: 36),
           );
         } else if (reader.localName == 'cols') {
           section.columnCount = int.parse(
@@ -861,17 +1133,105 @@ class WordDeserializer {
               reader.getAttribute('sep', namespaceUri: OfficeNamespaces.w) ==
               '1';
         } else if (reader.localName == 'headerReference') {
-          headerRid = _relationshipId(reader) ?? headerRid;
+          final String? rid = _relationshipId(reader);
+          final String type =
+              reader.getAttribute('type', namespaceUri: OfficeNamespaces.w) ??
+              'default';
+          if (type == 'first') {
+            firstHeaderRid = rid ?? firstHeaderRid;
+          } else if (type == 'even') {
+            evenHeaderRid = rid ?? evenHeaderRid;
+          } else {
+            headerRid = rid ?? headerRid;
+          }
         } else if (reader.localName == 'footerReference') {
-          footerRid = _relationshipId(reader) ?? footerRid;
+          final String? rid = _relationshipId(reader);
+          final String type =
+              reader.getAttribute('type', namespaceUri: OfficeNamespaces.w) ??
+              'default';
+          if (type == 'first') {
+            firstFooterRid = rid ?? firstFooterRid;
+          } else if (type == 'even') {
+            evenFooterRid = rid ?? evenFooterRid;
+          } else {
+            footerRid = rid ?? footerRid;
+          }
+        } else if (reader.localName == 'type') {
+          section.breakKind = switch (reader.getAttribute(
+            'val',
+            namespaceUri: OfficeNamespaces.w,
+          )) {
+            'continuous' => WmlSectionBreakKind.continuous,
+            'oddPage' => WmlSectionBreakKind.oddPage,
+            'evenPage' => WmlSectionBreakKind.evenPage,
+            _ => WmlSectionBreakKind.nextPage,
+          };
+        } else if (reader.localName == 'titlePg') {
+          section.differentFirstPage = true;
+        } else if (reader.localName == 'lnNumType') {
+          section.lineNumbers = true;
         }
       }
     }
     if (headerRid != null) {
-      section.header.addAll(_readStoryByRid(package, docUri, headerRid));
+      section.header.addAll(
+        _readStoryByRid(
+          package,
+          docUri,
+          headerRid,
+          visualsOut: section.headerVisuals,
+        ),
+      );
     }
     if (footerRid != null) {
-      section.footer.addAll(_readStoryByRid(package, docUri, footerRid));
+      section.footer.addAll(
+        _readStoryByRid(
+          package,
+          docUri,
+          footerRid,
+          visualsOut: section.footerVisuals,
+        ),
+      );
+    }
+    if (firstHeaderRid != null) {
+      section.firstHeader.addAll(
+        _readStoryByRid(
+          package,
+          docUri,
+          firstHeaderRid,
+          visualsOut: section.firstHeaderVisuals,
+        ),
+      );
+    }
+    if (firstFooterRid != null) {
+      section.firstFooter.addAll(
+        _readStoryByRid(
+          package,
+          docUri,
+          firstFooterRid,
+          visualsOut: section.firstFooterVisuals,
+        ),
+      );
+    }
+    if (evenHeaderRid != null) {
+      section.evenHeader.addAll(
+        _readStoryByRid(
+          package,
+          docUri,
+          evenHeaderRid,
+          visualsOut: section.evenHeaderVisuals,
+        ),
+      );
+    }
+    if (evenFooterRid != null) {
+      section.evenFooter.addAll(
+        _readStoryByRid(
+          package,
+          docUri,
+          evenFooterRid,
+          visualsOut: section.evenFooterVisuals,
+        ),
+      );
     }
   }
 
@@ -888,11 +1248,29 @@ class WordDeserializer {
       RelationshipTypes.footer,
     );
     for (final WmlSection section in document.sections) {
-      if (section.header.isEmpty && headerRel != null) {
-        section.header.addAll(_readStoryByRid(package, docUri, headerRel.id));
+      if (section.header.isEmpty &&
+          section.headerVisuals.isEmpty &&
+          headerRel != null) {
+        section.header.addAll(
+          _readStoryByRid(
+            package,
+            docUri,
+            headerRel.id,
+            visualsOut: section.headerVisuals,
+          ),
+        );
       }
-      if (section.footer.isEmpty && footerRel != null) {
-        section.footer.addAll(_readStoryByRid(package, docUri, footerRel.id));
+      if (section.footer.isEmpty &&
+          section.footerVisuals.isEmpty &&
+          footerRel != null) {
+        section.footer.addAll(
+          _readStoryByRid(
+            package,
+            docUri,
+            footerRel.id,
+            visualsOut: section.footerVisuals,
+          ),
+        );
       }
     }
   }
@@ -900,14 +1278,16 @@ class WordDeserializer {
   List<WmlParagraph> _readStoryByRid(
     OpcPackage package,
     String docUri,
-    String rid,
-  ) {
+    String rid, {
+    List<WmlVisual>? visualsOut,
+  }) {
     final RelationshipCollection rels = package.relationshipsFor(docUri);
     final PackageRelationship? rel = rels.byId(rid);
     if (rel == null) {
       return <WmlParagraph>[];
     }
-    final PackagePart? part = package.getPart(rels.resolve(rel));
+    final String storyUri = rels.resolve(rel);
+    final PackagePart? part = package.getPart(storyUri);
     if (part == null) {
       return <WmlParagraph>[];
     }
@@ -917,9 +1297,20 @@ class WordDeserializer {
       if (reader.eventType == XmlEventType.startElement &&
           reader.localName == 'p' &&
           reader.namespaceUri == OfficeNamespaces.w) {
-        paragraphs.add(_readParagraph(reader, package, docUri));
+        // Resolve drawings against the header/footer part, not document.xml.
+        paragraphs.add(_readParagraph(reader, package, storyUri));
+        if (visualsOut != null && _pendingVisuals.isNotEmpty) {
+          visualsOut.addAll(_pendingVisuals);
+          _pendingVisuals.clear();
+        } else {
+          _pendingVisuals.clear();
+        }
         _pendingEquations.clear();
       }
+    }
+    if (visualsOut != null && _pendingVisuals.isNotEmpty) {
+      visualsOut.addAll(_pendingVisuals);
+      _pendingVisuals.clear();
     }
     return paragraphs;
   }
@@ -938,27 +1329,57 @@ class WordDeserializer {
       }
       return;
     }
-    final Map<String, int> counters = <String, int>{};
+    final Map<String, List<int>> counters = <String, List<int>>{};
     for (final WmlParagraph paragraph in document.paragraphs) {
       final int? numId = paragraph.properties.numId;
       if (numId == null) {
         continue;
       }
+      final int ilvl = paragraph.properties.ilvl.clamp(0, 8);
       final _NumberingLevel? level =
-          levels[_levelKey(numId, paragraph.properties.ilvl)] ??
-          levels[_levelKey(numId, 0)];
+          levels[_levelKey(numId, ilvl)] ?? levels[_levelKey(numId, 0)];
       if (level == null) {
         paragraph.properties.listLabel ??= '• ';
         continue;
       }
       if (level.isBullet) {
         paragraph.properties.listLabel = level.bulletLabel();
-        continue;
+      } else {
+        final String key = '$numId';
+        final List<int> stack = counters.putIfAbsent(
+          key,
+          () => List<int>.filled(9, 0),
+        );
+        final int? restartAt = paragraph.properties.listRestart;
+        if (restartAt != null) {
+          stack[ilvl] = restartAt - 1;
+          for (int i = ilvl + 1; i < stack.length; i++) {
+            stack[i] = 0;
+          }
+          paragraph.properties.listRestart = null;
+        }
+        stack[ilvl] = stack[ilvl] + 1;
+        for (int i = ilvl + 1; i < stack.length; i++) {
+          stack[i] = 0;
+        }
+        // Seed missing ancestors so "%1.%2" never shows zeros mid-path.
+        for (int i = 0; i < ilvl; i++) {
+          if (stack[i] == 0) {
+            stack[i] = level.start;
+          }
+        }
+        paragraph.properties.listLabel = level.decimalLabelStack(stack, ilvl);
       }
-      final String key = '$numId:${paragraph.properties.ilvl}';
-      final int next = (counters[key] ?? (level.start - 1)) + 1;
-      counters[key] = next;
-      paragraph.properties.listLabel = level.decimalLabel(next);
+      if (paragraph.properties.indent.left == 0 &&
+          paragraph.properties.indent.hanging == 0 &&
+          (level.left > 0 || level.hanging > 0)) {
+        paragraph.properties.indent = WmlIndent(
+          left: level.left,
+          right: paragraph.properties.indent.right,
+          firstLine: paragraph.properties.indent.firstLine,
+          hanging: level.hanging,
+        );
+      }
     }
   }
 
@@ -987,13 +1408,21 @@ class WordDeserializer {
     var start = 1;
     var haveLevel = false;
     var numId = -1;
+    var leftInd = 0.0;
+    var hangingInd = 0.0;
 
     void flushLevel() {
       if (!haveLevel || abstractId < 0) {
         return;
       }
       byAbstract.putIfAbsent(abstractId, () => <int, _NumberingLevel>{})[ilvl] =
-          _NumberingLevel(fmt: fmt, text: text, start: start);
+          _NumberingLevel(
+            fmt: fmt,
+            text: text,
+            start: start,
+            left: leftInd,
+            hanging: hangingInd,
+          );
       haveLevel = false;
     }
 
@@ -1025,6 +1454,8 @@ class WordDeserializer {
           fmt = 'bullet';
           text = '•';
           start = 1;
+          leftInd = 0;
+          hangingInd = 0;
           haveLevel = true;
         case 'start':
           start =
@@ -1041,6 +1472,9 @@ class WordDeserializer {
           text =
               reader.getAttribute('val', namespaceUri: OfficeNamespaces.w) ??
               text;
+        case 'ind':
+          leftInd = _twipAttr(reader, 'left');
+          hangingInd = _twipAttr(reader, 'hanging');
         case 'num':
           flushLevel();
           numId =
@@ -1094,6 +1528,386 @@ class WordDeserializer {
       }
     }
     return buffer.toString();
+  }
+
+  void _readParagraphBorders(XmlPullReader reader, WmlParagraphProps props) {
+    if (reader.isEmptyElement) {
+      return;
+    }
+    final int depth = reader.depth;
+    while (reader.next() && reader.depth >= depth) {
+      if (reader.eventType != XmlEventType.startElement) {
+        continue;
+      }
+      final String? color = reader.getAttribute(
+        'color',
+        namespaceUri: OfficeNamespaces.w,
+      );
+      if (color != null && color.isNotEmpty) {
+        props.borderColor = color;
+      }
+    }
+  }
+
+  void _readWatermark(WmlDocument document, OpcPackage package) {
+    final PackagePart? part = package.getPart('/word/watermark.xml');
+    if (part != null) {
+      final String xml = part.readText();
+      final Match? match = RegExp(
+        r'<w:watermark[^>]*>([^<]*)</w:watermark>',
+      ).firstMatch(xml);
+      if (match != null) {
+        document.watermark = match.group(1)!
+            .replaceAll('&amp;', '&')
+            .replaceAll('&lt;', '<')
+            .replaceAll('&gt;', '>');
+      }
+    }
+    final RegExp vml = RegExp(r'string="([^"]*)"');
+    for (final PackagePart header in package.parts) {
+      if (!header.uri.contains('/word/header')) {
+        continue;
+      }
+      final Match? match = vml.firstMatch(header.readText());
+      if (match != null && match.group(1)!.isNotEmpty) {
+        document.watermark = match.group(1)!
+            .replaceAll('&amp;', '&')
+            .replaceAll('&lt;', '<')
+            .replaceAll('&gt;', '>');
+        return;
+      }
+    }
+  }
+
+  void _readCitations(WmlDocument document, OpcPackage package) {
+    final PackagePart? part =
+        package.getPart('/customXml/sources.xml') ??
+        package.getPart('/customXml/item1.xml');
+    if (part == null) {
+      return;
+    }
+    final XmlPullReader reader = XmlPullReader(part.readText());
+    String tag = '';
+    String author = '';
+    String title = '';
+    String year = '';
+    while (reader.next()) {
+      if (reader.eventType == XmlEventType.startElement &&
+          reader.localName == 'Source') {
+        tag = '';
+        author = '';
+        title = '';
+        year = '';
+      } else if (reader.eventType == XmlEventType.startElement &&
+          (reader.localName == 'Tag' ||
+              reader.localName == 'Author' ||
+              reader.localName == 'Title' ||
+              reader.localName == 'Year')) {
+        final String name = reader.localName;
+        final String text = _elementText(reader);
+        switch (name) {
+          case 'Tag':
+            tag = text;
+          case 'Author':
+            author = text;
+          case 'Title':
+            title = text;
+          case 'Year':
+            year = text;
+        }
+      } else if (reader.eventType == XmlEventType.endElement &&
+          reader.localName == 'Source' &&
+          tag.isNotEmpty) {
+        document.citations.add(
+          WmlCitation(tag: tag, author: author, title: title, year: year),
+        );
+      }
+    }
+  }
+
+  void _readNotes(WmlDocument document, OpcPackage package, String docUri) {
+    _readNotesPart(
+      document.footnotes,
+      package,
+      docUri,
+      RelationshipTypes.footnotes,
+      '/word/footnotes.xml',
+      'footnote',
+      endnote: false,
+    );
+    _readNotesPart(
+      document.endnotes,
+      package,
+      docUri,
+      RelationshipTypes.endnotes,
+      '/word/endnotes.xml',
+      'endnote',
+      endnote: true,
+    );
+  }
+
+  void _readNotesPart(
+    List<WmlNote> bucket,
+    OpcPackage package,
+    String docUri,
+    String relType,
+    String fallbackUri,
+    String item, {
+    required bool endnote,
+  }) {
+    final PackageRelationship? rel = package
+        .relationshipsFor(docUri)
+        .firstByType(relType);
+    final String uri = rel == null
+        ? fallbackUri
+        : package.relationshipsFor(docUri).resolve(rel);
+    final PackagePart? part = package.getPart(uri);
+    if (part == null) {
+      return;
+    }
+    bucket.clear();
+    final XmlPullReader reader = XmlPullReader(part.readText());
+    while (reader.next()) {
+      if (reader.eventType != XmlEventType.startElement ||
+          reader.localName != item) {
+        continue;
+      }
+      final String? noteType = reader.getAttribute(
+        'type',
+        namespaceUri: OfficeNamespaces.w,
+      );
+      // Word always ships separator / continuationSeparator notes (ids -1, 0).
+      // They are chrome, not document content — skip them.
+      if (noteType == 'separator' ||
+          noteType == 'continuationSeparator' ||
+          noteType == 'continuationNotice') {
+        if (!reader.isEmptyElement) {
+          final int skipDepth = reader.depth;
+          while (reader.next() && reader.depth >= skipDepth) {}
+        }
+        continue;
+      }
+      final int id =
+          int.tryParse(
+            reader.getAttribute('id', namespaceUri: OfficeNamespaces.w) ?? '',
+          ) ??
+          bucket.length + 1;
+      final WmlNote note = WmlNote(id: id, endnote: endnote);
+      note.paragraphs.clear();
+      if (!reader.isEmptyElement) {
+        final int depth = reader.depth;
+        while (reader.next() && reader.depth >= depth) {
+          if (reader.eventType == XmlEventType.startElement &&
+              reader.localName == 'p') {
+            note.paragraphs.add(_readParagraph(reader, package, docUri));
+          }
+        }
+      }
+      if (note.paragraphs.isEmpty) {
+        note.text = '';
+      }
+      bucket.add(note);
+    }
+  }
+
+  void _readStyles(WmlDocument document, OpcPackage package, String docUri) {
+    final RelationshipCollection rels = package.relationshipsFor(docUri);
+    final PackageRelationship? rel = rels.firstByType(RelationshipTypes.styles);
+    final PackagePart? part = rel == null
+        ? package.getPart('/word/styles.xml')
+        : package.getPart(rels.resolve(rel));
+    if (part == null) {
+      return;
+    }
+    WordStyles.extras.clear();
+    document.styles.clear();
+    final XmlPullReader reader = XmlPullReader(part.readText());
+    String? id;
+    String name = '';
+    String? basedOn;
+    String? font;
+    String? csFont;
+    var bold = false;
+    var italic = false;
+    var color = '000000';
+    var fontSizePoints = 11.0;
+    var spacingBefore = 0.0;
+    var spacingAfter = 8.0;
+    WmlJustification justification = WmlJustification.left;
+    int? headingLevel;
+    while (reader.next()) {
+      if (reader.eventType == XmlEventType.startElement &&
+          reader.localName == 'style') {
+        id = reader.getAttribute('styleId', namespaceUri: OfficeNamespaces.w);
+        name = '';
+        basedOn = null;
+        font = null;
+        csFont = null;
+        bold = false;
+        italic = false;
+        color = '000000';
+        fontSizePoints = 11;
+        spacingBefore = 0;
+        spacingAfter = 8;
+        justification = WmlJustification.left;
+        headingLevel = null;
+      } else if (reader.eventType == XmlEventType.startElement &&
+          reader.localName == 'name' &&
+          id != null) {
+        name =
+            reader.getAttribute('val', namespaceUri: OfficeNamespaces.w) ??
+            name;
+      } else if (reader.eventType == XmlEventType.startElement &&
+          reader.localName == 'basedOn' &&
+          id != null) {
+        basedOn = reader.getAttribute('val', namespaceUri: OfficeNamespaces.w);
+      } else if (reader.eventType == XmlEventType.startElement &&
+          reader.localName == 'rFonts') {
+        font =
+            reader.getAttribute('ascii', namespaceUri: OfficeNamespaces.w) ??
+            reader.getAttribute('hAnsi', namespaceUri: OfficeNamespaces.w) ??
+            font;
+        csFont =
+            reader.getAttribute('cs', namespaceUri: OfficeNamespaces.w) ?? csFont;
+      } else if (reader.eventType == XmlEventType.startElement &&
+          reader.localName == 'jc') {
+        justification = _jc(
+          reader.getAttribute('val', namespaceUri: OfficeNamespaces.w),
+        );
+      } else if (reader.eventType == XmlEventType.startElement &&
+          reader.localName == 'spacing') {
+        final String? before = reader.getAttribute(
+          'before',
+          namespaceUri: OfficeNamespaces.w,
+        );
+        final String? after = reader.getAttribute(
+          'after',
+          namespaceUri: OfficeNamespaces.w,
+        );
+        if (before != null) {
+          spacingBefore = twipsToPoints(int.parse(before));
+        }
+        if (after != null) {
+          spacingAfter = twipsToPoints(int.parse(after));
+        }
+      } else if (reader.eventType == XmlEventType.startElement &&
+          reader.localName == 'outlineLvl') {
+        final int? lvl = int.tryParse(
+          reader.getAttribute('val', namespaceUri: OfficeNamespaces.w) ?? '',
+        );
+        if (lvl != null) {
+          headingLevel = lvl + 1;
+        }
+      } else if (reader.eventType == XmlEventType.startElement &&
+          reader.localName == 'b') {
+        bold = true;
+      } else if (reader.eventType == XmlEventType.startElement &&
+          reader.localName == 'i') {
+        italic = true;
+      } else if (reader.eventType == XmlEventType.startElement &&
+          reader.localName == 'color') {
+        color =
+            reader.getAttribute('val', namespaceUri: OfficeNamespaces.w) ??
+            color;
+      } else if (reader.eventType == XmlEventType.startElement &&
+          reader.localName == 'sz') {
+        final int? half = int.tryParse(
+          reader.getAttribute('val', namespaceUri: OfficeNamespaces.w) ?? '',
+        );
+        if (half != null && half > 0) {
+          fontSizePoints = half / 2.0;
+        }
+      } else if (reader.eventType == XmlEventType.endElement &&
+          reader.localName == 'style' &&
+          id != null &&
+          id.isNotEmpty) {
+        final WmlStyle style = WmlStyle(
+          id: id,
+          name: name.isEmpty ? id : name,
+          nameAr: name.isEmpty ? id : name,
+          bold: bold,
+          italic: italic,
+          color: color,
+          fontSizePoints: fontSizePoints,
+          spacingBefore: spacingBefore,
+          spacingAfter: spacingAfter,
+          justification: justification,
+          headingLevel: headingLevel,
+          font: font,
+          csFont: csFont,
+          basedOn: basedOn,
+        );
+        document.styles.add(style);
+        if (WordStyles.byId(id) == null) {
+          WordStyles.extras.add(style);
+        }
+        id = null;
+      }
+    }
+  }
+
+  void _applyDocumentStyles(WmlDocument document) {
+    void walk(Iterable<WmlParagraph> story) {
+      for (final WmlParagraph paragraph in story) {
+        WordStyles.resolveOntoParagraph(paragraph, document: document);
+      }
+    }
+
+    walk(document.paragraphs);
+    for (final WmlSection section in document.sections) {
+      walk(section.header);
+      walk(section.footer);
+      walk(section.firstHeader);
+      walk(section.firstFooter);
+      walk(section.evenHeader);
+      walk(section.evenFooter);
+      for (final WmlBlock block in section.blocks) {
+        if (block is WmlTable) {
+          for (final WmlTableRow row in block.rows) {
+            for (final WmlTableCell cell in row.cells) {
+              for (final WmlBlock cellBlock in cell.blocks) {
+                if (cellBlock is WmlParagraph) {
+                  WordStyles.resolveOntoParagraph(
+                    cellBlock,
+                    document: document,
+                  );
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  void _readSettingsFlags(
+    WmlDocument document,
+    OpcPackage package,
+    String docUri,
+  ) {
+    final PackageRelationship? rel = package
+        .relationshipsFor(docUri)
+        .firstByType(RelationshipTypes.settings);
+    final PackagePart? part = package.getPart(
+      rel == null
+          ? '/word/settings.xml'
+          : package.relationshipsFor(docUri).resolve(rel),
+    );
+    if (part == null) {
+      return;
+    }
+    final String xml = part.readText();
+    if (xml.contains('trackRevisions')) {
+      document.trackRevisions = !xml.contains('w:val="0"');
+    }
+    if (xml.contains('documentProtection')) {
+      document.restrictEditing = true;
+    }
+    if (xml.contains('evenAndOddHeaders')) {
+      for (final WmlSection section in document.sections) {
+        section.differentOddEven = true;
+      }
+    }
   }
 
   static bool _isPageField(String instr) {
@@ -1317,6 +2131,8 @@ class _NumberingLevel {
     required this.fmt,
     required this.text,
     required this.start,
+    this.left = 0,
+    this.hanging = 0,
   });
 
   /// fmt API.
@@ -1328,12 +2144,33 @@ class _NumberingLevel {
   /// start API.
   final int start;
 
+  /// left API.
+  final double left;
+
+  /// hanging API.
+  final double hanging;
+
   /// isBullet API.
   bool get isBullet =>
       fmt == 'bullet' || (text.isNotEmpty && text.codeUnitAt(0) >= 0xF000);
 
   /// bulletLabel API.
-  String bulletLabel() => '• ';
+  String bulletLabel() {
+    final String raw = text.trim();
+    if (raw.isEmpty) {
+      return '• ';
+    }
+    final int cu = raw.codeUnitAt(0);
+    // Symbol / Wingdings private-use → solid bullet.
+    if (cu >= 0xF000) {
+      return '• ';
+    }
+    // Word often uses literal "o" with a Courier face for a hollow bullet.
+    if (raw == 'o') {
+      return '◦ ';
+    }
+    return '$raw ';
+  }
 
   /// decimalLabel API.
   String decimalLabel(int value) {
@@ -1341,5 +2178,26 @@ class _NumberingLevel {
       return '${text.replaceAll('%1', '$value')} ';
     }
     return '$value. ';
+  }
+
+  /// Expands `%1`…`%9` using the multilevel [stack] through [ilvl].
+  String decimalLabelStack(List<int> stack, int ilvl) {
+    if (!text.contains('%')) {
+      return '${stack[ilvl]}. ';
+    }
+    var out = text;
+    for (int i = 0; i <= ilvl; i++) {
+      out = out.replaceAll('%${i + 1}', '${stack[i] == 0 ? 1 : stack[i]}');
+    }
+    for (int i = ilvl + 1; i < 9; i++) {
+      out = out.replaceAll('%${i + 1}', '');
+    }
+    // Collapse separators left by unused deeper placeholders (e.g. "1..").
+    out = out.replaceAll(RegExp(r'\.{2,}'), '.');
+    out = out.replaceAll(RegExp(r'\s{2,}'), ' ').trimRight();
+    if (out.isEmpty) {
+      return '${stack[ilvl]}. ';
+    }
+    return out.endsWith(' ') ? out : '$out ';
   }
 }

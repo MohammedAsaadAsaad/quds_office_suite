@@ -64,6 +64,7 @@ class _AlTahreerDoc {
   static const String _alt = 'E8F0F2';
 
   static const WmlPageSize _a4 = WmlPageSize();
+  static final WmlPageSize _a4Land = _a4.landscape;
   static const WmlPageMargins _inner = WmlPageMargins(
     top: 56,
     bottom: 48,
@@ -116,17 +117,21 @@ class _AlTahreerDoc {
         _section(blocks: _credits()),
         _section(blocks: _toc()),
         _section(blocks: _chapterOpener('1.', 'General', 'Overview', 'photo_overview.jpg', 'Photo © Anas Hilles')),
-        _section(columnCount: 2, columnSpace: 18, blocks: _overview11()),
-        _section(columnCount: 2, columnSpace: 18, blocks: _overview12()),
+        ..._flow(_overview11()),
+        ..._flow(_overview12()),
         _section(blocks: _chapterOpener('2.', 'Profile and', 'Functionality Assessment', 'photo_profile.jpg', 'Photo © Motaz-AlAqad')),
-        _section(columnCount: 2, columnSpace: 18, blocks: _context()),
+        ..._flow(_context()),
         _section(blocks: _prePostWar()),
-        _section(columnCount: 2, columnSpace: 18, blocks: _conditions()),
-        _section(columnCount: 2, columnSpace: 18, blocks: _functionality()),
+        ..._flow(_conditions()),
+        ..._flow(_functionality()),
         _section(blocks: _scoreResults()),
-        _section(columnCount: 2, columnSpace: 18, blocks: _roadmap()),
-        _section(blocks: _zonesAndBudgets()),
-        _section(columnCount: 2, columnSpace: 18, blocks: _messages()),
+        ..._flow(
+          _roadmap(),
+          pageSize: _a4Land,
+          breakKind: WmlSectionBreakKind.nextPage,
+        ),
+        _section(blocks: _zonesAndBudgets(), pageSize: _a4Land),
+        ..._flow(_messages(), breakKind: WmlSectionBreakKind.nextPage),
         _section(blocks: _back()),
       ],
     );
@@ -605,7 +610,12 @@ class _AlTahreerDoc {
 
   List<WmlBlock> _roadmap() {
     return <WmlBlock>[
-      ..._sectionHead('2.5', 'Phased Recovery Roadmap and Spatial Prioritization', pageBreak: true),
+      ..._sectionHead(
+        '2.5',
+        'Phased Recovery Roadmap and Spatial Prioritization',
+        pageBreak: true,
+        contentWidth: _a4Land.width - _inner.left - _inner.right,
+      ),
       _body(
         'The post-war assessment of Al Tahreer reveals a distinct functionality profile that calls for tailored, '
         'area-based interventions. The neighborhood has been transformed into a humanitarian host '
@@ -618,9 +628,14 @@ class _AlTahreerDoc {
       _bullet('Zone A: Northwestern Al Tahreer – Partially Damaged'),
       _bullet('Zone B: Central & Northern Expanses – Dense Makeshift Camp'),
       _bullet('Zone C: Southeastern Periphery – Agricultural Open Land Reserve'),
-      _picture('fig_2_8_zones.jpg', width: 220, title: 'Figure 2.8'),
+      _picture('fig_2_8_zones.jpg', width: 340, title: 'Figure 2.8'),
       _caption('Figure 2.8: Spatial Projection of the Proposed Interventions'),
-      ..._sectionHead('2.5.1', 'Short-Term Programmatic Interventions', pageBreak: true),
+      ..._sectionHead(
+        '2.5.1',
+        'Short-Term Programmatic Interventions',
+        pageBreak: true,
+        contentWidth: _a4Land.width - _inner.left - _inner.right,
+      ),
       _subhead('1. Physical & Spatial Stabilization'),
       _bullet('Temporary reinforcement of transitional shelters to support safe occupancy.'),
       _bullet('Debris clearance and informal road repair to ensure emergency access.'),
@@ -640,8 +655,8 @@ class _AlTahreerDoc {
   List<WmlBlock> _zonesAndBudgets() {
     return <WmlBlock>[
       _heading('Short-Term Interventions: Zone A', 2, pageBreak: true),
-      _picture('fig_2_9_zone_a.jpg', width: 468, title: 'Figure 2.9'),
-      _picture('fig_zone_a_inset.jpg', width: 220, title: 'Zone A inset'),
+      _picture('fig_2_9_zone_a.jpg', width: 680, title: 'Figure 2.9'),
+      _picture('fig_zone_a_inset.jpg', width: 320, title: 'Zone A inset'),
       _caption('Figure 2.9: Zone A Interventions'),
       _body(
         'Prioritize rubble removal and road clearance along the main east-west artery; conduct rapid '
@@ -649,12 +664,12 @@ class _AlTahreerDoc {
         'properties; initiate spot repairs to water wells; and use cleared spaces for safe, lit community gathering points.',
       ),
       _heading('Short-Term Interventions: Zone B', 2, pageBreak: true),
-      _picture('fig_2_10_zone_b.jpg', width: 468, title: 'Figure 2.10'),
-      _picture('fig_zone_b_inset.jpg', width: 220, title: 'Zone B inset'),
+      _picture('fig_2_10_zone_b.jpg', width: 680, title: 'Figure 2.10'),
+      _picture('fig_zone_b_inset.jpg', width: 320, title: 'Zone B inset'),
       _caption('Figure 2.10: Zone B Interventions'),
       _heading('Short-Term Interventions: Zone C', 2, pageBreak: true),
-      _picture('fig_2_11_zone_c.jpg', width: 468, title: 'Figure 2.11'),
-      _picture('fig_zone_c_inset.jpg', width: 220, title: 'Zone C inset'),
+      _picture('fig_2_11_zone_c.jpg', width: 680, title: 'Figure 2.11'),
+      _picture('fig_zone_c_inset.jpg', width: 320, title: 'Zone C inset'),
       _caption('Figure 2.11: Zone C Interventions'),
       _heading('Short-Term Interventions: Phases', 2, pageBreak: true),
       _budget(
@@ -680,7 +695,12 @@ class _AlTahreerDoc {
           ('Household support package', '1,000 HHs', '1,555,000'),
         ],
       ),
-      ..._sectionHead('2.5.2', 'Long-Term Programmatic Interventions', pageBreak: true),
+      ..._sectionHead(
+        '2.5.2',
+        'Long-Term Programmatic Interventions',
+        pageBreak: true,
+        contentWidth: _a4Land.width - _inner.left - _inner.right,
+      ),
       _body(
         'Plan a phased transition of the neighborhood from humanitarian to recovery-oriented functions; '
         'prepare incremental spatial upgrading including rehabilitation of damaged structures and '
@@ -688,10 +708,10 @@ class _AlTahreerDoc {
         'infrastructure in priority zones; establish permanent water, sanitation, electricity, health, and '
         'education systems; regularize tenure; and restore the region\'s agricultural focus.',
       ),
-      _picture('fig_2_12_longterm.jpg', width: 468, title: 'Figure 2.12'),
-      _picture('fig_lt_zone_a.jpg', width: 150, title: 'LT A'),
-      _picture('fig_lt_zone_b.jpg', width: 150, title: 'LT B'),
-      _picture('fig_lt_zone_c.jpg', width: 150, title: 'LT C'),
+      _picture('fig_2_12_longterm.jpg', width: 680, title: 'Figure 2.12'),
+      _picture('fig_lt_zone_a.jpg', width: 220, title: 'LT A'),
+      _picture('fig_lt_zone_b.jpg', width: 220, title: 'LT B'),
+      _picture('fig_lt_zone_c.jpg', width: 220, title: 'LT C'),
       _caption('Figure 2.12: Long Term Spatial Interventions'),
       _budget(
         'Table 9: Long-Term Interventions Zone C Budget Breakdown',
@@ -763,16 +783,68 @@ class _AlTahreerDoc {
     ];
   }
 
+  List<WmlSection> _flow(
+    List<WmlBlock> blocks, {
+    int columns = 2,
+    WmlPageSize? pageSize,
+    WmlSectionBreakKind breakKind = WmlSectionBreakKind.continuous,
+  }) {
+    final List<WmlSection> sections = <WmlSection>[];
+    final List<WmlBlock> buf = <WmlBlock>[];
+    var bufCols = 1;
+
+    void flush() {
+      if (buf.isEmpty) {
+        return;
+      }
+      sections.add(
+        _section(
+          blocks: List<WmlBlock>.of(buf),
+          pageSize: pageSize,
+          columnCount: bufCols,
+          columnSpace: bufCols > 1 ? 18 : 36,
+          breakKind: sections.isEmpty
+              ? breakKind
+              : WmlSectionBreakKind.continuous,
+        ),
+      );
+      buf.clear();
+    }
+
+    for (int i = 0; i < blocks.length; i++) {
+      final WmlBlock block = blocks[i];
+      final bool wideTable = block is WmlTable &&
+          block.grid.fold<double>(0, (double a, double x) => a + x) > 280;
+      final bool leadBreak = block is WmlParagraph &&
+          block.properties.pageBreakBefore &&
+          i + 1 < blocks.length &&
+          blocks[i + 1] is WmlTable;
+      final int want = (wideTable || leadBreak) ? 1 : columns;
+      if (buf.isNotEmpty && want != bufCols) {
+        flush();
+      }
+      bufCols = want;
+      buf.add(block);
+    }
+    flush();
+    return sections;
+  }
+
   WmlSection _section({
     required List<WmlBlock> blocks,
+    WmlPageSize? pageSize,
     int columnCount = 1,
     double columnSpace = 36,
+    WmlSectionBreakKind breakKind = WmlSectionBreakKind.nextPage,
   }) {
+    final WmlPageSize size = pageSize ?? _a4;
     return WmlSection(
-      pageSize: _a4,
+      pageSize: size,
       margins: _inner,
+      linkToPrevious: !size.isLandscape,
       columnCount: columnCount,
       columnSpace: columnSpace,
+      breakKind: breakKind,
       header: const <WmlParagraph>[],
       footer: <WmlParagraph>[
         WmlParagraph(
@@ -797,7 +869,12 @@ class _AlTahreerDoc {
     );
   }
 
-  List<WmlBlock> _sectionHead(String number, String title, {bool pageBreak = false}) {
+  List<WmlBlock> _sectionHead(
+    String number,
+    String title, {
+    bool pageBreak = false,
+    double? contentWidth,
+  }) {
     final int level = number.split('.').length.clamp(1, 3);
     final int colon = title.indexOf(': ');
     final String lead = colon > 0 ? title.substring(0, colon + 1) : title;
@@ -832,7 +909,11 @@ class _AlTahreerDoc {
     return <WmlBlock>[
       if (pageBreak) _line('', pageBreak: true, after: 0, before: 0),
       WmlTable(
-        grid: <double>[52, 416],
+        grid: <double>[
+          52,
+          ((contentWidth ?? (_a4.width - _inner.left - _inner.right)) - 52)
+              .clamp(200, 900),
+        ],
         rows: <WmlTableRow>[
           WmlTableRow(
             cells: <WmlTableCell>[

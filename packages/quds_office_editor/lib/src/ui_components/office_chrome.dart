@@ -4,6 +4,9 @@ import '../embed/office_theme.dart';
 
 /// Vector chrome painted by the host RenderBoxes (not Material widgets).
 class OfficeChrome {
+  /// Thickness of the horizontal and vertical page rulers.
+  static const double rulerSize = 24;
+
   /// paintRuler API.
   static void paintRuler(
     Canvas canvas,
@@ -13,19 +16,27 @@ class OfficeChrome {
   }) {
     final Paint paint = Paint()..color = theme.headerFill;
     final Rect bar = vertical
-        ? Rect.fromLTWH(0, 0, 20, size.height)
-        : Rect.fromLTWH(0, 0, size.width, 20);
+        ? Rect.fromLTWH(0, 0, rulerSize, size.height)
+        : Rect.fromLTWH(0, 0, size.width, rulerSize);
     canvas.drawRect(bar, paint);
     final Paint tick = Paint()
       ..color = theme.headerText
       ..strokeWidth = 1;
     if (vertical) {
       for (double y = 0; y < size.height; y += 10) {
-        canvas.drawLine(Offset(y % 50 == 0 ? 4 : 12, y), Offset(20, y), tick);
+        canvas.drawLine(
+          Offset(y % 50 == 0 ? 4 : 12, y),
+          Offset(rulerSize, y),
+          tick,
+        );
       }
     } else {
       for (double x = 0; x < size.width; x += 10) {
-        canvas.drawLine(Offset(x, x % 50 == 0 ? 4 : 12), Offset(x, 20), tick);
+        canvas.drawLine(
+          Offset(x, x % 50 == 0 ? 4 : 12),
+          Offset(x, rulerSize),
+          tick,
+        );
       }
     }
   }

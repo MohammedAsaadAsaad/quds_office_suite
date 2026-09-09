@@ -1,8 +1,13 @@
+import '../../fonts/office_typeface.dart';
+import '../../office/office_document_properties.dart';
 import '../../opc/ole/embedded_part.dart';
 import '../../opc/opc_archive.dart';
 import '../../visual/office_visual.dart';
 import '../math/omml_document.dart';
 import '../properties/wml_properties.dart';
+import 'word_notes.dart';
+import 'word_revision.dart';
+import 'word_styles.dart';
 
 /// Class WmlBlock.
 sealed class WmlBlock {
@@ -24,6 +29,8 @@ class WmlRun extends WmlInline {
     WmlRunProps? properties,
     this.hyperlink,
     List<int>? commentIds,
+    this.noteRefId,
+    this.noteRefEndnote = false,
   }) : properties = properties ?? WmlRunProps(),
        commentIds = commentIds ?? <int>[];
 
@@ -38,6 +45,12 @@ class WmlRun extends WmlInline {
 
   /// commentIds API.
   List<int> commentIds;
+
+  /// `w:footnoteReference` / `w:endnoteReference` id when this run is a mark.
+  int? noteRefId;
+
+  /// True when [noteRefId] points at an endnote.
+  bool noteRefEndnote;
 }
 
 /// Class WmlComment.
@@ -282,6 +295,10 @@ class WmlTableCell {
     this.vMerge = WmlVMerge.none,
     this.width,
     this.fillColor,
+    this.borderTop,
+    this.borderBottom,
+    this.borderLeft,
+    this.borderRight,
   }) : blocks = blocks ?? <WmlBlock>[];
 
   /// blocks API.
@@ -298,6 +315,18 @@ class WmlTableCell {
 
   /// fillColor API.
   String? fillColor;
+
+  /// `null` inherits table grid; `false` is `w:val="nil"` / none.
+  bool? borderTop;
+
+  /// borderBottom API.
+  bool? borderBottom;
+
+  /// borderLeft API.
+  bool? borderLeft;
+
+  /// borderRight API.
+  bool? borderRight;
 }
 
 /// Class WmlTableRow.
@@ -415,6 +444,7 @@ class WmlToc extends WmlBlock {
     this.minLevel = 1,
     this.maxLevel = 3,
     this.showPageNumbers = true,
+    this.captionLabel,
     String title = 'Table of Contents',
     List<WmlTocEntry>? entries,
     WmlParagraph? titleParagraph,
@@ -451,6 +481,9 @@ class WmlToc extends WmlBlock {
   /// showPageNumbers API.
   bool showPageNumbers;
 
+  /// When set, the TOC is a table of figures for this caption label.
+  String? captionLabel;
+
   /// title API.
   String title;
 
@@ -485,6 +518,60 @@ class WmlTable extends WmlBlock {
   WmlTableProps properties;
 }
 
+/// A bibliographic source referenced from the document body.
+class WmlCitation {
+  /// WmlCitation API.
+  WmlCitation({
+    required this.tag,
+    required this.author,
+    required this.title,
+    this.year = '',
+    this.pages = '',
+  });
+
+  /// Short tag used in the body (`(Smith 2020)`).
+  String tag;
+
+  /// author API.
+  String author;
+
+  /// title API.
+  String title;
+
+  /// year API.
+  String year;
+
+  /// pages API.
+  String pages;
+
+  /// inText API.
+  String get inText {
+    final String yearBit = year.isEmpty ? '' : ' $year';
+    return '($author$yearBit)';
+  }
+
+  /// bibliographyLine API.
+  String get bibliographyLine {
+    final String yearBit = year.isEmpty ? '' : ' ($year).';
+    return '$author.$yearBit $title';
+  }
+}
+
+/// An index term marked in the document.
+class WmlIndexMark {
+  /// WmlIndexMark API.
+  WmlIndexMark({required this.term, required this.paragraphIndex});
+
+  /// term API.
+  String term;
+
+  /// paragraphIndex API.
+  int paragraphIndex;
+}
+
+/// How the next section starts.
+enum WmlSectionBreakKind { nextPage, continuous, oddPage, evenPage }
+
 /// Class WmlSection.
 class WmlSection {
   /// WmlSection API.
@@ -495,11 +582,36 @@ class WmlSection {
     this.columnCount = 1,
     this.columnSpace = 36,
     this.columnSep = false,
+    this.breakKind = WmlSectionBreakKind.nextPage,
+    this.differentFirstPage = false,
+    this.differentOddEven = false,
+    this.linkToPrevious = true,
+    this.lineNumbers = false,
     List<WmlParagraph>? header,
     List<WmlParagraph>? footer,
+    List<WmlParagraph>? firstHeader,
+    List<WmlParagraph>? firstFooter,
+    List<WmlParagraph>? evenHeader,
+    List<WmlParagraph>? evenFooter,
+    List<WmlVisual>? headerVisuals,
+    List<WmlVisual>? footerVisuals,
+    List<WmlVisual>? firstHeaderVisuals,
+    List<WmlVisual>? firstFooterVisuals,
+    List<WmlVisual>? evenHeaderVisuals,
+    List<WmlVisual>? evenFooterVisuals,
   }) : blocks = blocks ?? <WmlBlock>[],
        header = header ?? <WmlParagraph>[],
-       footer = footer ?? <WmlParagraph>[];
+       footer = footer ?? <WmlParagraph>[],
+       firstHeader = firstHeader ?? <WmlParagraph>[],
+       firstFooter = firstFooter ?? <WmlParagraph>[],
+       evenHeader = evenHeader ?? <WmlParagraph>[],
+       evenFooter = evenFooter ?? <WmlParagraph>[],
+       headerVisuals = headerVisuals ?? <WmlVisual>[],
+       footerVisuals = footerVisuals ?? <WmlVisual>[],
+       firstHeaderVisuals = firstHeaderVisuals ?? <WmlVisual>[],
+       firstFooterVisuals = firstFooterVisuals ?? <WmlVisual>[],
+       evenHeaderVisuals = evenHeaderVisuals ?? <WmlVisual>[],
+       evenFooterVisuals = evenFooterVisuals ?? <WmlVisual>[];
 
   /// blocks API.
   List<WmlBlock> blocks;
@@ -519,11 +631,114 @@ class WmlSection {
   /// columnSep API.
   bool columnSep;
 
+  /// breakKind API.
+  WmlSectionBreakKind breakKind;
+
+  /// differentFirstPage API.
+  bool differentFirstPage;
+
+  /// differentOddEven API.
+  bool differentOddEven;
+
+  /// linkToPrevious API.
+  bool linkToPrevious;
+
+  /// lineNumbers API.
+  bool lineNumbers;
+
   /// header API.
   List<WmlParagraph> header;
 
   /// footer API.
   List<WmlParagraph> footer;
+
+  /// firstHeader API.
+  List<WmlParagraph> firstHeader;
+
+  /// firstFooter API.
+  List<WmlParagraph> firstFooter;
+
+  /// evenHeader API.
+  List<WmlParagraph> evenHeader;
+
+  /// evenFooter API.
+  List<WmlParagraph> evenFooter;
+
+  /// Pictures / drawings from the default header part.
+  List<WmlVisual> headerVisuals;
+
+  /// Pictures / drawings from the default footer part.
+  List<WmlVisual> footerVisuals;
+
+  /// Pictures / drawings from the first-page header part.
+  List<WmlVisual> firstHeaderVisuals;
+
+  /// Pictures / drawings from the first-page footer part.
+  List<WmlVisual> firstFooterVisuals;
+
+  /// Pictures / drawings from the even-page header part.
+  List<WmlVisual> evenHeaderVisuals;
+
+  /// Pictures / drawings from the even-page footer part.
+  List<WmlVisual> evenFooterVisuals;
+
+  /// headerForPage API.
+  List<WmlParagraph> headerForPage(int pageNumber, {required bool firstInSection}) {
+    if (differentFirstPage && firstInSection && firstHeader.isNotEmpty) {
+      return firstHeader;
+    }
+    if (differentOddEven && pageNumber.isEven && evenHeader.isNotEmpty) {
+      return evenHeader;
+    }
+    return header;
+  }
+
+  /// Header drawings for [pageNumber] (logo, etc.).
+  List<WmlVisual> headerVisualsForPage(
+    int pageNumber, {
+    required bool firstInSection,
+  }) {
+    if (differentFirstPage &&
+        firstInSection &&
+        firstHeaderVisuals.isNotEmpty) {
+      return firstHeaderVisuals;
+    }
+    if (differentOddEven &&
+        pageNumber.isEven &&
+        evenHeaderVisuals.isNotEmpty) {
+      return evenHeaderVisuals;
+    }
+    return headerVisuals;
+  }
+
+  /// footerForPage API.
+  List<WmlParagraph> footerForPage(int pageNumber, {required bool firstInSection}) {
+    if (differentFirstPage && firstInSection && firstFooter.isNotEmpty) {
+      return firstFooter;
+    }
+    if (differentOddEven && pageNumber.isEven && evenFooter.isNotEmpty) {
+      return evenFooter;
+    }
+    return footer;
+  }
+
+  /// Footer drawings for [pageNumber].
+  List<WmlVisual> footerVisualsForPage(
+    int pageNumber, {
+    required bool firstInSection,
+  }) {
+    if (differentFirstPage &&
+        firstInSection &&
+        firstFooterVisuals.isNotEmpty) {
+      return firstFooterVisuals;
+    }
+    if (differentOddEven &&
+        pageNumber.isEven &&
+        evenFooterVisuals.isNotEmpty) {
+      return evenFooterVisuals;
+    }
+    return footerVisuals;
+  }
 
   /// contentWidth API.
   double get contentWidth => pageSize.width - margins.left - margins.right;
@@ -545,15 +760,41 @@ class WmlSection {
       margins.left + index * (columnWidth + columnSpace);
 }
 
+/// What a restricted document still allows.
+enum WmlRestrictMode { readOnly, comments, forms }
+
 /// Class WmlDocument.
 class WmlDocument {
   /// WmlDocument API.
   WmlDocument({
     List<WmlSection>? sections,
     List<WmlComment>? comments,
+    List<WmlNote>? footnotes,
+    List<WmlNote>? endnotes,
+    List<WmlRevision>? revisions,
+    List<WmlCitation>? citations,
+    List<WmlIndexMark>? indexMarks,
+    List<WmlStyle>? styles,
+    OfficeDocumentProperties? properties,
     this.package,
+    this.trackRevisions = false,
+    this.watermark = '',
+    this.restrictEditing = false,
+    this.restrictMode = WmlRestrictMode.readOnly,
+    List<Map<String, String>>? mailMergeRecords,
+    this.mailMergePreview = 0,
+    this.sourceFileName = '',
+    this.sourceByteLength,
   }) : sections = sections ?? <WmlSection>[WmlSection()],
-       comments = comments ?? <WmlComment>[];
+       comments = comments ?? <WmlComment>[],
+       footnotes = footnotes ?? <WmlNote>[],
+       endnotes = endnotes ?? <WmlNote>[],
+       revisions = revisions ?? <WmlRevision>[],
+       citations = citations ?? <WmlCitation>[],
+       indexMarks = indexMarks ?? <WmlIndexMark>[],
+       styles = styles ?? <WmlStyle>[],
+       mailMergeRecords = mailMergeRecords ?? <Map<String, String>>[],
+       properties = properties ?? OfficeDocumentProperties();
 
   /// sections API.
   List<WmlSection> sections;
@@ -561,16 +802,70 @@ class WmlDocument {
   /// comments API.
   List<WmlComment> comments;
 
+  /// footnotes API.
+  List<WmlNote> footnotes;
+
+  /// endnotes API.
+  List<WmlNote> endnotes;
+
+  /// revisions API.
+  List<WmlRevision> revisions;
+
+  /// citations API.
+  List<WmlCitation> citations;
+
+  /// indexMarks API.
+  List<WmlIndexMark> indexMarks;
+
+  /// Paragraph styles written to `styles.xml` when non-empty.
+  List<WmlStyle> styles;
+
+  /// properties API.
+  OfficeDocumentProperties properties;
+
   /// package API.
   OpcPackage? package;
 
+  /// trackRevisions API.
+  bool trackRevisions;
+
+  /// Diagonal / stamp watermark text painted by hosts.
+  String watermark;
+
+  /// Form / read-only protection (not file encryption).
+  bool restrictEditing;
+
+  /// restrictMode API.
+  WmlRestrictMode restrictMode;
+
+  /// Mail-merge data rows.
+  final List<Map<String, String>> mailMergeRecords;
+
+  /// mailMergePreview API.
+  int mailMergePreview;
+
+  /// Original package file name for FILENAME fields (host-supplied).
+  String sourceFileName;
+
+  /// Original package size in bytes for FILESIZE fields (host-supplied).
+  int? sourceByteLength;
+
   /// empty API.
-  factory WmlDocument.empty({String text = ''}) {
+  factory WmlDocument.empty({String text = '', bool? rtl}) {
+    final bool useRtl = rtl ?? OfficeTypeface.isRtlText(text);
     return WmlDocument(
       sections: <WmlSection>[
         WmlSection(
           blocks: <WmlBlock>[
-            WmlParagraph(inlines: <WmlInline>[WmlRun(text: text)]),
+            WmlParagraph(
+              properties: WmlParagraphProps(
+                rightToLeft: useRtl ? true : null,
+                justification: useRtl
+                    ? WmlJustification.right
+                    : WmlJustification.left,
+              ),
+              inlines: <WmlInline>[WmlRun(text: text)],
+            ),
           ],
         ),
       ],

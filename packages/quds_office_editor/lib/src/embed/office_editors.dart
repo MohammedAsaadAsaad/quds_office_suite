@@ -14,6 +14,7 @@ import 'office_context_menu.dart';
 import 'office_controller.dart';
 import 'office_direction_keys.dart';
 import 'office_theme.dart';
+import 'word_notes_pane.dart';
 
 /// Class OfficeUndoIntent.
 class OfficeUndoIntent extends Intent {
@@ -54,6 +55,104 @@ class OfficePasteIntent extends Intent {
   final OfficePasteMode mode;
 }
 
+/// Class OfficeFindIntent.
+class OfficeFindIntent extends Intent {
+  /// OfficeFindIntent API.
+  const OfficeFindIntent();
+}
+
+/// Class OfficeReplaceIntent.
+class OfficeReplaceIntent extends Intent {
+  /// OfficeReplaceIntent API.
+  const OfficeReplaceIntent();
+}
+
+/// Class OfficePrintIntent.
+class OfficePrintIntent extends Intent {
+  /// OfficePrintIntent API.
+  const OfficePrintIntent();
+}
+
+/// Class OfficeSpellCheckIntent.
+class OfficeSpellCheckIntent extends Intent {
+  /// OfficeSpellCheckIntent API.
+  const OfficeSpellCheckIntent();
+}
+
+/// Class OfficeFindNextIntent.
+class OfficeFindNextIntent extends Intent {
+  /// OfficeFindNextIntent API.
+  const OfficeFindNextIntent({this.forward = true});
+
+  /// forward API.
+  final bool forward;
+}
+
+/// Handles Ctrl+F/H/P, F3, and F7 from Focus.onKeyEvent (Shortcuts is a child).
+bool officeHandleDocumentShortcut(OfficeController controller, KeyEvent event) {
+  if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+    return false;
+  }
+  final bool ctrl =
+      HardwareKeyboard.instance.isControlPressed ||
+      HardwareKeyboard.instance.isMetaPressed;
+  final bool shift = HardwareKeyboard.instance.isShiftPressed;
+  if (ctrl && event.logicalKey == LogicalKeyboardKey.keyF) {
+    controller.requestFind();
+    return true;
+  }
+  if (ctrl && event.logicalKey == LogicalKeyboardKey.keyH) {
+    controller.requestReplace();
+    return true;
+  }
+  if (ctrl && event.logicalKey == LogicalKeyboardKey.keyP) {
+    controller.requestPrint();
+    return true;
+  }
+  if (event.logicalKey == LogicalKeyboardKey.f3) {
+    if (controller.findSession.hits.isEmpty &&
+        (controller.findSession.options == null ||
+            controller.findSession.options!.query.isEmpty)) {
+      controller.requestFind();
+    } else if (shift) {
+      controller.findPrevious();
+    } else {
+      controller.findNext();
+    }
+    return true;
+  }
+  if (event.logicalKey == LogicalKeyboardKey.f7) {
+    controller.requestSpellCheck();
+    return true;
+  }
+  if (event.logicalKey == LogicalKeyboardKey.escape &&
+      controller.findSession.active) {
+    controller.closeFind();
+    return true;
+  }
+  if (ctrl && controller.config.allowsMutation) {
+    if (controller is WordEditorController) {
+      if (event.logicalKey == LogicalKeyboardKey.keyB) {
+        controller.applyRunFormat((WmlRunProps p) => p.bold = !p.bold);
+        return true;
+      }
+      if (event.logicalKey == LogicalKeyboardKey.keyI) {
+        controller.applyRunFormat((WmlRunProps p) => p.italic = !p.italic);
+        return true;
+      }
+      if (event.logicalKey == LogicalKeyboardKey.keyU) {
+        controller.applyRunFormat((WmlRunProps p) {
+          p.underline = p.underline == WmlUnderline.none
+              ? WmlUnderline.single
+              : WmlUnderline.none;
+        });
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 /// Embeddable Word surface with focus, IME, shortcuts, and chrome slots.
 class QudsWordEditor extends StatefulWidget {
   /// QudsWordEditor API.
@@ -64,6 +163,9 @@ class QudsWordEditor extends StatefulWidget {
     this.focusNode,
     this.toolbarBuilder,
     this.statusBarBuilder,
+    this.findBarBuilder,
+    this.navigationBuilder,
+    this.notesPaneBuilder,
     this.onSelectionChanged,
   });
 
@@ -85,6 +187,21 @@ class QudsWordEditor extends StatefulWidget {
   final Widget Function(BuildContext context, WordEditorController controller)?
   /// statusBarBuilder API.
   statusBarBuilder;
+
+  /// Function API.
+  final Widget Function(BuildContext context, WordEditorController controller)?
+  /// findBarBuilder API.
+  findBarBuilder;
+
+  /// Function API.
+  final Widget Function(BuildContext context, WordEditorController controller)?
+  /// navigationBuilder API.
+  navigationBuilder;
+
+  /// Function API.
+  final Widget Function(BuildContext context, WordEditorController controller)?
+  /// notesPaneBuilder API.
+  notesPaneBuilder;
 
   /// onSelectionChanged API.
   final VoidCallback? onSelectionChanged;
@@ -267,10 +384,37 @@ class _QudsWordEditorState extends State<QudsWordEditor>
       _c.setParagraphDirection(rtl: directionRtl);
       return KeyEventResult.handled;
     }
+    if (officeHandleDocumentShortcut(_c, event)) {
+      return KeyEventResult.handled;
+    }
     final bool shift = HardwareKeyboard.instance.isShiftPressed;
     if (_c.isEditingHeaderFooter &&
         event.logicalKey == LogicalKeyboardKey.escape) {
       _c.endHeaderFooterEdit();
+      return KeyEventResult.handled;
+    }
+    if (_c.selectedFrame != null && !_c.editingFrame) {
+      if (event.logicalKey == LogicalKeyboardKey.escape) {
+        _c.selectFrame(null);
+        return KeyEventResult.handled;
+      }
+      if (event.logicalKey == LogicalKeyboardKey.arrowLeft ||
+          event.logicalKey == LogicalKeyboardKey.arrowRight ||
+          event.logicalKey == LogicalKeyboardKey.arrowUp ||
+          event.logicalKey == LogicalKeyboardKey.arrowDown) {
+        final double step = shift ? 12 : 8;
+        final double dx = event.logicalKey == LogicalKeyboardKey.arrowLeft
+            ? -step
+            : (event.logicalKey == LogicalKeyboardKey.arrowRight ? step : 0);
+        final double dy = event.logicalKey == LogicalKeyboardKey.arrowUp
+            ? -step
+            : (event.logicalKey == LogicalKeyboardKey.arrowDown ? step : 0);
+        _c.nudgeSelectedFrame(dx: dx, dy: dy, resize: shift);
+        return KeyEventResult.handled;
+      }
+    }
+    if (_c.editingFrame && event.logicalKey == LogicalKeyboardKey.escape) {
+      _c.selectFrame(_c.selectedFrame);
       return KeyEventResult.handled;
     }
     if (_c.selectedVisual != null) {
@@ -336,6 +480,10 @@ class _QudsWordEditorState extends State<QudsWordEditor>
     }
     if (event.logicalKey == LogicalKeyboardKey.tab) {
       if (_c.moveTableCell(forward: !shift)) {
+        return KeyEventResult.handled;
+      }
+      if (_c.config.allowsMutation && !shift) {
+        _c.insertText('\t');
         return KeyEventResult.handled;
       }
     }
@@ -406,6 +554,22 @@ class _QudsWordEditorState extends State<QudsWordEditor>
       _c.insertParagraphBreak();
       return KeyEventResult.handled;
     }
+    // Fallback when IME is detached (e.g. after ribbon / language click).
+    if (!_c.input.isAttached) {
+      final String? ch = event.character;
+      if (ch != null &&
+          ch.isNotEmpty &&
+          !HardwareKeyboard.instance.isControlPressed &&
+          !HardwareKeyboard.instance.isMetaPressed &&
+          !HardwareKeyboard.instance.isAltPressed) {
+        final int unit = ch.codeUnitAt(0);
+        if (unit >= 32 || unit == 9) {
+          _c.insertText(ch);
+          _c.attachInput();
+          return KeyEventResult.handled;
+        }
+      }
+    }
     return KeyEventResult.ignored;
   }
 
@@ -474,6 +638,24 @@ class _QudsWordEditorState extends State<QudsWordEditor>
         backward: false,
       ),
       const SingleActivator(LogicalKeyboardKey.enter): const _BreakIntent(),
+      const SingleActivator(LogicalKeyboardKey.keyF, control: true):
+          const OfficeFindIntent(),
+      const SingleActivator(LogicalKeyboardKey.keyF, meta: true):
+          const OfficeFindIntent(),
+      const SingleActivator(LogicalKeyboardKey.keyH, control: true):
+          const OfficeReplaceIntent(),
+      const SingleActivator(LogicalKeyboardKey.keyH, meta: true):
+          const OfficeReplaceIntent(),
+      const SingleActivator(LogicalKeyboardKey.keyP, control: true):
+          const OfficePrintIntent(),
+      const SingleActivator(LogicalKeyboardKey.keyP, meta: true):
+          const OfficePrintIntent(),
+      const SingleActivator(LogicalKeyboardKey.f7):
+          const OfficeSpellCheckIntent(),
+      const SingleActivator(LogicalKeyboardKey.f3):
+          const OfficeFindNextIntent(),
+      const SingleActivator(LogicalKeyboardKey.f3, shift: true):
+          const OfficeFindNextIntent(forward: false),
     };
   }
 
@@ -488,8 +670,23 @@ class _QudsWordEditorState extends State<QudsWordEditor>
         children: <Widget>[
           if (widget.toolbarBuilder != null)
             widget.toolbarBuilder!(context, _c),
+          if (widget.findBarBuilder != null &&
+              (config.showFindChrome || _c.findSession.active))
+            widget.findBarBuilder!(context, _c),
           Expanded(
-            child: Focus(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                if (widget.navigationBuilder != null &&
+                    config.effectiveShowNavigationPane(
+                      MediaQuery.sizeOf(context),
+                    ))
+                  SizedBox(
+                    width: 220,
+                    child: widget.navigationBuilder!(context, _c),
+                  ),
+                Expanded(
+                  child: Focus(
               focusNode: _focus,
               onFocusChange: (_) => _onFocus(),
               onKeyEvent: _onWordKey,
@@ -497,6 +694,7 @@ class _QudsWordEditorState extends State<QudsWordEditor>
                 shortcuts: _shortcuts,
                 child: Actions(
                   actions: <Type, Action<Intent>>{
+                    ..._documentActions(_c),
                     OfficeUndoIntent: CallbackAction<OfficeUndoIntent>(
                       onInvoke: (_) {
                         _c.undo();
@@ -534,6 +732,7 @@ class _QudsWordEditorState extends State<QudsWordEditor>
                         return null;
                       },
                     ),
+                    ..._documentActions(_c),
                     _MoveCaretIntent: CallbackAction<_MoveCaretIntent>(
                       onInvoke: (_MoveCaretIntent i) {
                         _c.moveCaretVisual(
@@ -572,6 +771,8 @@ class _QudsWordEditorState extends State<QudsWordEditor>
                       document: _c.document,
                       laidOut: _c.documentLaidOut,
                       caret: _c.caret,
+                      findHits: _c.findSession.hits,
+                      activeFindIndex: _c.findSession.index,
                       viewport: _c.viewport,
                       config: config,
                       hasFocus:
@@ -580,6 +781,8 @@ class _QudsWordEditorState extends State<QudsWordEditor>
                       semanticsLabel: _c.semanticsLabel,
                       semanticsValue: _c.semanticsValue,
                       selectedVisual: _c.selectedVisual,
+                      selectedFrame: _c.selectedFrame,
+                      editingFrame: _c.editingFrame,
                       selectedEquation: _c.selectedEquation,
                       equationSlot: _c.equationSlot,
                       equationCaret: _c.equationCaret,
@@ -593,6 +796,14 @@ class _QudsWordEditorState extends State<QudsWordEditor>
                       isVisualInSelection: _c.isVisualInSelection,
                       onExtendThroughVisual: _c.extendSelectionThroughVisual,
                       onSelectVisual: _c.selectVisualFromOffice,
+                      onSelectFrame: (WmlFrame? frame) =>
+                          _c.selectFrame(frame),
+                      onEditFrame: (WmlFrame frame) =>
+                          _c.selectFrame(frame, editing: true),
+                      onBeginFrameTransform: _c.beginFrameTransform,
+                      onPreviewFrameMove: _c.previewFrameMove,
+                      onPreviewFrameResize: _c.previewFrameResize,
+                      onCommitFrameTransform: _c.commitFrameTransform,
                       onSelectEquation:
                           (WmlEquation? equation, int? slot, int? caret) {
                             _c.selectEquation(
@@ -627,6 +838,9 @@ class _QudsWordEditorState extends State<QudsWordEditor>
                       editingFooter: _c.isEditingFooter,
                       onBeginHeaderFooterEdit: _c.beginHeaderFooterEdit,
                       onEndHeaderFooterEdit: _c.endHeaderFooterEdit,
+                      onBeginRulerEdit: _c.beginRulerEdit,
+                      onPreviewRulerEdit: _c.previewRulerEdit,
+                      onCommitRulerEdit: _c.commitRulerEdit,
                       onChanged: () {
                         _focus.requestFocus();
                         if (config.allowsMutation) {
@@ -638,6 +852,16 @@ class _QudsWordEditorState extends State<QudsWordEditor>
                   ),
                 ),
               ),
+            ),
+                  ),
+                if (config.showNotesPane)
+                  SizedBox(
+                    width: 240,
+                    child: widget.notesPaneBuilder != null
+                        ? widget.notesPaneBuilder!(context, _c)
+                        : WordNotesPane(controller: _c),
+                  ),
+              ],
             ),
           ),
           if (widget.statusBarBuilder != null)
@@ -658,6 +882,8 @@ class QudsSheetEditor extends StatefulWidget {
     this.focusNode,
     this.toolbarBuilder,
     this.statusBarBuilder,
+    this.findBarBuilder,
+    this.navigationBuilder,
     this.frozenRows = 0,
     this.frozenCols = 0,
   });
@@ -680,6 +906,16 @@ class QudsSheetEditor extends StatefulWidget {
   final Widget Function(BuildContext context, SheetEditorController controller)?
   /// statusBarBuilder API.
   statusBarBuilder;
+
+  /// Function API.
+  final Widget Function(BuildContext context, SheetEditorController controller)?
+  /// findBarBuilder API.
+  findBarBuilder;
+
+  /// Function API.
+  final Widget Function(BuildContext context, SheetEditorController controller)?
+  /// navigationBuilder API.
+  navigationBuilder;
 
   /// frozenRows API.
   final int frozenRows;
@@ -789,6 +1025,10 @@ class _QudsSheetEditorState extends State<QudsSheetEditor> {
         _c.deleteSheetCols();
       case 'clearCells':
         _c.clearSelectedCells();
+      case 'mergeAndCenter':
+        _c.toggleMergeAndCenter();
+      case 'unmergeCells':
+        _c.unmergeCells();
     }
   }
 
@@ -821,6 +1061,9 @@ class _QudsSheetEditorState extends State<QudsSheetEditor> {
     final bool? directionRtl = officeDirectionFromKeyEvent(event);
     if (directionRtl != null && _c.config.allowsMutation) {
       _c.setSheetRightToLeft(directionRtl);
+      return KeyEventResult.handled;
+    }
+    if (officeHandleDocumentShortcut(_c, event)) {
       return KeyEventResult.handled;
     }
     final bool ctrl =
@@ -1100,12 +1343,27 @@ class _QudsSheetEditorState extends State<QudsSheetEditor> {
         children: <Widget>[
           if (widget.toolbarBuilder != null)
             widget.toolbarBuilder!(context, _c),
+          if (widget.findBarBuilder != null &&
+              (config.showFindChrome || _c.findSession.active))
+            widget.findBarBuilder!(context, _c),
           Expanded(
             child: Focus(
               focusNode: _focus,
               onKeyEvent: _onKey,
               child: Shortcuts(
                 shortcuts: <ShortcutActivator, Intent>{
+                  const SingleActivator(LogicalKeyboardKey.keyF, control: true):
+                      const OfficeFindIntent(),
+                  const SingleActivator(LogicalKeyboardKey.keyH, control: true):
+                      const OfficeReplaceIntent(),
+                  const SingleActivator(LogicalKeyboardKey.keyP, control: true):
+                      const OfficePrintIntent(),
+                  const SingleActivator(LogicalKeyboardKey.f7):
+                      const OfficeSpellCheckIntent(),
+                  const SingleActivator(LogicalKeyboardKey.f3):
+                      const OfficeFindNextIntent(),
+                  const SingleActivator(LogicalKeyboardKey.f3, shift: true):
+                      const OfficeFindNextIntent(forward: false),
                   const SingleActivator(LogicalKeyboardKey.keyZ, control: true):
                       const OfficeUndoIntent(),
                   const SingleActivator(LogicalKeyboardKey.keyY, control: true):
@@ -1180,6 +1438,7 @@ class _QudsSheetEditorState extends State<QudsSheetEditor> {
                 },
                 child: Actions(
                   actions: <Type, Action<Intent>>{
+                    ..._documentActions(_c),
                     OfficeUndoIntent: CallbackAction<OfficeUndoIntent>(
                       onInvoke: (_) {
                         _c.undo();
@@ -1243,6 +1502,8 @@ class _QudsSheetEditorState extends State<QudsSheetEditor> {
                     child: SheetGrid(
                       sheet: _c.sheet,
                       selection: _c.selection,
+                      findHits: _c.findSession.hits,
+                      activeFindIndex: _c.findSession.index,
                       formulaBar: _c.formulaBarText,
                       frozenRows: widget.frozenRows > 0
                           ? widget.frozenRows
@@ -1319,6 +1580,9 @@ class QudsSlideEditor extends StatefulWidget {
     this.focusNode,
     this.toolbarBuilder,
     this.statusBarBuilder,
+    this.findBarBuilder,
+    this.navigationBuilder,
+    this.notesPaneBuilder,
   });
 
   /// controller API.
@@ -1339,6 +1603,21 @@ class QudsSlideEditor extends StatefulWidget {
   final Widget Function(BuildContext context, SlideEditorController controller)?
   /// statusBarBuilder API.
   statusBarBuilder;
+
+  /// Function API.
+  final Widget Function(BuildContext context, SlideEditorController controller)?
+  /// findBarBuilder API.
+  findBarBuilder;
+
+  /// Function API.
+  final Widget Function(BuildContext context, SlideEditorController controller)?
+  /// navigationBuilder API.
+  navigationBuilder;
+
+  /// Function API.
+  final Widget Function(BuildContext context, SlideEditorController controller)?
+  /// notesPaneBuilder API.
+  notesPaneBuilder;
 
   @override
   /// createState API.
@@ -1495,6 +1774,9 @@ class _QudsSlideEditorState extends State<QudsSlideEditor>
     if (event is! KeyDownEvent) {
       return KeyEventResult.ignored;
     }
+    if (!_c.isPresenting && officeHandleDocumentShortcut(_c, event)) {
+      return KeyEventResult.handled;
+    }
     if (event.logicalKey == LogicalKeyboardKey.f5) {
       if (_c.isPresenting) {
         _c.endShow();
@@ -1592,6 +1874,9 @@ class _QudsSlideEditorState extends State<QudsSlideEditor>
         children: <Widget>[
           if (widget.toolbarBuilder != null)
             widget.toolbarBuilder!(context, _c),
+          if (widget.findBarBuilder != null &&
+              (config.showFindChrome || _c.findSession.active))
+            widget.findBarBuilder!(context, _c),
           Expanded(
             child: Focus(
               autofocus: true,
@@ -1668,6 +1953,28 @@ class _QudsSlideEditorState extends State<QudsSlideEditor>
                 if (_c.editingText) {
                   return KeyEventResult.ignored;
                 }
+                if (event.logicalKey == LogicalKeyboardKey.arrowLeft ||
+                    event.logicalKey == LogicalKeyboardKey.arrowRight ||
+                    event.logicalKey == LogicalKeyboardKey.arrowUp ||
+                    event.logicalKey == LogicalKeyboardKey.arrowDown) {
+                  if (_c.selected == null) {
+                    return KeyEventResult.ignored;
+                  }
+                  final int step =
+                      HardwareKeyboard.instance.isShiftPressed ? 12700 : 127000;
+                  final int dx = event.logicalKey == LogicalKeyboardKey.arrowLeft
+                      ? -step
+                      : (event.logicalKey == LogicalKeyboardKey.arrowRight
+                            ? step
+                            : 0);
+                  final int dy = event.logicalKey == LogicalKeyboardKey.arrowUp
+                      ? -step
+                      : (event.logicalKey == LogicalKeyboardKey.arrowDown
+                            ? step
+                            : 0);
+                  _c.nudgeSelected(dx, dy);
+                  return KeyEventResult.handled;
+                }
                 if (event.logicalKey == LogicalKeyboardKey.enter ||
                     event.logicalKey == LogicalKeyboardKey.numpadEnter) {
                   _c.beginTextEdit();
@@ -1690,6 +1997,18 @@ class _QudsSlideEditorState extends State<QudsSlideEditor>
               },
               child: Shortcuts(
                 shortcuts: <ShortcutActivator, Intent>{
+                  const SingleActivator(LogicalKeyboardKey.keyF, control: true):
+                      const OfficeFindIntent(),
+                  const SingleActivator(LogicalKeyboardKey.keyH, control: true):
+                      const OfficeReplaceIntent(),
+                  const SingleActivator(LogicalKeyboardKey.keyP, control: true):
+                      const OfficePrintIntent(),
+                  const SingleActivator(LogicalKeyboardKey.f7):
+                      const OfficeSpellCheckIntent(),
+                  const SingleActivator(LogicalKeyboardKey.f3):
+                      const OfficeFindNextIntent(),
+                  const SingleActivator(LogicalKeyboardKey.f3, shift: true):
+                      const OfficeFindNextIntent(forward: false),
                   const SingleActivator(LogicalKeyboardKey.keyZ, control: true):
                       const OfficeUndoIntent(),
                   const SingleActivator(LogicalKeyboardKey.keyY, control: true):
@@ -1701,13 +2020,25 @@ class _QudsSlideEditorState extends State<QudsSlideEditor>
                   const SingleActivator(LogicalKeyboardKey.keyA, meta: true):
                       const OfficeSelectAllIntent(),
                   const SingleActivator(LogicalKeyboardKey.arrowLeft):
-                      const _NudgeIntent(-12700, 0),
+                      const _NudgeIntent(-127000, 0),
                   const SingleActivator(LogicalKeyboardKey.arrowRight):
-                      const _NudgeIntent(12700, 0),
+                      const _NudgeIntent(127000, 0),
                   const SingleActivator(LogicalKeyboardKey.arrowUp):
-                      const _NudgeIntent(0, -12700),
+                      const _NudgeIntent(0, -127000),
                   const SingleActivator(LogicalKeyboardKey.arrowDown):
-                      const _NudgeIntent(0, 12700),
+                      const _NudgeIntent(0, 127000),
+                  const SingleActivator(LogicalKeyboardKey.arrowLeft, shift: true):
+                      const _NudgeIntent(-12700, 0),
+                  const SingleActivator(
+                    LogicalKeyboardKey.arrowRight,
+                    shift: true,
+                  ): const _NudgeIntent(12700, 0),
+                  const SingleActivator(LogicalKeyboardKey.arrowUp, shift: true):
+                      const _NudgeIntent(0, -12700),
+                  const SingleActivator(
+                    LogicalKeyboardKey.arrowDown,
+                    shift: true,
+                  ): const _NudgeIntent(0, 12700),
                   const SingleActivator(LogicalKeyboardKey.keyC, control: true):
                       const OfficeCopyIntent(),
                   const SingleActivator(LogicalKeyboardKey.keyX, control: true):
@@ -1724,6 +2055,7 @@ class _QudsSlideEditorState extends State<QudsSlideEditor>
                 },
                 child: Actions(
                   actions: <Type, Action<Intent>>{
+                    ..._documentActions(_c),
                     OfficeUndoIntent: CallbackAction<OfficeUndoIntent>(
                       onInvoke: (_) {
                         _c.undo();
@@ -1781,8 +2113,11 @@ class _QudsSlideEditorState extends State<QudsSlideEditor>
                     child: SlideStage(
                       slide: _c.isPlayingMotion
                           ? (_c.slideShow?.currentSlide ?? _c.slide)
-                          : _c.slide,
+                          : _c.canvasSlide,
                       selected: _c.isPresenting ? null : _c.selected,
+                      selectedShapes: _c.isPresenting
+                          ? const <PmlShape>[]
+                          : _c.selectedShapes,
                       viewport: _c.viewport,
                       config: config,
                       hasFocus: _focus.hasFocus,
@@ -1803,6 +2138,7 @@ class _QudsSlideEditorState extends State<QudsSlideEditor>
                       onShowAdvance: _c.isPresenting ? _c.showNext : _c.endShow,
                       onSelect: _c.selectShape,
                       onSelectTableCell: _c.selectTableCell,
+                      onTransforms: _c.applyTransforms,
                       selectedTableRow: _c.selectedTableRow,
                       selectedTableCol: _c.selectedTableCol,
                       onContextMenu: _showSlideContext,
@@ -1856,6 +2192,8 @@ class QudsOfficeHost extends StatefulWidget {
     this.config = const OfficeSurfaceConfig(),
     this.toolbarBuilder,
     this.statusBarBuilder,
+    this.findBarBuilder,
+    this.navigationBuilder,
     this.onControllerReady,
   });
 
@@ -1889,6 +2227,16 @@ class QudsOfficeHost extends StatefulWidget {
   final Widget Function(BuildContext context, OfficeController controller)?
   /// statusBarBuilder API.
   statusBarBuilder;
+
+  /// Function API.
+  final Widget Function(BuildContext context, OfficeController controller)?
+  /// findBarBuilder API.
+  findBarBuilder;
+
+  /// Function API.
+  final Widget Function(BuildContext context, OfficeController controller)?
+  /// navigationBuilder API.
+  navigationBuilder;
 
   /// Function API.
   final void Function(OfficeController controller)? onControllerReady;
@@ -1986,6 +2334,14 @@ class _QudsOfficeHostState extends State<QudsOfficeHost> {
             ? null
             : (BuildContext ctx, WordEditorController _) =>
                   widget.statusBarBuilder!(ctx, c),
+        findBarBuilder: widget.findBarBuilder == null
+            ? null
+            : (BuildContext ctx, WordEditorController _) =>
+                  widget.findBarBuilder!(ctx, c),
+        navigationBuilder: widget.navigationBuilder == null
+            ? null
+            : (BuildContext ctx, WordEditorController _) =>
+                  widget.navigationBuilder!(ctx, c),
       ),
       SheetEditorController c => QudsSheetEditor(
         controller: c,
@@ -1998,6 +2354,14 @@ class _QudsOfficeHostState extends State<QudsOfficeHost> {
             ? null
             : (BuildContext ctx, SheetEditorController _) =>
                   widget.statusBarBuilder!(ctx, c),
+        findBarBuilder: widget.findBarBuilder == null
+            ? null
+            : (BuildContext ctx, SheetEditorController _) =>
+                  widget.findBarBuilder!(ctx, c),
+        navigationBuilder: widget.navigationBuilder == null
+            ? null
+            : (BuildContext ctx, SheetEditorController _) =>
+                  widget.navigationBuilder!(ctx, c),
       ),
       SlideEditorController c => QudsSlideEditor(
         controller: c,
@@ -2010,6 +2374,14 @@ class _QudsOfficeHostState extends State<QudsOfficeHost> {
             ? null
             : (BuildContext ctx, SlideEditorController _) =>
                   widget.statusBarBuilder!(ctx, c),
+        findBarBuilder: widget.findBarBuilder == null
+            ? null
+            : (BuildContext ctx, SlideEditorController _) =>
+                  widget.findBarBuilder!(ctx, c),
+        navigationBuilder: widget.navigationBuilder == null
+            ? null
+            : (BuildContext ctx, SlideEditorController _) =>
+                  widget.navigationBuilder!(ctx, c),
       ),
       OfficeController() => const SizedBox.shrink(),
     };
@@ -2215,4 +2587,43 @@ class RenderSpeakerNotesBar extends RenderBox {
       ..layout(ui.ParagraphConstraints(width: size.width - 16));
     canvas.drawParagraph(bodyP, offset + const Offset(8, 24));
   }
+}
+
+Map<Type, Action<Intent>> _documentActions(OfficeController controller) {
+  return <Type, Action<Intent>>{
+    OfficeFindIntent: CallbackAction<OfficeFindIntent>(
+      onInvoke: (_) {
+        controller.requestFind();
+        return null;
+      },
+    ),
+    OfficeReplaceIntent: CallbackAction<OfficeReplaceIntent>(
+      onInvoke: (_) {
+        controller.requestReplace();
+        return null;
+      },
+    ),
+    OfficePrintIntent: CallbackAction<OfficePrintIntent>(
+      onInvoke: (_) {
+        controller.requestPrint();
+        return null;
+      },
+    ),
+    OfficeSpellCheckIntent: CallbackAction<OfficeSpellCheckIntent>(
+      onInvoke: (_) {
+        controller.requestSpellCheck();
+        return null;
+      },
+    ),
+    OfficeFindNextIntent: CallbackAction<OfficeFindNextIntent>(
+      onInvoke: (OfficeFindNextIntent i) {
+        if (i.forward) {
+          controller.findNext();
+        } else {
+          controller.findPrevious();
+        }
+        return null;
+      },
+    ),
+  };
 }

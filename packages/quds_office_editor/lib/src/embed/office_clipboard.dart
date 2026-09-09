@@ -14,7 +14,7 @@ enum OfficePasteMode {
 }
 
 /// Enum OfficeClipboardKind.
-enum OfficeClipboardKind { empty, text, richText, cells, shape, visual }
+enum OfficeClipboardKind { empty, text, richText, cells, shape, visual, slide }
 
 /// Class OfficeClipboardSpan.
 class OfficeClipboardSpan {
@@ -65,6 +65,7 @@ class OfficeClipboardPayload {
     List<WmlBlock>? wordBlocks,
     this.shape,
     this.visual,
+    this.slide,
   }) : paragraphs = paragraphs ?? <List<OfficeClipboardSpan>>[],
        cells = cells ?? <List<OfficeClipboardCell>>[],
        wordBlocks = wordBlocks ?? <WmlBlock>[];
@@ -102,6 +103,9 @@ class OfficeClipboardPayload {
   /// visual API.
   final OfficeVisual? visual;
 
+  /// slide API.
+  final PmlSlide? slide;
+
   /// isEmpty API.
   bool get isEmpty {
     return plain.isEmpty &&
@@ -109,7 +113,8 @@ class OfficeClipboardPayload {
         wordBlocks.isEmpty &&
         cells.isEmpty &&
         shape == null &&
-        visual == null;
+        visual == null &&
+        slide == null;
   }
 
   /// hasWordBlocks API.

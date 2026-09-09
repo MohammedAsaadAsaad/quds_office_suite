@@ -1,3 +1,4 @@
+import '../model/sml_analysis.dart';
 import '../model/sml_workbook.dart';
 import 'formula_ast.dart';
 import 'formula_eval.dart';
@@ -117,6 +118,16 @@ class FormulaDepGraph {
           }
         case LiteralNode():
           break;
+        case NamedRangeNode(:final String name):
+          final SmlNamedRange? named = workbook.namedRange(name);
+          if (named == null) {
+            break;
+          }
+          final SmlWorksheet target =
+              workbook.sheetByName(named.sheetName) ?? sheet;
+          for (final SmlCellRef ref in named.range.cells) {
+            out.add(_key(target, ref));
+          }
       }
     }
 

@@ -13,7 +13,8 @@ First public release.
 
 ### Host integration
 - Controllers load and save OOXML bytes (`fromBytes` / `saveBytes`), including password-protected packages.
-- `OfficeTheme` + `OfficeSurfaceConfig` for light/dark, viewing / selecting / editing modes, and bilingual chrome strings.
+- `OfficeTheme` + `OfficeSurfaceConfig` for light/dark, viewing / selecting / editing modes, and localizable chrome strings.
+- Page orientation applies to the whole continuous section; the Word canvas pans horizontally with side gutters.
 - Undo/redo, clipboard, context menus, and keyboard intents without `TextField` / `ListView` / `InteractiveViewer`.
 - Isolate open for large documents so the UI isolate stays live.
 

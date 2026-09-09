@@ -53,7 +53,7 @@ abstract final class SheetDrawingIo {
       if (visual.isChart) {
         final String uri = '/xl/charts/chart$chartIndex.xml';
         chartIndex++;
-        final String xml = _chartXml(visual);
+        final String xml = _chartXml(visual, sheetRtl: sheet.rightToLeft);
         _writePart(
           package,
           uri,
@@ -404,34 +404,35 @@ abstract final class SheetDrawingIo {
     w.writeEndElement();
   }
 
-  static String _chartXml(OfficeVisual visual) {
+  static String _chartXml(OfficeVisual visual, {bool sheetRtl = false}) {
     final String title = visual.title.isEmpty ? 'Chart' : visual.title;
     final List<ChartPoint> points = visual.points.isEmpty
         ? OfficeVisual.sampleSeries()
         : visual.points;
+    final bool rtl = visual.chart.rtl || sheetRtl;
     return switch (visual.kind) {
       OfficeVisualKind.chartPie => DrawingmlCharts.pie(
         title: title,
         series: points,
-        rtl: false,
+        rtl: rtl,
         display: visual.chart,
       ),
       OfficeVisualKind.chartLine => DrawingmlCharts.line(
         title: title,
         series: <ChartSeries>[ChartSeries(name: title, points: points)],
-        rtl: false,
+        rtl: rtl,
         display: visual.chart,
       ),
       OfficeVisualKind.chartBar => DrawingmlCharts.bar(
         title: title,
         series: points,
-        rtl: false,
+        rtl: rtl,
         display: visual.chart,
       ),
       _ => DrawingmlCharts.bar(
         title: title,
         series: points,
-        rtl: false,
+        rtl: rtl,
         horizontal: false,
         display: visual.chart,
       ),

@@ -10,6 +10,7 @@ import 'package:quds_office_editor/quds_office_editor.dart';
 import 'sample_library.dart';
 import 'studio_chrome.dart';
 import 'studio_files.dart';
+import 'studio_find_pane.dart';
 import 'studio_window.dart';
 
 enum SuiteApp { word, excel, powerpoint }
@@ -57,11 +58,16 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
   var _showPasteOptions = false;
   final GlobalKey _settingsButtonKey = GlobalKey();
   final GlobalKey _accountButtonKey = GlobalKey();
+  final FocusNode _wordFocus = FocusNode(debugLabel: 'studio-word');
+  final FocusNode _sheetFocus = FocusNode(debugLabel: 'studio-sheet');
+  final FocusNode _slideFocus = FocusNode(debugLabel: 'studio-slide');
 
   late final WordEditorController _word;
   late final SheetEditorController _sheet;
   late final SlideEditorController _slides;
   final TextEditingController _commentReply = TextEditingController();
+  final TextEditingController _slideNotesEdit = TextEditingController();
+  int _notesSlideIndex = -1;
   final VirtualViewport _commentViewport = VirtualViewport();
   OverlayEntry? _commentContextMenu;
   OverlayEntry? _slideSorterMenu;
@@ -78,11 +84,17 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
   String? _wordPath;
   String? _sheetPath;
   String? _slidePath;
+  String _wordName = 'Al Tahreer Neighbourhood Profile.docx';
+  String _sheetName = 'Budget.xlsx';
+  String _slideName = 'Studio deck.pptx';
 
   OfficeSurfaceConfig? _cachedConfig;
   Object? _configKey;
   var _rebuildScheduled = false;
   var _slideshowFullscreen = false;
+  var _findOpen = false;
+  var _findReplace = false;
+  var _printPreview = false;
 
   @override
   void initState() {
@@ -91,6 +103,16 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
     _word.onFollowExternalLink = _openExternalLink;
     _sheet = SheetEditorController(workbook: SampleLibrary.excelBudget());
     _slides = SlideEditorController(presentation: SampleLibrary.slideDeck());
+    _bindHostActions(_word);
+    _bindHostActions(_sheet);
+    _bindHostActions(_slides);
+    _slides.onPlayMedia = (PmlShape shape) {
+      _toast(
+        _arabic
+            ? 'تشغيل ${shape.mediaName}'
+            : 'Playing ${shape.mediaName}',
+      );
+    };
     _word.addListener(_rebuild);
     _sheet.addListener(_rebuild);
     _slides.addListener(_rebuild);
@@ -130,31 +152,31 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
   }
 
   OfficeController get _active => switch (_app) {
-        SuiteApp.word => _word,
-        SuiteApp.excel => _sheet,
-        SuiteApp.powerpoint => _slides,
-      };
+    SuiteApp.word => _word,
+    SuiteApp.excel => _sheet,
+    SuiteApp.powerpoint => _slides,
+  };
 
   Color get _accent => switch (_app) {
-        SuiteApp.word => const Color(0xFF2B579A),
-        SuiteApp.excel => const Color(0xFF217346),
-        SuiteApp.powerpoint => const Color(0xFFB7472A),
-      };
+    SuiteApp.word => const Color(0xFF2B579A),
+    SuiteApp.excel => const Color(0xFF217346),
+    SuiteApp.powerpoint => const Color(0xFFB7472A),
+  };
 
   OfficeTheme get _officeTheme {
     const String arabicBody = 'Noto Naskh Arabic';
     return switch (_look) {
       SuiteLook.light => OfficeTheme.light.copyWith(
-          focusRing: _accent,
-          fontFamily: arabicBody,
-        ),
+        focusRing: _accent,
+        fontFamily: arabicBody,
+      ),
       SuiteLook.dark => OfficeTheme.dark.copyWith(
-          focusRing: _accent,
-          fontFamily: arabicBody,
-        ),
+        focusRing: _accent,
+        fontFamily: arabicBody,
+      ),
       SuiteLook.highContrast => OfficeTheme.highContrast.copyWith(
-          fontFamily: arabicBody,
-        ),
+        fontFamily: arabicBody,
+      ),
     };
   }
 
@@ -183,12 +205,16 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
       showSlideHandles: _slideHandles,
       textDirection: _arabic ? TextDirection.rtl : TextDirection.ltr,
       strings: _arabic ? OfficeStrings.arabic : OfficeStrings.english,
+      formFactor: OfficeFormFactor.automatic,
+      density: OfficeDensity.comfortable,
+      adaptiveChrome: true,
+      interactiveRulers: _wordRulers,
+      showNotesPane: _app == SuiteApp.word,
     );
     return _cachedConfig!;
   }
 
-  bool get _canMutate =>
-      _mode == OfficeInteractionMode.editing && !_opening;
+  bool get _canMutate => _mode == OfficeInteractionMode.editing && !_opening;
 
   @override
   void dispose() {
@@ -202,6 +228,10 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
       ..removeListener(_rebuild)
       ..dispose();
     _commentReply.dispose();
+    _slideNotesEdit.dispose();
+    _wordFocus.dispose();
+    _sheetFocus.dispose();
+    _slideFocus.dispose();
     _saveTicker?.cancel();
     _openTicker?.cancel();
     OfficeContextMenu.dismiss(_commentContextMenu);
@@ -223,11 +253,15 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
         const SingleActivator(LogicalKeyboardKey.keyZ, meta: true): _undo,
         const SingleActivator(LogicalKeyboardKey.keyY, control: true): _redo,
         const SingleActivator(LogicalKeyboardKey.keyY, meta: true): _redo,
-        const SingleActivator(LogicalKeyboardKey.keyZ, control: true, shift: true):
-            _redo,
+        const SingleActivator(
+          LogicalKeyboardKey.keyZ,
+          control: true,
+          shift: true,
+        ): _redo,
         const SingleActivator(LogicalKeyboardKey.keyZ, meta: true, shift: true):
             _redo,
-        const SingleActivator(LogicalKeyboardKey.keyA, control: true): _selectAll,
+        const SingleActivator(LogicalKeyboardKey.keyA, control: true):
+            _selectAll,
         const SingleActivator(LogicalKeyboardKey.keyA, meta: true): _selectAll,
         const SingleActivator(LogicalKeyboardKey.keyC, control: true): _copy,
         const SingleActivator(LogicalKeyboardKey.keyC, meta: true): _copy,
@@ -235,14 +269,49 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
         const SingleActivator(LogicalKeyboardKey.keyX, meta: true): _cut,
         const SingleActivator(LogicalKeyboardKey.keyV, control: true): _paste,
         const SingleActivator(LogicalKeyboardKey.keyV, meta: true): _paste,
-        const SingleActivator(LogicalKeyboardKey.keyV, control: true, shift: true):
-            () => _pasteMode(OfficePasteMode.keepTextOnly),
-        const SingleActivator(LogicalKeyboardKey.keyV, meta: true, shift: true):
-            () => _pasteMode(OfficePasteMode.keepTextOnly),
+        const SingleActivator(
+          LogicalKeyboardKey.keyV,
+          control: true,
+          shift: true,
+        ): () =>
+            _pasteMode(OfficePasteMode.keepTextOnly),
+        const SingleActivator(
+          LogicalKeyboardKey.keyV,
+          meta: true,
+          shift: true,
+        ): () =>
+            _pasteMode(OfficePasteMode.keepTextOnly),
         const SingleActivator(LogicalKeyboardKey.f5): _slideShowFromStart,
         const SingleActivator(LogicalKeyboardKey.f5, shift: true):
             _slideShowFromCurrent,
-        const SingleActivator(LogicalKeyboardKey.escape): _slideShowEscape,
+        const SingleActivator(LogicalKeyboardKey.escape): _workspaceEscape,
+        const SingleActivator(LogicalKeyboardKey.keyF, control: true):
+            _openFind,
+        const SingleActivator(LogicalKeyboardKey.keyF, meta: true): _openFind,
+        const SingleActivator(LogicalKeyboardKey.keyH, control: true):
+            _openReplace,
+        const SingleActivator(LogicalKeyboardKey.keyH, meta: true):
+            _openReplace,
+        const SingleActivator(LogicalKeyboardKey.keyP, control: true):
+            _exportPdf,
+        const SingleActivator(LogicalKeyboardKey.keyP, meta: true): _exportPdf,
+        const SingleActivator(LogicalKeyboardKey.f3): _findNext,
+        const SingleActivator(LogicalKeyboardKey.f3, shift: true): _findPrevious,
+        const SingleActivator(LogicalKeyboardKey.f7): _showSpelling,
+        const SingleActivator(LogicalKeyboardKey.keyB, control: true):
+            _toggleBold,
+        const SingleActivator(LogicalKeyboardKey.keyB, meta: true): _toggleBold,
+        const SingleActivator(LogicalKeyboardKey.keyI, control: true):
+            _toggleItalic,
+        const SingleActivator(LogicalKeyboardKey.keyI, meta: true):
+            _toggleItalic,
+        const SingleActivator(LogicalKeyboardKey.keyU, control: true):
+            _toggleUnderline,
+        const SingleActivator(LogicalKeyboardKey.keyU, meta: true):
+            _toggleUnderline,
+        const SingleActivator(LogicalKeyboardKey.keyS, control: true):
+            _saveFile,
+        const SingleActivator(LogicalKeyboardKey.keyS, meta: true): _saveFile,
       },
       child: StudioWindowScope(
         onChanged: () {
@@ -258,14 +327,26 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
             child: _app == SuiteApp.powerpoint && _slides.isPresenting
                 ? ColoredBox(
                     color: const Color(0xFF000000),
-                    child: QudsSlideEditor(
-                      controller: _slides,
-                      config: _config,
+                    child: Row(
+                      children: <Widget>[
+                        Expanded(
+                          child: QudsSlideEditor(
+                            controller: _slides,
+                            focusNode: _slideFocus,
+                            config: _config,
+                          ),
+                        ),
+                        SizedBox(
+                          width: 260,
+                          child: _presenterPane(),
+                        ),
+                      ],
                     ),
                   )
                 : Scaffold(
-                    backgroundColor:
-                        dark ? const Color(0xFF1B1B1B) : const Color(0xFFE8E8E8),
+                    backgroundColor: dark
+                        ? const Color(0xFF1B1B1B)
+                        : const Color(0xFFE8E8E8),
                     body: Column(
                       children: <Widget>[
                         _titleBar(),
@@ -295,6 +376,7 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
       _slides.endShow();
     }
     _slides.startShow(from: 0);
+    _slides.startPresenter();
   }
 
   void _slideShowFromCurrent() {
@@ -309,6 +391,7 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
       _slides.endShow();
     }
     _slides.startShow(from: _slides.activeSlideIndex);
+    _slides.startPresenter();
   }
 
   void _slideShowEscape() {
@@ -316,6 +399,31 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
         (_slides.isPresenting || _slides.isPreviewing)) {
       _slides.endShow();
     }
+  }
+
+  void _toggleBold() {
+    if (!_canMutate || _app != SuiteApp.word) {
+      return;
+    }
+    _word.applyRunFormat((WmlRunProps p) => p.bold = !p.bold);
+  }
+
+  void _toggleItalic() {
+    if (!_canMutate || _app != SuiteApp.word) {
+      return;
+    }
+    _word.applyRunFormat((WmlRunProps p) => p.italic = !p.italic);
+  }
+
+  void _toggleUnderline() {
+    if (!_canMutate || _app != SuiteApp.word) {
+      return;
+    }
+    _word.applyRunFormat((WmlRunProps p) {
+      p.underline = p.underline == WmlUnderline.none
+          ? WmlUnderline.single
+          : WmlUnderline.none;
+    });
   }
 
   void _undo() => _active.undo();
@@ -388,31 +496,49 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
                     ),
                   ),
                   _titleQuickAccess(),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Row(
+                      children: <Widget>[
+                        StudioAppSwitcher(
+                          label: 'Word',
+                          icon: Icons.description_outlined,
+                          selected: _app == SuiteApp.word,
+                          onTap: () => _switchApp(SuiteApp.word),
+                        ),
+                        StudioAppSwitcher(
+                          label: 'Excel',
+                          icon: Icons.grid_on_outlined,
+                          selected: _app == SuiteApp.excel,
+                          onTap: () => _switchApp(SuiteApp.excel),
+                        ),
+                        StudioAppSwitcher(
+                          label: 'PowerPoint',
+                          icon: Icons.slideshow_outlined,
+                          selected: _app == SuiteApp.powerpoint,
+                          onTap: () => _switchApp(SuiteApp.powerpoint),
+                        ),
+                      ],
+                    ),
+                  ),
                   Expanded(
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: Alignment.centerLeft,
-                      child: Row(
-                        children: <Widget>[
-                          StudioAppSwitcher(
-                            label: 'Word',
-                            icon: Icons.description_outlined,
-                            selected: _app == SuiteApp.word,
-                            onTap: () => _switchApp(SuiteApp.word),
+                    child: IgnorePointer(
+                      child: Align(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                          child: Text(
+                            _documentLabel,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.94),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
-                          StudioAppSwitcher(
-                            label: 'Excel',
-                            icon: Icons.grid_on_outlined,
-                            selected: _app == SuiteApp.excel,
-                            onTap: () => _switchApp(SuiteApp.excel),
-                          ),
-                          StudioAppSwitcher(
-                            label: 'PowerPoint',
-                            icon: Icons.slideshow_outlined,
-                            selected: _app == SuiteApp.powerpoint,
-                            onTap: () => _switchApp(SuiteApp.powerpoint),
-                          ),
-                        ],
+                        ),
                       ),
                     ),
                   ),
@@ -482,24 +608,6 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
                     ],
                   ),
                 ),
-              IgnorePointer(
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 280),
-                    child: Text(
-                      _chromeTitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.92),
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
             ],
           ),
         ),
@@ -551,39 +659,51 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
       SuiteApp.excel => 'Excel',
       SuiteApp.powerpoint => 'PowerPoint',
     };
-    return '$_documentLabel - $app';
+    return '$_documentLabel — $app';
   }
 
   String get _documentLabel {
+    final String name = switch (_app) {
+      SuiteApp.word => _wordName,
+      SuiteApp.excel => _sheetName,
+      SuiteApp.powerpoint => _slideName,
+    };
+    final String clean = name.trim().isEmpty ? _untitledName : name.trim();
+    return _active.isDirty ? '$clean*' : clean;
+  }
+
+  String get _untitledName => switch (_app) {
+    SuiteApp.word => 'Document1.docx',
+    SuiteApp.excel => 'Book1.xlsx',
+    SuiteApp.powerpoint => 'Presentation1.pptx',
+  };
+
+  String get _activeName => switch (_app) {
+    SuiteApp.word => _wordName,
+    SuiteApp.excel => _sheetName,
+    SuiteApp.powerpoint => _slideName,
+  };
+
+  set _activeName(String value) {
     switch (_app) {
       case SuiteApp.word:
-        for (final WmlParagraph para in _word.document.paragraphs) {
-          final String text = para.text.trim();
-          if (text.isEmpty) {
-            continue;
-          }
-          if ((para.properties.headingLevel ?? 0) > 0) {
-            return text;
-          }
-        }
-        for (final WmlParagraph para in _word.document.paragraphs) {
-          final String text = para.text.trim();
-          if (text.isNotEmpty) {
-            return text;
-          }
-        }
-        return 'Document1';
+        _wordName = value;
       case SuiteApp.excel:
-        return _sheet.sheet.name.isEmpty ? 'Book1' : _sheet.sheet.name;
+        _sheetName = value;
       case SuiteApp.powerpoint:
-        for (final PmlShape shape in _slides.slide.shapes) {
-          final String text = shape.text.trim();
-          if (text.isNotEmpty) {
-            return text.split('\n').first;
-          }
-        }
-        return 'Presentation1';
+        _slideName = value;
     }
+  }
+
+  String _nameFromPicked(PickedOfficeFile picked) {
+    if (picked.name.trim().isNotEmpty) {
+      return picked.name.trim();
+    }
+    final String? path = picked.path;
+    if (path != null && path.isNotEmpty) {
+      return StudioFiles.nameOf(path);
+    }
+    return _untitledName;
   }
 
   void _switchApp(SuiteApp app) {
@@ -607,10 +727,7 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
         8,
       );
     }
-    final Offset topLeft = button.localToGlobal(
-      Offset.zero,
-      ancestor: overlay,
-    );
+    final Offset topLeft = button.localToGlobal(Offset.zero, ancestor: overlay);
     final Offset bottomRight = button.localToGlobal(
       button.size.bottomRight(Offset.zero),
       ancestor: overlay,
@@ -647,7 +764,27 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
           _look = SuiteLook.values[(_look.index + 1) % SuiteLook.values.length];
         });
       } else if (value == 'lang') {
-        setState(() => _arabic = !_arabic);
+        _toggleArabic();
+      }
+    });
+  }
+
+  void _toggleArabic() {
+    setState(() => _arabic = !_arabic);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      // syncConfig runs in editor didUpdateWidget; re-focus so IME / caret return.
+      if (_app == SuiteApp.word) {
+        _wordFocus.requestFocus();
+        if (_canMutate) {
+          _word.attachInput();
+        }
+      } else if (_app == SuiteApp.excel) {
+        _sheetFocus.requestFocus();
+      } else {
+        _slideFocus.requestFocus();
       }
     });
   }
@@ -666,16 +803,16 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
   }
 
   String get _modeLabel => switch (_mode) {
-        OfficeInteractionMode.editing => _arabic ? 'تحرير' : 'Editing',
-        OfficeInteractionMode.selecting => _arabic ? 'تحديد' : 'Selecting',
-        OfficeInteractionMode.viewing => _arabic ? 'عرض' : 'Viewing',
-      };
+    OfficeInteractionMode.editing => _arabic ? 'تحرير' : 'Editing',
+    OfficeInteractionMode.selecting => _arabic ? 'تحديد' : 'Selecting',
+    OfficeInteractionMode.viewing => _arabic ? 'عرض' : 'Viewing',
+  };
 
   String get _lookLabel => switch (_look) {
-        SuiteLook.light => _arabic ? 'فاتح' : 'Light',
-        SuiteLook.dark => _arabic ? 'داكن' : 'Dark',
-        SuiteLook.highContrast => _arabic ? 'تباين' : 'Contrast',
-      };
+    SuiteLook.light => _arabic ? 'فاتح' : 'Light',
+    SuiteLook.dark => _arabic ? 'داكن' : 'Dark',
+    SuiteLook.highContrast => _arabic ? 'تباين' : 'Contrast',
+  };
 
   void _cycleMode() {
     setState(() {
@@ -688,49 +825,50 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
   }
 
   List<_RibbonTab> get _tabsForApp => switch (_app) {
-        SuiteApp.word => <_RibbonTab>[
-            _RibbonTab.file,
-            _RibbonTab.home,
-            _RibbonTab.insert,
-            if (_word.selectedEquation != null) _RibbonTab.design,
-            _RibbonTab.layout,
-            _RibbonTab.review,
-            _RibbonTab.view,
-          ],
-        SuiteApp.excel => const <_RibbonTab>[
-            _RibbonTab.file,
-            _RibbonTab.home,
-            _RibbonTab.insert,
-            _RibbonTab.formulas,
-            _RibbonTab.data,
-            _RibbonTab.view,
-          ],
-        SuiteApp.powerpoint => const <_RibbonTab>[
-            _RibbonTab.file,
-            _RibbonTab.home,
-            _RibbonTab.insert,
-            _RibbonTab.design,
-            _RibbonTab.transitions,
-            _RibbonTab.animations,
-            _RibbonTab.view,
-          ],
-      };
+    SuiteApp.word => <_RibbonTab>[
+      _RibbonTab.file,
+      _RibbonTab.home,
+      _RibbonTab.insert,
+      if (_word.selectedEquation != null) _RibbonTab.design,
+      _RibbonTab.layout,
+      _RibbonTab.review,
+      _RibbonTab.view,
+    ],
+    SuiteApp.excel => const <_RibbonTab>[
+      _RibbonTab.file,
+      _RibbonTab.home,
+      _RibbonTab.insert,
+      _RibbonTab.formulas,
+      _RibbonTab.data,
+      _RibbonTab.view,
+    ],
+    SuiteApp.powerpoint => const <_RibbonTab>[
+      _RibbonTab.file,
+      _RibbonTab.home,
+      _RibbonTab.insert,
+      _RibbonTab.design,
+      _RibbonTab.transitions,
+      _RibbonTab.animations,
+      _RibbonTab.view,
+    ],
+  };
 
   String _tabLabel(_RibbonTab tab) => switch (tab) {
-        _RibbonTab.file => _arabic ? 'ملف' : 'File',
-        _RibbonTab.home => _arabic ? 'الرئيسية' : 'Home',
-        _RibbonTab.insert => _arabic ? 'إدراج' : 'Insert',
-        _RibbonTab.layout => _arabic ? 'تخطيط' : 'Layout',
-        _RibbonTab.review => _arabic ? 'مراجعة' : 'Review',
-        _RibbonTab.formulas => _arabic ? 'صيغ' : 'Formulas',
-        _RibbonTab.data => _arabic ? 'بيانات' : 'Data',
-        _RibbonTab.design => _app == SuiteApp.word
-            ? (_arabic ? 'معادلة' : 'Equation')
-            : (_arabic ? 'تصميم' : 'Design'),
-        _RibbonTab.transitions => _arabic ? 'انتقالات' : 'Transitions',
-        _RibbonTab.animations => _arabic ? 'حركات' : 'Animations',
-        _RibbonTab.view => _arabic ? 'عرض' : 'View',
-      };
+    _RibbonTab.file => _arabic ? 'ملف' : 'File',
+    _RibbonTab.home => _arabic ? 'الرئيسية' : 'Home',
+    _RibbonTab.insert => _arabic ? 'إدراج' : 'Insert',
+    _RibbonTab.layout => _arabic ? 'تخطيط' : 'Layout',
+    _RibbonTab.review => _arabic ? 'مراجعة' : 'Review',
+    _RibbonTab.formulas => _arabic ? 'صيغ' : 'Formulas',
+    _RibbonTab.data => _arabic ? 'بيانات' : 'Data',
+    _RibbonTab.design =>
+      _app == SuiteApp.word
+          ? (_arabic ? 'معادلة' : 'Equation')
+          : (_arabic ? 'تصميم' : 'Design'),
+    _RibbonTab.transitions => _arabic ? 'انتقالات' : 'Transitions',
+    _RibbonTab.animations => _arabic ? 'حركات' : 'Animations',
+    _RibbonTab.view => _arabic ? 'عرض' : 'View',
+  };
 
   Widget _tabStrip(bool dark) {
     return Material(
@@ -762,12 +900,12 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
               foreground: _officeTheme.chromeText,
               onPressed: _canMutate && _active.canRedo ? _active.redo : null,
             ),
-            StudioIconCmd(
+              StudioIconCmd(
               icon: Icons.translate,
               tooltip: _arabic ? 'English' : 'العربية',
               accent: _accent,
               foreground: _officeTheme.chromeText,
-              onPressed: () => setState(() => _arabic = !_arabic),
+              onPressed: _toggleArabic,
             ),
             const SizedBox(width: 8),
           ],
@@ -782,7 +920,10 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
       child: DecoratedBox(
         decoration: BoxDecoration(
           border: Border(
-            bottom: BorderSide(color: _accent.withValues(alpha: 0.35), width: 2),
+            bottom: BorderSide(
+              color: _accent.withValues(alpha: 0.35),
+              width: 2,
+            ),
           ),
         ),
         child: SizedBox(
@@ -808,8 +949,10 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
       (SuiteApp.excel, _RibbonTab.formulas) => _sheetFormulas(),
       (SuiteApp.excel, _RibbonTab.data) => _sheetData(),
       (SuiteApp.excel, _RibbonTab.view) => _sheetView(),
-      (SuiteApp.powerpoint, _RibbonTab.file) =>
-        _fileGroups(_resetSlides, _newSlides),
+      (SuiteApp.powerpoint, _RibbonTab.file) => _fileGroups(
+        _resetSlides,
+        _newSlides,
+      ),
       (SuiteApp.powerpoint, _RibbonTab.home) => _slideHome(),
       (SuiteApp.powerpoint, _RibbonTab.insert) => _slideInsert(),
       (SuiteApp.powerpoint, _RibbonTab.design) => _slideDesign(),
@@ -820,7 +963,10 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
     };
   }
 
-  List<StudioRibbonGroup> _fileGroups(VoidCallback reset, VoidCallback createNew) {
+  List<StudioRibbonGroup> _fileGroups(
+    VoidCallback reset,
+    VoidCallback createNew,
+  ) {
     return <StudioRibbonGroup>[
       StudioRibbonGroup(
         title: _arabic ? 'ملف' : 'File',
@@ -841,21 +987,40 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
             _arabic ? 'تصدير PDF' : 'Export PDF',
             _exportPdf,
           ),
-          _cmd(Icons.refresh, _arabic ? 'إعادة العينة' : 'Reload sample', reset),
+          _cmd(
+            Icons.refresh,
+            _arabic ? 'إعادة العينة' : 'Reload sample',
+            reset,
+          ),
         ],
       ),
       StudioRibbonGroup(
         title: _arabic ? 'وضع العمل' : 'Mode',
         children: <Widget>[
-          _cmd(Icons.edit, _arabic ? 'تحرير' : 'Edit', () {
-            setState(() => _mode = OfficeInteractionMode.editing);
-          }, selected: _mode == OfficeInteractionMode.editing),
-          _cmd(Icons.select_all, _arabic ? 'تحديد' : 'Select', () {
-            setState(() => _mode = OfficeInteractionMode.selecting);
-          }, selected: _mode == OfficeInteractionMode.selecting),
-          _cmd(Icons.visibility, _arabic ? 'عرض' : 'View', () {
-            setState(() => _mode = OfficeInteractionMode.viewing);
-          }, selected: _mode == OfficeInteractionMode.viewing),
+          _cmd(
+            Icons.edit,
+            _arabic ? 'تحرير' : 'Edit',
+            () {
+              setState(() => _mode = OfficeInteractionMode.editing);
+            },
+            selected: _mode == OfficeInteractionMode.editing,
+          ),
+          _cmd(
+            Icons.select_all,
+            _arabic ? 'تحديد' : 'Select',
+            () {
+              setState(() => _mode = OfficeInteractionMode.selecting);
+            },
+            selected: _mode == OfficeInteractionMode.selecting,
+          ),
+          _cmd(
+            Icons.visibility,
+            _arabic ? 'عرض' : 'View',
+            () {
+              setState(() => _mode = OfficeInteractionMode.viewing);
+            },
+            selected: _mode == OfficeInteractionMode.viewing,
+          ),
         ],
       ),
     ];
@@ -898,38 +1063,84 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
             onSelected: _canMutate ? _setFaceStyle : null,
           ),
           const SizedBox(width: 6),
-          _icon(Icons.format_bold, _arabic ? 'عريض' : 'Bold', _canMutate
-              ? () => _word.applyRunFormat((WmlRunProps p) => p.bold = !p.bold)
-              : null, selected: _word.activeRunProps.bold),
-          _icon(Icons.format_italic, _arabic ? 'مائل' : 'Italic', _canMutate
-              ? () => _word.applyRunFormat((WmlRunProps p) => p.italic = !p.italic)
-              : null, selected: _word.activeRunProps.italic),
-          _icon(Icons.format_underline, _arabic ? 'تسطير' : 'Underline', _canMutate
-              ? () => _word.applyRunFormat((WmlRunProps p) {
+          _icon(
+            Icons.format_bold,
+            _arabic ? 'عريض' : 'Bold',
+            _canMutate
+                ? () =>
+                      _word.applyRunFormat((WmlRunProps p) => p.bold = !p.bold)
+                : null,
+            selected: _word.activeRunProps.bold,
+          ),
+          _icon(
+            Icons.format_italic,
+            _arabic ? 'مائل' : 'Italic',
+            _canMutate
+                ? () => _word.applyRunFormat(
+                    (WmlRunProps p) => p.italic = !p.italic,
+                  )
+                : null,
+            selected: _word.activeRunProps.italic,
+          ),
+          _icon(
+            Icons.format_underline,
+            _arabic ? 'تسطير' : 'Underline',
+            _canMutate
+                ? () => _word.applyRunFormat((WmlRunProps p) {
                     p.underline = p.underline == WmlUnderline.none
                         ? WmlUnderline.single
                         : WmlUnderline.none;
                   })
-              : null, selected: _word.activeRunProps.underline == WmlUnderline.single),
-          _icon(Icons.format_strikethrough, _arabic ? 'يتوسطه خط' : 'Strike',
-              _canMutate
-                  ? () => _word.applyRunFormat((WmlRunProps p) => p.strike = !p.strike)
-                  : null, selected: _word.activeRunProps.strike),
-          _icon(Icons.superscript, _arabic ? 'مرتفع' : 'Superscript',
-              _wordFullFormat ? () => _toggleVertAlign(WmlVertAlign.superscript) : null,
-              selected:
-                  _word.activeRunProps.vertAlign == WmlVertAlign.superscript),
-          _icon(Icons.subscript, _arabic ? 'منخفض' : 'Subscript',
-              _wordFullFormat ? () => _toggleVertAlign(WmlVertAlign.subscript) : null,
-              selected: _word.activeRunProps.vertAlign == WmlVertAlign.subscript),
-          _icon(Icons.format_color_text, _arabic ? 'لون النص' : 'Text color',
-              _canMutate ? _cycleTextColor : null),
-          _icon(Icons.border_color, _arabic ? 'تمييز' : 'Highlight',
-              _canMutate ? _cycleHighlight : null),
-          _icon(Icons.text_increase, _arabic ? 'تكبير' : 'Grow',
-              _wordFullFormat ? () => _nudgeFontSize(2) : null),
-          _icon(Icons.text_decrease, _arabic ? 'تصغير' : 'Shrink',
-              _wordFullFormat ? () => _nudgeFontSize(-2) : null),
+                : null,
+            selected: _word.activeRunProps.underline == WmlUnderline.single,
+          ),
+          _icon(
+            Icons.format_strikethrough,
+            _arabic ? 'يتوسطه خط' : 'Strike',
+            _canMutate
+                ? () => _word.applyRunFormat(
+                    (WmlRunProps p) => p.strike = !p.strike,
+                  )
+                : null,
+            selected: _word.activeRunProps.strike,
+          ),
+          _icon(
+            Icons.superscript,
+            _arabic ? 'مرتفع' : 'Superscript',
+            _wordFullFormat
+                ? () => _toggleVertAlign(WmlVertAlign.superscript)
+                : null,
+            selected:
+                _word.activeRunProps.vertAlign == WmlVertAlign.superscript,
+          ),
+          _icon(
+            Icons.subscript,
+            _arabic ? 'منخفض' : 'Subscript',
+            _wordFullFormat
+                ? () => _toggleVertAlign(WmlVertAlign.subscript)
+                : null,
+            selected: _word.activeRunProps.vertAlign == WmlVertAlign.subscript,
+          ),
+          _icon(
+            Icons.format_color_text,
+            _arabic ? 'لون النص' : 'Text color',
+            _canMutate ? _cycleTextColor : null,
+          ),
+          _icon(
+            Icons.border_color,
+            _arabic ? 'تمييز' : 'Highlight',
+            _canMutate ? _cycleHighlight : null,
+          ),
+          _icon(
+            Icons.text_increase,
+            _arabic ? 'تكبير' : 'Grow',
+            _wordFullFormat ? () => _nudgeFontSize(2) : null,
+          ),
+          _icon(
+            Icons.text_decrease,
+            _arabic ? 'تصغير' : 'Shrink',
+            _wordFullFormat ? () => _nudgeFontSize(-2) : null,
+          ),
         ],
       ),
       StudioRibbonGroup(
@@ -944,27 +1155,56 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
             tooltip: _arabic ? 'نمط الفقرة' : 'Paragraph style',
             onSelected: _wordFullFormat ? _word.applyHeading : null,
           ),
+          const SizedBox(width: 4),
+          StudioCombo<String>(
+            value: WordStyles.ofParagraph(_activeParagraph).id,
+            items: <String>[
+              for (final WmlStyle style in WordStyles.catalog) style.id,
+            ],
+            labelOf: (String id) =>
+                WordStyles.byId(id)?.label(arabic: _arabic) ?? id,
+            width: 132,
+            enabled: _wordFullFormat,
+            tooltip: _arabic ? 'معرض الأنماط' : 'Style gallery',
+            onSelected: _wordFullFormat ? _word.applyStyle : null,
+          ),
         ],
       ),
       StudioRibbonGroup(
         title: _arabic ? 'فقرة' : 'Paragraph',
         children: <Widget>[
-          _icon(Icons.format_align_left, _arabic ? 'يسار' : 'Left',
-              _wordFullFormat ? () => _setAlign(WmlJustification.left) : null,
-              selected: _activeParagraph.properties.justification ==
-                  WmlJustification.left),
-          _icon(Icons.format_align_center, _arabic ? 'وسط' : 'Center',
-              _wordFullFormat ? () => _setAlign(WmlJustification.center) : null,
-              selected: _activeParagraph.properties.justification ==
-                  WmlJustification.center),
-          _icon(Icons.format_align_right, _arabic ? 'يمين' : 'Right',
-              _wordFullFormat ? () => _setAlign(WmlJustification.right) : null,
-              selected: _activeParagraph.properties.justification ==
-                  WmlJustification.right),
-          _icon(Icons.format_align_justify, _arabic ? 'ضبط' : 'Justify',
-              _wordFullFormat ? () => _setAlign(WmlJustification.justify) : null,
-              selected: _activeParagraph.properties.justification ==
-                  WmlJustification.justify),
+          _icon(
+            Icons.format_align_left,
+            _arabic ? 'يسار' : 'Left',
+            _wordFullFormat ? () => _setAlign(WmlJustification.left) : null,
+            selected:
+                _activeParagraph.properties.justification ==
+                WmlJustification.left,
+          ),
+          _icon(
+            Icons.format_align_center,
+            _arabic ? 'وسط' : 'Center',
+            _wordFullFormat ? () => _setAlign(WmlJustification.center) : null,
+            selected:
+                _activeParagraph.properties.justification ==
+                WmlJustification.center,
+          ),
+          _icon(
+            Icons.format_align_right,
+            _arabic ? 'يمين' : 'Right',
+            _wordFullFormat ? () => _setAlign(WmlJustification.right) : null,
+            selected:
+                _activeParagraph.properties.justification ==
+                WmlJustification.right,
+          ),
+          _icon(
+            Icons.format_align_justify,
+            _arabic ? 'ضبط' : 'Justify',
+            _wordFullFormat ? () => _setAlign(WmlJustification.justify) : null,
+            selected:
+                _activeParagraph.properties.justification ==
+                WmlJustification.justify,
+          ),
           _icon(
             Icons.format_textdirection_r_to_l,
             _arabic ? 'من اليمين' : 'RTL',
@@ -977,39 +1217,62 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
             _wordFullFormat ? () => _setWordDirection(rtl: false) : null,
             selected: _activeParagraph.properties.rightToLeft != true,
           ),
-          _icon(Icons.format_list_bulleted, _arabic ? 'تعداد' : 'Bullets',
-              _wordFullFormat
-                  ? () => _word.toggleList(numbered: false)
-                  : null,
-              selected: _activeParagraph.properties.numId == 1),
-          _icon(Icons.format_list_numbered, _arabic ? 'ترقيم' : 'Numbering',
-              _wordFullFormat
-                  ? () => _word.toggleList(numbered: true)
-                  : null,
-              selected: _activeParagraph.properties.numId == 2),
-          _icon(Icons.format_indent_increase, _arabic ? 'زيادة المسافة' : 'Indent',
-              _wordFullFormat ? () => _nudgeIndent(18) : null),
-          _icon(Icons.format_indent_decrease, _arabic ? 'إنقاص المسافة' : 'Outdent',
-              _wordFullFormat ? () => _nudgeIndent(-18) : null),
+          _icon(
+            Icons.format_list_bulleted,
+            _arabic ? 'تعداد' : 'Bullets',
+            _wordFullFormat ? () => _word.toggleList(numbered: false) : null,
+            selected: _activeParagraph.properties.numId == 1,
+          ),
+          _icon(
+            Icons.format_list_numbered,
+            _arabic ? 'ترقيم' : 'Numbering',
+            _wordFullFormat ? () => _word.toggleList(numbered: true) : null,
+            selected: _activeParagraph.properties.numId == 2,
+          ),
+          _icon(
+            Icons.format_indent_increase,
+            _arabic ? 'زيادة المسافة' : 'Indent',
+            _wordFullFormat ? () => _nudgeIndent(18) : null,
+          ),
+          _icon(
+            Icons.format_indent_decrease,
+            _arabic ? 'إنقاص المسافة' : 'Outdent',
+            _wordFullFormat ? () => _nudgeIndent(-18) : null,
+          ),
         ],
       ),
       StudioRibbonGroup(
         title: _arabic ? 'إدراج سريع' : 'Quick insert',
         children: <Widget>[
-          _icon(Icons.image_outlined, _arabic ? 'صورة' : 'Picture',
-              _canMutate ? () => _insertWordPicture(fromFile: true) : null),
-          _icon(Icons.bar_chart, _arabic ? 'مخطط' : 'Chart',
-              _canMutate
-                  ? () => _insertWordVisual(OfficeVisualKind.chartColumn)
-                  : null),
-          _icon(Icons.account_tree, _arabic ? 'عملية' : 'Process',
-              _canMutate
-                  ? () => _insertWordVisual(OfficeVisualKind.diagramProcess)
-                  : null),
-          _icon(Icons.grid_on, _arabic ? 'جدول' : 'Table',
-              _canMutate ? () => _insertWordTable(3, 3) : null),
-          _icon(Icons.functions, _arabic ? 'معادلة' : 'Equation',
-              _canMutate ? () => _insertWordEquation() : null),
+          _icon(
+            Icons.image_outlined,
+            _arabic ? 'صورة' : 'Picture',
+            _canMutate ? () => _insertWordPicture(fromFile: true) : null,
+          ),
+          _icon(
+            Icons.bar_chart,
+            _arabic ? 'مخطط' : 'Chart',
+            _canMutate
+                ? () => _insertWordVisual(OfficeVisualKind.chartColumn)
+                : null,
+          ),
+          _icon(
+            Icons.account_tree,
+            _arabic ? 'عملية' : 'Process',
+            _canMutate
+                ? () => _insertWordVisual(OfficeVisualKind.diagramProcess)
+                : null,
+          ),
+          _icon(
+            Icons.grid_on,
+            _arabic ? 'جدول' : 'Table',
+            _canMutate ? () => _insertWordTable(3, 3) : null,
+          ),
+          _icon(
+            Icons.functions,
+            _arabic ? 'معادلة' : 'Equation',
+            _canMutate ? () => _insertWordEquation() : null,
+          ),
         ],
       ),
       if (_word.selectedVisual != null) ..._visualRibbon(),
@@ -1103,17 +1366,26 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
       StudioRibbonGroup(
         title: _arabic ? 'صفحات' : 'Pages',
         children: <Widget>[
-          _cmd(Icons.insert_page_break, _arabic ? 'فاصل صفحة' : 'Page break',
-              _canMutate ? _insertPageBreak : null),
-          _cmd(Icons.note_add_outlined, _arabic ? 'صفحة فارغة' : 'Blank page',
-              _canMutate ? _insertPageBreak : null),
-          _cmd(Icons.view_week, _arabic ? 'فاصل عمود' : 'Column break',
-              _canMutate
-                  ? () {
-                      _word.insertColumnBreak();
-                      _word.refresh();
-                    }
-                  : null),
+          _cmd(
+            Icons.insert_page_break,
+            _arabic ? 'فاصل صفحة' : 'Page break',
+            _canMutate ? _insertPageBreak : null,
+          ),
+          _cmd(
+            Icons.note_add_outlined,
+            _arabic ? 'صفحة فارغة' : 'Blank page',
+            _canMutate ? _insertPageBreak : null,
+          ),
+          _cmd(
+            Icons.view_week,
+            _arabic ? 'فاصل عمود' : 'Column break',
+            _canMutate
+                ? () {
+                    _word.insertColumnBreak();
+                    _word.refresh();
+                  }
+                : null,
+          ),
           _cmd(
             Icons.vertical_split_outlined,
             _arabic ? 'فاصل قسم' : 'Section break',
@@ -1134,9 +1406,9 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
             _arabic ? 'عنوان ١' : 'Heading 1',
             _canMutate
                 ? () => _word.insertHeading(
-                      level: 1,
-                      text: _arabic ? 'عنوان جديد' : 'New heading',
-                    )
+                    level: 1,
+                    text: _arabic ? 'عنوان جديد' : 'New heading',
+                  )
                 : null,
           ),
           _cmd(
@@ -1144,9 +1416,9 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
             _arabic ? 'عنوان ٢' : 'Heading 2',
             _canMutate
                 ? () => _word.insertHeading(
-                      level: 2,
-                      text: _arabic ? 'عنوان فرعي' : 'New subheading',
-                    )
+                    level: 2,
+                    text: _arabic ? 'عنوان فرعي' : 'New subheading',
+                  )
                 : null,
           ),
           _cmd(
@@ -1154,8 +1426,8 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
             _arabic ? 'المحتويات' : 'Contents',
             _canMutate
                 ? () => _word.insertTableOfContents(
-                      title: _arabic ? 'جدول المحتويات' : 'Table of Contents',
-                    )
+                    title: _arabic ? 'جدول المحتويات' : 'Table of Contents',
+                  )
                 : null,
           ),
           _cmd(
@@ -1189,92 +1461,215 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
             _arabic ? 'ملف محلي' : 'File link',
             _canMutate ? () => _insertWordLink(kind: _WordLinkKind.file) : null,
           ),
-          _cmd(Icons.short_text, _arabic ? 'فقرة' : 'Paragraph', _canMutate ? () {
-            _word.insertParagraphBreak();
-            _word.insertText(
-              _arabic
-                  ? 'فقرة يمكن تحريرها مباشرة من لوحة المفاتيح.'
-                  : 'A paragraph you can type into immediately.',
-            );
-          } : null),
-          _cmd(Icons.format_quote, _arabic ? 'اقتباس' : 'Quote',
-              _canMutate ? _insertQuote : null),
-          _cmd(Icons.crop_square, _arabic ? 'إطار نص' : 'Text box',
-              _canMutate
-                  ? () {
-                      _word.insertTextFrame(
-                        text: _arabic ? 'إطار نص' : 'Text box',
-                      );
-                      _word.refresh();
-                    }
-                  : null),
+          _cmd(
+            Icons.superscript,
+            _arabic ? 'حاشية' : 'Footnote',
+            _canMutate ? () => _word.insertFootnote() : null,
+          ),
+          _cmd(
+            Icons.subscript,
+            _arabic ? 'نهاية حاشية' : 'Endnote',
+            _canMutate ? () => _word.insertFootnote(endnote: true) : null,
+          ),
+          _cmd(
+            Icons.subtitles_outlined,
+            _arabic ? 'تسمية' : 'Caption',
+            _canMutate ? () => _word.insertCaption() : null,
+          ),
+          _cmd(
+            Icons.collections_bookmark_outlined,
+            _arabic ? 'جدول أشكال' : 'Figures',
+            _canMutate ? () => _word.insertTableOfFigures() : null,
+          ),
+          _cmd(
+            Icons.pin,
+            _arabic ? 'رقم صفحة' : 'Page #',
+            _canMutate ? () => _word.insertField(WmlFieldKind.page) : null,
+          ),
+          _cmd(
+            Icons.calendar_today,
+            _arabic ? 'تاريخ' : 'Date',
+            _canMutate ? () => _word.insertField(WmlFieldKind.date) : null,
+          ),
+          _cmd(
+            Icons.branding_watermark,
+            _arabic ? 'علامة مائية' : 'Watermark',
+            _canMutate
+                ? () => _word.setWatermark(_arabic ? 'مسودة' : 'DRAFT')
+                : null,
+          ),
+          _cmd(
+            Icons.short_text,
+            _arabic ? 'فقرة' : 'Paragraph',
+            _canMutate
+                ? () {
+                    _word.insertParagraphBreak();
+                    _word.insertText(
+                      _arabic
+                          ? 'فقرة يمكن تحريرها مباشرة من لوحة المفاتيح.'
+                          : 'A paragraph you can type into immediately.',
+                    );
+                  }
+                : null,
+          ),
+          _cmd(
+            Icons.format_quote,
+            _arabic ? 'اقتباس' : 'Quote',
+            _canMutate ? _insertQuote : null,
+          ),
+          _cmd(
+            Icons.crop_square,
+            _arabic ? 'إطار نص' : 'Text box',
+            _canMutate
+                ? () {
+                    _word.insertTextFrame(
+                      text: _arabic ? 'إطار نص' : 'Text box',
+                    );
+                    _word.refresh();
+                  }
+                : null,
+          ),
         ],
       ),
       StudioRibbonGroup(
         title: _arabic ? 'جدول' : 'Table',
         children: <Widget>[
-          _cmd(Icons.table_chart, _arabic ? '٢×٢' : '2×2',
-              _canMutate ? () => _insertWordTable(2, 2) : null),
-          _cmd(Icons.grid_on, _arabic ? '٣×٣' : '3×3',
-              _canMutate ? () => _insertWordTable(3, 3) : null),
-          _cmd(Icons.table_view, _arabic ? '٤×٤' : '4×4',
-              _canMutate ? () => _insertWordTable(4, 4) : null),
+          _cmd(
+            Icons.table_chart,
+            _arabic ? '٢×٢' : '2×2',
+            _canMutate ? () => _insertWordTable(2, 2) : null,
+          ),
+          _cmd(
+            Icons.grid_on,
+            _arabic ? '٣×٣' : '3×3',
+            _canMutate ? () => _insertWordTable(3, 3) : null,
+          ),
+          _cmd(
+            Icons.table_view,
+            _arabic ? '٤×٤' : '4×4',
+            _canMutate ? () => _insertWordTable(4, 4) : null,
+          ),
         ],
       ),
       StudioRibbonGroup(
         title: _arabic ? 'رسوم' : 'Illustrations',
         children: <Widget>[
-          _cmd(Icons.image_outlined, _arabic ? 'صورة' : 'Picture',
-              _canMutate ? () => _insertWordPicture(fromFile: true) : null),
-          _cmd(Icons.bar_chart, _arabic ? 'أعمدة' : 'Column',
-              _canMutate
-                  ? () => _insertWordVisual(OfficeVisualKind.chartColumn)
-                  : null),
-          _cmd(Icons.stacked_bar_chart, _arabic ? 'شريطي' : 'Bar',
-              _canMutate
-                  ? () => _insertWordVisual(OfficeVisualKind.chartBar)
-                  : null),
-          _cmd(Icons.pie_chart, _arabic ? 'دائري' : 'Pie',
-              _canMutate
-                  ? () => _insertWordVisual(OfficeVisualKind.chartPie)
-                  : null),
-          _cmd(Icons.show_chart, _arabic ? 'خطي' : 'Line',
-              _canMutate
-                  ? () => _insertWordVisual(OfficeVisualKind.chartLine)
-                  : null),
+          _cmd(
+            Icons.image_outlined,
+            _arabic ? 'صورة' : 'Picture',
+            _canMutate ? () => _insertWordPicture(fromFile: true) : null,
+          ),
+          _cmd(
+            Icons.bar_chart,
+            _arabic ? 'أعمدة' : 'Column',
+            _canMutate
+                ? () => _insertWordVisual(OfficeVisualKind.chartColumn)
+                : null,
+          ),
+          _cmd(
+            Icons.stacked_bar_chart,
+            _arabic ? 'شريطي' : 'Bar',
+            _canMutate
+                ? () => _insertWordVisual(OfficeVisualKind.chartBar)
+                : null,
+          ),
+          _cmd(
+            Icons.pie_chart,
+            _arabic ? 'دائري' : 'Pie',
+            _canMutate
+                ? () => _insertWordVisual(OfficeVisualKind.chartPie)
+                : null,
+          ),
+          _cmd(
+            Icons.show_chart,
+            _arabic ? 'خطي' : 'Line',
+            _canMutate
+                ? () => _insertWordVisual(OfficeVisualKind.chartLine)
+                : null,
+          ),
         ],
       ),
       StudioRibbonGroup(
         title: _arabic ? 'مخطط' : 'Diagram',
         children: <Widget>[
-          _cmd(Icons.linear_scale, _arabic ? 'عملية' : 'Process',
-              _canMutate
-                  ? () => _insertWordVisual(OfficeVisualKind.diagramProcess)
-                  : null),
-          _cmd(Icons.sync, _arabic ? 'دورة' : 'Cycle',
-              _canMutate
-                  ? () => _insertWordVisual(OfficeVisualKind.diagramCycle)
-                  : null),
-          _cmd(Icons.account_tree, _arabic ? 'هرمي' : 'Tree',
-              _canMutate
-                  ? () => _insertWordVisual(OfficeVisualKind.diagramHierarchy)
-                  : null),
+          _cmd(
+            Icons.linear_scale,
+            _arabic ? 'عملية' : 'Process',
+            _canMutate
+                ? () => _insertWordVisual(OfficeVisualKind.diagramProcess)
+                : null,
+          ),
+          _cmd(
+            Icons.sync,
+            _arabic ? 'دورة' : 'Cycle',
+            _canMutate
+                ? () => _insertWordVisual(OfficeVisualKind.diagramCycle)
+                : null,
+          ),
+          _cmd(
+            Icons.account_tree,
+            _arabic ? 'هرمي' : 'Tree',
+            _canMutate
+                ? () => _insertWordVisual(OfficeVisualKind.diagramHierarchy)
+                : null,
+          ),
+        ],
+      ),
+      StudioRibbonGroup(
+        title: _arabic ? 'مراجع' : 'References',
+        children: <Widget>[
+          _cmd(
+            Icons.format_quote,
+            _arabic ? 'استشهاد' : 'Citation',
+            _canMutate ? _insertStudioCitation : null,
+          ),
+          _cmd(
+            Icons.menu_book_outlined,
+            _arabic ? 'مراجع' : 'Bibliography',
+            _canMutate ? _word.insertBibliography : null,
+          ),
+          _cmd(
+            Icons.bookmark_add_outlined,
+            _arabic ? 'فهرس' : 'Mark index',
+            _canMutate
+                ? () => _word.markIndexTerm(_arabic ? 'مصطلح' : 'Term')
+                : null,
+          ),
+          _cmd(
+            Icons.list_alt_outlined,
+            _arabic ? 'إدراج الفهرس' : 'Index',
+            _canMutate ? _word.insertIndex : null,
+          ),
+        ],
+      ),
+      StudioRibbonGroup(
+        title: _arabic ? 'مراسلات' : 'Mailings',
+        children: <Widget>[
+          _cmd(
+            Icons.mark_email_read_outlined,
+            _arabic ? 'دمج' : 'Merge',
+            _canMutate ? _studioMergeMail : null,
+          ),
         ],
       ),
       StudioRibbonGroup(
         title: _arabic ? 'معادلات' : 'Equations',
         children: <Widget>[
-          _cmd(Icons.functions, _arabic ? 'معادلة' : 'Equation',
-              _canMutate ? () => _insertWordEquation() : null),
-          _cmd(Icons.calculate_outlined, _arabic ? 'تربيعي' : 'Quadratic',
-              _canMutate
-                  ? () => _insertWordEquation(id: 'quadratic')
-                  : null),
-          _cmd(Icons.integration_instructions_outlined,
-              _arabic ? 'تكامل' : 'Integral',
-              _canMutate
-                  ? () => _insertWordEquation(id: 'integral')
-                  : null),
+          _cmd(
+            Icons.functions,
+            _arabic ? 'معادلة' : 'Equation',
+            _canMutate ? () => _insertWordEquation() : null,
+          ),
+          _cmd(
+            Icons.calculate_outlined,
+            _arabic ? 'تربيعي' : 'Quadratic',
+            _canMutate ? () => _insertWordEquation(id: 'quadratic') : null,
+          ),
+          _cmd(
+            Icons.integration_instructions_outlined,
+            _arabic ? 'تكامل' : 'Integral',
+            _canMutate ? () => _insertWordEquation(id: 'integral') : null,
+          ),
           StudioCombo<String>(
             value: 'gallery',
             width: 132,
@@ -1349,9 +1744,7 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
           _cmd(
             Icons.border_all,
             _arabic ? 'واسع' : 'Wide',
-            _canMutate
-                ? () => _word.setPageMargins(WmlPageMargins.wide)
-                : null,
+            _canMutate ? () => _word.setPageMargins(WmlPageMargins.wide) : null,
             selected: margins.matches(WmlPageMargins.wide),
           ),
         ],
@@ -1381,10 +1774,10 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
             'A4',
             _canMutate
                 ? () => _word.setPageSize(
-                      size.isLandscape
-                          ? WmlPageSize.a4().landscape
-                          : WmlPageSize.a4(),
-                    )
+                    size.isLandscape
+                        ? WmlPageSize.a4().landscape
+                        : WmlPageSize.a4(),
+                  )
                 : null,
             selected: size.portrait.matches(WmlPageSize.a4()),
           ),
@@ -1393,10 +1786,10 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
             'Letter',
             _canMutate
                 ? () => _word.setPageSize(
-                      size.isLandscape
-                          ? WmlPageSize.letter().landscape
-                          : WmlPageSize.letter(),
-                    )
+                    size.isLandscape
+                        ? WmlPageSize.letter().landscape
+                        : WmlPageSize.letter(),
+                  )
                 : null,
             selected: size.portrait.matches(WmlPageSize.letter()),
           ),
@@ -1405,10 +1798,10 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
             'Legal',
             _canMutate
                 ? () => _word.setPageSize(
-                      size.isLandscape
-                          ? WmlPageSize.legal().landscape
-                          : WmlPageSize.legal(),
-                    )
+                    size.isLandscape
+                        ? WmlPageSize.legal().landscape
+                        : WmlPageSize.legal(),
+                  )
                 : null,
             selected: size.portrait.matches(WmlPageSize.legal()),
           ),
@@ -1417,10 +1810,10 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
             'A3',
             _canMutate
                 ? () => _word.setPageSize(
-                      size.isLandscape
-                          ? WmlPageSize.a3().landscape
-                          : WmlPageSize.a3(),
-                    )
+                    size.isLandscape
+                        ? WmlPageSize.a3().landscape
+                        : WmlPageSize.a3(),
+                  )
                 : null,
             selected: size.portrait.matches(WmlPageSize.a3()),
           ),
@@ -1452,8 +1845,11 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
       StudioRibbonGroup(
         title: _arabic ? 'فواصل' : 'Breaks',
         children: <Widget>[
-          _cmd(Icons.insert_page_break, _arabic ? 'صفحة' : 'Page',
-              _canMutate ? _insertPageBreak : null),
+          _cmd(
+            Icons.insert_page_break,
+            _arabic ? 'صفحة' : 'Page',
+            _canMutate ? _insertPageBreak : null,
+          ),
           _cmd(
             Icons.view_week_outlined,
             _arabic ? 'عمود' : 'Column',
@@ -1528,6 +1924,123 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
         ],
       ),
       StudioRibbonGroup(
+        title: _arabic ? 'ترويسة' : 'Header',
+        children: <Widget>[
+          _cmd(
+            Icons.web_asset,
+            _arabic ? 'ترويسة' : 'Header',
+            _canMutate
+                ? () {
+                    if (_word.isEditingHeader) {
+                      _word.endHeaderFooterEdit();
+                    } else {
+                      _word.beginHeaderFooterEdit(
+                        _word.visiblePageIndex,
+                        footer: false,
+                      );
+                    }
+                    setState(() {});
+                  }
+                : null,
+            selected: _word.isEditingHeader,
+          ),
+          _cmd(
+            Icons.web_asset_outlined,
+            _arabic ? 'تذييل' : 'Footer',
+            _canMutate
+                ? () {
+                    if (_word.isEditingFooter) {
+                      _word.endHeaderFooterEdit();
+                    } else {
+                      _word.beginHeaderFooterEdit(
+                        _word.visiblePageIndex,
+                        footer: true,
+                      );
+                    }
+                    setState(() {});
+                  }
+                : null,
+            selected: _word.isEditingFooter,
+          ),
+          _cmd(
+            Icons.done,
+            _arabic ? 'إغلاق' : 'Close',
+            _word.isEditingHeaderFooter ? _word.endHeaderFooterEdit : null,
+          ),
+          _cmd(
+            Icons.filter_1,
+            _arabic ? 'أول صفحة' : 'First page',
+            _canMutate
+                ? () => _word.setDifferentFirstPage(
+                    !_word.sectionAtCaret.differentFirstPage,
+                  )
+                : null,
+            selected: _word.sectionAtCaret.differentFirstPage,
+          ),
+          _cmd(
+            Icons.swap_vert,
+            _arabic ? 'فردي/زوجي' : 'Odd/even',
+            _canMutate
+                ? () => _word.setDifferentOddEven(
+                    !_word.sectionAtCaret.differentOddEven,
+                  )
+                : null,
+            selected: _word.sectionAtCaret.differentOddEven,
+          ),
+          _cmd(
+            Icons.link,
+            _arabic ? 'ربط بالسابق' : 'Link prev',
+            _canMutate
+                ? () => _word.setLinkToPrevious(
+                    !_word.sectionAtCaret.linkToPrevious,
+                  )
+                : null,
+            selected: _word.sectionAtCaret.linkToPrevious,
+          ),
+        ],
+      ),
+      StudioRibbonGroup(
+        title: _arabic ? 'مظهر الفقرة' : 'Paragraph look',
+        children: <Widget>[
+          _cmd(
+            Icons.format_size,
+            _arabic ? 'حرف استهلالي' : 'Drop cap',
+            _canMutate
+                ? () => _word.setDropCap(para.dropCapLines > 0 ? 0 : 3)
+                : null,
+            selected: para.dropCapLines > 0,
+          ),
+          _cmd(
+            Icons.format_list_numbered,
+            _arabic ? 'ترقيم أسطر' : 'Line numbers',
+            _canMutate
+                ? () => _word.setLineNumbers(!_word.sectionAtCaret.lineNumbers)
+                : null,
+            selected: _word.sectionAtCaret.lineNumbers,
+          ),
+          _cmd(
+            Icons.format_color_fill,
+            _arabic ? 'تظليل' : 'Shading',
+            _canMutate
+                ? () => _word.setParagraphShading(
+                    para.shadingFill == null ? 'FFF2CC' : null,
+                  )
+                : null,
+            selected: para.shadingFill != null,
+          ),
+          _cmd(
+            Icons.border_outer,
+            _arabic ? 'حدود' : 'Border',
+            _canMutate
+                ? () => _word.setParagraphBorder(
+                    para.borderColor == null ? '2E75B6' : null,
+                  )
+                : null,
+            selected: para.borderColor != null,
+          ),
+        ],
+      ),
+      StudioRibbonGroup(
         title: _arabic ? 'واجهة' : 'Interface',
         children: <Widget>[
           _cmd(Icons.format_textdirection_r_to_l, 'RTL', () {
@@ -1547,19 +2060,31 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
         title: _arabic ? 'تحديد' : 'Select',
         children: <Widget>[
           _cmd(Icons.select_all, _arabic ? 'الكل' : 'All', _selectAllDocument),
-          _cmd(Icons.text_fields, _arabic ? 'كلمة' : 'Word',
-              _word.selectWordAtCaret),
-          _cmd(Icons.notes, _arabic ? 'فقرة' : 'Paragraph',
-              _word.selectParagraphAtCaret),
+          _cmd(
+            Icons.text_fields,
+            _arabic ? 'كلمة' : 'Word',
+            _word.selectWordAtCaret,
+          ),
+          _cmd(
+            Icons.notes,
+            _arabic ? 'فقرة' : 'Paragraph',
+            _word.selectParagraphAtCaret,
+          ),
         ],
       ),
       StudioRibbonGroup(
         title: _arabic ? 'تحرير' : 'Edit',
         children: <Widget>[
-          _cmd(Icons.undo, _arabic ? 'تراجع' : 'Undo',
-              _canMutate && _word.canUndo ? _word.undo : null),
-          _cmd(Icons.redo, _arabic ? 'إعادة' : 'Redo',
-              _canMutate && _word.canRedo ? _word.redo : null),
+          _cmd(
+            Icons.undo,
+            _arabic ? 'تراجع' : 'Undo',
+            _canMutate && _word.canUndo ? _word.undo : null,
+          ),
+          _cmd(
+            Icons.redo,
+            _arabic ? 'إعادة' : 'Redo',
+            _canMutate && _word.canRedo ? _word.redo : null,
+          ),
         ],
       ),
       StudioRibbonGroup(
@@ -1590,9 +2115,9 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
                 : (_arabic ? 'حل' : 'Resolve'),
             _canMutate && _word.selectedComment != null
                 ? () => _word.setCommentResolved(
-                      _word.selectedCommentId!,
-                      !_selectedThreadResolved,
-                    )
+                    _word.selectedCommentId!,
+                    !_selectedThreadResolved,
+                  )
                 : null,
           ),
           _cmd(
@@ -1615,6 +2140,106 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
             WordComment.roots(_word.document).isNotEmpty
                 ? () => _word.stepComment(1)
                 : null,
+          ),
+        ],
+      ),
+      StudioRibbonGroup(
+        title: _arabic ? 'تحرير المستند' : 'Proofing',
+        children: <Widget>[
+          _cmd(
+            Icons.search,
+            _arabic ? 'بحث' : 'Find',
+            _openFind,
+          ),
+          _cmd(
+            Icons.find_replace,
+            _arabic ? 'استبدال' : 'Replace',
+            _canMutate ? _openReplace : null,
+          ),
+          _cmd(
+            Icons.spellcheck,
+            _arabic ? 'تدقيق' : 'Spelling',
+            _showSpelling,
+          ),
+          _cmd(
+            Icons.info_outline,
+            _arabic ? 'خصائص' : 'Properties',
+            _showProperties,
+          ),
+          _cmd(
+            Icons.track_changes,
+            _arabic ? 'تعقب' : 'Track',
+            () => _word.setTrackRevisions(!_word.document.trackRevisions),
+            selected: _word.document.trackRevisions,
+          ),
+          _cmd(
+            Icons.done_all,
+            _arabic ? 'قبول' : 'Accept',
+            _word.selectedRevision == null
+                ? null
+                : () => _word.acceptRevision(_word.selectedRevision!),
+          ),
+          _cmd(
+            Icons.remove_done,
+            _arabic ? 'رفض' : 'Reject',
+            _word.selectedRevision == null
+                ? null
+                : () => _word.rejectRevision(_word.selectedRevision!),
+          ),
+          _cmd(
+            Icons.keyboard_arrow_up,
+            _arabic ? 'تغيير سابق' : 'Prev change',
+            _word.document.revisions.isEmpty
+                ? null
+                : () => _word.stepRevision(-1),
+          ),
+          _cmd(
+            Icons.keyboard_arrow_down,
+            _arabic ? 'تغيير تالٍ' : 'Next change',
+            _word.document.revisions.isEmpty
+                ? null
+                : () => _word.stepRevision(1),
+          ),
+          _cmd(
+            Icons.done_outline,
+            _arabic ? 'قبول الكل' : 'Accept all',
+            _word.document.revisions.isEmpty
+                ? null
+                : _word.acceptAllRevisions,
+          ),
+          _cmd(
+            Icons.remove_circle_outline,
+            _arabic ? 'رفض الكل' : 'Reject all',
+            _word.document.revisions.isEmpty
+                ? null
+                : _word.rejectAllRevisions,
+          ),
+          _cmd(
+            Icons.sync,
+            _arabic ? 'تحديث حقول' : 'Update fields',
+            _canMutate ? _word.updateFields : null,
+          ),
+          _cmd(
+            Icons.lock_outline,
+            _arabic ? 'تقييد' : 'Restrict',
+            () => _word.setRestrictEditing(!_word.document.restrictEditing),
+            selected: _word.document.restrictEditing,
+          ),
+          _cmd(
+            Icons.compare_arrows,
+            _arabic ? 'مقارنة' : 'Compare',
+            _canMutate ? _studioCompareDocument : null,
+          ),
+          _cmd(
+            Icons.print,
+            _arabic ? 'معاينة طباعة' : 'Print preview',
+            () => setState(() => _printPreview = !_printPreview),
+            selected: _printPreview,
+          ),
+          _cmd(
+            Icons.preview,
+            _arabic ? 'سجل دمج' : 'Merge record',
+            _canMutate ? _studioMergePreview : null,
           ),
         ],
       ),
@@ -1658,21 +2283,36 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
       StudioRibbonGroup(
         title: _arabic ? 'سجل' : 'History',
         children: <Widget>[
-          _cmd(Icons.undo, _arabic ? 'تراجع' : 'Undo',
-              _canMutate && _sheet.canUndo ? _sheet.undo : null),
-          _cmd(Icons.redo, _arabic ? 'إعادة' : 'Redo',
-              _canMutate && _sheet.canRedo ? _sheet.redo : null),
+          _cmd(
+            Icons.undo,
+            _arabic ? 'تراجع' : 'Undo',
+            _canMutate && _sheet.canUndo ? _sheet.undo : null,
+          ),
+          _cmd(
+            Icons.redo,
+            _arabic ? 'إعادة' : 'Redo',
+            _canMutate && _sheet.canRedo ? _sheet.redo : null,
+          ),
         ],
       ),
       StudioRibbonGroup(
         title: _arabic ? 'خلايا' : 'Cells',
         children: <Widget>[
-          _cmd(Icons.edit_outlined, _arabic ? 'تحرير F2' : 'Edit F2',
-              _canMutate ? _sheet.beginCellEdit : null),
-          _cmd(Icons.clear, _arabic ? 'مسح' : 'Clear',
-              _canMutate ? _sheet.clearSelectedCells : null),
-          _cmd(Icons.backspace_outlined, _arabic ? 'مسح البؤرة' : 'Clear cell',
-              _canMutate ? _clearActiveCell : null),
+          _cmd(
+            Icons.edit_outlined,
+            _arabic ? 'تحرير F2' : 'Edit F2',
+            _canMutate ? _sheet.beginCellEdit : null,
+          ),
+          _cmd(
+            Icons.clear,
+            _arabic ? 'مسح' : 'Clear',
+            _canMutate ? _sheet.clearSelectedCells : null,
+          ),
+          _cmd(
+            Icons.backspace_outlined,
+            _arabic ? 'مسح البؤرة' : 'Clear cell',
+            _canMutate ? _clearActiveCell : null,
+          ),
           _cmd(
             Icons.table_rows,
             _arabic ? 'إدراج صف' : 'Insert row',
@@ -1709,6 +2349,34 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
         ],
       ),
       StudioRibbonGroup(
+        title: _arabic ? 'محاذاة' : 'Alignment',
+        children: <Widget>[
+          _cmd(
+            Icons.call_merge,
+            _arabic ? 'دمج وتوسيط' : 'Merge & Center',
+            _canMutate && _sheet.canMergeAndCenter
+                ? _sheet.toggleMergeAndCenter
+                : null,
+            selected: _sheet.hasMergedSelection,
+          ),
+          _cmd(
+            Icons.call_split,
+            _arabic ? 'إلغاء الدمج' : 'Unmerge',
+            _canMutate && _sheet.canUnmergeCells ? _sheet.unmergeCells : null,
+          ),
+          _cmd(
+            Icons.format_color_fill,
+            _arabic ? 'تعبئة' : 'Fill',
+            _canMutate ? _sheet.cycleSelectionFillRgb : null,
+          ),
+          _cmd(
+            Icons.format_color_text,
+            _arabic ? 'لون النص' : 'Font color',
+            _canMutate ? _sheet.cycleSelectionFontRgb : null,
+          ),
+        ],
+      ),
+      StudioRibbonGroup(
         title: _arabic ? 'تحجيم' : 'Size',
         children: <Widget>[
           _cmd(
@@ -1736,16 +2404,25 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
       StudioRibbonGroup(
         title: _arabic ? 'إدراج سريع' : 'Quick insert',
         children: <Widget>[
-          _cmd(Icons.image_outlined, _arabic ? 'صورة' : 'Picture',
-              _canMutate ? () => _insertSheetPicture(fromFile: true) : null),
-          _cmd(Icons.bar_chart, _arabic ? 'أعمدة' : 'Column',
-              _canMutate
-                  ? () => _insertSheetChart(OfficeVisualKind.chartColumn)
-                  : null),
-          _cmd(Icons.pie_chart, _arabic ? 'دائري' : 'Pie',
-              _canMutate
-                  ? () => _insertSheetChart(OfficeVisualKind.chartPie)
-                  : null),
+          _cmd(
+            Icons.image_outlined,
+            _arabic ? 'صورة' : 'Picture',
+            _canMutate ? () => _insertSheetPicture(fromFile: true) : null,
+          ),
+          _cmd(
+            Icons.bar_chart,
+            _arabic ? 'أعمدة' : 'Column',
+            _canMutate
+                ? () => _insertSheetChart(OfficeVisualKind.chartColumn)
+                : null,
+          ),
+          _cmd(
+            Icons.pie_chart,
+            _arabic ? 'دائري' : 'Pie',
+            _canMutate
+                ? () => _insertSheetChart(OfficeVisualKind.chartPie)
+                : null,
+          ),
         ],
       ),
       if (_sheet.selectedDrawing != null) ..._visualRibbon(),
@@ -1757,28 +2434,46 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
       StudioRibbonGroup(
         title: _arabic ? 'رسوم' : 'Illustrations',
         children: <Widget>[
-          _cmd(Icons.image_outlined, _arabic ? 'صورة' : 'Picture',
-              _canMutate ? () => _insertSheetPicture(fromFile: true) : null),
-          _cmd(Icons.bar_chart, _arabic ? 'أعمدة' : 'Column',
-              _canMutate
-                  ? () => _insertSheetChart(OfficeVisualKind.chartColumn)
-                  : null),
-          _cmd(Icons.stacked_bar_chart, _arabic ? 'شريطي' : 'Bar',
-              _canMutate
-                  ? () => _insertSheetChart(OfficeVisualKind.chartBar)
-                  : null),
-          _cmd(Icons.pie_chart, _arabic ? 'دائري' : 'Pie',
-              _canMutate
-                  ? () => _insertSheetChart(OfficeVisualKind.chartPie)
-                  : null),
-          _cmd(Icons.show_chart, _arabic ? 'خطي' : 'Line',
-              _canMutate
-                  ? () => _insertSheetChart(OfficeVisualKind.chartLine)
-                  : null),
-          _cmd(Icons.account_tree, _arabic ? 'عملية' : 'Process',
-              _canMutate
-                  ? () => _insertSheetChart(OfficeVisualKind.diagramProcess)
-                  : null),
+          _cmd(
+            Icons.image_outlined,
+            _arabic ? 'صورة' : 'Picture',
+            _canMutate ? () => _insertSheetPicture(fromFile: true) : null,
+          ),
+          _cmd(
+            Icons.bar_chart,
+            _arabic ? 'أعمدة' : 'Column',
+            _canMutate
+                ? () => _insertSheetChart(OfficeVisualKind.chartColumn)
+                : null,
+          ),
+          _cmd(
+            Icons.stacked_bar_chart,
+            _arabic ? 'شريطي' : 'Bar',
+            _canMutate
+                ? () => _insertSheetChart(OfficeVisualKind.chartBar)
+                : null,
+          ),
+          _cmd(
+            Icons.pie_chart,
+            _arabic ? 'دائري' : 'Pie',
+            _canMutate
+                ? () => _insertSheetChart(OfficeVisualKind.chartPie)
+                : null,
+          ),
+          _cmd(
+            Icons.show_chart,
+            _arabic ? 'خطي' : 'Line',
+            _canMutate
+                ? () => _insertSheetChart(OfficeVisualKind.chartLine)
+                : null,
+          ),
+          _cmd(
+            Icons.account_tree,
+            _arabic ? 'عملية' : 'Process',
+            _canMutate
+                ? () => _insertSheetChart(OfficeVisualKind.diagramProcess)
+                : null,
+          ),
         ],
       ),
       StudioRibbonGroup(
@@ -1804,31 +2499,67 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
       StudioRibbonGroup(
         title: _arabic ? 'دالة' : 'Function',
         children: <Widget>[
-          _cmd(Icons.functions, 'SUM',
-              _canMutate ? () => _insertFormula('SUM') : null),
-          _cmd(Icons.functions, 'AVERAGE',
-              _canMutate ? () => _insertFormula('AVERAGE') : null),
-          _cmd(Icons.functions, 'MIN',
-              _canMutate ? () => _insertFormula('MIN') : null),
-          _cmd(Icons.functions, 'MAX',
-              _canMutate ? () => _insertFormula('MAX') : null),
-          _cmd(Icons.functions, 'COUNT',
-              _canMutate ? () => _insertFormula('COUNT') : null),
-          _cmd(Icons.functions, 'COUNTA',
-              _canMutate ? () => _insertFormula('COUNTA') : null),
+          _cmd(
+            Icons.functions,
+            'SUM',
+            _canMutate ? () => _insertFormula('SUM') : null,
+          ),
+          _cmd(
+            Icons.functions,
+            'AVERAGE',
+            _canMutate ? () => _insertFormula('AVERAGE') : null,
+          ),
+          _cmd(
+            Icons.functions,
+            'MIN',
+            _canMutate ? () => _insertFormula('MIN') : null,
+          ),
+          _cmd(
+            Icons.functions,
+            'MAX',
+            _canMutate ? () => _insertFormula('MAX') : null,
+          ),
+          _cmd(
+            Icons.functions,
+            'COUNT',
+            _canMutate ? () => _insertFormula('COUNT') : null,
+          ),
+          _cmd(
+            Icons.functions,
+            'COUNTA',
+            _canMutate ? () => _insertFormula('COUNTA') : null,
+          ),
           _cmd(Icons.functions, 'IF', _canMutate ? _insertIfFormula : null),
-          _cmd(Icons.functions, 'SUMIF',
-              _canMutate ? () => _insertFormula('SUMIF') : null),
-          _cmd(Icons.functions, 'COUNTIF',
-              _canMutate ? () => _insertFormula('COUNTIF') : null),
-          _cmd(Icons.functions, 'IFERROR',
-              _canMutate ? () => _insertFormula('IFERROR') : null),
-          _cmd(Icons.functions, 'ROUND',
-              _canMutate ? () => _insertFormula('ROUND') : null),
-          _cmd(Icons.functions, 'CONCAT',
-              _canMutate ? () => _insertFormula('CONCAT') : null),
-          _cmd(Icons.functions, 'VLOOKUP',
-              _canMutate ? () => _insertFormula('VLOOKUP') : null),
+          _cmd(
+            Icons.functions,
+            'SUMIF',
+            _canMutate ? () => _insertFormula('SUMIF') : null,
+          ),
+          _cmd(
+            Icons.functions,
+            'COUNTIF',
+            _canMutate ? () => _insertFormula('COUNTIF') : null,
+          ),
+          _cmd(
+            Icons.functions,
+            'IFERROR',
+            _canMutate ? () => _insertFormula('IFERROR') : null,
+          ),
+          _cmd(
+            Icons.functions,
+            'ROUND',
+            _canMutate ? () => _insertFormula('ROUND') : null,
+          ),
+          _cmd(
+            Icons.functions,
+            'CONCAT',
+            _canMutate ? () => _insertFormula('CONCAT') : null,
+          ),
+          _cmd(
+            Icons.functions,
+            'VLOOKUP',
+            _canMutate ? () => _insertFormula('VLOOKUP') : null,
+          ),
         ],
       ),
       StudioRibbonGroup(
@@ -1849,8 +2580,11 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
       StudioRibbonGroup(
         title: _arabic ? 'أوراق' : 'Sheets',
         children: <Widget>[
-          _cmd(Icons.post_add, _arabic ? 'ورقة' : 'Insert',
-              _canMutate ? _addSheet : null),
+          _cmd(
+            Icons.post_add,
+            _arabic ? 'ورقة' : 'Insert',
+            _canMutate ? _addSheet : null,
+          ),
           _cmd(
             Icons.delete_outline,
             _arabic ? 'حذف' : 'Delete',
@@ -1863,18 +2597,127 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
       StudioRibbonGroup(
         title: _arabic ? 'رسوم' : 'Charts',
         children: <Widget>[
-          _cmd(Icons.bar_chart, _arabic ? 'أعمدة' : 'Column',
-              _canMutate
-                  ? () => _insertSheetChart(OfficeVisualKind.chartColumn)
-                  : null),
-          _cmd(Icons.pie_chart, _arabic ? 'دائري' : 'Pie',
-              _canMutate
-                  ? () => _insertSheetChart(OfficeVisualKind.chartPie)
-                  : null),
-          _cmd(Icons.show_chart, _arabic ? 'خطي' : 'Line',
-              _canMutate
-                  ? () => _insertSheetChart(OfficeVisualKind.chartLine)
-                  : null),
+          _cmd(
+            Icons.bar_chart,
+            _arabic ? 'أعمدة' : 'Column',
+            _canMutate
+                ? () => _insertSheetChart(OfficeVisualKind.chartColumn)
+                : null,
+          ),
+          _cmd(
+            Icons.pie_chart,
+            _arabic ? 'دائري' : 'Pie',
+            _canMutate
+                ? () => _insertSheetChart(OfficeVisualKind.chartPie)
+                : null,
+          ),
+          _cmd(
+            Icons.show_chart,
+            _arabic ? 'خطي' : 'Line',
+            _canMutate
+                ? () => _insertSheetChart(OfficeVisualKind.chartLine)
+                : null,
+          ),
+        ],
+      ),
+      StudioRibbonGroup(
+        title: _arabic ? 'بيانات' : 'Data',
+        children: <Widget>[
+          _cmd(
+            Icons.sort_by_alpha,
+            _arabic ? 'فرز' : 'Sort',
+            _canMutate ? () => _sheet.sortSelection() : null,
+          ),
+          _cmd(
+            Icons.filter_alt,
+            _arabic ? 'تصفية' : 'Filter',
+            _canMutate ? () => _sheet.filterSelection() : null,
+            selected: _sheet.sheet.autoFilter != null,
+          ),
+          _cmd(
+            Icons.filter_alt_off,
+            _arabic ? 'إلغاء التصفية' : 'Clear',
+            _canMutate && _sheet.sheet.autoFilter != null
+                ? _sheet.clearFilter
+                : null,
+          ),
+          _cmd(
+            Icons.bookmark_border,
+            _arabic ? 'اسم' : 'Name',
+            _canMutate
+                ? () => _sheet.defineName(
+                    'Range${_sheet.workbook.namedRanges.length + 1}',
+                  )
+                : null,
+          ),
+          _cmd(
+            Icons.print_outlined,
+            _arabic ? 'منطقة طباعة' : 'Print area',
+            _canMutate ? () => _sheet.setPrintArea(null) : null,
+          ),
+        ],
+      ),
+      StudioRibbonGroup(
+        title: _arabic ? 'أدوات' : 'Tools',
+        children: <Widget>[
+          _cmd(
+            Icons.comment_outlined,
+            _arabic ? 'تعليق' : 'Comment',
+            _canMutate
+                ? () => _sheet.setCellComment(
+                    _arabic ? 'تعليق خلية' : 'Cell comment',
+                  )
+                : null,
+          ),
+          _cmd(
+            Icons.lock_outline,
+            _arabic ? 'حماية' : 'Protect',
+            _canMutate
+                ? () => _sheet.protectSheet(
+                    enabled: !(_sheet.sheet.protection?.enabled ?? false),
+                  )
+                : null,
+            selected: _sheet.sheet.protection?.enabled ?? false,
+          ),
+          _cmd(
+            Icons.table_chart_outlined,
+            _arabic ? 'جدول' : 'Table',
+            _canMutate
+                ? () => _sheet.addTable(
+                    name: 'Table${_sheet.sheet.tables.length + 1}',
+                  )
+                : null,
+          ),
+          _cmd(
+            Icons.checklist,
+            _arabic ? 'تحقق' : 'Validate',
+            _canMutate ? _studioSheetValidation : null,
+          ),
+          _cmd(
+            Icons.pivot_table_chart,
+            _arabic ? 'محور' : 'Pivot',
+            _canMutate ? _studioInsertPivot : null,
+          ),
+          _cmd(
+            Icons.south,
+            _arabic ? 'تعبئة' : 'Fill',
+            _canMutate ? () => _sheet.fillSeries() : null,
+          ),
+          _cmd(
+            Icons.show_chart,
+            _arabic ? 'شرارة' : 'Sparkline',
+            _canMutate ? () => _sheet.addSparkline() : null,
+          ),
+          _cmd(
+            Icons.adjust,
+            _arabic ? 'هدف' : 'Goal seek',
+            _canMutate ? _studioGoalSeek : null,
+          ),
+          _cmd(
+            Icons.table_view,
+            _arabic ? 'CSV' : 'CSV',
+            _canMutate ? _studioImportCsv : null,
+          ),
         ],
       ),
     ];
@@ -1909,13 +2752,15 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
             Icons.table_rows,
             _arabic ? 'تجميد صف' : 'Freeze row',
             _canMutate ? _sheet.freezeTopRow : null,
-            selected: _sheet.sheet.freezeRows == 1 && _sheet.sheet.freezeCols == 0,
+            selected:
+                _sheet.sheet.freezeRows == 1 && _sheet.sheet.freezeCols == 0,
           ),
           _cmd(
             Icons.view_column,
             _arabic ? 'تجميد عمود' : 'Freeze column',
             _canMutate ? _sheet.freezeFirstColumn : null,
-            selected: _sheet.sheet.freezeCols == 1 && _sheet.sheet.freezeRows == 0,
+            selected:
+                _sheet.sheet.freezeCols == 1 && _sheet.sheet.freezeRows == 0,
           ),
           ..._zoomCmds(),
         ],
@@ -1946,14 +2791,23 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
       StudioRibbonGroup(
         title: _arabic ? 'الشرائح' : 'Slides',
         children: <Widget>[
-          _cmd(Icons.add_box_outlined, _arabic ? 'جديد' : 'New',
-              _canMutate ? _addSlide : null),
-          _cmd(Icons.copy_outlined, _arabic ? 'نسخ' : 'Duplicate',
-              _canMutate ? _duplicateSlide : null),
-          _cmd(Icons.delete_outline, _arabic ? 'حذف' : 'Delete',
-              _canMutate && _slides.presentation.slides.length > 1
-                  ? _deleteSlide
-                  : null),
+          _cmd(
+            Icons.add_box_outlined,
+            _arabic ? 'جديد' : 'New',
+            _canMutate ? _addSlide : null,
+          ),
+          _cmd(
+            Icons.copy_outlined,
+            _arabic ? 'نسخ' : 'Duplicate',
+            _canMutate ? _duplicateSlide : null,
+          ),
+          _cmd(
+            Icons.delete_outline,
+            _arabic ? 'حذف' : 'Delete',
+            _canMutate && _slides.presentation.slides.length > 1
+                ? _deleteSlide
+                : null,
+          ),
         ],
       ),
       StudioRibbonGroup(
@@ -1968,6 +2822,81 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
         ],
       ),
       StudioRibbonGroup(
+        title: _arabic ? 'ترتيب' : 'Arrange',
+        children: <Widget>[
+          _cmd(
+            Icons.align_horizontal_left,
+            _arabic ? 'يسار' : 'Left',
+            _canMutate
+                ? () => _slides.alignShapes(PmlAlignAxis.left)
+                : null,
+          ),
+          _cmd(
+            Icons.align_horizontal_center,
+            _arabic ? 'وسط' : 'Center',
+            _canMutate
+                ? () => _slides.alignShapes(PmlAlignAxis.center)
+                : null,
+          ),
+          _cmd(
+            Icons.align_vertical_top,
+            _arabic ? 'أعلى' : 'Top',
+            _canMutate ? () => _slides.alignShapes(PmlAlignAxis.top) : null,
+          ),
+          _cmd(
+            Icons.view_agenda_outlined,
+            _arabic ? 'قسم' : 'Section',
+            _canMutate
+                ? () => _slides.addSlideSection(
+                    _arabic ? 'قسم جديد' : 'New section',
+                  )
+                : null,
+          ),
+          _cmd(
+            Icons.group_work_outlined,
+            _arabic ? 'تجميع' : 'Group',
+            _canMutate && _slides.slide.shapes.length >= 2
+                ? () => _slides.groupShapes()
+                : null,
+          ),
+          _cmd(
+            Icons.group_off_outlined,
+            _arabic ? 'فك' : 'Ungroup',
+            _canMutate ? () => _slides.ungroupShapes() : null,
+          ),
+          _cmd(
+            Icons.title,
+            _arabic ? 'عنصر نائب' : 'Placeholder',
+            _canMutate
+                ? () => _slides.setLayoutPlaceholder(
+                    layoutName: _slides.slide.layoutName.isEmpty
+                        ? 'Title Slide'
+                        : _slides.slide.layoutName,
+                    text: _arabic ? 'انقر للعنوان' : 'Click to add title',
+                  )
+                : null,
+          ),
+          _cmd(
+            Icons.videocam_outlined,
+            _arabic ? 'وسائط' : 'Media',
+            _canMutate && _slides.selected != null
+                ? () => _slides.setShapeMedia(
+                    _slides.selected!,
+                    name: 'clip.mp4',
+                    bytes: <int>[0, 0, 0, 0],
+                  )
+                : null,
+          ),
+          _cmd(
+            Icons.play_circle_outline,
+            _arabic ? 'تشغيل' : 'Play',
+            _slides.selected?.hasMedia == true
+                ? () => _slides.playShapeMedia(_slides.selected!)
+                : null,
+          ),
+        ],
+      ),
+      StudioRibbonGroup(
         title: _arabic ? 'خط النص' : 'Text font',
         children: <Widget>[
           StudioCombo<int>(
@@ -1975,9 +2904,13 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
             items: OfficeTypeface.sizesPt,
             labelOf: (int pt) => '$pt',
             width: 52,
-            enabled: _canMutate && _slides.selected != null && _slides.selected!.visual == null,
+            enabled:
+                _canMutate &&
+                _slides.selected != null &&
+                _slides.selected!.visual == null,
             tooltip: _arabic ? 'حجم النص' : 'Text size',
-            onSelected: _canMutate &&
+            onSelected:
+                _canMutate &&
                     _slides.selected != null &&
                     _slides.selected!.visual == null
                 ? (int pt) => _slides.updateSelected(fontSizePt: pt.toDouble())
@@ -2041,18 +2974,36 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
       StudioRibbonGroup(
         title: _arabic ? 'ترتيب' : 'Arrange',
         children: <Widget>[
-          _cmd(Icons.arrow_back, '',
-              _canMutate ? () => _slides.nudgeSelected(-127000, 0) : null),
-          _cmd(Icons.arrow_forward, '',
-              _canMutate ? () => _slides.nudgeSelected(127000, 0) : null),
-          _cmd(Icons.arrow_upward, '',
-              _canMutate ? () => _slides.nudgeSelected(0, -127000) : null),
-          _cmd(Icons.arrow_downward, '',
-              _canMutate ? () => _slides.nudgeSelected(0, 127000) : null),
-          _cmd(Icons.flip_to_front, _arabic ? 'أمام' : 'Forward',
-              _canMutate ? () => _slides.reorderSelected(forward: true) : null),
-          _cmd(Icons.flip_to_back, _arabic ? 'خلف' : 'Back',
-              _canMutate ? () => _slides.reorderSelected(forward: false) : null),
+          _cmd(
+            Icons.arrow_back,
+            '',
+            _canMutate ? () => _slides.nudgeSelected(-127000, 0) : null,
+          ),
+          _cmd(
+            Icons.arrow_forward,
+            '',
+            _canMutate ? () => _slides.nudgeSelected(127000, 0) : null,
+          ),
+          _cmd(
+            Icons.arrow_upward,
+            '',
+            _canMutate ? () => _slides.nudgeSelected(0, -127000) : null,
+          ),
+          _cmd(
+            Icons.arrow_downward,
+            '',
+            _canMutate ? () => _slides.nudgeSelected(0, 127000) : null,
+          ),
+          _cmd(
+            Icons.flip_to_front,
+            _arabic ? 'أمام' : 'Forward',
+            _canMutate ? () => _slides.reorderSelected(forward: true) : null,
+          ),
+          _cmd(
+            Icons.flip_to_back,
+            _arabic ? 'خلف' : 'Back',
+            _canMutate ? () => _slides.reorderSelected(forward: false) : null,
+          ),
           _cmd(
             Icons.align_horizontal_left,
             _arabic ? 'يسار' : 'Left',
@@ -2141,16 +3092,14 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
             _cmd(
               Icons.delete_sweep,
               _arabic ? 'حذف صف' : 'Delete row',
-              _canEditSlideTable &&
-                      (_slides.selectedTable?.rowCount ?? 0) > 1
+              _canEditSlideTable && (_slides.selectedTable?.rowCount ?? 0) > 1
                   ? _slides.deleteSelectedTableRow
                   : null,
             ),
             _cmd(
               Icons.view_column_outlined,
               _arabic ? 'حذف عمود' : 'Delete column',
-              _canEditSlideTable &&
-                      (_slides.selectedTable?.colCount ?? 0) > 1
+              _canEditSlideTable && (_slides.selectedTable?.colCount ?? 0) > 1
                   ? _slides.deleteSelectedTableColumn
                   : null,
             ),
@@ -2164,43 +3113,73 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
       StudioRibbonGroup(
         title: _arabic ? 'أشكال' : 'Shapes',
         children: <Widget>[
-          _cmd(Icons.crop_square, _arabic ? 'بطاقة' : 'Card',
-              _canMutate ? _addCardShape : null),
-          _cmd(Icons.title, _arabic ? 'عنوان' : 'Title',
-              _canMutate ? _addTitleShape : null),
-          _cmd(Icons.rounded_corner, _arabic ? 'تمييز' : 'Accent',
-              _canMutate ? _addAccentShape : null),
+          _cmd(
+            Icons.crop_square,
+            _arabic ? 'بطاقة' : 'Card',
+            _canMutate ? _addCardShape : null,
+          ),
+          _cmd(
+            Icons.title,
+            _arabic ? 'عنوان' : 'Title',
+            _canMutate ? _addTitleShape : null,
+          ),
+          _cmd(
+            Icons.rounded_corner,
+            _arabic ? 'تمييز' : 'Accent',
+            _canMutate ? _addAccentShape : null,
+          ),
         ],
       ),
       StudioRibbonGroup(
         title: _arabic ? 'رسوم' : 'Illustrations',
         children: <Widget>[
-          _cmd(Icons.image_outlined, _arabic ? 'صورة' : 'Picture',
-              _canMutate ? () => _insertSlidePicture(fromFile: true) : null),
-          _cmd(Icons.bar_chart, _arabic ? 'أعمدة' : 'Column',
-              _canMutate
-                  ? () => _insertSlideVisual(OfficeVisualKind.chartColumn)
-                  : null),
-          _cmd(Icons.pie_chart, _arabic ? 'دائري' : 'Pie',
-              _canMutate
-                  ? () => _insertSlideVisual(OfficeVisualKind.chartPie)
-                  : null),
-          _cmd(Icons.account_tree, _arabic ? 'عملية' : 'Process',
-              _canMutate
-                  ? () => _insertSlideVisual(OfficeVisualKind.diagramProcess)
-                  : null),
-          _cmd(Icons.stacked_bar_chart, _arabic ? 'شريطي' : 'Bar',
-              _canMutate
-                  ? () => _insertSlideVisual(OfficeVisualKind.chartBar)
-                  : null),
-          _cmd(Icons.show_chart, _arabic ? 'خطي' : 'Line',
-              _canMutate
-                  ? () => _insertSlideVisual(OfficeVisualKind.chartLine)
-                  : null),
-          _cmd(Icons.sync, _arabic ? 'دورة' : 'Cycle',
-              _canMutate
-                  ? () => _insertSlideVisual(OfficeVisualKind.diagramCycle)
-                  : null),
+          _cmd(
+            Icons.image_outlined,
+            _arabic ? 'صورة' : 'Picture',
+            _canMutate ? () => _insertSlidePicture(fromFile: true) : null,
+          ),
+          _cmd(
+            Icons.bar_chart,
+            _arabic ? 'أعمدة' : 'Column',
+            _canMutate
+                ? () => _insertSlideVisual(OfficeVisualKind.chartColumn)
+                : null,
+          ),
+          _cmd(
+            Icons.pie_chart,
+            _arabic ? 'دائري' : 'Pie',
+            _canMutate
+                ? () => _insertSlideVisual(OfficeVisualKind.chartPie)
+                : null,
+          ),
+          _cmd(
+            Icons.account_tree,
+            _arabic ? 'عملية' : 'Process',
+            _canMutate
+                ? () => _insertSlideVisual(OfficeVisualKind.diagramProcess)
+                : null,
+          ),
+          _cmd(
+            Icons.stacked_bar_chart,
+            _arabic ? 'شريطي' : 'Bar',
+            _canMutate
+                ? () => _insertSlideVisual(OfficeVisualKind.chartBar)
+                : null,
+          ),
+          _cmd(
+            Icons.show_chart,
+            _arabic ? 'خطي' : 'Line',
+            _canMutate
+                ? () => _insertSlideVisual(OfficeVisualKind.chartLine)
+                : null,
+          ),
+          _cmd(
+            Icons.sync,
+            _arabic ? 'دورة' : 'Cycle',
+            _canMutate
+                ? () => _insertSlideVisual(OfficeVisualKind.diagramCycle)
+                : null,
+          ),
         ],
       ),
       StudioRibbonGroup(
@@ -2237,18 +3216,27 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
       StudioRibbonGroup(
         title: _arabic ? 'شكل' : 'Shape',
         children: <Widget>[
-          _cmd(Icons.format_color_fill, _arabic ? 'تعبئة' : 'Fill',
-              _canMutate && _slides.selected != null ? _cycleShapeFill : null),
-          _cmd(Icons.filter_center_focus, _arabic ? 'توسيط' : 'Center',
-              _canMutate && _slides.selected != null
-                  ? _centerSelectedShape
-                  : null),
-          _cmd(Icons.title, _arabic ? 'نص' : 'Text',
-              _canMutate &&
-                      _slides.selected != null &&
-                      _slides.selected!.visual == null
-                  ? _slides.beginTextEdit
-                  : null),
+          _cmd(
+            Icons.format_color_fill,
+            _arabic ? 'تعبئة' : 'Fill',
+            _canMutate && _slides.selected != null ? _cycleShapeFill : null,
+          ),
+          _cmd(
+            Icons.filter_center_focus,
+            _arabic ? 'توسيط' : 'Center',
+            _canMutate && _slides.selected != null
+                ? _centerSelectedShape
+                : null,
+          ),
+          _cmd(
+            Icons.title,
+            _arabic ? 'نص' : 'Text',
+            _canMutate &&
+                    _slides.selected != null &&
+                    _slides.selected!.visual == null
+                ? _slides.beginTextEdit
+                : null,
+          ),
         ],
       ),
       if (_slides.selected?.visual != null) ..._visualRibbon(),
@@ -2283,9 +3271,7 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
             _cmd(
               _transitionIcon(kind),
               PmlMotionCatalog.transitionLabel(kind, arabic: _arabic),
-              () => _slides.setSlideTransition(
-                current.copyWith(kind: kind),
-              ),
+              () => _slides.setSlideTransition(current.copyWith(kind: kind)),
               selected: current.kind == kind,
             ),
         ],
@@ -2298,8 +3284,8 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
             _dirLabel(current.direction),
             PmlMotionCatalog.usesDirection(current.kind)
                 ? () => _slides.setSlideTransition(
-                      current.copyWith(direction: _nextDir(current.direction)),
-                    )
+                    current.copyWith(direction: _nextDir(current.direction)),
+                  )
                 : null,
           ),
           _cmd(
@@ -2324,7 +3310,10 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
           _cmd(
             Icons.more_time,
             _advanceLabel(current),
-            () => _slides.setSlideTransition(_cycleAdvance(current), preview: false),
+            () => _slides.setSlideTransition(
+              _cycleAdvance(current),
+              preview: false,
+            ),
           ),
           _cmd(
             Icons.copy_all,
@@ -2407,9 +3396,9 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
             _activeAnimIndex == null
                 ? null
                 : () => _slides.updateShapeAnimation(
-                      _activeAnimIndex!,
-                      trigger: _nextTrigger(_activeAnim!.trigger),
-                    ),
+                    _activeAnimIndex!,
+                    trigger: _nextTrigger(_activeAnim!.trigger),
+                  ),
           ),
           _cmd(
             Icons.swap_horiz,
@@ -2418,9 +3407,9 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
                     !PmlMotionCatalog.animUsesDirection(_activeAnim!.preset)
                 ? null
                 : () => _slides.updateShapeAnimation(
-                      _activeAnimIndex!,
-                      direction: _nextDir(_activeAnim!.direction),
-                    ),
+                    _activeAnimIndex!,
+                    direction: _nextDir(_activeAnim!.direction),
+                  ),
           ),
           _cmd(
             Icons.timer,
@@ -2428,9 +3417,9 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
             _activeAnimIndex == null
                 ? null
                 : () => _slides.updateShapeAnimation(
-                      _activeAnimIndex!,
-                      durationMs: _nextDuration(_activeAnim!.durationMs),
-                    ),
+                    _activeAnimIndex!,
+                    durationMs: _nextDuration(_activeAnim!.durationMs),
+                  ),
           ),
           _cmd(
             Icons.more_time,
@@ -2438,9 +3427,9 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
             _activeAnimIndex == null
                 ? null
                 : () => _slides.updateShapeAnimation(
-                      _activeAnimIndex!,
-                      delayMs: _nextDelay(_activeAnim!.delayMs),
-                    ),
+                    _activeAnimIndex!,
+                    delayMs: _nextDelay(_activeAnim!.delayMs),
+                  ),
           ),
         ],
       ),
@@ -2449,7 +3438,9 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
 
   int? get _activeAnimIndex =>
       _slides.selectedAnimationIndex ??
-      (_slides.slide.animations.isEmpty ? null : _slides.slide.animations.length - 1);
+      (_slides.slide.animations.isEmpty
+          ? null
+          : _slides.slide.animations.length - 1);
 
   PmlShapeAnimation? get _activeAnim {
     final int? index = _activeAnimIndex;
@@ -2565,12 +3556,12 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
       PmlTransitionKind.none => Icons.block,
       PmlTransitionKind.morph => Icons.transform,
       PmlTransitionKind.fade ||
-      PmlTransitionKind.fadeThroughBlack =>
-        Icons.blur_on,
+      PmlTransitionKind.fadeThroughBlack => Icons.blur_on,
       PmlTransitionKind.cut => Icons.content_cut,
       PmlTransitionKind.push => Icons.keyboard_double_arrow_left,
       PmlTransitionKind.wipe => Icons.cleaning_services_outlined,
-      PmlTransitionKind.split || PmlTransitionKind.doors => Icons.vertical_split,
+      PmlTransitionKind.split ||
+      PmlTransitionKind.doors => Icons.vertical_split,
       PmlTransitionKind.uncover || PmlTransitionKind.reveal => Icons.visibility,
       PmlTransitionKind.cover => Icons.layers,
       PmlTransitionKind.dissolve => Icons.grain,
@@ -2583,7 +3574,8 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
       PmlTransitionKind.newsflash => Icons.flash_on,
       PmlTransitionKind.zoom => Icons.zoom_in,
       PmlTransitionKind.flash => Icons.wb_sunny_outlined,
-      PmlTransitionKind.strips || PmlTransitionKind.randomBars => Icons.view_stream,
+      PmlTransitionKind.strips ||
+      PmlTransitionKind.randomBars => Icons.view_stream,
       PmlTransitionKind.gallery => Icons.view_carousel,
     };
   }
@@ -2628,6 +3620,30 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
             _arabic ? 'ملاحظات' : 'Notes',
             () => setState(() => _showNotes = !_showNotes),
             selected: _showNotes,
+          ),
+          _cmd(
+            Icons.view_compact_alt,
+            _arabic ? 'تخطيط' : 'Layout',
+            _canMutate
+                ? () => _slides.setStageKind(
+                    _slides.stageKind == SlideStageKind.layout
+                        ? SlideStageKind.slide
+                        : SlideStageKind.layout,
+                  )
+                : null,
+            selected: _slides.stageKind == SlideStageKind.layout,
+          ),
+          _cmd(
+            Icons.layers_outlined,
+            _arabic ? 'رئيس' : 'Master',
+            _canMutate
+                ? () => _slides.setStageKind(
+                    _slides.stageKind == SlideStageKind.master
+                        ? SlideStageKind.slide
+                        : SlideStageKind.master,
+                  )
+                : null,
+            selected: _slides.stageKind == SlideStageKind.master,
           ),
           ..._zoomCmds(),
         ],
@@ -2700,14 +3716,17 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
           _switchApp(SuiteApp.word);
           await _word.loadBytesAsync(bytes, onProgress: onProgress);
           _wordPath = picked.path;
+          _wordName = _nameFromPicked(picked);
         case OpcPackageKind.sheet:
           _switchApp(SuiteApp.excel);
           await _sheet.loadBytesAsync(bytes, onProgress: onProgress);
           _sheetPath = picked.path;
+          _sheetName = _nameFromPicked(picked);
         case OpcPackageKind.slide:
           _switchApp(SuiteApp.powerpoint);
           await _slides.loadBytesAsync(bytes, onProgress: onProgress);
           _slidePath = picked.path;
+          _slideName = _nameFromPicked(picked);
         case OpcPackageKind.unknown:
           break;
       }
@@ -2790,10 +3809,10 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
   bool get _isSaving => _savePhase != _SavePhase.idle;
 
   String? get _activePath => switch (_app) {
-        SuiteApp.word => _wordPath,
-        SuiteApp.excel => _sheetPath,
-        SuiteApp.powerpoint => _slidePath,
-      };
+    SuiteApp.word => _wordPath,
+    SuiteApp.excel => _sheetPath,
+    SuiteApp.powerpoint => _slidePath,
+  };
 
   set _activePath(String? value) {
     switch (_app) {
@@ -2806,24 +3825,27 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
     }
   }
 
-  String get _defaultSaveName => switch (_app) {
-        SuiteApp.word => 'document.docx',
-        SuiteApp.excel => 'workbook.xlsx',
-        SuiteApp.powerpoint => 'presentation.pptx',
-      };
+  String get _defaultSaveName {
+    final String name = _activeName.trim();
+    if (name.isNotEmpty) {
+      return name;
+    }
+    return _untitledName;
+  }
 
   OpcPackageKind get _activeKind => switch (_app) {
-        SuiteApp.word => OpcPackageKind.word,
-        SuiteApp.excel => OpcPackageKind.sheet,
-        SuiteApp.powerpoint => OpcPackageKind.slide,
-      };
+    SuiteApp.word => OpcPackageKind.word,
+    SuiteApp.excel => OpcPackageKind.sheet,
+    SuiteApp.powerpoint => OpcPackageKind.slide,
+  };
 
   bool get _activeSaveIsHeavy => switch (_app) {
-        SuiteApp.word => OfficeSaveCost.isHeavyWord(_word.document),
-        SuiteApp.excel => OfficeSaveCost.isHeavyWorkbook(_sheet.workbook),
-        SuiteApp.powerpoint =>
-          OfficeSaveCost.isHeavyPresentation(_slides.presentation),
-      };
+    SuiteApp.word => OfficeSaveCost.isHeavyWord(_word.document),
+    SuiteApp.excel => OfficeSaveCost.isHeavyWorkbook(_sheet.workbook),
+    SuiteApp.powerpoint => OfficeSaveCost.isHeavyPresentation(
+      _slides.presentation,
+    ),
+  };
 
   String get _saveStatusLabel {
     if (_savePhase == _SavePhase.picking) {
@@ -2894,6 +3916,7 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
         }
         path = StudioFiles.withExtension(path, name);
         _activePath = path;
+        _activeName = StudioFiles.nameOf(path);
       }
 
       setState(() {
@@ -2939,60 +3962,167 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
       };
       final SfntFont? font = switch (_app) {
         SuiteApp.word => StudioFiles.exportFontForWord(
-            _word.document,
-            themeFamily: _officeTheme.fontFamily,
-          ),
-        SuiteApp.excel => StudioFiles.exportFontCovering(
-            <String>[
-              'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
-              for (final SmlWorksheet sheet in _sheet.workbook.sheets) ...<String>[
-                sheet.name,
-                for (final SmlCell cell in sheet.allCells) cell.asString,
-                for (final SmlDrawing drawing in sheet.drawings) ...<String>[
-                  drawing.visual.title,
-                  for (final ChartPoint point in drawing.visual.points)
-                    point.label,
-                ],
-              ],
+          _word.document,
+          themeFamily: _officeTheme.fontFamily,
+        ),
+        SuiteApp.excel => StudioFiles.exportFontCovering(<String>[
+          'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
+          for (final SmlWorksheet sheet in _sheet.workbook.sheets) ...<String>[
+            sheet.name,
+            for (final SmlCell cell in sheet.allCells) cell.asString,
+            for (final SmlDrawing drawing in sheet.drawings) ...<String>[
+              drawing.visual.title,
+              for (final ChartPoint point in drawing.visual.points) point.label,
             ],
-            preferred: _officeTheme.fontFamily,
-          ),
-        SuiteApp.powerpoint => StudioFiles.exportFontCovering(
-            <String>[
-              for (final PmlSlide slide in _slides.presentation.slides) ...<String>[
-                slide.notes,
-                for (final PmlShape shape in slide.shapes) ...<String>[
-                  _slides.presentation.resolveText(shape, slide),
-                  if (shape.visual != null) shape.visual!.title,
-                  if (shape.visual != null)
-                    for (final ChartPoint point in shape.visual!.points)
-                      point.label,
-                ],
-              ],
+          ],
+        ], preferred: _officeTheme.fontFamily),
+        SuiteApp.powerpoint => StudioFiles.exportFontCovering(<String>[
+          for (final PmlSlide slide in _slides.presentation.slides) ...<String>[
+            slide.notes,
+            for (final PmlShape shape in slide.shapes) ...<String>[
+              _slides.presentation.resolveText(shape, slide),
+              if (shape.visual != null) shape.visual!.title,
+              if (shape.visual != null)
+                for (final ChartPoint point in shape.visual!.points)
+                  point.label,
             ],
-            preferred: _officeTheme.fontFamily,
-          ),
+          ],
+        ], preferred: _officeTheme.fontFamily),
       };
-      final Uint8List bytes = switch (_app) {
-        SuiteApp.word => OfficePdfExport.word(
-            _word.document,
-            font: font,
-            title: stem,
-          ),
-        SuiteApp.excel => OfficePdfExport.workbook(
-            _sheet.workbook,
-            font: font,
-            title: stem,
-          ),
-        SuiteApp.powerpoint => OfficePdfExport.presentation(
-            _slides.presentation,
-            font: font,
-            title: stem,
-          ),
-      };
+      final Uint8List bytes = _active.exportPdf(
+        settings: OfficePrintSettings(title: stem),
+        font: font,
+      );
       await StudioFiles.save(bytes: bytes, fileName: '$stem.pdf');
     } catch (error) {
       _toast(_arabic ? 'تعذر تصدير PDF.' : 'Could not export PDF.');
+    }
+  }
+
+  void _bindHostActions(OfficeController controller) {
+    controller.onFindRequested = () {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _findOpen = true;
+        _findReplace = false;
+      });
+    };
+    controller.onReplaceRequested = () {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _findOpen = true;
+        _findReplace = true;
+      });
+    };
+    controller.onPrintRequested = () {
+      _exportPdf();
+    };
+    controller.onSpellCheckRequested = _showSpelling;
+  }
+
+  void _openFind() => _active.requestFind();
+
+  void _openReplace() => _active.requestReplace();
+
+  void _closeFind() {
+    _active.closeFind();
+    setState(() => _findOpen = false);
+  }
+
+  void _findNext() {
+    if (!_findOpen) {
+      _openFind();
+      return;
+    }
+    _active.findNext();
+    setState(() {});
+  }
+
+  void _findPrevious() {
+    if (!_findOpen) {
+      _openFind();
+      return;
+    }
+    _active.findPrevious();
+    setState(() {});
+  }
+
+  void _workspaceEscape() {
+    if (_findOpen) {
+      _closeFind();
+      return;
+    }
+    _slideShowEscape();
+  }
+
+  void _showSpelling() {
+    if (_active is WordEditorController) {
+      final List<OfficeSpellIssue> issues = _word.checkSpelling();
+      _toast(
+        issues.isEmpty
+            ? (_arabic ? 'لا أخطاء ظاهرة' : 'No issues (host dictionary)')
+            : '${issues.length}',
+      );
+      return;
+    }
+    _toast(_arabic ? 'التدقيق للمستندات' : 'Spelling is available in Word');
+  }
+
+  Future<void> _showProperties() async {
+    final OfficeDocumentProperties props = _active.documentProperties.copy();
+    final TextEditingController title = TextEditingController(text: props.title);
+    final TextEditingController author = TextEditingController(
+      text: props.creator,
+    );
+    try {
+      final bool? save = await showDialog<bool>(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: Text(_arabic ? 'خصائص المستند' : 'Document properties'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                TextField(
+                  controller: title,
+                  decoration: InputDecoration(
+                    labelText: _arabic ? 'العنوان' : 'Title',
+                  ),
+                ),
+                TextField(
+                  controller: author,
+                  decoration: InputDecoration(
+                    labelText: _arabic ? 'المؤلف' : 'Author',
+                  ),
+                ),
+              ],
+            ),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: Text(_arabic ? 'إلغاء' : 'Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: Text(_arabic ? 'حفظ' : 'Save'),
+              ),
+            ],
+          );
+        },
+      );
+      if (save == true) {
+        _active.documentProperties
+          ..title = title.text
+          ..creator = author.text;
+        _active.refresh();
+      }
+    } finally {
+      title.dispose();
+      author.dispose();
     }
   }
 
@@ -3000,12 +4130,15 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
     if (!mounted) {
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   StudioRibbonGroup _clipboardGroup() {
-    final OfficeStrings strings =
-        _arabic ? OfficeStrings.arabic : OfficeStrings.english;
+    final OfficeStrings strings = _arabic
+        ? OfficeStrings.arabic
+        : OfficeStrings.english;
     return StudioRibbonGroup(
       title: _arabic ? 'الحافظة' : 'Clipboard',
       children: <Widget>[
@@ -3032,18 +4165,15 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
           strings.cut,
           _canMutate && _active.canCut ? _cut : null,
         ),
-        _cmd(
-          Icons.content_copy,
-          strings.copy,
-          _active.canCopy ? _copy : null,
-        ),
+        _cmd(Icons.content_copy, strings.copy, _active.canCopy ? _copy : null),
       ],
     );
   }
 
   Widget _pasteOptionsBar(bool dark) {
-    final OfficeStrings strings =
-        _arabic ? OfficeStrings.arabic : OfficeStrings.english;
+    final OfficeStrings strings = _arabic
+        ? OfficeStrings.arabic
+        : OfficeStrings.english;
     return Material(
       color: dark ? const Color(0xFF333333) : const Color(0xFFF3F3F3),
       child: SizedBox(
@@ -3130,8 +4260,7 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
       _slides.selected!.visual == null &&
       _slides.selected!.table == null;
 
-  bool get _canEditSlideTable =>
-      _canMutate && _slides.selectedTable != null;
+  bool get _canEditSlideTable => _canMutate && _slides.selectedTable != null;
 
   void _setAlign(WmlJustification justification) {
     if (!_wordFullFormat) {
@@ -3204,8 +4333,9 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
 
   void _nudgeFontSize(int deltaHalfPoints) {
     _word.applyRunFormat((WmlRunProps p) {
-      p.fontSizeHalfPoints =
-          (p.fontSizeHalfPoints + deltaHalfPoints).clamp(16, 144).toInt();
+      p.fontSizeHalfPoints = (p.fontSizeHalfPoints + deltaHalfPoints)
+          .clamp(16, 144)
+          .toInt();
     });
   }
 
@@ -3222,7 +4352,8 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
     final List<WmlParagraph> paras = _word.document.paragraphs.toList();
     final String paraText = paras.isEmpty
         ? ''
-        : paras[_word.documentCaret.paragraphIndex.clamp(0, paras.length - 1)].text;
+        : paras[_word.documentCaret.paragraphIndex.clamp(0, paras.length - 1)]
+              .text;
     final bool rtl = PaintRunText.looksRtl(paraText);
     final String face = rtl
         ? (props.csFont.isNotEmpty ? props.csFont : props.asciiFont)
@@ -3291,9 +4422,10 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
 
   void _setFaceStyle(StudioFaceStyle style) {
     _word.applyRunFormat((WmlRunProps p) {
-      p.bold = style == StudioFaceStyle.bold ||
-          style == StudioFaceStyle.boldItalic;
-      p.italic = style == StudioFaceStyle.italic ||
+      p.bold =
+          style == StudioFaceStyle.bold || style == StudioFaceStyle.boldItalic;
+      p.italic =
+          style == StudioFaceStyle.italic ||
           style == StudioFaceStyle.boldItalic;
     });
   }
@@ -3314,6 +4446,76 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
         hanging: current.hanging,
       );
     });
+  }
+
+  void _insertStudioCitation() {
+    _word.insertCitation(
+      WmlCitation(
+        tag: 'Quds',
+        author: _arabic ? 'مكتب القدس' : 'Quds Office',
+        title: _arabic ? 'دليل المكتب' : 'Office Guide',
+        year: '2026',
+      ),
+    );
+  }
+
+  void _studioMergeMail() {
+    if (WordMailMerge.fieldsOf(_word.document).isEmpty) {
+      _word.insertText(_arabic ? 'عزيزي «الاسم»،' : 'Dear «Name»,');
+    }
+    _word.mergeMail(<String, String>{
+      'Name': 'Mohammed',
+      'الاسم': 'محمد',
+    });
+  }
+
+  void _studioCompareDocument() {
+    _word.compareWith(
+      WmlDocument.empty(
+        text: _arabic ? 'نسخة للمقارنة' : 'Comparison copy',
+      ),
+    );
+  }
+
+  void _studioSheetValidation() {
+    _sheet.addValidation(
+      SmlDataValidation(
+        range: _sheet.selection.range,
+        kind: SmlValidationKind.list,
+        formula1: _arabic ? 'نعم,لا' : 'Yes,No',
+      ),
+    );
+  }
+
+  void _studioMergePreview() {
+    final List<Map<String, String>> records = <Map<String, String>>[
+      <String, String>{'Name': 'Ada', 'الاسم': 'آدا'},
+      <String, String>{'Name': 'Omar', 'الاسم': 'عمر'},
+    ];
+    final int next = (_word.document.mailMergePreview + 1) % records.length;
+    _word.previewMailMerge(records, index: next);
+  }
+
+  void _studioGoalSeek() {
+    final SmlRange range = _sheet.selection.range;
+    _sheet.goalSeek(
+      target: SmlCellRef(range.maxCol, range.maxRow),
+      changing: SmlCellRef(range.minCol, range.minRow),
+      goal: 10,
+    );
+  }
+
+  void _studioImportCsv() {
+    _sheet.importCsv('Name,Amt\nAda,4\nOmar,6');
+  }
+
+  void _studioInsertPivot() {
+    final SmlRange range = _sheet.selection.range;
+    _sheet.insertPivot(
+      source: range,
+      rowField: 0,
+      dataField: range.maxCol > range.minCol ? 1 : 0,
+    );
   }
 
   void _insertWordTable(int rows, int cols) {
@@ -3436,55 +4638,86 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
       StudioRibbonGroup(
         title: _arabic ? 'تراكيب' : 'Structures',
         children: <Widget>[
-          _cmd(Icons.horizontal_split, _arabic ? 'كسر' : 'Fraction',
-              active
-                  ? () => _word.applyEquationStructure(OmmlStructure.fractionBar)
-                  : null),
-          _cmd(Icons.superscript, _arabic ? 'أس' : 'Script',
-              active
-                  ? () =>
-                      _word.applyEquationStructure(OmmlStructure.superscript)
-                  : null),
-          _cmd(Icons.square_foot, _arabic ? 'جذر' : 'Radical',
-              active
-                  ? () => _word.applyEquationStructure(OmmlStructure.squareRoot)
-                  : null),
-          _cmd(Icons.integration_instructions, '∫',
-              active
-                  ? () => _word
-                      .applyEquationStructure(OmmlStructure.integralDefinite)
-                  : null),
-          _cmd(Icons.functions, '∑',
-              active
-                  ? () => _word.applyEquationStructure(OmmlStructure.sum)
-                  : null),
-          _cmd(Icons.data_array, _arabic ? 'قوس' : 'Bracket',
-              active
-                  ? () => _word.applyEquationStructure(OmmlStructure.paren)
-                  : null),
-          _cmd(Icons.grid_on, _arabic ? 'مصفوفة' : 'Matrix',
-              active
-                  ? () => _word.applyEquationStructure(OmmlStructure.matrix2x2)
-                  : null),
-          _cmd(Icons.architecture, _arabic ? 'sin' : 'sin',
-              active
-                  ? () => _word.applyEquationStructure(OmmlStructure.sin)
-                  : null),
-          _cmd(Icons.trending_flat, _arabic ? 'نهاية' : 'Limit',
-              active
-                  ? () => _word.applyEquationStructure(OmmlStructure.lim)
-                  : null),
-          _cmd(Icons.change_history, _arabic ? 'قبعة' : 'Accent',
-              active
-                  ? () => _word.applyEquationStructure(OmmlStructure.accentHat)
-                  : null),
+          _cmd(
+            Icons.horizontal_split,
+            _arabic ? 'كسر' : 'Fraction',
+            active
+                ? () => _word.applyEquationStructure(OmmlStructure.fractionBar)
+                : null,
+          ),
+          _cmd(
+            Icons.superscript,
+            _arabic ? 'أس' : 'Script',
+            active
+                ? () => _word.applyEquationStructure(OmmlStructure.superscript)
+                : null,
+          ),
+          _cmd(
+            Icons.square_foot,
+            _arabic ? 'جذر' : 'Radical',
+            active
+                ? () => _word.applyEquationStructure(OmmlStructure.squareRoot)
+                : null,
+          ),
+          _cmd(
+            Icons.integration_instructions,
+            '∫',
+            active
+                ? () => _word.applyEquationStructure(
+                    OmmlStructure.integralDefinite,
+                  )
+                : null,
+          ),
+          _cmd(
+            Icons.functions,
+            '∑',
+            active
+                ? () => _word.applyEquationStructure(OmmlStructure.sum)
+                : null,
+          ),
+          _cmd(
+            Icons.data_array,
+            _arabic ? 'قوس' : 'Bracket',
+            active
+                ? () => _word.applyEquationStructure(OmmlStructure.paren)
+                : null,
+          ),
+          _cmd(
+            Icons.grid_on,
+            _arabic ? 'مصفوفة' : 'Matrix',
+            active
+                ? () => _word.applyEquationStructure(OmmlStructure.matrix2x2)
+                : null,
+          ),
+          _cmd(
+            Icons.architecture,
+            _arabic ? 'sin' : 'sin',
+            active
+                ? () => _word.applyEquationStructure(OmmlStructure.sin)
+                : null,
+          ),
+          _cmd(
+            Icons.trending_flat,
+            _arabic ? 'نهاية' : 'Limit',
+            active
+                ? () => _word.applyEquationStructure(OmmlStructure.lim)
+                : null,
+          ),
+          _cmd(
+            Icons.change_history,
+            _arabic ? 'قبعة' : 'Accent',
+            active
+                ? () => _word.applyEquationStructure(OmmlStructure.accentHat)
+                : null,
+          ),
         ],
       ),
     ];
   }
 
   void _insertWordVisual(OfficeVisualKind kind) {
-    final bool diagram = kind == OfficeVisualKind.diagramProcess ||
+    final bool diagram =
+        kind == OfficeVisualKind.diagramProcess ||
         kind == OfficeVisualKind.diagramCycle ||
         kind == OfficeVisualKind.diagramHierarchy;
     _insertBlockAfterActive(
@@ -3526,9 +4759,7 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
       from: range.start,
       to: range.end,
     );
-    return points.isEmpty
-        ? OfficeVisual.sampleSeries(arabic: _arabic)
-        : points;
+    return points.isEmpty ? OfficeVisual.sampleSeries(arabic: _arabic) : points;
   }
 
   Future<void> _insertSheetPicture({bool fromFile = false}) async {
@@ -3596,7 +4827,8 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
 
   void _insertSlideVisual(OfficeVisualKind kind) {
     final PmlSlide slide = _slides.slide;
-    final bool diagram = kind == OfficeVisualKind.diagramProcess ||
+    final bool diagram =
+        kind == OfficeVisualKind.diagramProcess ||
         kind == OfficeVisualKind.diagramCycle ||
         kind == OfficeVisualKind.diagramHierarchy;
     final PmlShape shape = PmlShape(
@@ -3676,9 +4908,7 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
             minLines: 2,
             maxLines: 5,
             autofocus: true,
-            decoration: InputDecoration(
-              labelText: _arabic ? 'الرد' : 'Reply',
-            ),
+            decoration: InputDecoration(labelText: _arabic ? 'الرد' : 'Reply'),
           ),
           actions: <Widget>[
             TextButton(
@@ -3757,11 +4987,12 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
       decoration: props.strike
           ? TextDecoration.lineThrough
           : props.underline == WmlUnderline.none
-              ? TextDecoration.none
-              : TextDecoration.underline,
+          ? TextDecoration.none
+          : TextDecoration.underline,
       color: _hexColor(props.color),
-      backgroundColor:
-          props.highlight == null ? null : _hexColor(props.highlight!),
+      backgroundColor: props.highlight == null
+          ? null
+          : _hexColor(props.highlight!),
     );
   }
 
@@ -3811,8 +5042,8 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
                       roots.isEmpty
                           ? (_arabic ? 'لا تعليقات' : 'No comments')
                           : (_arabic
-                              ? '${roots.length} محادثة'
-                              : '${roots.length} threads'),
+                                ? '${roots.length} محادثة'
+                                : '${roots.length} threads'),
                       style: TextStyle(
                         fontSize: 11,
                         color: _officeTheme.chromeText,
@@ -3847,8 +5078,10 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
                     ),
                   for (final WmlComment root in roots) ...<Widget>[
                     _commentCard(root, root: root, dark: dark),
-                    for (final WmlComment reply
-                        in WordComment.repliesOf(_word.document, root.id))
+                    for (final WmlComment reply in WordComment.repliesOf(
+                      _word.document,
+                      root.id,
+                    ))
                       Padding(
                         padding: const EdgeInsetsDirectional.only(start: 18),
                         child: _commentCard(reply, root: root, dark: dark),
@@ -3974,8 +5207,9 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
                                 _commentDateLabel(comment),
                                 style: TextStyle(
                                   fontSize: 9,
-                                  color: _officeTheme.chromeText
-                                      .withValues(alpha: 0.65),
+                                  color: _officeTheme.chromeText.withValues(
+                                    alpha: 0.65,
+                                  ),
                                 ),
                               ),
                           ],
@@ -4006,53 +5240,54 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
                                 style: TextStyle(
                                   fontSize: 12,
                                   fontStyle: FontStyle.italic,
-                                  color: _officeTheme.chromeText
-                                      .withValues(alpha: 0.55),
+                                  color: _officeTheme.chromeText.withValues(
+                                    alpha: 0.55,
+                                  ),
                                 ),
                               ),
                             ]
                           : _commentSpans(comment),
                     ),
                   ),
-                  if (selected)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Wrap(
-                        spacing: 0,
-                        children: <Widget>[
-                          IconButton(
-                            tooltip: root.resolved
-                                ? (_arabic ? 'إعادة فتح' : 'Reopen')
-                                : (_arabic ? 'حل' : 'Resolve'),
-                            visualDensity: VisualDensity.compact,
-                            onPressed: _canMutate
-                                ? () => _word.setCommentResolved(
-                                      root.id,
-                                      !root.resolved,
-                                    )
-                                : null,
-                            icon: Icon(
-                              root.resolved ? Icons.replay : Icons.task_alt,
-                              size: 16,
-                            ),
+                if (selected)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Wrap(
+                      spacing: 0,
+                      children: <Widget>[
+                        IconButton(
+                          tooltip: root.resolved
+                              ? (_arabic ? 'إعادة فتح' : 'Reopen')
+                              : (_arabic ? 'حل' : 'Resolve'),
+                          visualDensity: VisualDensity.compact,
+                          onPressed: _canMutate
+                              ? () => _word.setCommentResolved(
+                                  root.id,
+                                  !root.resolved,
+                                )
+                              : null,
+                          icon: Icon(
+                            root.resolved ? Icons.replay : Icons.task_alt,
+                            size: 16,
                           ),
-                          IconButton(
-                            tooltip: _arabic ? 'حذف' : 'Delete',
-                            visualDensity: VisualDensity.compact,
-                            onPressed: _canMutate
-                                ? () => _word.deleteComment(comment.id)
-                                : null,
-                            icon: const Icon(Icons.delete_outline, size: 16),
-                          ),
-                        ],
-                      ),
+                        ),
+                        IconButton(
+                          tooltip: _arabic ? 'حذف' : 'Delete',
+                          visualDensity: VisualDensity.compact,
+                          onPressed: _canMutate
+                              ? () => _word.deleteComment(comment.id)
+                              : null,
+                          icon: const Icon(Icons.delete_outline, size: 16),
+                        ),
+                      ],
                     ),
-                ],
-              ),
+                  ),
+              ],
             ),
           ),
         ),
-      );
+      ),
+    );
   }
 
   Widget _commentBodySurface(WmlComment comment) {
@@ -4076,8 +5311,8 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
             laidOut: laid,
             caret: _word.commentCaret,
             viewport: _commentViewport,
-            hasFocus: _word.isEditingComment &&
-                _word.selectedCommentId == comment.id,
+            hasFocus:
+                _word.isEditingComment && _word.selectedCommentId == comment.id,
             config: _config.copyWith(showRulers: false),
             selectedCommentId: comment.id,
             onContextMenu: (OfficeContextHit hit) {
@@ -4140,35 +5375,34 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
               _word.documentCaret.normalizedRange.endIdx,
             )
           : (kind == _WordLinkKind.bookmark && headings.isNotEmpty
-              ? headings.first.text
-              : kind == _WordLinkKind.file
-                  ? (_arabic ? 'ملف محلي' : 'Local file')
-                  : 'ECMA-376'),
+                ? headings.first.text
+                : kind == _WordLinkKind.file
+                ? (_arabic ? 'ملف محلي' : 'Local file')
+                : 'ECMA-376'),
     );
     final TextEditingController target = TextEditingController(
       text: switch (kind) {
         _WordLinkKind.web => 'https://www.ecma-international.org/',
         _WordLinkKind.file => '/etc/os-release',
-        _WordLinkKind.bookmark => headings.isEmpty
-            ? ''
-            : WordLink.headingBookmark(
-                headings.first.text,
-                headings.first.level,
-              ),
+        _WordLinkKind.bookmark =>
+          headings.isEmpty
+              ? ''
+              : WordLink.headingBookmark(
+                  headings.first.text,
+                  headings.first.level,
+                ),
       },
     );
     final bool? ok = await showDialog<bool>(
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: Text(
-            switch (kind) {
-              _WordLinkKind.web => _arabic ? 'رابط ويب' : 'Web link',
-              _WordLinkKind.file => _arabic ? 'رابط ملف' : 'File link',
-              _WordLinkKind.bookmark =>
-                _arabic ? 'مرجع داخل المستند' : 'Document reference',
-            },
-          ),
+          title: Text(switch (kind) {
+            _WordLinkKind.web => _arabic ? 'رابط ويب' : 'Web link',
+            _WordLinkKind.file => _arabic ? 'رابط ملف' : 'File link',
+            _WordLinkKind.bookmark =>
+              _arabic ? 'مرجع داخل المستند' : 'Document reference',
+          }),
           content: SizedBox(
             width: 360,
             child: Column(
@@ -4302,11 +5536,11 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
   }
 
   String _marginPresetLabel(String id) => switch (id) {
-        'narrow' => _arabic ? 'ضيق (0.5")' : 'Narrow (0.5")',
-        'moderate' => _arabic ? 'متوسط (0.75")' : 'Moderate (0.75")',
-        'wide' => _arabic ? 'واسع (2")' : 'Wide (2")',
-        _ => _arabic ? 'عادي (1")' : 'Normal (1")',
-      };
+    'narrow' => _arabic ? 'ضيق (0.5")' : 'Narrow (0.5")',
+    'moderate' => _arabic ? 'متوسط (0.75")' : 'Moderate (0.75")',
+    'wide' => _arabic ? 'واسع (2")' : 'Wide (2")',
+    _ => _arabic ? 'عادي (1")' : 'Normal (1")',
+  };
 
   void _applyMarginPreset(String id) {
     _word.setPageMargins(switch (id) {
@@ -4449,7 +5683,9 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
               selected = rows.first;
             }
             return AlertDialog(
-              title: Text(_arabic ? 'دليل دوال الإكسل' : 'Excel function guide'),
+              title: Text(
+                _arabic ? 'دليل دوال الإكسل' : 'Excel function guide',
+              ),
               content: SizedBox(
                 width: 720,
                 height: 440,
@@ -4476,7 +5712,8 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
                               ChoiceChip(
                                 label: Text(_arabic ? 'الكل' : 'All'),
                                 selected: filter == null,
-                                onSelected: (_) => setDialog(() => filter = null),
+                                onSelected: (_) =>
+                                    setDialog(() => filter = null),
                               ),
                               for (final FormulaFnCategory category
                                   in FormulaFnCategory.values)
@@ -4577,17 +5814,16 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
         : SmlCellRef(focus.col + 1, focus.row).a1;
     final String yes = _arabic ? 'نعم' : 'Yes';
     final String no = _arabic ? 'لا' : 'No';
-    _sheet.beginCellEdit(
-      initial: '=IF($probe>0,"$yes","$no")',
-      replace: true,
-    );
+    _sheet.beginCellEdit(initial: '=IF($probe>0,"$yes","$no")', replace: true);
     _sheet.commitCellEdit();
   }
 
   void _newWord() {
     _wordPath = null;
+    _wordName = 'Document1.docx';
     _word.document = WmlDocument.empty(
       text: _arabic ? 'مستند جديد' : 'New document',
+      rtl: _arabic,
     );
     _word.documentCaret.paragraphIndex = 0;
     _word.documentCaret.logicalIndex = 0;
@@ -4598,18 +5834,21 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
 
   void _newSheet() {
     _sheetPath = null;
+    _sheetName = 'Book1.xlsx';
     _sheet.workbook = SmlWorkbook();
     _sheet.setActiveSheet(0);
   }
 
   void _newSlides() {
     _slidePath = null;
+    _slideName = 'Presentation1.pptx';
     _slides.presentation = PmlPresentation();
     _slides.setActiveSlide(0);
   }
 
   void _resetWord() {
     _wordPath = null;
+    _wordName = 'Al Tahreer Neighbourhood Profile.docx';
     _word.document = SampleLibrary.wordBriefing();
     _word.documentCaret.paragraphIndex = 0;
     _word.documentCaret.logicalIndex = 0;
@@ -4620,12 +5859,14 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
 
   void _resetSheet() {
     _sheetPath = null;
+    _sheetName = 'Budget.xlsx';
     _sheet.workbook = SampleLibrary.excelBudget();
     _sheet.setActiveSheet(0);
   }
 
   void _resetSlides() {
     _slidePath = null;
+    _slideName = 'Studio deck.pptx';
     _slides.presentation = SampleLibrary.slideDeck();
     _slides.setActiveSlide(0);
   }
@@ -4808,13 +6049,7 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
         : ((_slides.presentation.slideHeight - t.cy) * y).round();
     _slides.applyTransform(
       shape,
-      PmlTransform(
-        x: nextX,
-        y: nextY,
-        cx: t.cx,
-        cy: t.cy,
-        rot: t.rot,
-      ),
+      PmlTransform(x: nextX, y: nextY, cx: t.cx, cy: t.cy, rot: t.rot),
     );
     _slides.refresh();
   }
@@ -4865,36 +6100,100 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
           fit: StackFit.expand,
           children: <Widget>[
             switch (_app) {
-              SuiteApp.word => QudsWordEditor(
-                  controller: _word,
-                  config: _config,
-                ),
+              SuiteApp.word => Stack(
+                fit: StackFit.expand,
+                children: <Widget>[
+                  QudsWordEditor(
+                    controller: _word,
+                    focusNode: _wordFocus,
+                    config: _printPreview
+                        ? _config.copyWith(mode: OfficeInteractionMode.viewing)
+                        : _config,
+                  ),
+                  if (_printPreview) _wordPrintPreviewBanner(),
+                ],
+              ),
               SuiteApp.excel => Column(
-                  children: <Widget>[
-                    _excelFormulaBar(dark),
-                    Expanded(
-                      child: QudsSheetEditor(
-                        controller: _sheet,
-                        config: _config,
-                      ),
+                children: <Widget>[
+                  _excelFormulaBar(dark),
+                  Expanded(
+                    child: QudsSheetEditor(
+                      controller: _sheet,
+                      focusNode: _sheetFocus,
+                      config: _config,
                     ),
-                    _excelSheetTabs(dark),
-                  ],
-                ),
+                  ),
+                  _excelSheetTabs(dark),
+                ],
+              ),
               SuiteApp.powerpoint => Column(
-                  children: <Widget>[
-                    Expanded(
-                      child: QudsSlideEditor(
-                        controller: _slides,
-                        config: _config,
-                      ),
+                children: <Widget>[
+                  Expanded(
+                    child: QudsSlideEditor(
+                      controller: _slides,
+                      focusNode: _slideFocus,
+                      config: _config,
                     ),
-                    if (_showNotes && !_slides.isPresenting) _slideNotes(dark),
-                  ],
-                ),
+                  ),
+                  if (_showNotes && !_slides.isPresenting) _slideNotes(dark),
+                ],
+              ),
             },
+            if (_findOpen)
+              Positioned(
+                top: 0,
+                bottom: 0,
+                left: _arabic ? 0 : null,
+                right: _arabic ? null : 0,
+                child: StudioFindPane(
+                  controller: _active,
+                  arabic: _arabic,
+                  accent: _accent,
+                  replaceMode: _findReplace,
+                  onReplaceMode: (bool value) {
+                    setState(() => _findReplace = value);
+                  },
+                  onClose: _closeFind,
+                ),
+              ),
             if (_opening) _openProgressOverlay(dark),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _wordPrintPreviewBanner() {
+    final List<LaidOutPage> pages = _word.printPreviewPages();
+    return Align(
+      alignment: Alignment.topCenter,
+      child: Material(
+        color: const Color(0xEE2B579A),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Text(
+                _arabic
+                    ? 'معاينة طباعة · ${pages.length} صفحة'
+                    : 'Print preview · ${pages.length} pages',
+                style: const TextStyle(color: Colors.white, fontSize: 12),
+              ),
+              IconButton(
+                onPressed: () => _jumpWordPage(_word.visiblePageIndex - 1),
+                icon: const Icon(Icons.chevron_left, color: Colors.white),
+              ),
+              IconButton(
+                onPressed: () => _jumpWordPage(_word.visiblePageIndex + 1),
+                icon: const Icon(Icons.chevron_right, color: Colors.white),
+              ),
+              IconButton(
+                onPressed: () => setState(() => _printPreview = false),
+                icon: const Icon(Icons.close, color: Colors.white),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -4973,7 +6272,7 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
               width: 72,
               child: Center(
                 child: Text(
-                  _sheet.selection.focus.a1,
+                  _sheet.selectionAddress,
                   style: TextStyle(
                     fontWeight: FontWeight.w600,
                     color: _officeTheme.chromeText,
@@ -5143,55 +6442,125 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
         StudioRibbonGroup(
           title: _arabic ? 'تنسيق الصورة' : 'Picture format',
           children: <Widget>[
-            _cmd(Icons.photo_library_outlined, _arabic ? 'استبدال' : 'Replace',
-                _canMutate ? _replaceSelectedPicture : null),
-            _cmd(Icons.crop, _arabic ? 'قص' : 'Crop',
-                _canMutate ? _toggleWordPictureCrop : null,
-                selected: _app == SuiteApp.word && _word.pictureCropMode),
-            _cmd(Icons.crop_free, _arabic ? 'إلغاء القص' : 'Clear crop',
-                _canMutate
-                    ? () => _mutateVisual((OfficeVisual v) {
-                          v.picture
-                            ..cropLeft = 0
-                            ..cropTop = 0
-                            ..cropRight = 0
-                            ..cropBottom = 0;
-                        })
-                    : null),
-            _cmd(Icons.rotate_right, _arabic ? 'دوران' : 'Rotate',
-                _canMutate ? () => _mutateVisual((OfficeVisual v) => v.rotateBy(90)) : null),
-            _cmd(Icons.wb_sunny_outlined, _arabic ? 'إضاءة' : 'Bright',
-                _canMutate ? () => _mutateVisual((OfficeVisual v) => v.bumpBrightness(0.1)) : null),
-            _cmd(Icons.contrast, _arabic ? 'تباين' : 'Contrast',
-                _canMutate ? () => _mutateVisual((OfficeVisual v) => v.bumpContrast(0.15)) : null),
-            _cmd(Icons.border_style, _arabic ? 'إطار' : 'Border',
-                _canMutate ? () => _mutateVisual((OfficeVisual v) => v.cycleBorder()) : null),
-            _cmd(Icons.opacity, _arabic ? 'شفافية' : 'Opacity',
-                _canMutate ? () => _mutateVisual((OfficeVisual v) => v.bumpTransparency(0.1)) : null),
-            _cmd(Icons.flip, _arabic ? 'قلب أفقي' : 'Flip H',
-                _canMutate ? () => _mutateVisual((OfficeVisual v) => v.toggleFlipH()) : null,
-                selected: visual.picture.flipH),
-            _cmd(Icons.flip_camera_android, _arabic ? 'قلب عمودي' : 'Flip V',
-                _canMutate ? () => _mutateVisual((OfficeVisual v) => v.toggleFlipV()) : null,
-                selected: visual.picture.flipV),
-            _cmd(Icons.wrap_text, _arabic ? 'التفاف' : 'Wrap',
-                _canMutate ? () => _mutateVisual((OfficeVisual v) => v.cycleWrap()) : null),
-            _cmd(Icons.aspect_ratio, _arabic ? 'نسبة' : 'Lock',
-                _canMutate
-                    ? () => _mutateVisual(
-                          (OfficeVisual v) => v.picture.lockAspect = !v.picture.lockAspect,
-                        )
-                    : null,
-                selected: visual.picture.lockAspect),
-            _cmd(Icons.blur_on, _arabic ? 'ظل' : 'Shadow',
-                _canMutate
-                    ? () => _mutateVisual((OfficeVisual v) => v.picture.shadow = !v.picture.shadow)
-                    : null,
-                selected: visual.picture.shadow),
-            _cmd(Icons.restart_alt, _arabic ? 'إعادة' : 'Reset',
-                _canMutate ? () => _mutateVisual((OfficeVisual v) => v.resetPicture()) : null),
-            _cmd(Icons.delete_outline, _arabic ? 'حذف' : 'Delete',
-                _canMutate ? _deleteSelectedVisual : null),
+            _cmd(
+              Icons.photo_library_outlined,
+              _arabic ? 'استبدال' : 'Replace',
+              _canMutate ? _replaceSelectedPicture : null,
+            ),
+            _cmd(
+              Icons.crop,
+              _arabic ? 'قص' : 'Crop',
+              _canMutate ? _toggleWordPictureCrop : null,
+              selected: _app == SuiteApp.word && _word.pictureCropMode,
+            ),
+            _cmd(
+              Icons.crop_free,
+              _arabic ? 'إلغاء القص' : 'Clear crop',
+              _canMutate
+                  ? () => _mutateVisual((OfficeVisual v) {
+                      v.picture
+                        ..cropLeft = 0
+                        ..cropTop = 0
+                        ..cropRight = 0
+                        ..cropBottom = 0;
+                    })
+                  : null,
+            ),
+            _cmd(
+              Icons.rotate_right,
+              _arabic ? 'دوران' : 'Rotate',
+              _canMutate
+                  ? () => _mutateVisual((OfficeVisual v) => v.rotateBy(90))
+                  : null,
+            ),
+            _cmd(
+              Icons.wb_sunny_outlined,
+              _arabic ? 'إضاءة' : 'Bright',
+              _canMutate
+                  ? () =>
+                        _mutateVisual((OfficeVisual v) => v.bumpBrightness(0.1))
+                  : null,
+            ),
+            _cmd(
+              Icons.contrast,
+              _arabic ? 'تباين' : 'Contrast',
+              _canMutate
+                  ? () =>
+                        _mutateVisual((OfficeVisual v) => v.bumpContrast(0.15))
+                  : null,
+            ),
+            _cmd(
+              Icons.border_style,
+              _arabic ? 'إطار' : 'Border',
+              _canMutate
+                  ? () => _mutateVisual((OfficeVisual v) => v.cycleBorder())
+                  : null,
+            ),
+            _cmd(
+              Icons.opacity,
+              _arabic ? 'شفافية' : 'Opacity',
+              _canMutate
+                  ? () => _mutateVisual(
+                      (OfficeVisual v) => v.bumpTransparency(0.1),
+                    )
+                  : null,
+            ),
+            _cmd(
+              Icons.flip,
+              _arabic ? 'قلب أفقي' : 'Flip H',
+              _canMutate
+                  ? () => _mutateVisual((OfficeVisual v) => v.toggleFlipH())
+                  : null,
+              selected: visual.picture.flipH,
+            ),
+            _cmd(
+              Icons.flip_camera_android,
+              _arabic ? 'قلب عمودي' : 'Flip V',
+              _canMutate
+                  ? () => _mutateVisual((OfficeVisual v) => v.toggleFlipV())
+                  : null,
+              selected: visual.picture.flipV,
+            ),
+            _cmd(
+              Icons.wrap_text,
+              _arabic ? 'التفاف' : 'Wrap',
+              _canMutate
+                  ? () => _mutateVisual((OfficeVisual v) => v.cycleWrap())
+                  : null,
+            ),
+            _cmd(
+              Icons.aspect_ratio,
+              _arabic ? 'نسبة' : 'Lock',
+              _canMutate
+                  ? () => _mutateVisual(
+                      (OfficeVisual v) =>
+                          v.picture.lockAspect = !v.picture.lockAspect,
+                    )
+                  : null,
+              selected: visual.picture.lockAspect,
+            ),
+            _cmd(
+              Icons.blur_on,
+              _arabic ? 'ظل' : 'Shadow',
+              _canMutate
+                  ? () => _mutateVisual(
+                      (OfficeVisual v) => v.picture.shadow = !v.picture.shadow,
+                    )
+                  : null,
+              selected: visual.picture.shadow,
+            ),
+            _cmd(
+              Icons.restart_alt,
+              _arabic ? 'إعادة' : 'Reset',
+              _canMutate
+                  ? () => _mutateVisual((OfficeVisual v) => v.resetPicture())
+                  : null,
+            ),
+            _cmd(
+              Icons.delete_outline,
+              _arabic ? 'حذف' : 'Delete',
+              _canMutate ? _deleteSelectedVisual : null,
+            ),
           ],
         ),
       ];
@@ -5200,64 +6569,147 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
       StudioRibbonGroup(
         title: _arabic ? 'تصميم المخطط' : 'Chart design',
         children: <Widget>[
-          _cmd(Icons.bar_chart, _arabic ? 'أعمدة' : 'Column',
-              _canMutate ? () => _mutateVisual((OfficeVisual v) => v.kind = OfficeVisualKind.chartColumn) : null,
-              selected: visual.kind == OfficeVisualKind.chartColumn),
-          _cmd(Icons.stacked_bar_chart, _arabic ? 'شريطي' : 'Bar',
-              _canMutate ? () => _mutateVisual((OfficeVisual v) => v.kind = OfficeVisualKind.chartBar) : null,
-              selected: visual.kind == OfficeVisualKind.chartBar),
-          _cmd(Icons.pie_chart, _arabic ? 'دائري' : 'Pie',
-              _canMutate ? () => _mutateVisual((OfficeVisual v) => v.kind = OfficeVisualKind.chartPie) : null,
-              selected: visual.kind == OfficeVisualKind.chartPie),
-          _cmd(Icons.show_chart, _arabic ? 'خطي' : 'Line',
-              _canMutate ? () => _mutateVisual((OfficeVisual v) => v.kind = OfficeVisualKind.chartLine) : null,
-              selected: visual.kind == OfficeVisualKind.chartLine),
-          _cmd(Icons.title, _arabic ? 'عنوان' : 'Title',
-              _canMutate ? () => _mutateVisual((OfficeVisual v) => v.cycleTitle(arabic: _arabic)) : null),
-          _cmd(Icons.add, _arabic ? 'نقطة' : 'Point',
-              _canMutate ? () => _mutateVisual((OfficeVisual v) => v.addSamplePoint(arabic: _arabic)) : null),
-          _cmd(Icons.remove, _arabic ? 'حذف نقطة' : 'Remove',
-              _canMutate && visual.points.length > 1
-                  ? () => _mutateVisual((OfficeVisual v) => v.removeLastPoint())
-                  : null),
-          _cmd(Icons.legend_toggle, _arabic ? 'وسيلة إيضاح' : 'Legend',
-              _canMutate
-                  ? () => _mutateVisual((OfficeVisual v) => v.chart.showLegend = !v.chart.showLegend)
-                  : null,
-              selected: visual.chart.showLegend),
-          _cmd(Icons.label_outline, _arabic ? 'تسميات' : 'Labels',
-              _canMutate
-                  ? () => _mutateVisual((OfficeVisual v) => v.chart.showDataLabels = !v.chart.showDataLabels)
-                  : null,
-              selected: visual.chart.showDataLabels),
-          _cmd(Icons.grid_4x4, _arabic ? 'محاور' : 'Axes',
-              _canMutate
-                  ? () => _mutateVisual((OfficeVisual v) => v.chart.showAxes = !v.chart.showAxes)
-                  : null,
-              selected: visual.chart.showAxes),
-          _cmd(Icons.grid_on, _arabic ? 'خطوط شبكة' : 'Grid',
-              _canMutate
-                  ? () => _mutateVisual(
-                        (OfficeVisual v) => v.chart.showGridlines = !v.chart.showGridlines,
-                      )
-                  : null,
-              selected: visual.chart.showGridlines),
-          _cmd(Icons.place, _arabic ? 'موضع الإيضاح' : 'Legend pos',
-              _canMutate ? () => _mutateVisual((OfficeVisual v) => v.cycleLegendPos()) : null),
-          _cmd(Icons.title, _arabic ? 'إظهار العنوان' : 'Show title',
-              _canMutate
-                  ? () => _mutateVisual((OfficeVisual v) => v.chart.showTitle = !v.chart.showTitle)
-                  : null,
-              selected: visual.chart.showTitle),
-          _cmd(Icons.percent, _arabic ? 'نسب' : 'Percent',
-              _canMutate
-                  ? () => _mutateVisual(
-                        (OfficeVisual v) => v.chart.showPercent = !v.chart.showPercent,
-                      )
-                  : null,
-              selected: visual.chart.showPercent),
-          _cmd(Icons.delete_outline, _arabic ? 'حذف' : 'Delete',
-              _canMutate ? _deleteSelectedVisual : null),
+          _cmd(
+            Icons.bar_chart,
+            _arabic ? 'أعمدة' : 'Column',
+            _canMutate
+                ? () => _mutateVisual(
+                    (OfficeVisual v) => v.kind = OfficeVisualKind.chartColumn,
+                  )
+                : null,
+            selected: visual.kind == OfficeVisualKind.chartColumn,
+          ),
+          _cmd(
+            Icons.stacked_bar_chart,
+            _arabic ? 'شريطي' : 'Bar',
+            _canMutate
+                ? () => _mutateVisual(
+                    (OfficeVisual v) => v.kind = OfficeVisualKind.chartBar,
+                  )
+                : null,
+            selected: visual.kind == OfficeVisualKind.chartBar,
+          ),
+          _cmd(
+            Icons.pie_chart,
+            _arabic ? 'دائري' : 'Pie',
+            _canMutate
+                ? () => _mutateVisual(
+                    (OfficeVisual v) => v.kind = OfficeVisualKind.chartPie,
+                  )
+                : null,
+            selected: visual.kind == OfficeVisualKind.chartPie,
+          ),
+          _cmd(
+            Icons.show_chart,
+            _arabic ? 'خطي' : 'Line',
+            _canMutate
+                ? () => _mutateVisual(
+                    (OfficeVisual v) => v.kind = OfficeVisualKind.chartLine,
+                  )
+                : null,
+            selected: visual.kind == OfficeVisualKind.chartLine,
+          ),
+          _cmd(
+            Icons.title,
+            _arabic ? 'عنوان' : 'Title',
+            _canMutate
+                ? () => _mutateVisual(
+                    (OfficeVisual v) => v.cycleTitle(arabic: _arabic),
+                  )
+                : null,
+          ),
+          _cmd(
+            Icons.add,
+            _arabic ? 'نقطة' : 'Point',
+            _canMutate
+                ? () => _mutateVisual(
+                    (OfficeVisual v) => v.addSamplePoint(arabic: _arabic),
+                  )
+                : null,
+          ),
+          _cmd(
+            Icons.remove,
+            _arabic ? 'حذف نقطة' : 'Remove',
+            _canMutate && visual.points.length > 1
+                ? () => _mutateVisual((OfficeVisual v) => v.removeLastPoint())
+                : null,
+          ),
+          _cmd(
+            Icons.legend_toggle,
+            _arabic ? 'وسيلة إيضاح' : 'Legend',
+            _canMutate
+                ? () => _mutateVisual(
+                    (OfficeVisual v) =>
+                        v.chart.showLegend = !v.chart.showLegend,
+                  )
+                : null,
+            selected: visual.chart.showLegend,
+          ),
+          _cmd(
+            Icons.label_outline,
+            _arabic ? 'تسميات' : 'Labels',
+            _canMutate
+                ? () => _mutateVisual(
+                    (OfficeVisual v) =>
+                        v.chart.showDataLabels = !v.chart.showDataLabels,
+                  )
+                : null,
+            selected: visual.chart.showDataLabels,
+          ),
+          _cmd(
+            Icons.grid_4x4,
+            _arabic ? 'محاور' : 'Axes',
+            _canMutate
+                ? () => _mutateVisual(
+                    (OfficeVisual v) => v.chart.showAxes = !v.chart.showAxes,
+                  )
+                : null,
+            selected: visual.chart.showAxes,
+          ),
+          _cmd(
+            Icons.grid_on,
+            _arabic ? 'خطوط شبكة' : 'Grid',
+            _canMutate
+                ? () => _mutateVisual(
+                    (OfficeVisual v) =>
+                        v.chart.showGridlines = !v.chart.showGridlines,
+                  )
+                : null,
+            selected: visual.chart.showGridlines,
+          ),
+          _cmd(
+            Icons.place,
+            _arabic ? 'موضع الإيضاح' : 'Legend pos',
+            _canMutate
+                ? () => _mutateVisual((OfficeVisual v) => v.cycleLegendPos())
+                : null,
+          ),
+          _cmd(
+            Icons.title,
+            _arabic ? 'إظهار العنوان' : 'Show title',
+            _canMutate
+                ? () => _mutateVisual(
+                    (OfficeVisual v) => v.chart.showTitle = !v.chart.showTitle,
+                  )
+                : null,
+            selected: visual.chart.showTitle,
+          ),
+          _cmd(
+            Icons.percent,
+            _arabic ? 'نسب' : 'Percent',
+            _canMutate
+                ? () => _mutateVisual(
+                    (OfficeVisual v) =>
+                        v.chart.showPercent = !v.chart.showPercent,
+                  )
+                : null,
+            selected: visual.chart.showPercent,
+          ),
+          _cmd(
+            Icons.delete_outline,
+            _arabic ? 'حذف' : 'Delete',
+            _canMutate ? _deleteSelectedVisual : null,
+          ),
         ],
       ),
     ];
@@ -5320,7 +6772,9 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
                 0,
                 359,
                 '${visual.picture.rotationDeg.round()}°',
-                (double v) => _mutateVisual((OfficeVisual vis) => vis.picture.rotationDeg = v),
+                (double v) => _mutateVisual(
+                  (OfficeVisual vis) => vis.picture.rotationDeg = v,
+                ),
               ),
               _visualSlider(
                 _arabic ? 'إضاءة' : 'Brightness',
@@ -5328,7 +6782,9 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
                 -0.5,
                 0.5,
                 visual.picture.brightness.toStringAsFixed(2),
-                (double v) => _mutateVisual((OfficeVisual vis) => vis.picture.brightness = v),
+                (double v) => _mutateVisual(
+                  (OfficeVisual vis) => vis.picture.brightness = v,
+                ),
               ),
               _visualSlider(
                 _arabic ? 'تباين' : 'Contrast',
@@ -5336,7 +6792,9 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
                 0.5,
                 1.8,
                 visual.picture.contrast.toStringAsFixed(2),
-                (double v) => _mutateVisual((OfficeVisual vis) => vis.picture.contrast = v),
+                (double v) => _mutateVisual(
+                  (OfficeVisual vis) => vis.picture.contrast = v,
+                ),
               ),
               _visualSlider(
                 _arabic ? 'شفافية' : 'Transparency',
@@ -5344,7 +6802,9 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
                 0,
                 0.85,
                 '${(visual.picture.transparency * 100).round()}%',
-                (double v) => _mutateVisual((OfficeVisual vis) => vis.picture.transparency = v),
+                (double v) => _mutateVisual(
+                  (OfficeVisual vis) => vis.picture.transparency = v,
+                ),
               ),
               _visualSlider(
                 _arabic ? 'قص' : 'Crop',
@@ -5390,10 +6850,15 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
                   children: <Widget>[
                     for (final PictureWrap wrap in PictureWrap.values)
                       ChoiceChip(
-                        label: Text(_wrapLabel(wrap), style: const TextStyle(fontSize: 10)),
+                        label: Text(
+                          _wrapLabel(wrap),
+                          style: const TextStyle(fontSize: 10),
+                        ),
                         selected: visual.picture.wrap == wrap,
                         onSelected: _canMutate
-                            ? (_) => _mutateVisual((OfficeVisual v) => v.picture.wrap = wrap)
+                            ? (_) => _mutateVisual(
+                                (OfficeVisual v) => v.picture.wrap = wrap,
+                              )
                             : null,
                         visualDensity: VisualDensity.compact,
                       ),
@@ -5403,40 +6868,66 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
             ] else ...<Widget>[
               SwitchListTile(
                 dense: true,
-                title: Text(_arabic ? 'وسيلة إيضاح' : 'Legend',
-                    style: TextStyle(fontSize: 12, color: _officeTheme.chromeText)),
+                title: Text(
+                  _arabic ? 'وسيلة إيضاح' : 'Legend',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: _officeTheme.chromeText,
+                  ),
+                ),
                 value: visual.chart.showLegend,
                 onChanged: _canMutate
-                    ? (bool v) => _mutateVisual((OfficeVisual vis) => vis.chart.showLegend = v)
+                    ? (bool v) => _mutateVisual(
+                        (OfficeVisual vis) => vis.chart.showLegend = v,
+                      )
                     : null,
               ),
               SwitchListTile(
                 dense: true,
-                title: Text(_arabic ? 'تسميات البيانات' : 'Data labels',
-                    style: TextStyle(fontSize: 12, color: _officeTheme.chromeText)),
+                title: Text(
+                  _arabic ? 'تسميات البيانات' : 'Data labels',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: _officeTheme.chromeText,
+                  ),
+                ),
                 value: visual.chart.showDataLabels,
                 onChanged: _canMutate
-                    ? (bool v) =>
-                        _mutateVisual((OfficeVisual vis) => vis.chart.showDataLabels = v)
+                    ? (bool v) => _mutateVisual(
+                        (OfficeVisual vis) => vis.chart.showDataLabels = v,
+                      )
                     : null,
               ),
               SwitchListTile(
                 dense: true,
-                title: Text(_arabic ? 'محاور' : 'Axes',
-                    style: TextStyle(fontSize: 12, color: _officeTheme.chromeText)),
+                title: Text(
+                  _arabic ? 'محاور' : 'Axes',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: _officeTheme.chromeText,
+                  ),
+                ),
                 value: visual.chart.showAxes,
                 onChanged: _canMutate
-                    ? (bool v) => _mutateVisual((OfficeVisual vis) => vis.chart.showAxes = v)
+                    ? (bool v) => _mutateVisual(
+                        (OfficeVisual vis) => vis.chart.showAxes = v,
+                      )
                     : null,
               ),
               SwitchListTile(
                 dense: true,
-                title: Text(_arabic ? 'خطوط الشبكة' : 'Gridlines',
-                    style: TextStyle(fontSize: 12, color: _officeTheme.chromeText)),
+                title: Text(
+                  _arabic ? 'خطوط الشبكة' : 'Gridlines',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: _officeTheme.chromeText,
+                  ),
+                ),
                 value: visual.chart.showGridlines,
                 onChanged: _canMutate
-                    ? (bool v) =>
-                        _mutateVisual((OfficeVisual vis) => vis.chart.showGridlines = v)
+                    ? (bool v) => _mutateVisual(
+                        (OfficeVisual vis) => vis.chart.showGridlines = v,
+                      )
                     : null,
               ),
               _visualFact(
@@ -5449,8 +6940,9 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
                 0,
                 400,
                 '${visual.chart.gapWidth}',
-                (double v) =>
-                    _mutateVisual((OfficeVisual vis) => vis.chart.gapWidth = v.round()),
+                (double v) => _mutateVisual(
+                  (OfficeVisual vis) => vis.chart.gapWidth = v.round(),
+                ),
               ),
               for (int i = 0; i < visual.points.length; i++)
                 ListTile(
@@ -5465,10 +6957,15 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
                   ),
                   title: Text(
                     '${visual.points[i].label}  ${visual.points[i].value.toStringAsFixed(0)}',
-                    style: TextStyle(fontSize: 12, color: _officeTheme.chromeText),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: _officeTheme.chromeText,
+                    ),
                   ),
                   onTap: _canMutate
-                      ? () => _mutateVisual((OfficeVisual v) => v.cyclePointColor(i))
+                      ? () => _mutateVisual(
+                          (OfficeVisual v) => v.cyclePointColor(i),
+                        )
                       : null,
                   trailing: SizedBox(
                     width: 72,
@@ -5477,25 +6974,25 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
                         InkWell(
                           onTap: _canMutate
                               ? () => _mutateVisual(
-                                    (OfficeVisual v) => v.bumpPointValue(i, -5),
-                                  )
+                                  (OfficeVisual v) => v.bumpPointValue(i, -5),
+                                )
                               : null,
                           child: const Icon(Icons.remove, size: 16),
                         ),
                         InkWell(
                           onTap: _canMutate
                               ? () => _mutateVisual(
-                                    (OfficeVisual v) => v.bumpPointValue(i, 5),
-                                  )
+                                  (OfficeVisual v) => v.bumpPointValue(i, 5),
+                                )
                               : null,
                           child: const Icon(Icons.add, size: 16),
                         ),
                         InkWell(
                           onTap: _canMutate
                               ? () => _mutateVisual(
-                                    (OfficeVisual v) =>
-                                        v.cyclePointLabel(i, arabic: _arabic),
-                                  )
+                                  (OfficeVisual v) =>
+                                      v.cyclePointLabel(i, arabic: _arabic),
+                                )
                               : null,
                           child: const Icon(Icons.text_fields, size: 16),
                         ),
@@ -5513,10 +7010,17 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
   Widget _visualFact(String label, String value) {
     return ListTile(
       dense: true,
-      title: Text(label, style: TextStyle(fontSize: 11, color: _officeTheme.chromeText)),
+      title: Text(
+        label,
+        style: TextStyle(fontSize: 11, color: _officeTheme.chromeText),
+      ),
       trailing: Text(
         value,
-        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: _accent),
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: _accent,
+        ),
       ),
     );
   }
@@ -5539,7 +7043,10 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
               Expanded(
                 child: Text(
                   label,
-                  style: TextStyle(fontSize: 11, color: _officeTheme.chromeText),
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: _officeTheme.chromeText,
+                  ),
                 ),
               ),
               Text(
@@ -5614,8 +7121,8 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
               child: Text(
                 anims.isEmpty
                     ? (_arabic
-                        ? 'حدد شكلاً ثم اختر حركة من الشريط.'
-                        : 'Select a shape, then add an effect.')
+                          ? 'حدد شكلاً ثم اختر حركة من الشريط.'
+                          : 'Select a shape, then add an effect.')
                     : '${anims.length} ${_arabic ? 'حركة' : 'effects'}',
                 style: TextStyle(
                   fontSize: 11,
@@ -5635,7 +7142,10 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
                   final String shapeName = _slides.slide.shapes
                       .firstWhere(
                         (PmlShape s) => s.id == anim.shapeId,
-                        orElse: () => PmlShape(id: anim.shapeId, name: '#${anim.shapeId}'),
+                        orElse: () => PmlShape(
+                          id: anim.shapeId,
+                          name: '#${anim.shapeId}',
+                        ),
                       )
                       .name;
                   final Color tone = switch (anim.category) {
@@ -5653,7 +7163,10 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
                       backgroundColor: tone,
                       child: Text(
                         '$clickNo',
-                        style: const TextStyle(color: Colors.white, fontSize: 11),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                        ),
                       ),
                     ),
                     title: Text(
@@ -5691,9 +7204,9 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
                       _slides.selectedAnimationIndex == null
                           ? null
                           : () => _slides.moveShapeAnimation(
-                                _slides.selectedAnimationIndex!,
-                                -1,
-                              ),
+                              _slides.selectedAnimationIndex!,
+                              -1,
+                            ),
                     ),
                     _icon(
                       Icons.keyboard_arrow_down,
@@ -5701,9 +7214,9 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
                       _slides.selectedAnimationIndex == null
                           ? null
                           : () => _slides.moveShapeAnimation(
-                                _slides.selectedAnimationIndex!,
-                                1,
-                              ),
+                              _slides.selectedAnimationIndex!,
+                              1,
+                            ),
                     ),
                     _icon(
                       Icons.delete_outline,
@@ -5711,8 +7224,8 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
                       _slides.selectedAnimationIndex == null
                           ? null
                           : () => _slides.removeShapeAnimation(
-                                _slides.selectedAnimationIndex!,
-                              ),
+                              _slides.selectedAnimationIndex!,
+                            ),
                     ),
                   ],
                 ),
@@ -5723,14 +7236,149 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
     );
   }
 
+  Widget _presenterPane() {
+    final Duration elapsed = _slides.presenterElapsed;
+    final String clock =
+        '${elapsed.inMinutes.toString().padLeft(2, '0')}:${(elapsed.inSeconds % 60).toString().padLeft(2, '0')}';
+    final int? next = _slides.nextVisibleSlide;
+    final String nextText = next == null
+        ? (_arabic ? 'النهاية' : 'End')
+        : _slides.presentation.slides[next].notes.isEmpty
+        ? '${_arabic ? 'الشريحة' : 'Slide'} ${next + 1}'
+        : _slides.presentation.slides[next].notes;
+    return ColoredBox(
+      color: const Color(0xFF1A1A1A),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            Row(
+              children: <Widget>[
+                Expanded(
+                  child: Text(
+                    _arabic ? 'عرض المقدّم' : 'Presenter',
+                    style: const TextStyle(
+                      color: Color(0xFFFFFFFF),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  onPressed: _slides.pausePresenter,
+                  icon: Icon(
+                    _slides.presenterPaused
+                        ? Icons.play_arrow
+                        : Icons.pause,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                ),
+              ],
+            ),
+            Text(
+              clock,
+              style: const TextStyle(color: Color(0xFF8CD3FF), fontSize: 28),
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 72,
+              child: IgnorePointer(
+                child: SlideStage(
+                  slide: _slides.slide,
+                  preview: true,
+                  config: _config.copyWith(
+                    mode: OfficeInteractionMode.viewing,
+                    showSlideHandles: false,
+                    showRulers: false,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 48,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: _slides.presentation.slides.length,
+                separatorBuilder: (BuildContext context, int index) =>
+                    const SizedBox(width: 6),
+                itemBuilder: (BuildContext context, int i) {
+                  final bool on = i == _slides.activeSlideIndex;
+                  return GestureDetector(
+                    onTap: () => _slides.setActiveSlide(i),
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        border: Border.all(
+                          color: on ? _accent : const Color(0xFF555555),
+                          width: on ? 2 : 1,
+                        ),
+                      ),
+                      child: SizedBox(
+                        width: 72,
+                        child: IgnorePointer(
+                          child: SlideStage(
+                            slide: _slides.presentation.slides[i],
+                            preview: true,
+                            config: _config.copyWith(
+                              mode: OfficeInteractionMode.viewing,
+                              showSlideHandles: false,
+                              showRulers: false,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              _arabic ? 'ملاحظات هذه الشريحة' : 'This slide',
+              style: const TextStyle(color: Color(0xFFBBBBBB), fontSize: 11),
+            ),
+            Text(
+              _slides.slide.notes.isEmpty
+                  ? (_arabic ? 'لا ملاحظات' : 'No notes')
+                  : _slides.slide.notes,
+              style: const TextStyle(color: Color(0xFFFFFFFF), fontSize: 13),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              _arabic ? 'التالي' : 'Next',
+              style: const TextStyle(color: Color(0xFFBBBBBB), fontSize: 11),
+            ),
+            Text(
+              nextText,
+              style: const TextStyle(color: Color(0xFFE0E0E0), fontSize: 12),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _syncSlideNotesField() {
+    if (_notesSlideIndex == _slides.activeSlideIndex &&
+        _slideNotesEdit.text == _slides.slide.notes) {
+      return;
+    }
+    _notesSlideIndex = _slides.activeSlideIndex;
+    if (_slideNotesEdit.text != _slides.slide.notes) {
+      _slideNotesEdit.value = TextEditingValue(
+        text: _slides.slide.notes,
+        selection: TextSelection.collapsed(offset: _slides.slide.notes.length),
+      );
+    }
+  }
+
   Widget _slideNotes(bool dark) {
-    final String preview = _slides.slide.shapes
-        .map((PmlShape s) => s.text)
-        .firstWhere((String t) => t.isNotEmpty, orElse: () => '');
+    _syncSlideNotesField();
     return Material(
       color: dark ? const Color(0xFF242424) : const Color(0xFFF7F7F7),
       child: SizedBox(
-        height: 72,
+        height: 88,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           child: Column(
@@ -5745,13 +7393,24 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
                 ),
               ),
               const SizedBox(height: 4),
-              Text(
-                preview.isEmpty
-                    ? (_arabic ? 'لا نص على هذه الشريحة.' : 'No text on this slide.')
-                    : preview,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 12, color: _officeTheme.chromeText),
+              Expanded(
+                child: TextField(
+                  controller: _slideNotesEdit,
+                  enabled: _canMutate,
+                  maxLines: 2,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: _officeTheme.chromeText,
+                  ),
+                  decoration: InputDecoration(
+                    isDense: true,
+                    border: InputBorder.none,
+                    hintText: _arabic
+                        ? 'اكتب ملاحظات المتحدث…'
+                        : 'Type speaker notes…',
+                  ),
+                  onChanged: _slides.setSpeakerNotes,
+                ),
               ),
             ],
           ),
@@ -5787,10 +7446,7 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        StudioPaneTitle(
-          text: _arabic ? 'المخطط' : 'Outline',
-          accent: _accent,
-        ),
+        StudioPaneTitle(text: _arabic ? 'المخطط' : 'Outline', accent: _accent),
         Expanded(
           child: ListView(
             children: <Widget>[
@@ -5876,10 +7532,7 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        StudioPaneTitle(
-          text: _arabic ? 'الأوراق' : 'Sheets',
-          accent: _accent,
-        ),
+        StudioPaneTitle(text: _arabic ? 'الأوراق' : 'Sheets', accent: _accent),
         for (int i = 0; i < _sheet.workbook.sheets.length; i++)
           ListTile(
             dense: true,
@@ -5897,7 +7550,7 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
         Padding(
           padding: const EdgeInsets.all(12),
           child: Text(
-            '${_arabic ? 'الخلية' : 'Cell'} ${_sheet.selection.focus.a1}\n'
+            '${_arabic ? 'الخلية' : 'Cell'} ${_sheet.selectionAddress}\n'
             '${_sheet.formulaBarText}',
             style: TextStyle(fontSize: 12, color: _officeTheme.chromeText),
           ),
@@ -5923,13 +7576,14 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
                 padding: const EdgeInsets.all(8),
                 buildDefaultDragHandles: false,
                 itemCount: _slides.presentation.slides.length,
-                proxyDecorator: (Widget child, int index, Animation<double> anim) {
-                  return Material(
-                    elevation: 6,
-                    color: Colors.transparent,
-                    child: child,
-                  );
-                },
+                proxyDecorator:
+                    (Widget child, int index, Animation<double> anim) {
+                      return Material(
+                        elevation: 6,
+                        color: Colors.transparent,
+                        child: child,
+                      );
+                    },
                 onReorder: (int from, int to) {
                   if (!_canMutate) {
                     return;
@@ -5969,10 +7623,11 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
     final Color frame = on
         ? _accent
         : (hidden
-            ? (dark ? const Color(0xFF7A7A7A) : const Color(0xFF6A6A6A))
-            : (dark ? const Color(0xFFD0D0D0) : const Color(0xFF1F1F1F)));
-    final Color slideStroke =
-        dark ? const Color(0xFF000000) : const Color(0xFF111111);
+              ? (dark ? const Color(0xFF7A7A7A) : const Color(0xFF6A6A6A))
+              : (dark ? const Color(0xFFD0D0D0) : const Color(0xFF1F1F1F)));
+    final Color slideStroke = dark
+        ? const Color(0xFF000000)
+        : const Color(0xFF111111);
     return ReorderableDragStartListener(
       key: key,
       index: index,
@@ -6103,13 +7758,16 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
     _slideSorterMenu = OfficeContextMenu.show(
       context: context,
       globalPosition: globalPosition,
-      actions: OfficeContextMenu.slideSorter(
-        controller: _slides,
-        index: index,
-      ),
+      actions: OfficeContextMenu.slideSorter(controller: _slides, index: index),
       onSelect: (String id) {
         _slideSorterMenu = null;
         switch (id) {
+          case 'copySlide':
+            _slides.copySlide(index);
+          case 'pasteSlide':
+            _slides.pasteSlide(afterIndex: index);
+          case 'duplicateSlide':
+            _slides.duplicateSlide(index);
           case 'hideSlide':
             _slides.setSlideHidden(index, true);
           case 'showSlide':
@@ -6132,7 +7790,7 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
             '${WordComment.roots(_word.document).isEmpty ? '' : ' · ${WordComment.roots(_word.document).length} ${_arabic ? 'تعليقات' : 'comments'}'}'
             '${_word.isDirty ? ' · •' : ''}',
       SuiteApp.excel =>
-        '${_sheet.sheet.name}!${_sheet.selection.focus.a1}'
+        '${_sheet.sheet.name}!${_sheet.selectionAddress}'
             '${_sheet.cellEditor.editing ? (_arabic ? ' · تحرير الخلية' : ' · editing cell') : ''}'
             ' · ${_sheet.workbook.sheets.length} '
             '${_arabic ? 'أوراق' : 'sheets'}'
@@ -6165,8 +7823,8 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
                         _opening
                             ? _openStatusLabel
                             : (_isSaving
-                                ? _saveStatusLabel
-                                : '$_modeLabel · $detail'),
+                                  ? _saveStatusLabel
+                                  : '$_modeLabel · $detail'),
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 11,
@@ -6204,10 +7862,7 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
                     const SizedBox(width: 16),
                     Text(
                       _active.semanticsLabel,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 11,
-                      ),
+                      style: const TextStyle(color: Colors.white, fontSize: 11),
                     ),
                   ],
                 ),
@@ -6215,7 +7870,10 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
             ),
             if (_savePhase == _SavePhase.saving || _opening)
               LinearProgressIndicator(
-                value: (_opening ? _openProgress : _saveProgress).clamp(0.0, 1.0),
+                value: (_opening ? _openProgress : _saveProgress).clamp(
+                  0.0,
+                  1.0,
+                ),
                 minHeight: 4,
                 backgroundColor: const Color(0x33FFFFFF),
                 color: Colors.white,
@@ -6226,15 +7884,5 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
     );
   }
 
-  int get _wordCount {
-    var n = 0;
-    for (final WmlParagraph para in _word.document.paragraphs) {
-      for (final String part in para.text.split(RegExp(r'\s+'))) {
-        if (part.isNotEmpty) {
-          n++;
-        }
-      }
-    }
-    return n;
-  }
+  int get _wordCount => _word.documentStats.words;
 }

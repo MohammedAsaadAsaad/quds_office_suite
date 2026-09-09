@@ -112,7 +112,7 @@ abstract final class LineBreaker {
     for (int i = 0; i < breaks.length - 1; i++) {
       final int from = breaks[i];
       var to = breaks[i + 1];
-      while (to > from && logical[to - 1].isSpace) {
+      while (to > from && _isSoftTrailingSpace(logical[to - 1])) {
         to--;
       }
       final List<ShapedGlyph> slice = _reorderLine(logical.sublist(from, to));
@@ -266,7 +266,7 @@ abstract final class LineBreaker {
         double w = widths[to] - widths[from];
         // trailing spaces do not count
         var t = to - 1;
-        while (t >= from && glyphs[t].isSpace) {
+        while (t >= from && _isSoftTrailingSpace(glyphs[t])) {
           w -= glyphs[t].advance;
           t--;
         }
@@ -330,6 +330,9 @@ abstract final class LineBreaker {
 
   static bool _isBreakSpace(int cp) =>
       cp == 0x0020 || cp == 0x0009 || cp == 0x2000 || cp == 0x3000;
+
+  static bool _isSoftTrailingSpace(ShapedGlyph glyph) =>
+      glyph.isSpace && glyph.codePoint != 0x09;
 
   static bool _isTashkeel(int cp) =>
       (cp >= 0x064B && cp <= 0x065F) || cp == 0x0670;
