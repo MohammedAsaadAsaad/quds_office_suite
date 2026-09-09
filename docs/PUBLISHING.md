@@ -43,7 +43,7 @@ flutter pub publish --dry-run
 Fix every warning you can: missing LICENSE, short description, undocumented
 public API, leftover `publish_to: none`, path dependencies.
 
-The editor depends on `quds_office_engine: ^0.1.0`. Inside the workspace,
+The editor depends on `quds_office_engine: ^0.2.0`. Inside the workspace,
 Dart resolves the local package. On pub.dev, the version must already exist
 **before** you publish the editor.
 
