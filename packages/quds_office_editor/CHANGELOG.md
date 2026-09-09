@@ -2,6 +2,12 @@
 
 All notable changes to `quds_office_editor` are documented here.
 
+## 0.2.0
+
+Interactive Word ruler, notes pane, section-wide landscape, horizontal page
+gutters, and English package documentation. Chrome strings stay localizable;
+the canvas supports many languages and writing directions.
+
 ## 0.1.0
 
 First public release.

@@ -2,6 +2,12 @@
 
 All notable changes to `quds_office_engine` are documented here.
 
+## 0.2.0
+
+Word widget DSL, independent landscape sections, find/print/stats helpers,
+font sets, notes/fields/styles, and richer PDF embedding. English-only
+package documentation; multilingual and multi-direction text remain first-class.
+
 ## 0.1.0
 
 First public release.

@@ -2,7 +2,7 @@ name: quds_office_editor
 description: >-
   Flutter Word, Excel, and PowerPoint editors on custom RenderBox
   surfaces — IME, BiDi caret, formulas, and slideshows.
-version: 0.1.0
+version: 0.2.0
 homepage: https://github.com/MohammedAsaadAsaad/quds_office_suite
 repository: https://github.com/MohammedAsaadAsaad/quds_office_suite
 issue_tracker: https://github.com/MohammedAsaadAsaad/quds_office_suite/issues
@@ -38,7 +38,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  quds_office_engine: ^0.1.0
+  quds_office_engine: ^0.2.0
 
 dev_dependencies:
   flutter_lints: ^6.0.0
