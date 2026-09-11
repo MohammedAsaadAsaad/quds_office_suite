@@ -99,7 +99,7 @@ flutter pub add quds_office_editor
 ```
 
 Requires Flutter **3.44+** and Dart **3.12+**. The engine comes along as
-`quds_office_engine: ^0.3.0`.
+`quds_office_engine: ^0.3.1`.
 
 ### Host fonts
 

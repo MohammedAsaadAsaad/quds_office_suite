@@ -68,7 +68,7 @@ Most Dart “Office” libraries stop at writing a simple DOCX. Quds goes furthe
 
 ```yaml
 dependencies:
-  quds_office_engine: ^0.3.0
+  quds_office_engine: ^0.3.1
 ```
 
 ### Editor (pulls the engine)

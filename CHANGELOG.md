@@ -7,6 +7,10 @@ This repository is a Dart workspace. Each published package keeps its own change
 
 ## Unreleased
 
+## 0.3.1
+
+- Engine patch: `pdf_widgets` stays on a dedicated import (no Flutter name clashes).
+
 ## 0.3.0
 
 - Phase 6 PDF file: `PdfFile`, display list, `QudsPdfViewer` / `QudsPdfEditor`.
