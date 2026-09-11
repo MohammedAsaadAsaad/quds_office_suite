@@ -2,6 +2,12 @@
 
 All notable changes to `quds_office_engine` are documented here.
 
+## 0.3.1
+
+- Keep `pdf_widgets` on its own library import
+  (`package:quds_office_engine/pdf_widgets.dart`) so Flutter hosts do not see
+  colliding `Text` / `TextStyle` / `Widget` names from the main barrel.
+
 ## 0.3.0
 
 **Office + PDF in one pure-Dart engine.** This release makes PDF a first-class

@@ -40,7 +40,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  quds_office_engine: ^0.3.0
+  quds_office_engine: ^0.3.1
 
 dev_dependencies:
   flutter_lints: ^6.0.0

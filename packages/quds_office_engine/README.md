@@ -127,7 +127,7 @@ not appear.
 
 ```yaml
 dependencies:
-  quds_office_engine: ^0.3.0
+  quds_office_engine: ^0.3.1
 ```
 
 ```bash
