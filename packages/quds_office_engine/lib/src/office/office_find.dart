@@ -1,3 +1,5 @@
+import '../pdf/file/model/pdf_file.dart';
+import '../pdf/file/text/pdf_extract.dart';
 import '../sheet/model/sml_workbook.dart';
 import '../slide/model/pml_presentation.dart';
 import '../word/model/wml_document.dart';
@@ -72,6 +74,7 @@ class OfficeFindHit {
     this.a1,
     this.slideIndex,
     this.shapeId,
+    this.pageIndex,
   });
 
   /// kind API.
@@ -100,10 +103,13 @@ class OfficeFindHit {
 
   /// shapeId API.
   final int? shapeId;
+
+  /// PDF page index when [kind] is [OpcPackageKindHint.pdf].
+  final int? pageIndex;
 }
 
 /// Discriminator that does not import OPC.
-enum OpcPackageKindHint { word, sheet, slide }
+enum OpcPackageKindHint { word, sheet, slide, pdf }
 
 /// Model-level find and replace. Hosts drive caret / selection from hits.
 abstract final class OfficeFind {
@@ -333,6 +339,29 @@ abstract final class OfficeFind {
       }
     }
     return count;
+  }
+
+  /// inPdf API.
+  static List<OfficeFindHit> inPdf(PdfFile file, OfficeFindOptions options) {
+    if (options.query.isEmpty) {
+      return const <OfficeFindHit>[];
+    }
+    final List<OfficeFindHit> hits = <OfficeFindHit>[];
+    for (int i = 0; i < file.pageCount; i++) {
+      final String text = PdfExtract.pageText(file, i);
+      for (final (int start, int end) in _spans(text, options)) {
+        hits.add(
+          OfficeFindHit(
+            kind: OpcPackageKindHint.pdf,
+            preview: text,
+            pageIndex: i,
+            start: start,
+            end: end,
+          ),
+        );
+      }
+    }
+    return hits;
   }
 
   static Iterable<(int, int)> _spans(String text, OfficeFindOptions options) {

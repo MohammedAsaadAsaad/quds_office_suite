@@ -9,16 +9,22 @@
   <img alt="Dart 3" src="https://img.shields.io/badge/Dart-3.12%2B-0175C2?logo=dart&logoColor=white"/>
 </p>
 
-**A pure Dart Office Open XML engine.** Open, build, mutate, paginate, and export
-`.docx`, `.xlsx`, and `.pptx` — then compile the same models to native **PDF 1.7**.
+**A pure Dart Office + PDF engine.** Open, build, and mutate `.docx`, `.xlsx`,
+and `.pptx` — **and** open real PDF files (`PdfFile`), compose pages with
+Flutter-like `pdf_widgets`, or export Office models to native **PDF 1.7**.
 
 No Flutter. No `dart:ui`. No Microsoft Office, LibreOffice, or cloud conversion
 step. You pass `Uint8List` in and you get `Uint8List` out.
 
 This is the model, layout, and IO half of
 [Quds Office Suite](https://github.com/MohammedAsaadAsaad/quds_office_suite).
-Interactive canvases live in
+Interactive canvases (including PDF view/edit) live in
 [`quds_office_editor`](https://pub.dev/packages/quds_office_editor).
+
+<p align="center">
+  <img src="example/screenshots/pdf_widgets.png" alt="PDF widgets invoice" width="48%"/>
+  <img src="example/screenshots/office_rtl.png" alt="RTL Office export" width="48%"/>
+</p>
 
 ---
 
@@ -29,13 +35,14 @@ to a native binary. This engine owns the stack that a real suite needs:
 
 | You need | What the engine does |
 | --- | --- |
-| Generate reports on a server | Fluent builders and a widget-style Word DSL return bytes |
-| Open files people actually send | OPC package + WordprocessingML / SpreadsheetML / PresentationML |
+| Generate reports on a server | Fluent builders + `pdf_widgets` return bytes |
+| Open files people actually send | OPC packages **and** ISO 32000 `PdfFile` |
 | Spreadsheets that calculate | Formula AST, Excel-style functions, dependency graph |
-| Text that reads correctly worldwide | Unicode, LTR / RTL / mixed BiDi, Arabic shaping, grapheme breaks |
-| Print and archive | Native PDF 1.7 with subsetted fonts, images, links, outlines |
+| Text that reads correctly worldwide | Unicode, LTR / RTL / mixed BiDi, Arabic shaping |
+| Compose polished PDFs | Constraint layout (`Document` / `Table` / `MultiPage`) |
+| Print and archive from Office | Native PDF 1.7 export with subsetted fonts |
 | Large files in a UI | Isolate open / save so the UI isolate stays responsive |
-| Damaged or encrypted packages | Repair heuristics and password-aware Agile encryption |
+| Damaged or encrypted packages | Repair heuristics and password-aware encryption |
 
 The bytes are yours. There is no hidden “call a conversion API” step.
 
@@ -50,25 +57,30 @@ flowchart LR
     WML[Word model + layout]
     SML[Sheet model + formulas]
     PML[Slide model + motion]
-    PDF[PDF 1.7]
+    PDFf[PdfFile open / display list]
+    PDFw[pdf_widgets compose]
+    PDFx[OfficePdfExport]
     OPC --> WML & SML & PML
-    WML & SML & PML --> PDF
+    WML & SML & PML --> PDFx
+    PDFw --> PDFx
   end
   subgraph editor [quds_office_editor — Flutter]
     Word[QudsWordEditor]
     Sheet[QudsSheetEditor]
     Slide[QudsSlideEditor]
+    Pdf[QudsPdfViewer / Editor]
   end
   engine --> editor
+  PDFf --> Pdf
 ```
 
 | Package | Runtime | Role |
 | --- | --- | --- |
-| **`quds_office_engine`** | Dart VM, web, Flutter | Documents, formulas, layout, PDF, extract |
-| **`quds_office_editor`** | Flutter | Custom `RenderBox` Word / Excel / PowerPoint surfaces |
+| **`quds_office_engine`** | Dart VM, web, Flutter | Office models, formulas, `PdfFile`, `pdf_widgets`, export |
+| **`quds_office_editor`** | Flutter | Custom `RenderBox` Word / Excel / PowerPoint / PDF surfaces |
 
 Use the engine alone for CLI tools, isolates, backends, and codegen. Add the
-editor when a human needs to type, select, and present.
+editor when a human needs to type, select, present, or annotate a PDF.
 
 ---
 
@@ -115,7 +127,7 @@ not appear.
 
 ```yaml
 dependencies:
-  quds_office_engine: ^0.2.0
+  quds_office_engine: ^0.3.0
 ```
 
 ```bash
@@ -125,27 +137,24 @@ dart pub add quds_office_engine
 SDK: Dart **3.12+**. Works in Flutter apps, CLI tools, isolates, and web
 (where `dart:io` is not required — pass `Uint8List` yourself).
 
-Optional widget-style Word API:
+Optional Flutter-like PDF composer (pure Dart, no `dart:ui`):
 
 ```dart
-import 'package:quds_office_engine/word_widgets.dart' as ww;
+import 'package:quds_office_engine/pdf_widgets.dart' as pw;
 ```
 
-The default library stays Flutter-free. `word_widgets.dart` is still pure Dart;
-it is only a document DSL, not a Flutter dependency.
+Word generation stays on `DocxDocumentBuilder` + `WmlDocument`. Constraint
+layout belongs on PDF pages, not in OOXML flow.
 
 ---
 
 ## Word
 
-Three layers, same `WmlDocument` model:
+Two layers, same `WmlDocument` model:
 
 1. **Fluent builder** — `DocxDocumentBuilder` for reports and mail-merge-like
    generation.
-2. **Widget DSL** — `package:quds_office_engine/word_widgets.dart`, shaped like
-   `package:pdf/widgets.dart` (`Document`, `MultiPage`, `Paragraph`, `Table`,
-   `Row` / `Column`, images, charts).
-3. **Typed model** — `WmlDocument` / `WmlSection` / `WmlParagraph` / `WmlRun`
+2. **Typed model** — `WmlDocument` / `WmlSection` / `WmlParagraph` / `WmlRun`
    for load, mutate, and round-trip serialize.
 
 ### Build a `.docx`
@@ -190,51 +199,6 @@ void main() {
       .build();
 
   File('report.docx').writeAsBytesSync(bytes);
-}
-```
-
-### Widget-style documents
-
-Independent sections can change page size and orientation. A landscape
-`MultiPage` in the middle of a portrait report is a real Word section, not a
-rotated drawing.
-
-```dart
-import 'dart:typed_data';
-import 'package:quds_office_engine/word_widgets.dart' as ww;
-
-Future<void> writeReport() async {
-  final doc = ww.Document(title: 'Quarterly', author: 'Quds Office');
-
-  doc.addPage(
-    ww.MultiPage(
-      pageFormat: ww.PdfPageFormat.a4,
-      build: (context) => <ww.Widget>[
-        ww.Header(level: 1, text: 'Cover and summary'),
-        ww.Paragraph(text: 'Portrait narrative, lists, and a table of contents.'),
-        ww.TableOfContent(),
-      ],
-    ),
-  );
-
-  doc.addPage(
-    ww.MultiPage(
-      pageFormat: ww.PdfPageFormat.a4,
-      orientation: ww.PageOrientation.landscape,
-      build: (context) => <ww.Widget>[
-        ww.Header(level: 1, text: 'Wide KPI table'),
-        ww.Table.fromTextArray(
-          headers: ['Region', 'Q1', 'Q2', 'Q3', 'Q4'],
-          data: [
-            ['North', '12', '14', '15', '18'],
-            ['South', '9', '11', '10', '13'],
-          ],
-        ),
-      ],
-    ),
-  );
-
-  final Uint8List docx = await doc.save();
 }
 ```
 
@@ -420,8 +384,81 @@ final pdf = (PdfReportBuilder(
     .build();
 ```
 
+### Widget-style PDF (`pdf_widgets.dart`)
+
+Constraint layout on a `PdfCanvas` — Flutter-shaped `Widget.layout` /
+`PwBox.paint`, no `dart:ui`. `Document.save()` is synchronous and writes a
+native `PdfDocument`. Subclass `Widget` for custom boxes.
+
+```dart
+import 'package:quds_office_engine/pdf_widgets.dart' as pw;
+
+final doc = pw.Document(title: 'Invoice', font: font);
+doc.addPage(
+  pw.MultiPage(
+    pageFormat: pw.PdfPageFormat.a4,
+    header: (c) => pw.Text('Quds Office'),
+    footer: (c) => pw.Footer(),
+    build: (c) => <pw.Widget>[
+      pw.Header(level: 1, text: 'Invoice'),
+      pw.Row(children: <pw.Widget>[
+        pw.Expanded(child: pw.Paragraph(text: 'Bill to…')),
+        pw.Expanded(child: pw.Paragraph(text: 'Due Net 14')),
+      ]),
+      pw.Table.fromTextArray(
+        headers: ['Item', 'Amount'],
+        data: [
+          ['License', '2,400'],
+        ],
+      ),
+      pw.Chart(
+        type: pw.ChartType.bar,
+        points: const [
+          pw.ChartPoint(label: 'Q1', value: 12),
+          pw.ChartPoint(label: 'Q2', value: 18),
+        ],
+      ),
+    ],
+  ),
+);
+final Uint8List pdf = doc.save();
+```
+
+`Row` / `Column` / `Expanded`, `Wrap`, `Stack` / `Positioned`, `GridView`,
+`Table`, `Image`, `Chart`, `UrlLink`, `Watermark`, and a two-pass
+`TableOfContent` are implemented. Word does **not** have this DSL — OOXML is
+flow, not boxes.
+
 `OfficePrint` applies a page range, copy count, and optional landscape flag on
 top of the same export path.
+
+### Open PDF
+
+`PdfDocument` is the **writer**. `PdfFile` is an **opened** ISO 32000 file
+(parallel stack — it does not replace export).
+
+```dart
+import 'package:quds_office_engine/pdf_file.dart';
+
+final PdfFile file = PdfFile.open(bytes, password: password);
+final PdfDisplayList list = file.displayList(0);
+final hits = OfficeFind.inPdf(file, const OfficeFindOptions(query: 'Hello'));
+file.addAnnot(0, PdfAnnot(id: 0, subtype: 'Highlight', rect: rect));
+final Uint8List saved = PdfIncrementalSave.write(
+  originalBytes: bytes,
+  file: file,
+);
+```
+
+Isolate open: `OfficeIsolateOpen.pdf`. Print: `OfficePrint.pdfFile`.
+Page merge / extract / rotate live on `PdfFile`. XFDF: `PdfXfdf`.
+`file.structTree` is the tagged tree when present; `PdfExtract.readingOrder`
+walks Alt/ActualText. `file.signatures` reports ByteRange coverage only.
+`file.viewerPrefs` and `file.form.hasXfa` are read flags. Raw CFF `/FontFile3`
+is wrapped as OTTO for a host `FontLoader` — the engine does not rasterize
+CFF. PDF/A is **detected**, never certified. JBIG2, JPX, CMS verify, and
+in-engine CFF raster stay unsupported. Content-stream reflow editing is out
+of scope.
 
 ---
 
@@ -489,14 +526,14 @@ final theme = OfficeDocumentTheme.custom(
 lib/
 ├── quds_office_engine.dart              default export (no Flutter)
 ├── quds_office_engine_optional.dart     optional extras
-├── word_widgets.dart                    Document / MultiPage DSL
+├── pdf_widgets.dart                     Flutter-like PDF layout (Document / MultiPage)
 └── src/
     ├── opc/        ZIP, relationships, content types, OLE, crypto, repair, isolates
     ├── xml/        Streaming reader / writer, Office namespaces
-    ├── word/       WML model, layout, OMML math, widgets, serialize
+    ├── word/       WML model, layout, OMML math, serialize
     ├── sheet/      SML model, styles, formula AST + functions
     ├── slide/      PML model, DrawingML, animations, Morph, serialize
-    ├── pdf/        PDF 1.7 document, fonts, images, Office export
+    ├── pdf/        PDF 1.7 writer + `file/` open/annotate model
     ├── bidi/       UAX #9, shaping, line breaker, office direction
     ├── fonts/      SFNT parse, metrics, subset, outlines, font set
     ├── builders/   Fluent DOCX / XLSX / PPTX writers
@@ -511,8 +548,10 @@ lib/
 | Script | Writes |
 | --- | --- |
 | [`example/engine_quickstart.dart`](example/engine_quickstart.dart) | One DOCX + PDF |
-| [`example/word_widgets_sample.dart`](example/word_widgets_sample.dart) | Widget-style Word document |
-| [`example/word_report_sample.dart`](example/word_report_sample.dart) | Multi-section report (portrait + landscape) |
+| [`example/word_report_sample.dart`](example/word_report_sample.dart) | Word report via `DocxDocumentBuilder` |
+| [`example/pdf_widgets_invoice.dart`](example/pdf_widgets_invoice.dart) | Invoice (Row, Table, UrlLink) |
+| [`example/pdf_widgets_report.dart`](example/pdf_widgets_report.dart) | Quarterly report (TOC, charts, landscape) |
+| [`example/pdf_widgets_proposal.dart`](example/pdf_widgets_proposal.dart) | Proposal (cover band, GridView) |
 | [`example/rich_export_gallery.dart`](example/rich_export_gallery.dart) | Word, Excel, PowerPoint galleries + PDF |
 | [`example/word_gallery.dart`](example/word_gallery.dart) | Word-only |
 | [`example/sheet_gallery.dart`](example/sheet_gallery.dart) | Excel-only |
@@ -522,6 +561,9 @@ lib/
 cd packages/quds_office_engine
 dart run example/engine_quickstart.dart
 dart run example/word_report_sample.dart
+dart run example/pdf_widgets_invoice.dart
+dart run example/pdf_widgets_report.dart
+dart run example/pdf_widgets_proposal.dart
 dart run example/rich_export_gallery.dart
 ```
 

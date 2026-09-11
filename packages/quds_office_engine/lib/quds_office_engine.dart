@@ -4,6 +4,8 @@
 /// server, web, and native targets.
 library;
 
+export 'pdf_file.dart';
+export 'pdf_widgets.dart';
 export 'src/bidi/arabic_shaping.dart';
 export 'src/bidi/grapheme_clusters.dart';
 export 'src/bidi/line_breaker.dart';

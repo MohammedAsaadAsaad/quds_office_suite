@@ -11,12 +11,39 @@ abstract final class PdfFlate {
     return _zlibWrap(raw, data);
   }
 
-  /// Inflates a zlib-wrapped content stream produced by [compress].
-  static Uint8List decompress(Uint8List zlib) {
-    if (zlib.length < 6) {
-      throw const FormatException('Truncated zlib stream');
+  /// Inflates a FlateDecode stream (zlib, or raw DEFLATE if the wrapper is absent).
+  ///
+  /// Producers often omit or truncate the Adler-32 trailer. The inflater stops
+  /// at BFINAL, so leftover checksum bytes are ignored — they must not be
+  /// sliced off before inflate.
+  static Uint8List decompress(Uint8List data) {
+    if (data.length < 2) {
+      throw const FormatException('Truncated Flate stream');
     }
-    return RawDeflate.inflate(Uint8List.sublistView(zlib, 2, zlib.length - 4));
+    if (_isZlibHeader(data[0], data[1])) {
+      var start = 2;
+      if (data[1] & 0x20 != 0) {
+        if (data.length < 6) {
+          throw const FormatException('Truncated zlib dictionary');
+        }
+        start = 6;
+      }
+      try {
+        return RawDeflate.inflate(Uint8List.sublistView(data, start));
+      } on ZipDeflateException {
+        if (data.length > start + 4) {
+          return RawDeflate.inflate(
+            Uint8List.sublistView(data, start, data.length - 4),
+          );
+        }
+        rethrow;
+      }
+    }
+    return RawDeflate.inflate(data);
+  }
+
+  static bool _isZlibHeader(int cmf, int flg) {
+    return (cmf & 0x0F) == 8 && ((cmf << 8) + flg) % 31 == 0;
   }
 
   static Uint8List _zlibWrap(Uint8List rawDeflate, List<int> original) {

@@ -8,6 +8,8 @@ import '../slide/serial/slide_serial.dart';
 import '../visual/sheet_chart_data.dart';
 import '../word/layout/word_layout.dart';
 import '../word/model/wml_document.dart';
+import '../pdf/file/io/pdf_open_payload.dart';
+import '../pdf/file/model/pdf_file.dart';
 import '../word/serial/word_deserializer.dart';
 import 'office_open_types.dart';
 import 'repair/office_repair.dart';
@@ -23,6 +25,17 @@ Object decodeOfficeOpen(
 ) {
   /// emit API.
   emit(const OfficeOpenProgress(value: 0.16, stage: 'archive'));
+  if (kind == 'pdf') {
+    emit(const OfficeOpenProgress(value: 0.42, stage: 'xref'));
+    final PdfFile file = PdfFile.open(bytes, password: password);
+    emit(const OfficeOpenProgress(value: 0.72, stage: 'display'));
+    final PdfOpenPayload payload = PdfOpenPayload(
+      file: file,
+      lists: file.displayLists(),
+    );
+    emit(const OfficeOpenProgress(value: 0.92, stage: 'apply'));
+    return payload;
+  }
 
   /// package API.
   final package = OfficeRepair.open(bytes, password: password);

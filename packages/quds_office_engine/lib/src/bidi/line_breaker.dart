@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'arabic_shaping.dart';
 import 'grapheme_clusters.dart';
 import 'uax9_bidi.dart';
@@ -77,6 +79,9 @@ abstract final class LineBreaker {
     int? baseLevel,
     double spaceStretch = 3,
     double spaceShrink = 1,
+    /// When false, do not stretch spaces to the line edge (pdf_widgets
+    /// non-justify aligns). Word layout keeps the default [true].
+    bool justify = true,
   }) {
     if (text.isEmpty) {
       return <BrokenLine>[
@@ -102,6 +107,57 @@ abstract final class LineBreaker {
       return <BrokenLine>[];
     }
 
+    // Hard breaks on LF/CR (Flutter / package:pdf Text parity).
+    final List<BrokenLine> lines = <BrokenLine>[];
+    var start = 0;
+    for (int i = 0; i <= logical.length; i++) {
+      final bool atEnd = i == logical.length;
+      final bool hard = !atEnd &&
+          (logical[i].codePoint == 0x0A || logical[i].codePoint == 0x0D);
+      if (!atEnd && !hard) {
+        continue;
+      }
+      final List<ShapedGlyph> chunk = logical.sublist(start, i);
+      if (chunk.isNotEmpty) {
+        lines.addAll(
+          _wrapChunk(
+            chunk,
+            maxWidth: maxWidth,
+            spaceStretch: spaceStretch,
+            spaceShrink: spaceShrink,
+            justify: justify,
+          ),
+        );
+      } else if (hard || (atEnd && lines.isEmpty)) {
+        lines.add(
+          BrokenLine(
+            glyphs: const <ShapedGlyph>[],
+            width: 0,
+            logicalStart: 0,
+            logicalEnd: 0,
+            justificationRatio: 0,
+          ),
+        );
+      }
+      start = i + (hard ? 1 : 0);
+      if (hard &&
+          i + 1 < logical.length &&
+          logical[i].codePoint == 0x0D &&
+          logical[i + 1].codePoint == 0x0A) {
+        start = i + 2;
+        i++;
+      }
+    }
+    return lines;
+  }
+
+  static List<BrokenLine> _wrapChunk(
+    List<ShapedGlyph> logical, {
+    required double maxWidth,
+    required double spaceStretch,
+    required double spaceShrink,
+    required bool justify,
+  }) {
     final List<int> breaks = _knuthPlass(
       logical,
       maxWidth,
@@ -125,11 +181,14 @@ abstract final class LineBreaker {
         }
       }
       var ratio = 0.0;
-      if (spaces > 0 && width < maxWidth && i != breaks.length - 2) {
+      if (justify &&
+          spaces > 0 &&
+          width < maxWidth &&
+          i != breaks.length - 2) {
         ratio = (maxWidth - width) / (spaces * spaceStretch);
         width = maxWidth;
       }
-      int logStart = text.length;
+      int logStart = 0x7fffffff;
       int logEnd = 0;
       for (final ShapedGlyph g in slice) {
         if (g.logicalIndex < logStart) {
@@ -278,7 +337,20 @@ abstract final class LineBreaker {
           badness = ((w - maxWidth) / (shrink <= 0 ? 1 : shrink)) * 4 + 20;
         } else if (j != legal.length - 1) {
           final double slack = maxWidth - w;
-          badness = slack / (stretch <= 0 ? 1 : stretch);
+          var spaces = 0;
+          for (int k = from; k <= t; k++) {
+            if (glyphs[k].isSpace && glyphs[k].codePoint != 0x09) {
+              spaces++;
+            }
+          }
+          // TeX-like: stretchability grows with the number of word gaps.
+          final double stretchability =
+              math.max(spaces, 1) * (stretch <= 0 ? 1 : stretch);
+          badness = slack / stretchability;
+          // Extra penalty for sparse lines (few spaces, large gaps).
+          if (spaces > 0 && slack / spaces > stretch * 2) {
+            badness += (slack / spaces) / stretch;
+          }
         }
         final double cost = demerits[i] + badness * badness * 100 + 10;
         if (cost < demerits[j]) {

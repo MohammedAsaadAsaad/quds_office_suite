@@ -102,25 +102,25 @@ abstract final class WordRuler {
     );
   }
 
-  /// Line the ruler should follow: the caret when it is on [visiblePageIndex],
-  /// otherwise the first content line on the page under the ruler.
+  /// Line the ruler should follow: the caret when it is on [activePageIndex],
+  /// otherwise the first content line on that active page.
   static LaidOutLine? pickFocusLine({
-    required int visiblePageIndex,
+    required int activePageIndex,
     LaidOutLine? caretLine,
-    required List<LaidOutLine> visiblePageLines,
+    required List<LaidOutLine> pageLines,
   }) {
     if (caretLine != null &&
-        caretLine.pageIndex == visiblePageIndex &&
+        caretLine.pageIndex == activePageIndex &&
         caretLine.boxWidth > 0) {
       return caretLine;
     }
-    for (final LaidOutLine line in visiblePageLines) {
+    for (final LaidOutLine line in pageLines) {
       if (line.boxWidth > 0) {
         return line;
       }
     }
-    if (visiblePageLines.isNotEmpty) {
-      return visiblePageLines.first;
+    if (pageLines.isNotEmpty) {
+      return pageLines.first;
     }
     return caretLine;
   }

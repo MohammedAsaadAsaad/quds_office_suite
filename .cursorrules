@@ -7,8 +7,10 @@ You are implementing a two-package Office suite:
 
 ## Architecture
 
-Follow the layout and Phase 1–5 roadmap in [docs/MISSION.md](docs/MISSION.md).
-Do not skip phases. Do not leave `TODO` stubs or placeholder return values.
+Follow the layout and Phase 1–6 roadmap in [docs/MISSION.md](docs/MISSION.md).
+PDF-as-a-file is [docs/PDF.md](docs/PDF.md). Keep writer types (`PdfDocument`)
+separate from `PdfFile`. Do not skip remaining honesty items in STANDARDS.
+Do not leave `TODO` stubs or placeholder return values.
 100% type safety: no `dynamic`, no untyped maps.
 
 ## Editor prohibition
@@ -19,5 +21,7 @@ are custom RenderBox subclasses.
 
 ## Current focus
 
-Complete each phase fully before starting the next. Prefer Uint8List views,
-index slicing, and object pooling over heap-heavy DOM trees.
+Phase 6 PDF file has landed (`PdfFile`, `QudsPdfViewer`, `QudsPdfEditor`).
+Do not rename the writer `PdfDocument`. Prefer Uint8List views, index slicing,
+and object pooling over heap-heavy DOM trees. Honor STANDARDS limits
+(CFF raster, JBIG2/JPX, CMS signature verify, certified PDF/A).

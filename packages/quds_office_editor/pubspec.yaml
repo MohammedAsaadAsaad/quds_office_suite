@@ -1,8 +1,8 @@
 name: quds_office_editor
 description: >-
-  Flutter Word, Excel, and PowerPoint editors on custom RenderBox
-  surfaces — IME, BiDi caret, formulas, and slideshows.
-version: 0.2.0
+  Flutter Office + PDF surfaces on custom RenderBox: Word, Excel, PowerPoint,
+  and QudsPdfViewer/Editor — IME, BiDi, formulas, slideshows, PDF markup.
+version: 0.3.0
 homepage: https://github.com/MohammedAsaadAsaad/quds_office_suite
 repository: https://github.com/MohammedAsaadAsaad/quds_office_suite
 issue_tracker: https://github.com/MohammedAsaadAsaad/quds_office_suite/issues
@@ -12,8 +12,8 @@ topics:
   - flutter
   - office
   - editor
+  - pdf
   - word
-  - excel
 
 platforms:
   android:
@@ -30,6 +30,8 @@ screenshots:
     path: example/screenshots/excel.png
   - description: "PowerPoint stage — shapes, snap guides, and slideshow."
     path: example/screenshots/powerpoint.png
+  - description: "PDF surface — invoice page from pdf_widgets in the Studio gallery."
+    path: example/screenshots/pdf.png
 
 environment:
   sdk: ^3.12.0
@@ -38,7 +40,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  quds_office_engine: ^0.2.0
+  quds_office_engine: ^0.3.0
 
 dev_dependencies:
   flutter_lints: ^6.0.0
@@ -47,3 +49,5 @@ dev_dependencies:
 
 flutter:
   uses-material-design: false
+  assets:
+    - fonts/

@@ -8,21 +8,22 @@
   <img alt="Flutter RenderBox" src="https://img.shields.io/badge/Flutter-RenderBox-02569B?logo=flutter&logoColor=white"/>
 </p>
 
-**Embeddable Word, Excel, and PowerPoint surfaces for Flutter** — painted as
+**Embeddable Word, Excel, PowerPoint, and PDF surfaces for Flutter** — painted as
 custom `RenderBox` editors, not `TextField`, `ListView`, or `InteractiveViewer`.
 
 This is the interaction half of
 [Quds Office Suite](https://github.com/MohammedAsaadAsaad/quds_office_suite).
-Documents, formulas, pagination, and PDF live in
+Documents, formulas, pagination, `PdfFile`, and `pdf_widgets` live in
 [`quds_office_engine`](https://pub.dev/packages/quds_office_engine)
 (re-exported from this package).
 
 You draw **your** ribbon, file menu, and window chrome. This package paints the
-document.
+document — Office **or** PDF.
 
 ![Word editor](example/screenshots/word.png)
 ![Excel editor](example/screenshots/excel.png)
 ![PowerPoint editor](example/screenshots/powerpoint.png)
+![PDF viewer](example/screenshots/pdf.png)
 
 ---
 
@@ -39,6 +40,8 @@ for a paginated Word page, a virtualized sheet, or a slide stage with motion.
 | `QudsWordEditor` | `WordEditorController` | Paginated pages, caret, tables, comments, headers/footers, OMML, pictures |
 | `QudsSheetEditor` | `SheetEditorController` | Virtualized grid, formula bar, freeze panes, fill handle, charts |
 | `QudsSlideEditor` | `SlideEditorController` | Slide stage, transform handles, snap guides, animations, slideshow |
+| `QudsPdfViewer` | `PdfViewerController` | Read-only PDF pages, zoom, find, copy, follow links |
+| `QudsPdfEditor` | `PdfEditorController` | Same canvas plus markup, form fill, page ops, incremental save |
 
 ```text
 ┌─ your Scaffold / desktop frame ──────────────────────────┐
@@ -88,7 +91,7 @@ only changes chrome labels, not pagination.
 
 ```yaml
 dependencies:
-  quds_office_editor: ^0.2.0
+  quds_office_editor: ^0.3.0
 ```
 
 ```bash
@@ -96,7 +99,24 @@ flutter pub add quds_office_editor
 ```
 
 Requires Flutter **3.44+** and Dart **3.12+**. The engine comes along as
-`quds_office_engine: ^0.2.0`.
+`quds_office_engine: ^0.3.0`.
+
+### Host fonts
+
+The package ships Liberation Sans/Serif/Mono (PDF Standard 14 / Arial / Times /
+Courier substitutes) and Noto Naskh Arabic. Register them once before paint:
+
+```dart
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await OfficeHostFonts.ensureRegistered();
+  runApp(const MyApp());
+}
+```
+
+Aliases such as Helvetica, Arial, Calibri, Times New Roman, and Courier New
+resolve to those faces. When a PDF embeds its own `/FontFile*`, that face still
+wins for glyph shape and advances.
 
 ---
 
@@ -242,6 +262,28 @@ frame. It is not a jump to the previous slide’s final state.
 
 ---
 
+## PDF viewer and editor
+
+`QudsPdfViewer` is display-only (`viewing` / `selecting`): zoom, find, copy,
+outline jump, follow URI. It has no `saveBytes`.
+
+`QudsPdfEditor` extends the same canvas: highlights, notes, ink, AcroForm
+values, page insert/delete/rotate, XFDF, incremental save.
+
+```dart
+final viewer = PdfViewerController.fromBytes(pdfBytes);
+QudsPdfViewer(controller: viewer);
+
+final editor = PdfEditorController.fromBytes(pdfBytes);
+editor.highlightSelection();
+final Uint8List saved = editor.saveBytes();
+```
+
+The page is `RenderPdfCanvas`. Host chrome (File / View / Annotate / Form)
+stays outside the widget. Body-text reflow is out of scope.
+
+---
+
 ## Theming, modes, and chrome
 
 ```dart
@@ -361,6 +403,7 @@ flowchart TB
 | `render_word_canvas.dart` | Paginated Word `RenderBox` |
 | `render_sheet_grid.dart` | Virtualized sheet `RenderBox` |
 | `render_slide_stage.dart` | Slide + slideshow `RenderBox` |
+| `render_pdf_canvas.dart` | Shared PDF page `RenderBox` |
 | `office_ruler.dart` | Interactive Word ruler |
 | `word_notes_pane.dart` | Footnotes / endnotes host pane |
 

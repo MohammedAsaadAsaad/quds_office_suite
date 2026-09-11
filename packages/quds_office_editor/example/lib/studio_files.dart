@@ -29,6 +29,7 @@ abstract final class StudioFiles {
     'docm',
     'xlsm',
     'pptm',
+    'pdf',
   ];
 
   static Future<Uint8List?> pickImage() async {
@@ -164,16 +165,91 @@ abstract final class StudioFiles {
   static SfntFont? systemUiFont() =>
       fontForFamily(OfficeTypeface.arabicTheme) ?? _firstExisting(_uiFonts);
 
-  static SfntFont? exportFontForWord(WmlDocument document, {String? themeFamily}) {
-    return exportFontCovering(
-      <String>[
-        for (final WmlParagraph paragraph in document.paragraphs) paragraph.text,
+  /// Latin-capable UI face for PDF export (never Arabic-only).
+  static SfntFont? latinExportFont() =>
+      fontForFamily('Liberation Sans') ??
+      fontForFamily('DejaVu Sans') ??
+      fontForFamily('Arial') ??
+      _firstExisting(const <String>[
+        '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf',
+        '/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf',
+        '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+        '/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf',
+      ]);
+
+  /// Bold companion for [latinExportFont] (real weight, not faux stroke).
+  static SfntFont? latinExportBoldFont() => _firstExisting(const <String>[
+        '/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf',
+        '/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf',
+        '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
+        '/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf',
+      ]);
+
+  /// Arabic-capable face for mixed-script PDF export.
+  static SfntFont? arabicExportFont() =>
+      fontForFamily(OfficeTypeface.arabicTheme) ??
+      fontForFamily('Noto Sans Arabic') ??
+      fontForFamily('Tajawal');
+
+  /// Multi-face pack so Latin and Arabic both get real advances when exporting.
+  static OfficeFontSet exportFontSetCovering(Iterable<String> texts) {
+    final SfntFont? latin = latinExportFont();
+    final SfntFont? arabic = arabicExportFont();
+    var needsLatin = false;
+    var needsArabic = false;
+    for (final String text in texts) {
+      for (final int cp in text.runes) {
+        if (cp >= 0x0600 && cp <= 0x06FF) {
+          needsArabic = true;
+        } else if ((cp >= 0x0041 && cp <= 0x007A) ||
+            (cp >= 0x00C0 && cp <= 0x024F)) {
+          needsLatin = true;
+        }
+      }
+    }
+    if (needsLatin && needsArabic && latin != null && arabic != null) {
+      return OfficeFontSet(primary: latin, fallbacks: <SfntFont>[arabic]);
+    }
+    if (needsArabic && !needsLatin && arabic != null) {
+      return OfficeFontSet(
+        primary: arabic,
+        fallbacks: <SfntFont>[
+          if (latin != null) latin,
+        ],
+      );
+    }
+    final SfntFont? covered = exportFontCovering(texts);
+    return OfficeFontSet(
+      primary: covered ?? latin ?? arabic,
+      fallbacks: <SfntFont>[
+        if (latin != null && !identical(latin, covered)) latin,
+        if (arabic != null && !identical(arabic, covered)) arabic,
       ],
-      preferred: OfficeTypeface.preferredExportFamily(
-        document,
-        themeFamily: themeFamily,
-      ),
     );
+  }
+
+  static SfntFont? exportFontForWord(WmlDocument document, {String? themeFamily}) {
+    return exportFontSetForWord(document, themeFamily: themeFamily).primary ??
+        exportFontCovering(
+          <String>[
+            for (final WmlParagraph paragraph in document.paragraphs)
+              paragraph.text,
+          ],
+          preferred: OfficeTypeface.preferredExportFamily(
+            document,
+            themeFamily: themeFamily,
+          ),
+        );
+  }
+
+  /// Font set for Word → PDF (Latin primary when the doc mixes scripts).
+  static OfficeFontSet exportFontSetForWord(
+    WmlDocument document, {
+    String? themeFamily,
+  }) {
+    return exportFontSetCovering(<String>[
+      for (final WmlParagraph paragraph in document.paragraphs) paragraph.text,
+    ]);
   }
 
   /// Picks a TrueType face that covers the most requested characters.
@@ -187,6 +263,7 @@ abstract final class StudioFiles {
     }
     final List<SfntFont?> candidates = <SfntFont?>[
       if (preferred != null && preferred.isNotEmpty) fontForFamily(preferred),
+      latinExportFont(),
       systemUiFont(),
       fontForFamily('DejaVu Sans'),
       fontForFamily('Noto Sans Arabic'),
@@ -195,6 +272,8 @@ abstract final class StudioFiles {
     ];
     SfntFont? best;
     var bestHits = -1;
+    final int printable =
+        cps.where((int cp) => cp >= 32).length.clamp(1, 0x7fffffff);
     for (final SfntFont? font in candidates) {
       if (font == null || !font.hasTable('glyf')) {
         continue;
@@ -205,12 +284,15 @@ abstract final class StudioFiles {
           hits++;
         }
       }
-      if (hits > bestHits) {
+      if (hits > bestHits && hits * 2 >= printable) {
+        best = font;
+        bestHits = hits;
+      } else if (best == null && hits > bestHits) {
         best = font;
         bestHits = hits;
       }
     }
-    return best ?? systemUiFont();
+    return best ?? latinExportFont() ?? systemUiFont();
   }
 
   static SfntFont? fontForFamily(String family) {
@@ -332,6 +414,9 @@ abstract final class StudioFiles {
     }
     if (lower.endsWith('.docx') || lower.endsWith('.docm')) {
       return OpcPackageKind.word;
+    }
+    if (lower.endsWith('.pdf')) {
+      return OpcPackageKind.unknown;
     }
     try {
       return OfficeRepair.open(bytes).kind;

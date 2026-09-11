@@ -1,6 +1,8 @@
 import 'dart:typed_data';
 
 import '../fonts/sfnt_parser.dart';
+import '../pdf/file/io/pdf_incremental_save.dart';
+import '../pdf/file/model/pdf_file.dart';
 import '../pdf/office_pdf_export.dart';
 import '../sheet/model/sml_workbook.dart';
 import '../slide/model/pml_presentation.dart';
@@ -94,6 +96,22 @@ abstract final class OfficePrint {
       mode: mode,
       slideFrom: settings.pageFrom,
       slideTo: settings.pageTo,
+    );
+  }
+
+  /// pdfFile API.
+  static Uint8List pdfFile(
+    PdfFile file, {
+    OfficePrintSettings settings = const OfficePrintSettings(),
+  }) {
+    if (file.dirtyPages.isEmpty &&
+        settings.pageFrom <= 1 &&
+        (settings.pageTo == null || settings.pageTo! >= file.pageCount)) {
+      return file.originalBytes;
+    }
+    return PdfIncrementalSave.write(
+      originalBytes: file.originalBytes,
+      file: file,
     );
   }
 

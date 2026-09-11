@@ -11,9 +11,11 @@ import 'sample_library.dart';
 import 'studio_chrome.dart';
 import 'studio_files.dart';
 import 'studio_find_pane.dart';
+import 'studio_pdf_gallery.dart';
+import 'studio_pdf_surface.dart';
 import 'studio_window.dart';
 
-enum SuiteApp { word, excel, powerpoint }
+enum SuiteApp { word, excel, powerpoint, pdf }
 
 enum SuiteLook { light, dark, highContrast }
 
@@ -65,7 +67,9 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
   late final WordEditorController _word;
   late final SheetEditorController _sheet;
   late final SlideEditorController _slides;
+  late final PdfEditorController _pdf;
   final TextEditingController _commentReply = TextEditingController();
+  final TextEditingController _pdfFind = TextEditingController();
   final TextEditingController _slideNotesEdit = TextEditingController();
   int _notesSlideIndex = -1;
   final VirtualViewport _commentViewport = VirtualViewport();
@@ -87,12 +91,18 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
   String _wordName = 'Al Tahreer Neighbourhood Profile.docx';
   String _sheetName = 'Budget.xlsx';
   String _slideName = 'Studio deck.pptx';
+  String? _pdfPath;
+  String _pdfName = 'Studio.pdf';
 
   OfficeSurfaceConfig? _cachedConfig;
   Object? _configKey;
   var _rebuildScheduled = false;
   var _slideshowFullscreen = false;
   var _findOpen = false;
+  var _pdfSideTab = 0; // 0 thumbs, 1 outline
+  final ScrollController _pdfThumbScroll = ScrollController();
+  int _pdfThumbSyncedPage = -1;
+  final Set<String> _pdfOutlineExpanded = <String>{};
   var _findReplace = false;
   var _printPreview = false;
 
@@ -103,6 +113,7 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
     _word.onFollowExternalLink = _openExternalLink;
     _sheet = SheetEditorController(workbook: SampleLibrary.excelBudget());
     _slides = SlideEditorController(presentation: SampleLibrary.slideDeck());
+    _pdf = PdfEditorController.fromBytes(studioSamplePdf());
     _bindHostActions(_word);
     _bindHostActions(_sheet);
     _bindHostActions(_slides);
@@ -116,6 +127,7 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
     _word.addListener(_rebuild);
     _sheet.addListener(_rebuild);
     _slides.addListener(_rebuild);
+    _pdf.addListener(_rebuild);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       StudioWindow.setTitle('$_chromeTitle — Quds Office Studio');
     });
@@ -155,12 +167,14 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
     SuiteApp.word => _word,
     SuiteApp.excel => _sheet,
     SuiteApp.powerpoint => _slides,
+    SuiteApp.pdf => _word,
   };
 
   Color get _accent => switch (_app) {
     SuiteApp.word => const Color(0xFF2B579A),
     SuiteApp.excel => const Color(0xFF217346),
     SuiteApp.powerpoint => const Color(0xFFB7472A),
+    SuiteApp.pdf => const Color(0xFFC0392B),
   };
 
   OfficeTheme get _officeTheme {
@@ -227,7 +241,12 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
     _slides
       ..removeListener(_rebuild)
       ..dispose();
+    _pdf
+      ..removeListener(_rebuild)
+      ..dispose();
     _commentReply.dispose();
+    _pdfFind.dispose();
+    _pdfThumbScroll.dispose();
     _slideNotesEdit.dispose();
     _wordFocus.dispose();
     _sheetFocus.dispose();
@@ -312,6 +331,24 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
         const SingleActivator(LogicalKeyboardKey.keyS, control: true):
             _saveFile,
         const SingleActivator(LogicalKeyboardKey.keyS, meta: true): _saveFile,
+        const SingleActivator(LogicalKeyboardKey.equal, control: true):
+            _shortcutZoomIn,
+        const SingleActivator(LogicalKeyboardKey.equal, meta: true):
+            _shortcutZoomIn,
+        const SingleActivator(LogicalKeyboardKey.numpadAdd, control: true):
+            _shortcutZoomIn,
+        const SingleActivator(LogicalKeyboardKey.add, control: true):
+            _shortcutZoomIn,
+        const SingleActivator(LogicalKeyboardKey.minus, control: true):
+            _shortcutZoomOut,
+        const SingleActivator(LogicalKeyboardKey.minus, meta: true):
+            _shortcutZoomOut,
+        const SingleActivator(LogicalKeyboardKey.numpadSubtract, control: true):
+            _shortcutZoomOut,
+        const SingleActivator(LogicalKeyboardKey.digit0, control: true):
+            _shortcutZoomReset,
+        const SingleActivator(LogicalKeyboardKey.digit0, meta: true):
+            _shortcutZoomReset,
       },
       child: StudioWindowScope(
         onChanged: () {
@@ -519,6 +556,12 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
                           selected: _app == SuiteApp.powerpoint,
                           onTap: () => _switchApp(SuiteApp.powerpoint),
                         ),
+                        StudioAppSwitcher(
+                          label: 'PDF',
+                          icon: Icons.picture_as_pdf_outlined,
+                          selected: _app == SuiteApp.pdf,
+                          onTap: () => _switchApp(SuiteApp.pdf),
+                        ),
                       ],
                     ),
                   ),
@@ -658,6 +701,7 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
       SuiteApp.word => 'Word',
       SuiteApp.excel => 'Excel',
       SuiteApp.powerpoint => 'PowerPoint',
+      SuiteApp.pdf => 'PDF',
     };
     return '$_documentLabel — $app';
   }
@@ -667,21 +711,25 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
       SuiteApp.word => _wordName,
       SuiteApp.excel => _sheetName,
       SuiteApp.powerpoint => _slideName,
+      SuiteApp.pdf => _pdfName,
     };
     final String clean = name.trim().isEmpty ? _untitledName : name.trim();
-    return _active.isDirty ? '$clean*' : clean;
+    final bool dirty = _app == SuiteApp.pdf ? _pdf.isDirty : _active.isDirty;
+    return dirty ? '$clean*' : clean;
   }
 
   String get _untitledName => switch (_app) {
     SuiteApp.word => 'Document1.docx',
     SuiteApp.excel => 'Book1.xlsx',
     SuiteApp.powerpoint => 'Presentation1.pptx',
+    SuiteApp.pdf => 'Document.pdf',
   };
 
   String get _activeName => switch (_app) {
     SuiteApp.word => _wordName,
     SuiteApp.excel => _sheetName,
     SuiteApp.powerpoint => _slideName,
+    SuiteApp.pdf => _pdfName,
   };
 
   set _activeName(String value) {
@@ -692,6 +740,8 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
         _sheetName = value;
       case SuiteApp.powerpoint:
         _slideName = value;
+      case SuiteApp.pdf:
+        _pdfName = value;
     }
   }
 
@@ -709,7 +759,7 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
   void _switchApp(SuiteApp app) {
     setState(() {
       _app = app;
-      _tab = _RibbonTab.home;
+      _tab = app == SuiteApp.pdf ? _RibbonTab.view : _RibbonTab.home;
     });
     StudioWindow.setTitle('$_chromeTitle — Quds Office Studio');
   }
@@ -851,14 +901,24 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
       _RibbonTab.animations,
       _RibbonTab.view,
     ],
+    SuiteApp.pdf => const <_RibbonTab>[
+      _RibbonTab.file,
+      _RibbonTab.view,
+      _RibbonTab.review,
+      _RibbonTab.insert,
+    ],
   };
 
   String _tabLabel(_RibbonTab tab) => switch (tab) {
     _RibbonTab.file => _arabic ? 'ملف' : 'File',
     _RibbonTab.home => _arabic ? 'الرئيسية' : 'Home',
-    _RibbonTab.insert => _arabic ? 'إدراج' : 'Insert',
+    _RibbonTab.insert => _app == SuiteApp.pdf
+        ? (_arabic ? 'نموذج' : 'Form')
+        : (_arabic ? 'إدراج' : 'Insert'),
     _RibbonTab.layout => _arabic ? 'تخطيط' : 'Layout',
-    _RibbonTab.review => _arabic ? 'مراجعة' : 'Review',
+    _RibbonTab.review => _app == SuiteApp.pdf
+        ? (_arabic ? 'تعليق' : 'Annotate')
+        : (_arabic ? 'مراجعة' : 'Review'),
     _RibbonTab.formulas => _arabic ? 'صيغ' : 'Formulas',
     _RibbonTab.data => _arabic ? 'بيانات' : 'Data',
     _RibbonTab.design =>
@@ -891,14 +951,20 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
               tooltip: _arabic ? 'تراجع' : 'Undo',
               accent: _accent,
               foreground: _officeTheme.chromeText,
-              onPressed: _canMutate && _active.canUndo ? _active.undo : null,
+              onPressed: _canMutate &&
+                      (_app == SuiteApp.pdf ? _pdf.canUndo : _active.canUndo)
+                  ? (_app == SuiteApp.pdf ? _pdf.undo : _active.undo)
+                  : null,
             ),
             StudioIconCmd(
               icon: Icons.redo,
               tooltip: _arabic ? 'إعادة' : 'Redo',
               accent: _accent,
               foreground: _officeTheme.chromeText,
-              onPressed: _canMutate && _active.canRedo ? _active.redo : null,
+              onPressed: _canMutate &&
+                      (_app == SuiteApp.pdf ? _pdf.canRedo : _active.canRedo)
+                  ? (_app == SuiteApp.pdf ? _pdf.redo : _active.redo)
+                  : null,
             ),
               StudioIconCmd(
               icon: Icons.translate,
@@ -959,8 +1025,223 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
       (SuiteApp.powerpoint, _RibbonTab.transitions) => _slideTransitions(),
       (SuiteApp.powerpoint, _RibbonTab.animations) => _slideAnimations(),
       (SuiteApp.powerpoint, _RibbonTab.view) => _slideView(),
+      (SuiteApp.pdf, _RibbonTab.file) => _pdfFileGroups(),
+      (SuiteApp.pdf, _RibbonTab.review) => _pdfAnnotate(),
+      (SuiteApp.pdf, _RibbonTab.insert) => _pdfForm(),
+      (SuiteApp.pdf, _) => _pdfView(),
       _ => _fileGroups(_resetWord, _newWord),
     };
+  }
+
+  void _resetPdf() {
+    _pdf.loadBytesAsync(studioSamplePdf());
+    _pdfPath = null;
+    _pdfName = 'Studio.pdf';
+  }
+
+  void _newPdf() {
+    _pdf.loadBytesAsync(studioSamplePdf());
+    _pdfPath = null;
+    _pdfName = 'Document.pdf';
+  }
+
+  List<StudioRibbonGroup> _pdfFileGroups() {
+    return <StudioRibbonGroup>[
+      ..._fileGroups(_resetPdf, _newPdf),
+      StudioRibbonGroup(
+        title: _arabic ? 'عينات تجريبية' : 'Sample lab',
+        children: <Widget>[
+          _cmd(
+            Icons.auto_awesome,
+            _arabic ? 'معرض PDF' : 'PDF gallery',
+            _opening || _isSaving ? null : _openPdfSampleGallery,
+          ),
+        ],
+      ),
+    ];
+  }
+
+  Future<void> _openPdfSampleGallery() async {
+    final StudioPdfSample? sample = await showDialog<StudioPdfSample>(
+      context: context,
+      builder: (BuildContext context) {
+        return _PdfSampleGalleryDialog(arabic: _arabic, accent: _accent);
+      },
+    );
+    if (sample == null || !mounted) {
+      return;
+    }
+    await _loadPdfSample(sample);
+  }
+
+  Future<void> _loadPdfSample(StudioPdfSample sample) async {
+    setState(() {
+      _opening = true;
+      _openHeavy = true;
+      _openProgress = 0.08;
+      _openStage = 'sample';
+      _openName = sample.fileName;
+    });
+    _openTicker?.cancel();
+    _openTicker = Timer.periodic(const Duration(milliseconds: 90), (_) {
+      if (!mounted || !_opening) {
+        return;
+      }
+      setState(() {
+        _openProgress = (_openProgress + 0.04).clamp(0.0, 0.92);
+      });
+    });
+    try {
+      await SampleLibrary.preload();
+      final OfficeFontSet fontSet = sample.id == 'office-tahreer-word'
+          ? StudioFiles.exportFontSetForWord(SampleLibrary.wordBriefing())
+          : StudioFiles.exportFontSetCovering(
+              <String>[
+                sample.titleEn,
+                sample.blurbEn,
+                'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz',
+                'حي التحرير التعافي',
+              ],
+            );
+      final SfntFont? font = fontSet.primary ?? StudioFiles.latinExportFont();
+      final Uint8List bytes = await Future<Uint8List>(() {
+        return sample.build(font: font, fonts: fontSet);
+      });
+      final Directory dir = Directory(
+        '${Directory.systemTemp.path}/quds_pdf_samples',
+      )..createSync(recursive: true);
+      final File file = File('${dir.path}/${sample.fileName}');
+      await file.writeAsBytes(bytes, flush: true);
+      if (!mounted) {
+        return;
+      }
+      _switchApp(SuiteApp.pdf);
+      await _pdf.loadBytesAsync(bytes);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _pdfPath = file.path;
+        _pdfName = sample.fileName;
+        _pdfThumbSyncedPage = -1;
+        _openProgress = 1;
+      });
+    } catch (error, stack) {
+      debugPrint('PDF sample failed: $error\n$stack');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              _arabic
+                  ? 'تعذّر إنشاء العينة: $error'
+                  : 'Sample failed: $error',
+            ),
+          ),
+        );
+      }
+    } finally {
+      _openTicker?.cancel();
+      _openTicker = null;
+      if (mounted) {
+        setState(() {
+          _opening = false;
+          _openHeavy = false;
+          _openProgress = 0;
+          _openStage = 'archive';
+          _openName = '';
+        });
+      }
+    }
+  }
+
+  List<StudioRibbonGroup> _pdfView() {
+    return <StudioRibbonGroup>[
+      StudioRibbonGroup(
+        title: _arabic ? 'عرض' : 'View',
+        children: <Widget>[
+          _cmd(Icons.zoom_in, _arabic ? 'تكبير' : 'Zoom in', () {
+            _pdf.zoomBy(1.1);
+          }),
+          _cmd(Icons.zoom_out, _arabic ? 'تصغير' : 'Zoom out', () {
+            _pdf.zoomBy(1 / 1.1);
+          }),
+          _cmd(Icons.fit_screen_outlined, _arabic ? 'ملاءمة' : 'Fit width', () {
+            _pdf.fitVisibleWidth();
+          }),
+          _cmd(Icons.search, _arabic ? 'بحث' : 'Find', _openFind),
+        ],
+      ),
+    ];
+  }
+
+  Widget _pdfFindBar(bool dark) {
+    return Material(
+      elevation: 4,
+      color: dark ? const Color(0xFF2A2A2A) : Colors.white,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        child: Row(
+          children: <Widget>[
+            Expanded(
+              child: TextField(
+                controller: _pdfFind,
+                decoration: InputDecoration(
+                  isDense: true,
+                  hintText: _arabic ? 'بحث في PDF' : 'Find in PDF',
+                  border: const OutlineInputBorder(),
+                ),
+                onSubmitted: (String query) {
+                  _pdf.find(query);
+                },
+              ),
+            ),
+            IconButton(
+              onPressed: () => _pdf.find(_pdfFind.text),
+              icon: const Icon(Icons.search),
+            ),
+            IconButton(
+              onPressed: _closeFind,
+              icon: const Icon(Icons.close),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  List<StudioRibbonGroup> _pdfAnnotate() {
+    return <StudioRibbonGroup>[
+      StudioRibbonGroup(
+        title: _arabic ? 'تعليق' : 'Annotate',
+        children: <Widget>[
+          _cmd(Icons.highlight_outlined, _arabic ? 'تمييز' : 'Highlight', () {
+            _pdf.highlightSelection();
+          }),
+          _cmd(Icons.sticky_note_2_outlined, _arabic ? 'ملاحظة' : 'Note', () {
+            _pdf.addNote(
+              const PdfRect(x: 72, y: 72, width: 24, height: 24),
+              _arabic ? 'ملاحظة' : 'Note',
+            );
+          }),
+        ],
+      ),
+    ];
+  }
+
+  List<StudioRibbonGroup> _pdfForm() {
+    return <StudioRibbonGroup>[
+      StudioRibbonGroup(
+        title: _arabic ? 'صفحات' : 'Pages',
+        children: <Widget>[
+          _cmd(Icons.note_add_outlined, _arabic ? 'صفحة' : 'Blank page', () {
+            _pdf.insertBlankPage(_pdf.pageIndex + 1);
+          }),
+          _cmd(Icons.rotate_right, _arabic ? 'تدوير' : 'Rotate', () {
+            _pdf.rotateCurrentPage(90);
+          }),
+        ],
+      ),
+    ];
   }
 
   List<StudioRibbonGroup> _fileGroups(
@@ -3654,20 +3935,49 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
   List<Widget> _zoomCmds() {
     return <Widget>[
       _cmd(Icons.zoom_out, _arabic ? 'تصغير' : 'Zoom out', () {
-        _setZoom(_active.viewport.scale - 0.1);
+        _setZoom(_viewScale - 0.1);
       }),
       _cmd(Icons.search, '$_zoomPercent%', () => _setZoom(1)),
       _cmd(Icons.zoom_in, _arabic ? 'تكبير' : 'Zoom in', () {
-        _setZoom(_active.viewport.scale + 0.1);
+        _setZoom(_viewScale + 0.1);
       }),
     ];
   }
 
-  int get _zoomPercent => (_active.viewport.scale * 100).round();
+  double get _viewScale => _app == SuiteApp.pdf
+      ? _pdf.viewport.scale
+      : _active.viewport.scale;
+
+  int get _zoomPercent => (_viewScale * 100).round();
 
   void _setZoom(double value) {
+    if (_app == SuiteApp.pdf) {
+      _pdf.setScale(value);
+      setState(() {});
+      return;
+    }
     _active.viewport.setScale(value);
     _active.refresh();
+  }
+
+  void _shortcutZoomIn() {
+    if (_app == SuiteApp.pdf) {
+      _pdf.zoomBy(1.1);
+      return;
+    }
+    _setZoom(_viewScale + 0.1);
+  }
+
+  void _shortcutZoomOut() {
+    if (_app == SuiteApp.pdf) {
+      _pdf.zoomBy(1 / 1.1);
+      return;
+    }
+    _setZoom(_viewScale - 0.1);
+  }
+
+  void _shortcutZoomReset() {
+    _setZoom(1);
   }
 
   Future<void> _openFile() async {
@@ -3677,6 +3987,17 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
     try {
       final PickedOfficeFile? picked = await StudioFiles.open();
       if (picked == null || !mounted) {
+        return;
+      }
+      if (picked.name.toLowerCase().endsWith('.pdf')) {
+        final Uint8List pdfBytes = await StudioFiles.ensureBytes(picked);
+        if (!mounted) {
+          return;
+        }
+        _switchApp(SuiteApp.pdf);
+        await _pdf.loadBytesAsync(pdfBytes);
+        _pdfPath = picked.path;
+        _pdfName = _nameFromPicked(picked);
         return;
       }
       if (picked.kind == OpcPackageKind.unknown) {
@@ -3734,11 +4055,7 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
         setState(() => _openProgress = 1);
       }
     } catch (error) {
-      _toast(
-        _arabic
-            ? 'تعذر فتح الملف. قد يكون الأرشيف تالفاً أو مضغوطاً بطريقة غير مدعومة بعد.'
-            : 'Could not open the file. The archive may be damaged or use an unsupported compression stream.',
-      );
+      _toast(_openFailureMessage(error));
     } finally {
       _stopOpenTicker();
       if (mounted) {
@@ -3748,6 +4065,50 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
         });
       }
     }
+  }
+
+  String _openFailureMessage(Object error) {
+    final Object root = error is StateError ? error.message : error;
+    final PdfOpenError? kind = root is PdfOpenException
+        ? root.error
+        : _pdfOpenErrorFromText('$error');
+    if (kind != null) {
+      return switch (kind) {
+        PdfOpenError.encrypted || PdfOpenError.wrongPassword => _arabic
+            ? 'الملف محمي بكلمة مرور.'
+            : 'This PDF is password-protected.',
+        PdfOpenError.unsupportedFilter => _arabic
+            ? 'المحرّك لا يفكّ هذا النوع من ضغط مجاري PDF بعد.'
+            : 'This PDF uses a stream filter that is not decoded yet.',
+        PdfOpenError.unsupportedHandler => _arabic
+            ? 'معالج حماية PDF غير مدعوم.'
+            : 'This PDF uses an unsupported security handler.',
+        PdfOpenError.limit => _arabic
+            ? 'الملف أكبر من حد الأمان.'
+            : 'The file exceeds the safety limit.',
+        PdfOpenError.badHeader || PdfOpenError.badXref => _arabic
+            ? 'ملف PDF تالف أو جدول الإسناد غير صالح.'
+            : 'The PDF is damaged or its cross-reference table is invalid.',
+      };
+    }
+    if ('$error'.contains('ZipDeflate') || '$error'.contains('Flate')) {
+      return _arabic
+          ? 'تعذر فك ضغط مجرى في ملف PDF.'
+          : 'Could not inflate a stream inside the PDF.';
+    }
+    return _arabic
+        ? 'تعذر فتح الملف. قد يكون الأرشيف تالفاً أو مضغوطاً بطريقة غير مدعومة بعد.'
+        : 'Could not open the file. The archive may be damaged or use an unsupported compression stream.';
+  }
+
+  PdfOpenError? _pdfOpenErrorFromText(String text) {
+    for (final PdfOpenError value in PdfOpenError.values) {
+      if (text.contains('PdfOpenException.$value') ||
+          text.contains('PdfOpenError.$value')) {
+        return value;
+      }
+    }
+    return null;
   }
 
   bool _pickedFileIsHeavy(PickedOfficeFile picked) {
@@ -3812,6 +4173,7 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
     SuiteApp.word => _wordPath,
     SuiteApp.excel => _sheetPath,
     SuiteApp.powerpoint => _slidePath,
+    SuiteApp.pdf => _pdfPath,
   };
 
   set _activePath(String? value) {
@@ -3822,6 +4184,8 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
         _sheetPath = value;
       case SuiteApp.powerpoint:
         _slidePath = value;
+      case SuiteApp.pdf:
+        _pdfPath = value;
     }
   }
 
@@ -3837,6 +4201,7 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
     SuiteApp.word => OpcPackageKind.word,
     SuiteApp.excel => OpcPackageKind.sheet,
     SuiteApp.powerpoint => OpcPackageKind.slide,
+    SuiteApp.pdf => OpcPackageKind.unknown,
   };
 
   bool get _activeSaveIsHeavy => switch (_app) {
@@ -3845,6 +4210,7 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
     SuiteApp.powerpoint => OfficeSaveCost.isHeavyPresentation(
       _slides.presentation,
     ),
+    SuiteApp.pdf => false,
   };
 
   String get _saveStatusLabel {
@@ -3886,6 +4252,13 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
 
   Future<void> _saveFile() async {
     if (_isSaving) {
+      return;
+    }
+    if (_app == SuiteApp.pdf) {
+      await StudioFiles.save(
+        bytes: _pdf.saveBytes(),
+        fileName: _defaultSaveName,
+      );
       return;
     }
     try {
@@ -3955,10 +4328,15 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
 
   Future<void> _exportPdf() async {
     try {
+      if (_app == SuiteApp.pdf) {
+        await StudioFiles.save(bytes: _pdf.saveBytes(), fileName: _pdfName);
+        return;
+      }
       final String stem = switch (_app) {
         SuiteApp.word => 'document',
         SuiteApp.excel => 'workbook',
         SuiteApp.powerpoint => 'presentation',
+        SuiteApp.pdf => 'document',
       };
       final SfntFont? font = switch (_app) {
         SuiteApp.word => StudioFiles.exportFontForWord(
@@ -3988,6 +4366,7 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
             ],
           ],
         ], preferred: _officeTheme.fontFamily),
+        SuiteApp.pdf => null,
       };
       final Uint8List bytes = _active.exportPdf(
         settings: OfficePrintSettings(title: stem),
@@ -4024,12 +4403,20 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
     controller.onSpellCheckRequested = _showSpelling;
   }
 
-  void _openFind() => _active.requestFind();
+  void _openFind() {
+    if (_app == SuiteApp.pdf) {
+      setState(() => _findOpen = true);
+      return;
+    }
+    _active.requestFind();
+  }
 
   void _openReplace() => _active.requestReplace();
 
   void _closeFind() {
-    _active.closeFind();
+    if (_app != SuiteApp.pdf) {
+      _active.closeFind();
+    }
     setState(() => _findOpen = false);
   }
 
@@ -4299,6 +4686,8 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
         }
         _slides.setSelectedTextDirection(rtl: rtl);
         return KeyEventResult.handled;
+      case SuiteApp.pdf:
+        return KeyEventResult.ignored;
     }
   }
 
@@ -6138,8 +6527,19 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
                   if (_showNotes && !_slides.isPresenting) _slideNotes(dark),
                 ],
               ),
+              SuiteApp.pdf => StudioPdfSurface(
+                controller: _pdf,
+                config: _config,
+              ),
             },
-            if (_findOpen)
+            if (_findOpen && _app == SuiteApp.pdf)
+              Positioned(
+                top: 8,
+                left: 8,
+                right: 8,
+                child: _pdfFindBar(dark),
+              ),
+            if (_findOpen && _app != SuiteApp.pdf)
               Positioned(
                 top: 0,
                 bottom: 0,
@@ -6201,59 +6601,98 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
 
   Widget _openProgressOverlay(bool dark) {
     final int percent = (_openProgress * 100).round().clamp(0, 100);
+    final Color card = dark ? const Color(0xFF1E1E22) : Colors.white;
+    final Color track = dark ? const Color(0xFF3A3A42) : const Color(0xFFE8E8EE);
     return ColoredBox(
-      color: const Color(0x99000000),
+      color: const Color(0xB3000000),
       child: Center(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 360),
+          constraints: const BoxConstraints(maxWidth: 400),
           child: Material(
-            color: dark ? const Color(0xFF2A2A2A) : Colors.white,
-            elevation: 8,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: <Widget>[
-                  Text(
-                    _arabic ? 'جاري فتح الملف' : 'Opening file',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      color: _officeTheme.chromeText,
+            color: card,
+            elevation: 16,
+            shadowColor: Colors.black54,
+            borderRadius: BorderRadius.circular(16),
+            clipBehavior: Clip.antiAlias,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                Container(
+                  height: 6,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: <Color>[
+                        _accent,
+                        _accent.withValues(alpha: 0.55),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    _openStatusLabel,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: _officeTheme.chromeText.withValues(alpha: 0.75),
-                    ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 22, 24, 20),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      Container(
+                        width: 56,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          color: _accent.withValues(alpha: 0.12),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.picture_as_pdf_rounded,
+                          color: _accent,
+                          size: 28,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        _arabic ? 'جاري تجهيز المستند' : 'Preparing document',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.2,
+                          color: _officeTheme.chromeText,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        _openStatusLabel,
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12,
+                          height: 1.35,
+                          color: _officeTheme.chromeText.withValues(alpha: 0.65),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(999),
+                        child: LinearProgressIndicator(
+                          value: _openProgress.clamp(0.04, 1),
+                          minHeight: 8,
+                          backgroundColor: track,
+                          color: _accent,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        '$percent%',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: _accent,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 16),
-                  LinearProgressIndicator(
-                    value: _openProgress.clamp(0.02, 1),
-                    minHeight: 6,
-                    backgroundColor: dark
-                        ? const Color(0xFF444444)
-                        : const Color(0xFFE0E0E0),
-                    color: _accent,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    '$percent%',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: _accent,
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ),
@@ -6407,6 +6846,7 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
       SuiteApp.word => _word.selectedVisual?.visual,
       SuiteApp.excel => _sheet.selectedDrawing?.visual,
       SuiteApp.powerpoint => _slides.selected?.visual,
+      SuiteApp.pdf => null,
     };
   }
 
@@ -6418,6 +6858,8 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
         _sheet.mutateSelectedDrawing(edit);
       case SuiteApp.powerpoint:
         _slides.mutateSelectedShapeVisual(edit);
+      case SuiteApp.pdf:
+        break;
     }
   }
 
@@ -6429,6 +6871,8 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
         _sheet.deleteSelectedDrawing();
       case SuiteApp.powerpoint:
         _slides.deleteSelectedShape();
+      case SuiteApp.pdf:
+        break;
     }
   }
 
@@ -7429,6 +7873,7 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
           SuiteApp.word => _wordNav(),
           SuiteApp.excel => _sheetNav(),
           SuiteApp.powerpoint => _slideNav(),
+          SuiteApp.pdf => _pdfNav(),
         },
       ),
     );
@@ -7555,6 +8000,316 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
             style: TextStyle(fontSize: 12, color: _officeTheme.chromeText),
           ),
         ),
+      ],
+    );
+  }
+
+  Widget _pdfNav() {
+    final PdfOutlineNode? outline = _pdf.file?.outline;
+    final bool hasOutline =
+        outline != null && outline.children.isNotEmpty;
+    final int tab = hasOutline ? _pdfSideTab.clamp(0, 1) : 0;
+    if (!hasOutline && _pdfSideTab != 0) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          setState(() => _pdfSideTab = 0);
+        }
+      });
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Expanded(
+          child: tab == 0
+              ? _pdfThumbsPane()
+              : _pdfOutlinePane(outline!),
+        ),
+        if (hasOutline) _pdfSideTabBar(tab),
+      ],
+    );
+  }
+
+  Widget _pdfSideTabBar(int tab) {
+    Widget iconTab({
+      required IconData icon,
+      required int index,
+      required String tip,
+    }) {
+      final bool selected = tab == index;
+      return Tooltip(
+        message: tip,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: () => setState(() => _pdfSideTab = index),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 120),
+            width: 40,
+            height: 36,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: selected
+                  ? _accent.withValues(alpha: 0.14)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(
+              icon,
+              size: 20,
+              color: selected
+                  ? _accent
+                  : _officeTheme.chromeText.withValues(alpha: 0.55),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Material(
+            color: _officeTheme.chromeFill,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          border: Border(
+            top: BorderSide(
+              color: _officeTheme.chromeText.withValues(alpha: 0.12),
+            ),
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: <Widget>[
+            iconTab(
+              icon: Icons.grid_view_rounded,
+              index: 0,
+              tip: _arabic ? 'معاينة الصفحات' : 'Page previews',
+            ),
+            iconTab(
+              icon: Icons.format_list_bulleted_rounded,
+              index: 1,
+              tip: _arabic ? 'المخطط' : 'Outline',
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _pdfThumbsPane() {
+    final List<PdfDisplayList> lists = _pdf.lists;
+    final int current = _pdf.pageIndex;
+    if (current != _pdfThumbSyncedPage) {
+      _pdfThumbSyncedPage = current;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_pdfThumbScroll.hasClients || lists.isEmpty) {
+          return;
+        }
+        // ListView.builder may not have built the selected child yet, so
+        // estimate offset from page aspect instead of ensureVisible alone.
+        const double pad = 12;
+        final double contentW =
+            math.max(80, _pdfThumbScroll.position.viewportDimension > 0
+                ? 268 - pad * 2
+                : 244);
+        var y = 4.0;
+        for (int i = 0; i < current && i < lists.length; i++) {
+          final PdfDisplayList list = lists[i];
+          final double pageW =
+              list.page.width <= 0 ? 595 : list.page.width;
+          final double pageH =
+              list.page.height <= 0 ? 842 : list.page.height;
+          final double thumbH = contentW * pageH / pageW;
+          y += thumbH + 6 + 16 + 12; // thumb + gap + label + padding
+        }
+        final double max = _pdfThumbScroll.position.maxScrollExtent;
+        final double target = (y - 24).clamp(0.0, max);
+        _pdfThumbScroll.animateTo(
+          target,
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+        );
+      });
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        StudioPaneTitle(
+          text: _arabic ? 'معاينة الصفحات' : 'Page previews',
+          accent: _accent,
+        ),
+        Expanded(
+          child: ListView.builder(
+            controller: _pdfThumbScroll,
+            padding: const EdgeInsets.fromLTRB(12, 4, 12, 16),
+            itemCount: lists.length,
+            itemBuilder: (BuildContext context, int index) {
+              final bool selected = index == current;
+              return Padding(
+                key: ValueKey<int>(index),
+                padding: const EdgeInsets.only(bottom: 12),
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => _pdf.goToPage(index),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: <Widget>[
+                      PdfPageThumb(
+                        list: lists[index],
+                        selected: selected,
+                        annots:
+                            _pdf.file?.annotsOn(index) ?? const <PdfAnnot>[],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        '${_arabic ? 'صفحة' : 'Page'} ${index + 1}'
+                        '${selected ? (_arabic ? '  ·  الحالية' : '  ·  current') : ''}',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight:
+                              selected ? FontWeight.w700 : FontWeight.w500,
+                          color: selected
+                              ? _accent
+                              : _officeTheme.chromeText.withValues(alpha: 0.7),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _pdfOutlinePane(PdfOutlineNode root) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        StudioPaneTitle(
+          text: _arabic ? 'المخطط' : 'Outline',
+          accent: _accent,
+        ),
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(4, 4, 8, 16),
+            children: <Widget>[
+              for (int i = 0; i < root.children.length; i++)
+                _pdfOutlineTile(root.children[i], 'r$i', 0),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  int? _outlineTargetPage(PdfOutlineNode node) {
+    if (node.pageIndex != null) {
+      return node.pageIndex;
+    }
+    for (final PdfOutlineNode child in node.children) {
+      final int? page = _outlineTargetPage(child);
+      if (page != null) {
+        return page;
+      }
+    }
+    return null;
+  }
+
+  Widget _pdfOutlineTile(PdfOutlineNode node, String path, int depth) {
+    final bool hasKids = node.children.isNotEmpty;
+    // Collapsed keys are stored as `c$path`; default is expanded (Evince-like).
+    final bool open = hasKids && !_pdfOutlineExpanded.contains('c$path');
+    final int? page = _outlineTargetPage(node);
+    final bool selected =
+        page != null && page == _pdf.pageIndex && node.pageIndex == page;
+
+    void toggleExpand() {
+      setState(() {
+        final String key = 'c$path';
+        if (_pdfOutlineExpanded.contains(key)) {
+          _pdfOutlineExpanded.remove(key);
+        } else {
+          _pdfOutlineExpanded.add(key);
+        }
+      });
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Material(
+          color: selected
+              ? _accent.withValues(alpha: 0.12)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(8),
+            onTap: page == null
+                ? (hasKids ? toggleExpand : null)
+                : () => _pdf.goToPage(page),
+            child: Padding(
+              padding: EdgeInsetsDirectional.only(
+                start: 4.0 + depth * 12.0,
+                end: 4,
+                top: 6,
+                bottom: 6,
+              ),
+              child: Row(
+                children: <Widget>[
+                  SizedBox(
+                    width: 28,
+                    height: 28,
+                    child: hasKids
+                        ? IconButton(
+                            padding: EdgeInsets.zero,
+                            iconSize: 18,
+                            onPressed: toggleExpand,
+                            icon: Icon(
+                              open
+                                  ? Icons.expand_more
+                                  : Icons.chevron_right,
+                              color: _officeTheme.chromeText
+                                  .withValues(alpha: 0.55),
+                            ),
+                          )
+                        : const SizedBox.shrink(),
+                  ),
+                  Expanded(
+                    child: Text(
+                      node.title.trim().isEmpty
+                          ? (_arabic ? '(بدون عنوان)' : '(Untitled)')
+                          : node.title.trim(),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: depth == 0 ? 13 : 12,
+                        fontWeight:
+                            depth == 0 ? FontWeight.w700 : FontWeight.w500,
+                        color: _officeTheme.chromeText,
+                      ),
+                    ),
+                  ),
+                  if (page != null)
+                    Padding(
+                      padding: const EdgeInsetsDirectional.only(start: 6),
+                      child: Text(
+                        '${page + 1}',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: _officeTheme.chromeText.withValues(alpha: 0.45),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        if (open)
+          for (int i = 0; i < node.children.length; i++)
+            _pdfOutlineTile(node.children[i], '$path.$i', depth + 1),
       ],
     );
   }
@@ -7806,6 +8561,9 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
             '${_slides.editingText ? (_arabic ? ' · تحرير النص' : ' · editing text') : ''}'
             '${_slides.slide.hidden ? (_arabic ? ' · مخفية' : ' · hidden') : ''}'
             '${_slides.isDirty ? ' · •' : ''}',
+      SuiteApp.pdf =>
+        '${_arabic ? 'صفحة' : 'Page'} ${_pdf.pageIndex + 1}/${_pdf.pageCount}'
+            '${_pdf.isDirty ? ' · •' : ''}',
     };
     return Material(
       color: _accent,
@@ -7834,7 +8592,7 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
                       ),
                     ),
                     InkWell(
-                      onTap: () => _setZoom(_active.viewport.scale - 0.1),
+                      onTap: () => _setZoom(_viewScale - 0.1),
                       child: const Icon(
                         Icons.remove,
                         size: 14,
@@ -7852,7 +8610,7 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
                       ),
                     ),
                     InkWell(
-                      onTap: () => _setZoom(_active.viewport.scale + 0.1),
+                      onTap: () => _setZoom(_viewScale + 0.1),
                       child: const Icon(
                         Icons.add,
                         size: 14,
@@ -7861,7 +8619,9 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
                     ),
                     const SizedBox(width: 16),
                     Text(
-                      _active.semanticsLabel,
+                      _app == SuiteApp.pdf
+                          ? (_arabic ? 'مستند PDF' : 'PDF document')
+                          : _active.semanticsLabel,
                       style: const TextStyle(color: Colors.white, fontSize: 11),
                     ),
                   ],
@@ -7885,4 +8645,261 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
   }
 
   int get _wordCount => _word.documentStats.words;
+}
+
+/// Modal picker for experimental PDF samples.
+class _PdfSampleGalleryDialog extends StatelessWidget {
+  const _PdfSampleGalleryDialog({
+    required this.arabic,
+    required this.accent,
+  });
+
+  final bool arabic;
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color surface = Theme.of(context).colorScheme.surface;
+    final Color onSurface = Theme.of(context).colorScheme.onSurface;
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 28, vertical: 28),
+      backgroundColor: Colors.transparent,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 640, maxHeight: 620),
+        child: Material(
+          color: surface,
+          elevation: 18,
+          shadowColor: Colors.black45,
+          borderRadius: BorderRadius.circular(18),
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              Container(
+                padding: const EdgeInsets.fromLTRB(22, 18, 12, 16),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: <Color>[
+                      accent,
+                      Color.lerp(accent, const Color(0xFF1A1A1A), 0.35)!,
+                    ],
+                  ),
+                ),
+                child: Row(
+                  children: <Widget>[
+                    Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.16),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(
+                        Icons.auto_awesome,
+                        color: Colors.white,
+                        size: 22,
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text(
+                            arabic ? 'معرض عينات PDF' : 'PDF sample gallery',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.2,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            arabic
+                                ? 'أوفيس ← PDF  ·  محرك PDF  ·  pdf_widgets'
+                                : 'Office → PDF  ·  PDF engine  ·  pdf_widgets',
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.85),
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: const Icon(Icons.close, color: Colors.white),
+                      tooltip: arabic ? 'إغلاق' : 'Close',
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+                  children: <Widget>[
+                    Text(
+                      arabic
+                          ? 'اختر عينة ليُنشئها البرنامج ويعرضها فوراً (مع ملف مؤقت).'
+                          : 'Choose a sample to generate and open instantly (writes a temp file).',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        height: 1.4,
+                        color: onSurface.withValues(alpha: 0.65),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    for (final StudioPdfSampleKind kind
+                        in StudioPdfSampleKind.values) ...<Widget>[
+                      _gallerySectionHeader(
+                        kind: kind,
+                        arabic: arabic,
+                        accent: accent,
+                        onSurface: onSurface,
+                      ),
+                      const SizedBox(height: 8),
+                      for (final StudioPdfSample sample
+                          in StudioPdfGallery.all.where(
+                        (StudioPdfSample s) => s.kind == kind,
+                      ))
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: _gallerySampleCard(
+                            sample: sample,
+                            kind: kind,
+                            arabic: arabic,
+                            accent: accent,
+                            onSurface: onSurface,
+                            onTap: () => Navigator.of(context).pop(sample),
+                          ),
+                        ),
+                      const SizedBox(height: 8),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _gallerySectionHeader({
+    required StudioPdfSampleKind kind,
+    required bool arabic,
+    required Color accent,
+    required Color onSurface,
+  }) {
+    return Row(
+      children: <Widget>[
+        Container(
+          width: 4,
+          height: 18,
+          decoration: BoxDecoration(
+            color: accent,
+            borderRadius: BorderRadius.circular(4),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          StudioPdfGallery.kindTitle(kind, arabic),
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w800,
+            color: accent,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            StudioPdfGallery.kindBlurb(kind, arabic),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 11,
+              color: onSurface.withValues(alpha: 0.45),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _gallerySampleCard({
+    required StudioPdfSample sample,
+    required StudioPdfSampleKind kind,
+    required bool arabic,
+    required Color accent,
+    required Color onSurface,
+    required VoidCallback onTap,
+  }) {
+    final IconData icon = switch (kind) {
+      StudioPdfSampleKind.officeToPdf => Icons.apps_rounded,
+      StudioPdfSampleKind.pdfEngine => Icons.picture_as_pdf_rounded,
+      StudioPdfSampleKind.pdfWidgets => Icons.widgets_rounded,
+    };
+    return Material(
+      color: accent.withValues(alpha: 0.04),
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(12, 12, 14, 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: accent.withValues(alpha: 0.12)),
+          ),
+          child: Row(
+            children: <Widget>[
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, color: accent, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      sample.title(arabic),
+                      style: TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w700,
+                        color: onSurface,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      sample.blurb(arabic),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        height: 1.3,
+                        color: onSurface.withValues(alpha: 0.6),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.chevron_right_rounded,
+                color: onSurface.withValues(alpha: 0.35),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }

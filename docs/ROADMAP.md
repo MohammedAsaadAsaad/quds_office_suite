@@ -29,6 +29,25 @@ and [MISSION.md](MISSION.md) honest as coverage changes.
 - Optional PPT media package IO: `package:quds_office_engine/quds_office_engine_optional.dart`
 - Mission Phase 1–5 restored in [MISSION.md](MISSION.md)
 
+## Wave 5+ — PDF file program
+
+Phase 6 landed: `PdfFile`, `QudsPdfViewer`, `QudsPdfEditor`, incremental
+save, AcroForm fill, XFDF, page surgery, CCITT, Standard-14 / WinAnsi,
+CFF→OTTO host wrap, ActualText, ViewerPreferences, layer toggle, Type 2/3
+`sh`, struct reading order, signature ByteRange status. Remaining limits
+(in-engine CFF raster, JBIG2/JPX, CMS verify, certified PDF/A) are in
+[STANDARDS.md](STANDARDS.md). Contract: [PDF.md](PDF.md).
+
+- P6.1 COS + Standard encryption
+- P6.2 Display list + `QudsPdfViewer`
+- P6.3 Markup + incremental save + `QudsPdfEditor`
+- P6.4 AcroForm + deeper fonts
+- P6.5 Page surgery, OCG, XFDF
+- P6.6 PDF/A–UA honesty, redact, signature verify
+- P6.7 Studio + README + performance
+
+Do not skip sub-phases. Do not route OOXML export through `PdfFile`.
+
 ## Architecture reminder
 
 - `quds_office_engine` — pure Dart, no `dart:ui`

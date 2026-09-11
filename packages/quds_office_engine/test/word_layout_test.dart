@@ -358,7 +358,22 @@ void main() {
     expect(first.justificationRatio, isNot(0));
     expect(first.glyphs, isNotEmpty);
     final LaidOutGlyph last = first.glyphs.last;
-    expect(last.x + last.advance, closeTo(first.x + first.width, 1.5));
+    final double right = last.x + last.advance;
+    expect(right, closeTo(first.x + first.width, 1.5));
+    // Soft justify: never blow past the content box, and keep word gaps tame.
+    expect(right, lessThanOrEqualTo(first.x + first.boxWidth + 1.5));
+    final List<LaidOutGlyph> spaces = first.glyphs
+        .where(
+          (LaidOutGlyph g) => g.glyph.isSpace && g.glyph.codePoint != 0x09,
+        )
+        .toList();
+    if (spaces.isNotEmpty) {
+      final double em = spaces.first.fontSize;
+      // Natural space + capped extra (≤0.45em), not multi-em rivers.
+      for (final LaidOutGlyph space in spaces) {
+        expect(space.advance, lessThanOrEqualTo(em * 1.25));
+      }
+    }
     expect(laid.pages.first.lines.last.justificationRatio, 0);
   });
 

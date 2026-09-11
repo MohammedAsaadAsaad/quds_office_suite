@@ -1950,7 +1950,7 @@ void main() {
     );
   });
 
-  test('ruler focus line stays on the visible page', () {
+  test('ruler focus line follows the active page caret', () {
     final LaidOutLine cover = LaidOutLine(
       glyphs: const <LaidOutGlyph>[],
       x: 8,
@@ -1976,19 +1976,27 @@ void main() {
     );
     expect(
       WordRuler.pickFocusLine(
-        visiblePageIndex: 1,
+        activePageIndex: 1,
         caretLine: cover,
-        visiblePageLines: <LaidOutLine>[credits],
+        pageLines: <LaidOutLine>[credits],
       ),
       credits,
     );
     expect(
       WordRuler.pickFocusLine(
-        visiblePageIndex: 1,
+        activePageIndex: 1,
         caretLine: credits,
-        visiblePageLines: <LaidOutLine>[credits],
+        pageLines: <LaidOutLine>[credits],
       ),
       credits,
+    );
+    expect(
+      WordRuler.pickFocusLine(
+        activePageIndex: 0,
+        caretLine: cover,
+        pageLines: <LaidOutLine>[cover],
+      ),
+      cover,
     );
   });
 }

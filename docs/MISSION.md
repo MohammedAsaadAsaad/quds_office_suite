@@ -51,8 +51,16 @@ DOM-style trees.
 - Optional modules (e.g. PPT media package IO) stay off the default engine export
 - Keep [STANDARDS.md](STANDARDS.md) honest about limits
 
+## Phase 6 — PDF file (open, view, annotate)
+
+Specified in [PDF.md](PDF.md). Parallel to OOXML: a `PdfFile` model, isolate
+open/save, `QudsPdfViewer`, and `QudsPdfEditor`. Does **not** replace Phase 4
+export (`OfficePdfExport` / writer `PdfDocument`). Do not start until Phases
+1–5 are treated as stable, and do not skip PDF sub-phases P6.1–P6.7.
+
 ## Waves vs phases
 
 Post-audit delivery waves (1–4 in the roadmap) refine Phase 4 fidelity and
 platform options; they do not replace Phases 1–3. Complete each wave’s tests
-before starting the next.
+before starting the next. PDF work is Phase 6 / [PDF.md](PDF.md), not a
+substitute for Waves 1–4.

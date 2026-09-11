@@ -1378,9 +1378,17 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
     return storyParagraphs ?? document.paragraphs.toList();
   }
 
-  int _visibleRulerPageIndex() {
+  /// Page the sticky rulers follow: the caret's page (active), not merely
+  /// whichever sheet sits under the top of the viewport.
+  int _activeRulerPageIndex() {
     if (laidOut.pages.isEmpty) {
       return 0;
+    }
+    final LaidOutLine? caretLine = _lineForParagraph(_caretParagraph());
+    if (caretLine != null &&
+        caretLine.pageIndex >= 0 &&
+        caretLine.pageIndex < laidOut.pages.length) {
+      return caretLine.pageIndex;
     }
     return laidOut
         .pageIndexAtContentY(
@@ -1408,7 +1416,7 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
           ? WmlSection()
           : document.sections.first;
     }
-    final int sectionIndex = laidOut.pages[_visibleRulerPageIndex()].sectionIndex
+    final int sectionIndex = laidOut.pages[_activeRulerPageIndex()].sectionIndex
         .clamp(0, document.sections.length - 1);
     return document.sections[sectionIndex];
   }
@@ -1417,12 +1425,12 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
     if (laidOut.pages.isEmpty) {
       return null;
     }
-    final int pageIndex = _visibleRulerPageIndex();
+    final int pageIndex = _activeRulerPageIndex();
     final LaidOutPage page = laidOut.pages[pageIndex];
     return WordRuler.pickFocusLine(
-      visiblePageIndex: pageIndex,
+      activePageIndex: pageIndex,
       caretLine: _lineForParagraph(_caretParagraph()),
-      visiblePageLines: _editingHeaderFooter
+      pageLines: _editingHeaderFooter
           ? (editingFooter ? page.footer : page.header)
           : page.lines,
     );
@@ -1437,7 +1445,7 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
   }
 
   _RulerView _rulerView() {
-    final int pageIndex = laidOut.pages.isEmpty ? 0 : _visibleRulerPageIndex();
+    final int pageIndex = laidOut.pages.isEmpty ? 0 : _activeRulerPageIndex();
     final WmlSection section = _rulerSection();
     final LaidOutLine? focus = _rulerFocusLine();
     final WmlParagraph? para = _rulerParagraph();

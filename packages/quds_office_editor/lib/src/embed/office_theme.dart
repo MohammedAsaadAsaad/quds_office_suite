@@ -450,6 +450,8 @@ class OfficeStrings {
     this.print = 'Print',
     this.properties = 'Properties',
     this.wordCount = 'Word count',
+    this.pdfViewer = 'PDF viewer',
+    this.pdfEditor = 'PDF editor',
   });
 
   /// wordEditor API.
@@ -629,6 +631,12 @@ class OfficeStrings {
   /// wordCount API.
   final String wordCount;
 
+  /// pdfViewer API.
+  final String pdfViewer;
+
+  /// pdfEditor API.
+  final String pdfEditor;
+
   /// english API.
   static const OfficeStrings english = OfficeStrings(
     wordEditor: 'Word document',
@@ -691,6 +699,8 @@ class OfficeStrings {
     print: 'Print',
     properties: 'Properties',
     wordCount: 'Word count',
+    pdfViewer: 'PDF viewer',
+    pdfEditor: 'PDF editor',
   );
 
   /// arabic API.
@@ -755,5 +765,7 @@ class OfficeStrings {
     print: 'طباعة',
     properties: 'خصائص',
     wordCount: 'عدد الكلمات',
+    pdfViewer: 'عارض PDF',
+    pdfEditor: 'محرر PDF',
   );
 }

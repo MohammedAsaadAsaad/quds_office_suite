@@ -1,6 +1,8 @@
 import '../word/layout/word_layout.dart';
 import '../word/model/wml_document.dart';
 
+export '../pdf/file/io/pdf_open_payload.dart';
+
 /// Progress while a package is decoded on a worker isolate.
 class OfficeOpenProgress {
   /// Creates a progress tick.

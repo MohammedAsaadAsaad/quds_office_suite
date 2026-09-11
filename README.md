@@ -20,7 +20,7 @@ Two packages. One suite. Publish and depend on each package **on its own**.
 | Package | Runtime | What it is | pub.dev |
 | --- | --- | --- | --- |
 | **[`quds_office_engine`](packages/quds_office_engine)** | Pure Dart | OOXML + OPC/ZIP + formulas + PDF 1.7 | [pub.dev/packages/quds_office_engine](https://pub.dev/packages/quds_office_engine) |
-| **[`quds_office_editor`](packages/quds_office_editor)** | Flutter | Interactive Word / Sheet / Slide surfaces | [pub.dev/packages/quds_office_editor](https://pub.dev/packages/quds_office_editor) |
+| **[`quds_office_editor`](packages/quds_office_editor)** | Flutter | Interactive Word / Sheet / Slide / PDF surfaces | [pub.dev/packages/quds_office_editor](https://pub.dev/packages/quds_office_editor) |
 
 ```text
 ┌─────────────────────────────────────────────────────────────┐
@@ -30,6 +30,7 @@ Two packages. One suite. Publish and depend on each package **on its own**.
 │  QudsWordEditor              │  Docx / Xlsx / Pptx builders │
 │  QudsSheetEditor             │  Wml / Sml / Pml models      │
 │  QudsSlideEditor             │  Formula engine              │
+│  QudsPdfViewer / Editor      │  PdfFile + OfficePdfExport   │
 │  custom RenderBox canvases   │  OfficePdfExport             │
 │         │                    │  OfficeIsolateOpen / Save    │
 │         └────────────────────┤  OPC · ZIP · OLE · XML       │
@@ -41,9 +42,10 @@ The engine **never** imports `dart:ui` or Flutter. The editor **never** uses
 `TextField`, `ListView`, or `InteractiveViewer` for the document surface.
 
 <p align="center">
-  <img src="packages/quds_office_editor/example/screenshots/word.png" alt="Word" width="32%"/>
-  <img src="packages/quds_office_editor/example/screenshots/excel.png" alt="Excel" width="32%"/>
-  <img src="packages/quds_office_editor/example/screenshots/powerpoint.png" alt="PowerPoint" width="32%"/>
+  <img src="packages/quds_office_editor/example/screenshots/word.png" alt="Word" width="24%"/>
+  <img src="packages/quds_office_editor/example/screenshots/excel.png" alt="Excel" width="24%"/>
+  <img src="packages/quds_office_editor/example/screenshots/powerpoint.png" alt="PowerPoint" width="24%"/>
+  <img src="packages/quds_office_editor/example/screenshots/pdf.png" alt="PDF" width="24%"/>
 </p>
 
 ---
@@ -66,14 +68,14 @@ Most Dart “Office” libraries stop at writing a simple DOCX. Quds goes furthe
 
 ```yaml
 dependencies:
-  quds_office_engine: ^0.2.0
+  quds_office_engine: ^0.3.0
 ```
 
 ### Editor (pulls the engine)
 
 ```yaml
 dependencies:
-  quds_office_editor: ^0.2.0
+  quds_office_editor: ^0.3.0
 ```
 
 This repository is a [Dart workspace](https://dart.dev/tools/pub/workspaces). From the root:

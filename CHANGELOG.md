@@ -5,6 +5,15 @@ This repository is a Dart workspace. Each published package keeps its own change
 - [`packages/quds_office_engine/CHANGELOG.md`](packages/quds_office_engine/CHANGELOG.md)
 - [`packages/quds_office_editor/CHANGELOG.md`](packages/quds_office_editor/CHANGELOG.md)
 
+## Unreleased
+
+## 0.3.0
+
+- Phase 6 PDF file: `PdfFile`, display list, `QudsPdfViewer` / `QudsPdfEditor`.
+- PDF widget composer (`pdf_widgets.dart`); Word widget DSL removed.
+- Animated PDF zoom, host fonts, Studio PDF gallery.
+- pub.dev **0.3.0** — Office + PDF diversity highlighted in package docs.
+
 ## 0.2.0
 
 - English documentation for the engine, editor, and repository landing page.

@@ -2,6 +2,28 @@
 
 All notable changes to `quds_office_editor` are documented here.
 
+## 0.3.0
+
+**Four surfaces: Word · Excel · PowerPoint · PDF.** The editor now embeds a
+full PDF viewer/editor beside the Office canvases — same RenderBox discipline,
+same theme/chrome hooks.
+
+### PDF surfaces
+- `QudsPdfViewer` / `QudsPdfEditor` on `RenderPdfCanvas` (display list paint,
+  find, copy, link follow, animated zoom with tile stretch).
+- Viewer is display-only; editor adds markup, form fill, page ops, layer
+  toggle, and incremental save.
+- Host fonts: call `OfficeHostFonts.ensureRegistered()` so Standard-14 /
+  common Office aliases paint without OS font folders; embedded PDF faces win.
+
+### Office surfaces (continued)
+- `QudsWordEditor`, `QudsSheetEditor`, `QudsSlideEditor` — IME, BiDi caret,
+  formulas, Morph slideshow, isolate open.
+
+### Studio example
+- PDF gallery (Office→PDF, PdfDocument writer, `pdf_widgets` samples) and
+  bilingual workspace.
+
 ## 0.2.0
 
 Interactive Word ruler, notes pane, section-wide landscape, horizontal page

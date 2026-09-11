@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import '../builders/docx_builder.dart';
+import '../pdf/file/model/pdf_file.dart';
+import '../pdf/file/text/pdf_extract.dart';
 import '../builders/xlsx_io.dart';
 import '../opc/opc_archive.dart';
 import '../opc/package_part.dart';
@@ -127,9 +129,7 @@ class OfficeTextExtract {
 
 /// Format-generic plain-text facade for RAG / search. No prompt logic.
 ///
-/// PDF text extraction is skipped in this version (native PDF 1.7 streams are
-/// not a cheap text source). Callers receive [OfficeExtractKind.pdf] with
-/// empty paragraphs.
+/// Format-generic plain-text facade for RAG / search.
 abstract final class OfficeTextExtractor {
   /// extract API.
   static OfficeTextExtract extract(
@@ -147,9 +147,7 @@ abstract final class OfficeTextExtractor {
       OfficeExtractKind.opendocumentText ||
       OfficeExtractKind.opendocumentSheet ||
       OfficeExtractKind.opendocumentPresentation => _odf(bytes, kind),
-      OfficeExtractKind.pdf => const OfficeTextExtract(
-        kind: OfficeExtractKind.pdf,
-      ),
+      OfficeExtractKind.pdf => _pdf(bytes, password: password),
       OfficeExtractKind.unknown => const OfficeTextExtract(
         kind: OfficeExtractKind.unknown,
       ),
@@ -250,6 +248,14 @@ abstract final class OfficeTextExtractor {
         for (final XlsxNamedSheet s in all)
           OfficeExtractSheet(name: s.name, rows: s.rows),
       ],
+    );
+  }
+
+  static OfficeTextExtract _pdf(Uint8List bytes, {String? password}) {
+    final PdfFile file = PdfFile.open(bytes, password: password);
+    return OfficeTextExtract(
+      kind: OfficeExtractKind.pdf,
+      paragraphs: PdfExtract.paragraphs(file),
     );
   }
 

@@ -59,6 +59,24 @@ abstract final class OfficeIsolateOpen {
     return raw as SmlWorkbook;
   }
 
+  /// Opens a PDF file and builds display lists.
+  static Future<PdfOpenPayload> pdf(
+    Uint8List bytes, {
+    String? password,
+    void Function(OfficeOpenProgress progress)? onProgress,
+  }) async {
+    final Object raw = await _open(
+      bytes: bytes,
+      password: password,
+      kind: 'pdf',
+      onProgress: onProgress,
+    );
+    if (raw is PdfOpenPayload) {
+      return raw;
+    }
+    throw StateError('PDF open isolate returned an unexpected payload');
+  }
+
   /// Opens a presentation.
   static Future<PmlPresentation> presentation(
     Uint8List bytes, {

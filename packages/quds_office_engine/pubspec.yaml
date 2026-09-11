@@ -1,8 +1,8 @@
 name: quds_office_engine
 description: >-
-  Pure Dart Office Open XML engine for DOCX, XLSX, PPTX, OPC/ZIP,
-  Excel formulas, RTL/BiDi, and native PDF 1.7 — no Flutter.
-version: 0.2.0
+  Pure Dart Office + PDF engine: DOCX, XLSX, PPTX, formulas, BiDi/RTL,
+  PdfFile open/display, pdf_widgets composition, and PDF 1.7 export — no Flutter.
+version: 0.3.0
 homepage: https://github.com/MohammedAsaadAsaad/quds_office_suite
 repository: https://github.com/MohammedAsaadAsaad/quds_office_suite
 issue_tracker: https://github.com/MohammedAsaadAsaad/quds_office_suite/issues
@@ -14,6 +14,12 @@ topics:
   - xlsx
   - pptx
   - pdf
+
+screenshots:
+  - description: "PDF widgets — invoice composed with Document / Table / MultiPage."
+    path: example/screenshots/pdf_widgets.png
+  - description: "Office → PDF — RTL formal letter exported to PDF 1.7."
+    path: example/screenshots/office_rtl.png
 
 platforms:
   android:

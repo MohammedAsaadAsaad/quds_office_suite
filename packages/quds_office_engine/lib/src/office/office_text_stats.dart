@@ -1,3 +1,5 @@
+import '../pdf/file/model/pdf_file.dart';
+import '../pdf/file/text/pdf_extract.dart';
 import '../sheet/model/sml_workbook.dart';
 import '../slide/model/pml_presentation.dart';
 import '../word/layout/word_layout.dart';
@@ -89,6 +91,19 @@ class OfficeTextStats {
       characters: chars,
       charactersNoSpaces: noSpace,
       cells: cells,
+    );
+  }
+
+  /// ofPdf API.
+  static OfficeTextStats ofPdf(PdfFile file) {
+    final String text = PdfExtract.documentText(file);
+    final _Count count = _count(text);
+    return OfficeTextStats(
+      words: count.words,
+      characters: count.characters,
+      charactersNoSpaces: count.charactersNoSpaces,
+      paragraphs: PdfExtract.paragraphs(file).length,
+      pages: file.pageCount,
     );
   }
 

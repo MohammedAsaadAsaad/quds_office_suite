@@ -132,7 +132,7 @@ abstract final class OfficePdfExport {
     final OfficeFontSet set = fonts ?? OfficeFontSet.single(font);
     final LaidOutDocument laid = _layoutWord(
       document,
-      set.primary ?? font,
+      set,
       laidOut,
     );
     final Set<int> cps = <int>{};
@@ -392,13 +392,17 @@ abstract final class OfficePdfExport {
 
   static LaidOutDocument _layoutWord(
     WmlDocument document,
-    SfntFont? font,
+    OfficeFontSet set,
     LaidOutDocument? laidOut,
   ) {
     WordLink.ensureHeadingBookmarks(document);
     WordToc.refreshEmpty(document);
     WordToc.rebindHeadings(document);
-    final WordLayoutEngine engine = WordLayoutEngine(font: font);
+    final WordLayoutEngine engine = WordLayoutEngine(
+      font: set.primary ??
+          (set.embeddable.isEmpty ? null : set.embeddable.first),
+      fonts: set.isEmpty ? null : set,
+    );
     LaidOutDocument laid = laidOut ?? engine.layout(document);
     if (WordToc.syncPageNumbers(document, laid)) {
       laid = engine.layout(document);

@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import '../../bidi/line_breaker.dart';
 import '../../fonts/font_metrics.dart';
+import '../../fonts/office_font_set.dart';
 import '../../fonts/office_typeface.dart';
 import '../../fonts/sfnt_parser.dart';
 import '../../visual/office_visual.dart';
@@ -189,7 +190,8 @@ class LaidOutLine {
   /// Width of the paragraph content box, before first-line indent.
   final double boxWidth;
 
-  /// Stretches space glyphs so the line fills [targetWidth].
+  /// Stretches word spaces so the line fills [targetWidth], capping extreme
+  /// gaps so narrow columns stay readable (soft justify when stretch is huge).
   void applyJustification({double? targetWidth}) {
     if (glyphs.isEmpty) {
       return;
@@ -203,27 +205,36 @@ class LaidOutLine {
     }
     final double target = targetWidth ?? width;
     var used = 0.0;
-    var spaces = 0;
-    for (final LaidOutGlyph glyph in glyphs) {
+    final List<int> spaceIndexes = <int>[];
+    for (int i = 0; i < glyphs.length; i++) {
+      final LaidOutGlyph glyph = glyphs[i];
       used += glyph.advance;
-      if (glyph.glyph.isSpace) {
-        spaces++;
+      // Tabs keep their stop width; only word spaces absorb justify stretch.
+      if (glyph.glyph.isSpace && glyph.glyph.codePoint != 0x09) {
+        spaceIndexes.add(i);
       }
     }
     final double slack = target - used;
+    final int spaces = spaceIndexes.length;
     if (spaces <= 0 || slack <= 0.5) {
       return;
     }
-    final double extra = slack / spaces;
+    final double em = glyphs[spaceIndexes.first].fontSize;
+    // ~0.45em per gap ≈ Word-like comfort; beyond that, leave a slight shortfall
+    // instead of "rivers" of white space in narrow columns.
+    final double maxExtra = math.max(em * 0.45, 1.0);
+    final double extra = math.min(slack / spaces, maxExtra);
+    final Set<int> stretch = spaceIndexes.toSet();
     var x = this.x;
-    for (final LaidOutGlyph glyph in glyphs) {
+    for (int i = 0; i < glyphs.length; i++) {
+      final LaidOutGlyph glyph = glyphs[i];
       glyph.x = x;
-      if (glyph.glyph.isSpace) {
+      if (stretch.contains(i)) {
         glyph.advance += extra;
       }
       x += glyph.advance;
     }
-    width = target;
+    width = used + extra * spaces;
   }
 }
 
@@ -609,15 +620,41 @@ const double kDefaultTabWidth = 36;
 /// Flowable pagination: Knuth-Plass lines accumulated into physical pages.
 class WordLayoutEngine {
   /// WordLayoutEngine API.
-  WordLayoutEngine({required this.font, this.fallbackWidthFactor = 0.5});
+  WordLayoutEngine({
+    required this.font,
+    this.fonts,
+    this.fallbackWidthFactor = 0.5,
+  });
 
-  /// font API.
+  /// Primary face used when [fonts] does not cover a code point.
   final SfntFont? font;
+
+  /// Multi-face pack for mixed-script documents (Latin + Arabic, …).
+  final OfficeFontSet? fonts;
 
   /// fallbackWidthFactor API.
   final double fallbackWidthFactor;
 
+  final Map<int, FontMetrics> _metricsCache = <int, FontMetrics>{};
+
   WmlDocument? _layoutDoc;
+
+  double _advanceOf(int cp, double sizePoints, double emFallback) {
+    if (cp == 0x09) {
+      return kDefaultTabWidth;
+    }
+    final SfntFont? face = fonts?.faceFor(cp) ??
+        (font != null && font!.glyphIdFor(cp) != 0 ? font : null);
+    if (face == null) {
+      return sizePoints * emFallback;
+    }
+    final int key = identityHashCode(face) ^ (sizePoints * 100).round();
+    final FontMetrics metrics = _metricsCache.putIfAbsent(
+      key,
+      () => FontMetrics(font: face, fontSizePoints: sizePoints),
+    );
+    return metrics.characterWidth(cp);
+  }
 
   /// Tallest header logo height for [section] (0 if none).
   static double _headerLogoHeight(WmlSection section) {
@@ -999,10 +1036,11 @@ class WordLayoutEngine {
     final List<BrokenLine> broken = LineBreaker.breakLines(
       text: text,
       maxWidth: maxWidth,
-      widthOf: (int cp) => cp == 0x09
-          ? kDefaultTabWidth
-          : (metrics?.characterWidth(cp) ?? fontSize * em),
-      glyphIdOf: (int cp) => font?.glyphIdFor(cp) ?? cp,
+      widthOf: (int cp) => _advanceOf(cp, fontSize, em),
+      glyphIdOf: (int cp) {
+        final SfntFont? face = fonts?.faceFor(cp) ?? font;
+        return face?.glyphIdFor(cp) ?? cp;
+      },
       baseLevel: paragraph.properties.bidiBaseLevel,
     );
     var cursorY = y + paragraph.properties.spacingBefore;
