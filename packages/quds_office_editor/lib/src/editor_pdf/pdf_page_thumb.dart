@@ -7,6 +7,7 @@ import 'package:quds_office_engine/pdf_file.dart';
 
 import 'paint_pdf_display_list.dart';
 import 'pdf_font_faces.dart';
+import 'pdf_page_rotation.dart';
 import 'pdf_raster.dart';
 
 /// Live thumbnail of one PDF page (same display list as the canvas).
@@ -34,7 +35,10 @@ class PdfPageThumb extends LeafRenderObjectWidget {
   }
 
   @override
-  void updateRenderObject(BuildContext context, RenderPdfPageThumb renderObject) {
+  void updateRenderObject(
+    BuildContext context,
+    RenderPdfPageThumb renderObject,
+  ) {
     renderObject
       ..list = list
       ..selected = selected
@@ -115,7 +119,8 @@ class RenderPdfPageThumb extends RenderBox {
       }
     }
     final Canvas canvas = context.canvas;
-    final double scale = size.width / (_list.page.width <= 0 ? 595 : _list.page.width);
+    final double scale =
+        size.width / (_list.page.width <= 0 ? 595 : _list.page.width);
     canvas.save();
     canvas.translate(offset.dx, offset.dy);
     canvas.drawRect(
@@ -124,6 +129,8 @@ class RenderPdfPageThumb extends RenderBox {
     );
     canvas.clipRect(Offset.zero & size);
     canvas.scale(scale);
+    canvas.save();
+    applyPdfPageRotation(canvas, _list.page);
     PaintPdfDisplayList.paint(
       canvas,
       _list,
@@ -132,10 +139,16 @@ class RenderPdfPageThumb extends RenderBox {
     );
     for (final PdfAnnot annot in _annots) {
       canvas.drawRect(
-        Rect.fromLTWH(annot.rect.x, annot.rect.y, annot.rect.width, annot.rect.height),
+        Rect.fromLTWH(
+          annot.rect.x,
+          annot.rect.y,
+          annot.rect.width,
+          annot.rect.height,
+        ),
         Paint()..color = Color(annot.color).withValues(alpha: 0.28),
       );
     }
+    canvas.restore();
     canvas.restore();
     canvas.drawRect(
       offset & size,

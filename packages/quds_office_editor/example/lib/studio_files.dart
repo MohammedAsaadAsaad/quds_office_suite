@@ -3,7 +3,10 @@ import 'dart:isolate';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:quds_office_editor/quds_office_editor.dart';
+
+import 'studio_pdf_faces.dart';
 
 enum StudioSaveStage { picking, writing }
 
@@ -22,6 +25,7 @@ class PickedOfficeFile {
 }
 
 abstract final class StudioFiles {
+  static final Map<String, SfntFont> _bundled = <String, SfntFont>{};
   static const List<String> extensions = <String>[
     'docx',
     'xlsx',
@@ -97,54 +101,25 @@ abstract final class StudioFiles {
     '/usr/share/fonts/truetype/freefont/FreeSans.ttf',
   ];
 
-  static const Map<String, List<String>> _familyFiles =
-      <String, List<String>>{
+  static const Map<String, List<String>> _familyFiles = <String, List<String>>{
     'noto naskh arabic': <String>[
       'NotoNaskhArabic-Regular.ttf',
       'NotoNaskhArabic-Regular.otf',
     ],
-    'noto sans arabic': <String>[
-      'NotoSansArabic-Regular.ttf',
-    ],
-    'tajawal': <String>[
-      'Tajawal-Regular.ttf',
-    ],
-    'calibri': <String>[
-      'Carlito-Regular.ttf',
-      'LiberationSans-Regular.ttf',
-    ],
-    'carlito': <String>[
-      'Carlito-Regular.ttf',
-    ],
-    'arial': <String>[
-      'LiberationSans-Regular.ttf',
-      'DejaVuSans.ttf',
-    ],
-    'liberation sans': <String>[
-      'LiberationSans-Regular.ttf',
-    ],
-    'times new roman': <String>[
-      'LiberationSerif-Regular.ttf',
-    ],
-    'georgia': <String>[
-      'LiberationSerif-Regular.ttf',
-    ],
-    'liberation serif': <String>[
-      'LiberationSerif-Regular.ttf',
-    ],
-    'courier new': <String>[
-      'LiberationMono-Regular.ttf',
-      'DejaVuSansMono.ttf',
-    ],
-    'tahoma': <String>[
-      'DejaVuSans.ttf',
-    ],
-    'dejavu sans': <String>[
-      'DejaVuSans.ttf',
-    ],
-    'dejavu': <String>[
-      'DejaVuSans.ttf',
-    ],
+    'noto sans arabic': <String>['NotoSansArabic-Regular.ttf'],
+    'tajawal': <String>['Tajawal-Regular.ttf'],
+    'cairo': <String>['Cairo-Regular.ttf'],
+    'calibri': <String>['Carlito-Regular.ttf', 'LiberationSans-Regular.ttf'],
+    'carlito': <String>['Carlito-Regular.ttf'],
+    'arial': <String>['LiberationSans-Regular.ttf', 'DejaVuSans.ttf'],
+    'liberation sans': <String>['LiberationSans-Regular.ttf'],
+    'times new roman': <String>['LiberationSerif-Regular.ttf'],
+    'georgia': <String>['LiberationSerif-Regular.ttf'],
+    'liberation serif': <String>['LiberationSerif-Regular.ttf'],
+    'courier new': <String>['LiberationMono-Regular.ttf', 'DejaVuSansMono.ttf'],
+    'tahoma': <String>['DejaVuSans.ttf'],
+    'dejavu sans': <String>['DejaVuSans.ttf'],
+    'dejavu': <String>['DejaVuSans.ttf'],
   };
 
   static List<String> get _fontSearchDirs {
@@ -167,6 +142,7 @@ abstract final class StudioFiles {
 
   /// Latin-capable UI face for PDF export (never Arabic-only).
   static SfntFont? latinExportFont() =>
+      bundledFont('LiberationSans-Regular.ttf') ??
       fontForFamily('Liberation Sans') ??
       fontForFamily('DejaVu Sans') ??
       fontForFamily('Arial') ??
@@ -179,22 +155,32 @@ abstract final class StudioFiles {
 
   /// Bold companion for [latinExportFont] (real weight, not faux stroke).
   static SfntFont? latinExportBoldFont() => _firstExisting(const <String>[
-        '/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf',
-        '/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf',
-        '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
-        '/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf',
-      ]);
+    '/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf',
+    '/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf',
+    '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
+    '/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf',
+  ]);
 
-  /// Arabic-capable face for mixed-script PDF export.
+  /// Bundled Noto Naskh, used when a named face has no Arabic coverage.
+  ///
+  /// Word PDF export does not call this first. [arabicFaceForDocument]
+  /// embeds registered Tajawal or Cairo when those TTFs cover Arabic, and
+  /// only then falls back here.
   static SfntFont? arabicExportFont() =>
+      bundledFont('NotoNaskhArabic-Regular.ttf') ??
       fontForFamily(OfficeTypeface.arabicTheme) ??
-      fontForFamily('Noto Sans Arabic') ??
-      fontForFamily('Tajawal');
+      fontForFamily('Noto Sans Arabic');
 
   /// Multi-face pack so Latin and Arabic both get real advances when exporting.
-  static OfficeFontSet exportFontSetCovering(Iterable<String> texts) {
+  ///
+  /// [arabic] overrides the Noto fallback. Word export passes the registered
+  /// Tajawal or Cairo face so those bytes are embedded instead of Noto.
+  static OfficeFontSet exportFontSetCovering(
+    Iterable<String> texts, {
+    SfntFont? arabic,
+  }) {
     final SfntFont? latin = latinExportFont();
-    final SfntFont? arabic = arabicExportFont();
+    final SfntFont? arabicFace = arabic ?? arabicExportFont();
     var needsLatin = false;
     var needsArabic = false;
     for (final String text in texts) {
@@ -207,28 +193,29 @@ abstract final class StudioFiles {
         }
       }
     }
-    if (needsLatin && needsArabic && latin != null && arabic != null) {
-      return OfficeFontSet(primary: latin, fallbacks: <SfntFont>[arabic]);
+    if (needsLatin && needsArabic && latin != null && arabicFace != null) {
+      return OfficeFontSet(primary: latin, fallbacks: <SfntFont>[arabicFace]);
     }
-    if (needsArabic && !needsLatin && arabic != null) {
+    if (needsArabic && !needsLatin && arabicFace != null) {
       return OfficeFontSet(
-        primary: arabic,
-        fallbacks: <SfntFont>[
-          if (latin != null) latin,
-        ],
+        primary: arabicFace,
+        fallbacks: <SfntFont>[if (latin != null) latin],
       );
     }
     final SfntFont? covered = exportFontCovering(texts);
     return OfficeFontSet(
-      primary: covered ?? latin ?? arabic,
+      primary: covered ?? latin ?? arabicFace,
       fallbacks: <SfntFont>[
         if (latin != null && !identical(latin, covered)) latin,
-        if (arabic != null && !identical(arabic, covered)) arabic,
+        if (arabicFace != null && !identical(arabicFace, covered)) arabicFace,
       ],
     );
   }
 
-  static SfntFont? exportFontForWord(WmlDocument document, {String? themeFamily}) {
+  static SfntFont? exportFontForWord(
+    WmlDocument document, {
+    String? themeFamily,
+  }) {
     return exportFontSetForWord(document, themeFamily: themeFamily).primary ??
         exportFontCovering(
           <String>[
@@ -243,13 +230,76 @@ abstract final class StudioFiles {
   }
 
   /// Font set for Word → PDF (Latin primary when the doc mixes scripts).
+  ///
+  /// A run or theme named Cairo embeds Cairo. Otherwise a registered Tajawal
+  /// face is embedded so Arabic is not silently redrawn with Noto Naskh.
+  /// Noto is used only when that named face is missing or has no Arabic
+  /// coverage (nominal letters plus initial Yeh U+FEF3).
   static OfficeFontSet exportFontSetForWord(
     WmlDocument document, {
     String? themeFamily,
   }) {
     return exportFontSetCovering(<String>[
       for (final WmlParagraph paragraph in document.paragraphs) paragraph.text,
-    ]);
+    ], arabic: arabicFaceForDocument(document, themeFamily: themeFamily));
+  }
+
+  /// Arabic face the studio actually embeds for [document].
+  ///
+  /// Cairo wins when a run or the theme names it and the TTF covers Arabic.
+  /// Otherwise registered Tajawal is used so Word PDF does not silently
+  /// substitute Noto Naskh. Noto is the fallback when that face is missing
+  /// or has no Arabic coverage.
+  static SfntFont? arabicFaceForDocument(
+    WmlDocument document, {
+    String? themeFamily,
+  }) {
+    if (_namesFamily(document, themeFamily, StudioPdfFaces.cairoFamily)) {
+      return _coveringOrNaskh(
+        StudioPdfFaces.tryFamily(StudioPdfFaces.cairoFamily),
+      );
+    }
+    final SfntFont? tajawal = StudioPdfFaces.tryFamily(
+      StudioPdfFaces.tajawalFamily,
+    );
+    if (tajawal != null && StudioPdfFaces.coversArabic(tajawal)) {
+      return tajawal;
+    }
+    return arabicExportFont();
+  }
+
+  static SfntFont? _coveringOrNaskh(SfntFont? face) {
+    if (face != null && StudioPdfFaces.coversArabic(face)) {
+      return face;
+    }
+    return arabicExportFont();
+  }
+
+  static bool _namesFamily(
+    WmlDocument document,
+    String? themeFamily,
+    String family,
+  ) {
+    final String key = family.toLowerCase();
+    if (themeFamily != null && themeFamily.toLowerCase() == key) {
+      return true;
+    }
+    for (final WmlParagraph paragraph in document.paragraphs) {
+      for (final WmlInline inline in paragraph.inlines) {
+        if (inline is! WmlRun) {
+          continue;
+        }
+        if (inline.properties.csFont.toLowerCase() == key ||
+            inline.properties.asciiFont.toLowerCase() == key) {
+          return true;
+        }
+      }
+    }
+    return OfficeTypeface.preferredExportFamily(
+          document,
+          themeFamily: themeFamily,
+        ).toLowerCase() ==
+        key;
   }
 
   /// Picks a TrueType face that covers the most requested characters.
@@ -272,8 +322,10 @@ abstract final class StudioFiles {
     ];
     SfntFont? best;
     var bestHits = -1;
-    final int printable =
-        cps.where((int cp) => cp >= 32).length.clamp(1, 0x7fffffff);
+    final int printable = cps
+        .where((int cp) => cp >= 32)
+        .length
+        .clamp(1, 0x7fffffff);
     for (final SfntFont? font in candidates) {
       if (font == null || !font.hasTable('glyf')) {
         continue;
@@ -295,12 +347,77 @@ abstract final class StudioFiles {
     return best ?? latinExportFont() ?? systemUiFont();
   }
 
+  static Future<void> installBundledAssets() async {
+    await _installAsset('LiberationSans-Regular.ttf');
+    await _installAsset('NotoNaskhArabic-Regular.ttf');
+  }
+
+  /// Parsed package font, from the asset cache or a file next to the package.
+  static SfntFont? bundledFont(String file) =>
+      _bundled[file] ?? _loadBundledFile(file);
+
+  static Future<void> _installAsset(String file) async {
+    if (_bundled.containsKey(file)) {
+      return;
+    }
+    if (!kIsWeb) {
+      final SfntFont? disk = _loadBundledFile(file);
+      if (disk != null) {
+        return;
+      }
+    }
+    try {
+      final ByteData data = await rootBundle.load(
+        'packages/quds_office_editor/fonts/$file',
+      );
+      _bundled[file] = SfntFont.parse(
+        data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
+      );
+    } catch (_) {
+      _loadBundledFile(file);
+    }
+  }
+
+  static SfntFont? _loadBundledFile(String file) {
+    final SfntFont? cached = _bundled[file];
+    if (cached != null) {
+      return cached;
+    }
+    if (kIsWeb) {
+      return null;
+    }
+    Directory dir = Directory.current;
+    for (int i = 0; i < 6; i++) {
+      final String sep = Platform.pathSeparator;
+      final List<String> candidates = <String>[
+        '${dir.path}${sep}fonts$sep$file',
+        '${dir.path}${sep}packages${sep}quds_office_editor${sep}fonts$sep$file',
+      ];
+      for (final String path in candidates) {
+        final File fontFile = File(path);
+        if (!fontFile.existsSync()) {
+          continue;
+        }
+        final SfntFont font = SfntFont.parse(fontFile.readAsBytesSync());
+        _bundled[file] = font;
+        return font;
+      }
+      final Directory parent = dir.parent;
+      if (parent.path == dir.path) {
+        break;
+      }
+      dir = parent;
+    }
+    return null;
+  }
+
   static SfntFont? fontForFamily(String family) {
     if (kIsWeb) {
       return null;
     }
     final String key = family.toLowerCase();
-    final List<String> names = _familyFiles[key] ??
+    final List<String> names =
+        _familyFiles[key] ??
         <String>['${family.replaceAll(' ', '')}-Regular.ttf'];
     for (final String name in names) {
       for (final String dir in _fontSearchDirs) {
@@ -447,19 +564,20 @@ class _OfficeDiskSaveJob {
 void _encodeAndWriteOffice(_OfficeDiskSaveJob job) {
   final Uint8List bytes = switch (job.kind) {
     OpcPackageKind.word => WordSerializer().writeBytes(
-        job.word!,
-        password: job.password,
-      ),
+      job.word!,
+      password: job.password,
+    ),
     OpcPackageKind.sheet => SheetSerializer().writeBytes(
-        job.workbook!,
-        password: job.password,
-      ),
+      job.workbook!,
+      password: job.password,
+    ),
     OpcPackageKind.slide => SlideSerializer().writeBytes(
-        job.presentation!,
-        password: job.password,
-      ),
-    OpcPackageKind.unknown =>
-      throw ArgumentError('Cannot save an unknown Office package.'),
+      job.presentation!,
+      password: job.password,
+    ),
+    OpcPackageKind.unknown => throw ArgumentError(
+      'Cannot save an unknown Office package.',
+    ),
   };
   File(job.path).writeAsBytesSync(bytes, flush: true);
 }

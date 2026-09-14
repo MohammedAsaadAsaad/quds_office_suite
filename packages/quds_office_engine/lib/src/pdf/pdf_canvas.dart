@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
+import 'file/text/pdf_std14.dart';
+
 /// Vector emitter: cm, BT/ET, Tf, Td, TJ, m/l/c/re/f/S.
 class PdfCanvas {
   /// PdfCanvas API.
@@ -275,11 +277,70 @@ class PdfCanvas {
     _buf.writeln('(${_pdfEscape(text)}) Tj');
   }
 
+  /// One text showing under the current CTM, not one operator per letter.
+  ///
+  /// [logical] is stored as ActualText (UTF-16BE) so a viewer can rotate the
+  /// whole word. [glyphIds] is the visual-order subset TJ for other readers.
+  void showMarkedLine({
+    required double x,
+    required double y,
+    required double fontSize,
+    required String logical,
+    required String color,
+    required String fontName,
+    List<int> glyphIds = const <int>[],
+  }) {
+    endText();
+    _buf.writeln('/Span << /ActualText ${_utf16Hex(logical)} >> BDC');
+    beginText();
+    setFillColor(color);
+    _setFont(fontName, fontSize);
+    _buf.writeln('1 0 0 -1 ${_n(x)} ${_n(y)} Tm');
+    if (glyphIds.isEmpty) {
+      _buf.writeln('(${_pdfEscape(logical)}) Tj');
+    } else {
+      final String hex = glyphIds
+          .map((int id) => id.toRadixString(16).padLeft(4, '0'))
+          .join();
+      _buf.writeln('[<$hex>] TJ');
+    }
+    endText();
+    _buf.writeln('EMC');
+  }
+
+  static String _utf16Hex(String text) {
+    final StringBuffer hex = StringBuffer('FEFF');
+    for (final int unit in text.codeUnits) {
+      hex.write(unit.toRadixString(16).padLeft(4, '0'));
+    }
+    return '<$hex>';
+  }
+
+  /// PDF literal-string body for Helvetica WinAnsi.
+  ///
+  /// The content stream is UTF-8-encoded as ASCII. Bytes above 0x7E must be
+  /// octal escapes — stuffing the Dart character (or its UTF-8) into `(…)` is
+  /// how `·` becomes `Â·` and Arabic becomes `Ø…`.
   static String _pdfEscape(String value) {
-    return value
-        .replaceAll('\\', r'\\')
-        .replaceAll('(', r'\(')
-        .replaceAll(')', r'\)');
+    final StringBuffer out = StringBuffer();
+    for (final int cp in value.runes) {
+      final int? byte = PdfStd14.winAnsiByte(cp);
+      if (byte == null) {
+        continue;
+      }
+      if (byte == 0x5C) {
+        out.write(r'\\');
+      } else if (byte == 0x28) {
+        out.write(r'\(');
+      } else if (byte == 0x29) {
+        out.write(r'\)');
+      } else if (byte < 0x20 || byte > 0x7E) {
+        out.write('\\${byte.toRadixString(8).padLeft(3, '0')}');
+      } else {
+        out.writeCharCode(byte);
+      }
+    }
+    return out.toString();
   }
 
   /// toStream API.

@@ -430,17 +430,141 @@ class Table extends Widget {
     for (final double h in rowH) {
       totalH += h;
     }
+    final bool rtl = context.textDirection == TextDirection.rtl;
+    final List<double> placedWidths = rtl
+        ? widths.reversed.toList(growable: false)
+        : widths;
+    final List<List<PwBox>> placedCells = rtl
+        ? <List<PwBox>>[
+            for (final List<PwBox> row in cells) row.reversed.toList(),
+          ]
+        : cells;
     return _TableBox(
       constraints.constrain(PwSize(maxW, totalH)),
-      widths,
+      placedWidths,
       rowH,
-      cells,
+      placedCells,
       aligns,
       children,
       border,
       tableBorder,
       borderColor,
     );
+  }
+
+  /// Splits a tall table across [MultiPage] pages, repeating `repeat` header rows.
+  @override
+  SpanSlice? layoutSpan(Context context, BoxConstraints constraints) {
+    if (children.isEmpty) {
+      return SpanSlice(EmptyBox(), null);
+    }
+    if (!constraints.hasBoundedHeight) {
+      return SpanSlice(layout(context, constraints), null);
+    }
+    final List<TableRow> headers = <TableRow>[
+      for (final TableRow row in children)
+        if (row.repeat) row,
+    ];
+    final List<TableRow> body = <TableRow>[
+      for (final TableRow row in children)
+        if (!row.repeat) row,
+    ];
+    if (body.isEmpty) {
+      return SpanSlice(layout(context, constraints), null);
+    }
+    final double maxW =
+        constraints.hasBoundedWidth ? constraints.maxWidth : 400;
+    final List<double> headerH = _rowHeights(context, headers, maxW);
+    final List<double> bodyH = _rowHeights(context, body, maxW);
+    var chrome = 0.0;
+    for (final double h in headerH) {
+      chrome += h;
+    }
+    final double limit = constraints.maxHeight;
+    var take = 0;
+    var used = chrome;
+    for (int i = 0; i < body.length; i++) {
+      final double next = used + bodyH[i];
+      if (take > 0 && next > limit + 0.5) {
+        break;
+      }
+      used = next;
+      take++;
+      if (take == 1 && used > limit) {
+        break;
+      }
+    }
+    if (take <= 0) {
+      take = 1;
+    }
+    if (take >= body.length) {
+      return SpanSlice(layout(context, constraints), null);
+    }
+    final Table slice = _copyWith(<TableRow>[
+      ...headers,
+      ...body.take(take),
+    ]);
+    final Table rest = _copyWith(<TableRow>[
+      ...headers,
+      ...body.skip(take),
+    ]);
+    return SpanSlice(
+      slice.layout(
+        context,
+        BoxConstraints(maxWidth: maxW),
+      ),
+      rest,
+    );
+  }
+
+  Table _copyWith(List<TableRow> rows) {
+    return Table(
+      children: rows,
+      border: border,
+      tableBorder: tableBorder,
+      columnWidths: columnWidths,
+      columnWidthSpec: columnWidthSpec,
+      defaultColumnWidth: defaultColumnWidth,
+      defaultColumnWidthSpec: defaultColumnWidthSpec,
+      borderColor: borderColor,
+      defaultVerticalAlignment: defaultVerticalAlignment,
+    );
+  }
+
+  List<double> _rowHeights(Context context, List<TableRow> rows, double maxW) {
+    if (rows.isEmpty) {
+      return const <double>[];
+    }
+    var cols = 1;
+    for (final TableRow row in rows) {
+      if (row.children.length > cols) {
+        cols = row.children.length;
+      }
+    }
+    final List<double> widths = _resolveWidths(
+      context,
+      cols,
+      maxW,
+      BoxConstraints(maxWidth: maxW),
+    );
+    final List<double> heights = <double>[];
+    for (final TableRow row in rows) {
+      var h = 0.0;
+      for (int c = 0; c < cols; c++) {
+        final Widget child = c < row.children.length
+            ? row.children[c]
+            : const SizedBox.shrink();
+        final PwBox box = child.layout(
+          context,
+          BoxConstraints.tightFor(width: widths[c]),
+        );
+        if (box.size.height > h) {
+          h = box.size.height;
+        }
+      }
+      heights.add(h < 14 ? 14 : h);
+    }
+    return heights;
   }
 
   List<double> _resolveWidths(

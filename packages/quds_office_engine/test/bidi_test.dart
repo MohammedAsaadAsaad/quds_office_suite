@@ -46,6 +46,26 @@ void main() {
       expect(ArabicShaper.shape('لإ').first.codePoint, anyOf(0xFEF9, 0xFEFA));
     });
 
+    test('Lam-Alef in ملاحظة does not also keep a second alef', () {
+      final List<BrokenLine> lines = LineBreaker.breakLines(
+        text: 'ملاحظة',
+        maxWidth: 400,
+        widthOf: (int cp) => cp == 0 ? 0 : 8,
+        justify: false,
+      );
+      final List<int> cps = <int>[
+        for (final ShapedGlyph g in lines.single.glyphs)
+          if (g.advance > 0) g.codePoint,
+      ];
+      expect(cps, isNot(contains(0x0627)));
+      expect(cps, isNot(contains(0x0644)));
+      expect(
+        cps,
+        contains(anyOf(0xFEFB, 0xFEFC)),
+      );
+      expect(cps.length, 5);
+    });
+
     test('keeps tashkeel at zero advance on the base letter', () {
       final List<ShapedChar> shaped = ArabicShaper.shape('بَ');
       expect(shaped.length, 2);

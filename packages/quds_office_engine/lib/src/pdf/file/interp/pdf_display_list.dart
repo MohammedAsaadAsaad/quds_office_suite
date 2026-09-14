@@ -192,6 +192,7 @@ final class PdfDrawText extends PdfPaintOp {
     this.bold = false,
     this.fontFamily = 'Helvetica',
     this.fontBytes,
+    this.angle = 0,
   });
 
   /// x API.
@@ -220,6 +221,12 @@ final class PdfDrawText extends PdfPaintOp {
 
   /// Embedded `/FontFile2` bytes when the file carries a glyf face.
   final Uint8List? fontBytes;
+
+  /// Baseline rotation in screen space (y down). Zero is horizontal.
+  ///
+  /// Non-zero means [text] is one logical string, not a letter picked out of
+  /// a run. The painter rotates that string as a unit so Arabic stays joined.
+  final double angle;
 }
 
 /// `q` — push graphics state (clip + transform) for the painter.

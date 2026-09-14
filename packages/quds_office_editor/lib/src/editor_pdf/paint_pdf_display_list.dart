@@ -84,9 +84,13 @@ abstract final class PaintPdfDisplayList {
           :final bool bold,
           :final String fontFamily,
           :final Uint8List? fontBytes,
+          :final double angle,
         ):
+          final bool rotated = angle.abs() > 0.01;
           final String host = PdfFontFaces.hostFamily(fontFamily);
-          final String family = PdfFontFaces.familyFor(fontBytes, fontFamily);
+          final String family = rotated
+              ? host
+              : PdfFontFaces.familyFor(fontBytes, fontFamily);
           // Embedded subsets already encode bold/italic; synthesizing again
           // fattens strokes past the PDF design.
           final FontWeight weight = PdfFontFaces.isEmbedded(family)
@@ -119,7 +123,9 @@ abstract final class PaintPdfDisplayList {
                 letterSpacing: 0,
               ),
             ),
-            textDirection: TextDirection.ltr,
+            textDirection: rotated && _arabicScript(text)
+                ? TextDirection.rtl
+                : TextDirection.ltr,
             strutStyle: StrutStyle(
               fontSize: size,
               height: 1,
@@ -127,7 +133,15 @@ abstract final class PaintPdfDisplayList {
               fontWeight: weight,
             ),
           )..layout();
-          painter.paint(canvas, Offset(x, y));
+          if (rotated) {
+            canvas.save();
+            canvas.translate(x, y);
+            canvas.rotate(angle);
+            painter.paint(canvas, Offset.zero);
+            canvas.restore();
+          } else {
+            painter.paint(canvas, Offset(x, y));
+          }
         case PdfDrawImage(
           :final double x,
           :final double y,
@@ -222,4 +236,17 @@ abstract final class PaintPdfDisplayList {
     }
     return dest;
   }
+}
+
+bool _arabicScript(String text) {
+  for (final int unit in text.runes) {
+    if ((unit >= 0x0600 && unit <= 0x06FF) ||
+        (unit >= 0x0750 && unit <= 0x077F) ||
+        (unit >= 0x08A0 && unit <= 0x08FF) ||
+        (unit >= 0xFB50 && unit <= 0xFDFF) ||
+        (unit >= 0xFE70 && unit <= 0xFEFF)) {
+      return true;
+    }
+  }
+  return false;
 }

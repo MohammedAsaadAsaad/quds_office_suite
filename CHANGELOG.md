@@ -7,6 +7,14 @@ This repository is a Dart workspace. Each published package keeps its own change
 
 ## Unreleased
 
+## 0.4.0
+
+- Engine: `PdfToolbox` page graft, quarter-turn `/Rotate`, shaped PDF watermark,
+  two-slides-per-page export.
+- Editor: page-owned PDF selection, select-all / select-page, display-list
+  search with Arabic folding.
+- Package READMEs rewritten to cover the public surface and the honest limits.
+
 ## 0.3.1
 
 - Engine patch: `pdf_widgets` stays on a dedicated import (no Flutter name clashes).

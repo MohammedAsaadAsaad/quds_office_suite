@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:quds_office_engine/pdf_file.dart';
 import 'package:quds_office_engine/quds_office_engine.dart';
 
+import '../editor_pdf/pdf_text_selection.dart';
 import 'office_controller.dart';
 import 'office_theme.dart';
+import 'pdf_controller.dart';
 
 /// Enum OfficeContextKind.
 enum OfficeContextKind {
@@ -82,7 +85,17 @@ class OfficeContextAction {
     this.enabled = true,
     this.danger = false,
     this.separatorBefore = false,
+    this.isCaption = false,
   });
+
+  /// Non-interactive section label.
+  const OfficeContextAction.caption(this.label, {this.separatorBefore = false})
+    : id = '',
+      icon = null,
+      shortcut = null,
+      enabled = false,
+      danger = false,
+      isCaption = true;
 
   /// id API.
   final String id;
@@ -104,6 +117,32 @@ class OfficeContextAction {
 
   /// separatorBefore API.
   final bool separatorBefore;
+
+  /// Section label, not a command.
+  final bool isCaption;
+}
+
+/// Right-click target on a PDF page.
+class PdfContextHit {
+  /// PdfContextHit API.
+  const PdfContextHit({
+    required this.globalPosition,
+    required this.pageIndex,
+    this.link,
+    this.annot,
+  });
+
+  /// globalPosition API.
+  final Offset globalPosition;
+
+  /// pageIndex API.
+  final int pageIndex;
+
+  /// Internal or URI hotspot under the pointer.
+  final PdfLinkAction? link;
+
+  /// Markup annotation under the pointer, never a link.
+  final PdfAnnot? annot;
 }
 
 /// Overlay context menu with its own [Material] surface (Column, not a list).
@@ -355,6 +394,175 @@ abstract final class OfficeContextMenu {
         ),
       );
     }
+    return items;
+  }
+
+  /// Viewer and editor menu for a PDF page.
+  static List<OfficeContextAction> pdf({
+    required PdfViewerController controller,
+    required PdfContextHit hit,
+  }) {
+    final OfficeStrings strings = controller.config.strings;
+    final bool mutate =
+        controller.config.allowsMutation && controller is PdfEditorController;
+    final int page = hit.pageIndex;
+    final bool hasText =
+        page >= 0 &&
+        page < controller.lists.length &&
+        controller.lists[page].runs.isNotEmpty;
+    final PdfTextSelection? selection = controller.selection;
+    final bool canCopy = selection != null && !selection.isCollapsed;
+    final PdfLinkAction? link = hit.link;
+    final bool external = link?.uri != null && link!.uri!.isNotEmpty;
+    final List<OfficeContextAction> items = <OfficeContextAction>[
+      OfficeContextAction.caption(strings.pdfMenuSelection),
+      OfficeContextAction(
+        id: 'copy',
+        label: strings.copy,
+        icon: Icons.content_copy,
+        shortcut: 'Ctrl+C',
+        enabled: canCopy,
+      ),
+      OfficeContextAction(
+        id: 'selectAll',
+        label: strings.selectAll,
+        icon: Icons.select_all,
+        shortcut: 'Ctrl+A',
+        enabled: controller.lists.any(
+          (PdfDisplayList list) => list.runs.isNotEmpty,
+        ),
+      ),
+      OfficeContextAction(
+        id: 'selectPage',
+        label: strings.selectPage,
+        icon: Icons.crop_free,
+        shortcut: 'Ctrl+Shift+A',
+        enabled: hasText,
+      ),
+      if (link != null)
+        OfficeContextAction(
+          id: 'followLink',
+          label: external ? strings.followLink : strings.goToDestination,
+          icon: external ? Icons.open_in_new : Icons.shortcut,
+        ),
+      OfficeContextAction.caption(strings.pdfMenuView, separatorBefore: true),
+      OfficeContextAction(
+        id: 'zoomIn',
+        label: strings.zoomIn,
+        icon: Icons.zoom_in,
+        shortcut: 'Ctrl++',
+      ),
+      OfficeContextAction(
+        id: 'zoomOut',
+        label: strings.zoomOut,
+        icon: Icons.zoom_out,
+        shortcut: 'Ctrl+-',
+      ),
+      OfficeContextAction(
+        id: 'actualSize',
+        label: strings.actualSize,
+        icon: Icons.one_x_mobiledata,
+        shortcut: 'Ctrl+0',
+      ),
+      OfficeContextAction(
+        id: 'fitWidth',
+        label: strings.fitWidth,
+        icon: Icons.fit_screen,
+      ),
+      OfficeContextAction(
+        id: 'fitPage',
+        label: strings.fitPage,
+        icon: Icons.fit_screen_outlined,
+      ),
+      OfficeContextAction.caption(strings.pdfMenuPage, separatorBefore: true),
+      OfficeContextAction(
+        id: 'previousPage',
+        label: strings.previousPage,
+        icon: Icons.keyboard_arrow_up,
+        enabled: page > 0,
+      ),
+      OfficeContextAction(
+        id: 'nextPage',
+        label: strings.nextPage,
+        icon: Icons.keyboard_arrow_down,
+        enabled: page + 1 < controller.pageCount,
+      ),
+    ];
+    if (!mutate || controller is! PdfEditorController) {
+      return items;
+    }
+    final PdfEditorController editor = controller;
+    final bool locked =
+        editor.file?.permissions != null &&
+        !editor.file!.permissions!.canAnnotate;
+    final PdfAnnot? annot = hit.annot;
+    items.addAll(<OfficeContextAction>[
+      OfficeContextAction.caption(strings.pdfMenuMarkup, separatorBefore: true),
+      OfficeContextAction(
+        id: 'highlight',
+        label: strings.highlight,
+        icon: Icons.highlight,
+        enabled: canCopy && !locked,
+      ),
+      OfficeContextAction(
+        id: 'strikethrough',
+        label: strings.strikethrough,
+        icon: Icons.strikethrough_s,
+        enabled: canCopy && !locked,
+      ),
+      OfficeContextAction(
+        id: 'underline',
+        label: strings.underline,
+        icon: Icons.format_underlined,
+        enabled: canCopy && !locked,
+      ),
+      if (annot != null)
+        OfficeContextAction(
+          id: 'deleteAnnot',
+          label: strings.deleteAnnotation,
+          icon: Icons.delete_outline,
+          enabled: !locked,
+          danger: true,
+        ),
+      OfficeContextAction(
+        id: 'rotatePage',
+        label: strings.rotatePage,
+        icon: Icons.rotate_right,
+        separatorBefore: true,
+      ),
+      OfficeContextAction(
+        id: 'rotatePageLeft',
+        label: strings.rotatePageLeft,
+        icon: Icons.rotate_left,
+      ),
+      OfficeContextAction(
+        id: 'insertPage',
+        label: strings.insertPage,
+        icon: Icons.note_add_outlined,
+      ),
+      OfficeContextAction(
+        id: 'deletePage',
+        label: strings.deletePage,
+        icon: Icons.delete_outline,
+        enabled: controller.pageCount > 1,
+        danger: true,
+      ),
+      OfficeContextAction(
+        id: 'undo',
+        label: strings.undo,
+        icon: Icons.undo,
+        shortcut: 'Ctrl+Z',
+        enabled: editor.canUndo,
+        separatorBefore: true,
+      ),
+      OfficeContextAction(
+        id: 'redo',
+        label: strings.redo,
+        icon: Icons.redo,
+        shortcut: 'Ctrl+Y',
+        enabled: editor.canRedo,
+      ),
+    ]);
     return items;
   }
 
@@ -624,12 +832,13 @@ class _OfficeContextOverlay extends StatelessWidget {
   Widget build(BuildContext context) {
     final _MenuPalette palette = _MenuPalette.of(theme);
     final Size screen = MediaQuery.sizeOf(context);
-    const double width = 268;
+    const double width = 292;
     final double height = actions.fold<double>(12, (
       double h,
       OfficeContextAction a,
     ) {
-      return h + (a.separatorBefore ? 9 : 0) + 36;
+      final double row = a.isCaption ? 22 : 36;
+      return h + (a.separatorBefore ? 9 : 0) + row;
     });
     final double left = globalPosition.dx.clamp(
       8,
@@ -731,6 +940,23 @@ class _OfficeContextItemState extends State<_OfficeContextItem> {
   Widget build(BuildContext context) {
     final OfficeContextAction action = widget.action;
     final _MenuPalette palette = widget.palette;
+    if (action.isCaption) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(12, 6, 12, 2),
+        child: Text(
+          action.label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.4,
+            color: palette.muted,
+            height: 1.2,
+          ),
+        ),
+      );
+    }
     final Color fg = !action.enabled
         ? palette.disabled
         : (action.danger ? palette.danger : palette.text);

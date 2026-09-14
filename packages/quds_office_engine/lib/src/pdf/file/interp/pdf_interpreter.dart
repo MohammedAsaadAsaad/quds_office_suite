@@ -15,11 +15,8 @@ import 'pdf_display_list.dart';
 /// Interprets a page content stream into a [PdfDisplayList].
 class PdfInterpreter {
   /// PdfInterpreter API.
-  PdfInterpreter(
-    this.store, {
-    this.maxFormDepth = 32,
-    List<PdfLayer>? layers,
-  }) : layers = layers ?? const <PdfLayer>[];
+  PdfInterpreter(this.store, {this.maxFormDepth = 32, List<PdfLayer>? layers})
+    : layers = layers ?? const <PdfLayer>[];
 
   /// store API.
   final PdfCosStore store;
@@ -241,13 +238,21 @@ class PdfInterpreter {
       case 'm':
         if (stack.length >= 2) {
           frame.path.add(
-            PdfPathVerb(PdfPathKind.move, _n(stack[stack.length - 2]), _n(stack.last)),
+            PdfPathVerb(
+              PdfPathKind.move,
+              _n(stack[stack.length - 2]),
+              _n(stack.last),
+            ),
           );
         }
       case 'l':
         if (stack.length >= 2) {
           frame.path.add(
-            PdfPathVerb(PdfPathKind.line, _n(stack[stack.length - 2]), _n(stack.last)),
+            PdfPathVerb(
+              PdfPathKind.line,
+              _n(stack[stack.length - 2]),
+              _n(stack.last),
+            ),
           );
         }
       case 'c':
@@ -295,11 +300,7 @@ class PdfInterpreter {
         }
       case 'gs':
         if (stack.isNotEmpty && stack.last is _Name) {
-          frame.applyExtGState(
-            store,
-            resources,
-            (stack.last as _Name).value,
-          );
+          frame.applyExtGState(store, resources, (stack.last as _Name).value);
         }
       case 'h':
         frame.path.add(const PdfPathVerb(PdfPathKind.close, 0, 0));
@@ -449,12 +450,7 @@ class PdfInterpreter {
     }
   }
 
-  void _doXObject(
-    String name,
-    PdfCosDict resources,
-    _Frame frame,
-    int depth,
-  ) {
+  void _doXObject(String name, PdfCosDict resources, _Frame frame, int depth) {
     final PdfCosDict? xos = store.asDict(resources['XObject']);
     final PdfCos? raw = xos == null ? null : store.deref(xos[name]);
     if (raw is! PdfCosStream) {
@@ -465,8 +461,7 @@ class PdfInterpreter {
     }
     final String subtype = pdfCosName(raw.dict['Subtype']) ?? '';
     if (subtype == 'Form') {
-      final PdfCosDict inner =
-          store.asDict(raw.dict['Resources']) ?? resources;
+      final PdfCosDict inner = store.asDict(raw.dict['Resources']) ?? resources;
       final Uint8List? bytes = store.streamBytes(raw);
       if (bytes != null) {
         // Transparency-group forms are painted offscreen then composited with
@@ -533,9 +528,10 @@ class PdfInterpreter {
     var pixels = decoded.bytes ?? Uint8List(0);
     final int pw = w.round();
     final int ph = h.round();
-    final bool imageMask = _flag(raw.dict['ImageMask']) || _flag(raw.dict['IM']);
-    final int bpc = pdfCosInt(raw.dict['BitsPerComponent']) ??
-        (imageMask ? 1 : 8);
+    final bool imageMask =
+        _flag(raw.dict['ImageMask']) || _flag(raw.dict['IM']);
+    final int bpc =
+        pdfCosInt(raw.dict['BitsPerComponent']) ?? (imageMask ? 1 : 8);
     final bool invert = _decodeInverts(raw.dict);
     var hasAlpha = false;
     if (imageMask && !jpeg) {
@@ -651,7 +647,10 @@ class PdfInterpreter {
           return pdfCosInt(profile.dict['N']) ?? 3;
         }
       }
-      if (name == 'DeviceGray' || name == 'G' || name == 'Indexed' || name == 'I') {
+      if (name == 'DeviceGray' ||
+          name == 'G' ||
+          name == 'Indexed' ||
+          name == 'I') {
         return 1;
       }
       if (name == 'DeviceCMYK' || name == 'CMYK') {
@@ -714,12 +713,7 @@ class PdfInterpreter {
     return gray;
   }
 
-  static Uint8List _composeSMask(
-    Uint8List rgb,
-    Uint8List mask,
-    int w,
-    int h,
-  ) {
+  static Uint8List _composeSMask(Uint8List rgb, Uint8List mask, int w, int h) {
     final Uint8List out = Uint8List(w * h * 4);
     for (int i = 0; i < w * h; i++) {
       out[i * 4] = rgb[i * 3];
@@ -947,8 +941,8 @@ class PdfInterpreter {
     final Uint8List? fileBytes = desc == null
         ? null
         : store.streamBytes(desc['FontFile2']) ??
-            store.streamBytes(desc['FontFile3']) ??
-            store.streamBytes(desc['FontFile']);
+              store.streamBytes(desc['FontFile3']) ??
+              store.streamBytes(desc['FontFile']);
     SfntFont? sfnt;
     if (fileBytes != null && fileBytes.length > 16) {
       try {
@@ -1005,7 +999,8 @@ class PdfInterpreter {
   }
 
   String _encodingName(PdfCosDict font, PdfCosDict? desc) {
-    final PdfCos? enc = store.deref(font['Encoding']) ??
+    final PdfCos? enc =
+        store.deref(font['Encoding']) ??
         (desc == null ? null : store.deref(desc['Encoding']));
     if (enc is PdfCosName) {
       return enc.value;
@@ -1066,7 +1061,9 @@ class PdfInterpreter {
   Map<int, String> _type3Names(PdfCosDict font) {
     final PdfCos? enc = store.deref(font['Encoding']);
     final PdfCosDict? dict = enc is PdfCosDict ? enc : null;
-    final PdfCosArray? diff = dict == null ? null : store.asArray(dict['Differences']);
+    final PdfCosArray? diff = dict == null
+        ? null
+        : store.asArray(dict['Differences']);
     if (diff == null) {
       return const <int, String>{};
     }
@@ -1093,8 +1090,9 @@ class PdfInterpreter {
         store.asDict(dict['Resources']) ?? PdfCosDict();
     for (final int code in codes) {
       final String? name = font.type3[code];
-      final Uint8List? bytes =
-          name == null ? null : store.streamBytes(procs?[name]);
+      final Uint8List? bytes = name == null
+          ? null
+          : store.streamBytes(procs?[name]);
       final ({double x, double y, double size}) draw = frame._textDraw();
       if (bytes != null) {
         frame.save();
@@ -1231,7 +1229,12 @@ class PdfInterpreter {
     final Uint8List out = Uint8List(w * h * 4);
     var o = 0;
     for (int i = 0; i < w * h; i++) {
-      final int bit = _sampleAt(raw, w, i, bpc == 8 && raw.length >= w * h ? 8 : 1);
+      final int bit = _sampleAt(
+        raw,
+        w,
+        i,
+        bpc == 8 && raw.length >= w * h ? 8 : 1,
+      );
       final bool paint = invert ? bit == 0 : bit != 0;
       out[o++] = r;
       out[o++] = g;
@@ -1474,8 +1477,7 @@ class _FontRes {
     }
     var w = 0.0;
     for (final int code in codes) {
-      final int tw = widths[code] ??
-          (cid ? dw : PdfStd14.width(family, code));
+      final int tw = widths[code] ?? (cid ? dw : PdfStd14.width(family, code));
       if (sfnt != null && !cid) {
         final int cp = PdfStd14.unicode(code, encoding);
         final int gid = sfnt!.glyphIdFor(cp);
@@ -1499,7 +1501,14 @@ class _Matrix {
 
   _Matrix copy() => _Matrix(a, b, c, d, e, f);
 
-  void multiply(double na, double nb, double nc, double nd, double ne, double nf) {
+  void multiply(
+    double na,
+    double nb,
+    double nc,
+    double nd,
+    double ne,
+    double nf,
+  ) {
     final double oa = a, ob = b, oc = c, od = d, oe = e, of = f;
     a = oa * na + oc * nb;
     b = ob * na + od * nb;
@@ -1509,7 +1518,8 @@ class _Matrix {
     f = ob * ne + od * nf + of;
   }
 
-  (double, double) map(double x, double y) => (a * x + c * y + e, b * x + d * y + f);
+  (double, double) map(double x, double y) =>
+      (a * x + c * y + e, b * x + d * y + f);
 }
 
 class _Frame {
@@ -1523,14 +1533,12 @@ class _Frame {
       return (0, 0);
     }
     final PdfPathVerb last = path.last;
-    return last.kind == PdfPathKind.cubic ? (last.x3, last.y3) : (last.x, last.y);
+    return last.kind == PdfPathKind.cubic
+        ? (last.x3, last.y3)
+        : (last.x, last.y);
   }
 
-  void applyExtGState(
-    PdfCosStore store,
-    PdfCosDict resources,
-    String name,
-  ) {
+  void applyExtGState(PdfCosStore store, PdfCosDict resources, String name) {
     final PdfCosDict? ext = store.asDict(resources['ExtGState']);
     final PdfCosDict? gs = ext == null ? null : store.asDict(ext[name]);
     if (gs == null) {
@@ -1579,6 +1587,7 @@ class _Frame {
       blend = PdfInterpreter._blendOf(bm);
     }
   }
+
   _Matrix ctm = _Matrix.identity();
   _Matrix textMatrix = _Matrix.identity();
   _Matrix textLine = _Matrix.identity();
@@ -1835,8 +1844,9 @@ class _Frame {
   }
 
   void show(Object value) {
-    final ({String text, List<int> codes, List<String> glyphs}) run =
-        _decode(value);
+    final ({String text, List<int> codes, List<String> glyphs}) run = _decode(
+      value,
+    );
     if (run.text.isEmpty && run.codes.isEmpty) {
       return;
     }
@@ -1854,11 +1864,19 @@ class _Frame {
   void showTj(List<Object> items) {
     for (final Object item in items) {
       if (item is num) {
-        textMatrix.multiply(1, 0, 0, 1, -item.toDouble() / 1000.0 * fontSize, 0);
+        textMatrix.multiply(
+          1,
+          0,
+          0,
+          1,
+          -item.toDouble() / 1000.0 * fontSize,
+          0,
+        );
         continue;
       }
-      final ({String text, List<int> codes, List<String> glyphs}) run =
-          _decode(item);
+      final ({String text, List<int> codes, List<String> glyphs}) run = _decode(
+        item,
+      );
       if (run.text.isEmpty && run.codes.isEmpty) {
         continue;
       }
@@ -1876,22 +1894,60 @@ class _Frame {
 
   /// Paint one PDF code at a time. Ligatures map to multi-char strings but
   /// still use one PDF advance; joining them lets Flutter `hmtx` fight TJ/Tw.
+  ///
+  /// A rotated baseline is different: the showing is one word. Splitting it
+  /// draws upright letters along a diagonal and breaks Arabic joining.
   void _emitText(String text, List<int> codes, List<String> glyphs) {
     final ({double x, double y, double size}) start = _textDraw();
     final double totalW = _textWidth(codes);
-    final double renderedW =
-        fontSize.abs() < 1e-9 ? totalW : totalW * (start.size / fontSize.abs());
+    final double renderedW = fontSize.abs() < 1e-9
+        ? totalW
+        : totalW * (start.size / fontSize.abs());
+    final double angle = _screenAngle();
+    if (angle.abs() > 0.02) {
+      final String paint = actualText != null && actualText!.isNotEmpty
+          ? actualText!
+          : text;
+      if (actualText != null) {
+        actualTextEmitted = true;
+      }
+      if (paint.isNotEmpty && textRender != 3) {
+        ops.add(
+          PdfDrawText(
+            x: start.x,
+            y: start.y,
+            size: start.size,
+            color: textRender == 1 ? stroke : fill,
+            text: paint,
+            italic: font?.italic ?? false,
+            bold: font?.bold ?? false,
+            fontFamily: font?.family ?? 'Helvetica',
+            fontBytes: font?.bytes,
+            angle: angle,
+          ),
+        );
+      }
+      textMatrix.multiply(1, 0, 0, 1, totalW, 0);
+      if (paint.isNotEmpty) {
+        runs.add(
+          PdfTextRun(
+            text: paint,
+            x: start.x,
+            y: start.y,
+            width: renderedW,
+            height: start.size,
+          ),
+        );
+      }
+      return;
+    }
     if (textRender != 3) {
       final List<String> paintGlyphs = glyphs.length == codes.length
           ? glyphs
-          : <String>[
-              for (final int u in text.runes) String.fromCharCode(u),
-            ];
+          : <String>[for (final int u in text.runes) String.fromCharCode(u)];
       final List<int> paintCodes = glyphs.length == codes.length
           ? codes
-          : <int>[
-              for (final int u in text.runes) u,
-            ];
+          : <int>[for (final int u in text.runes) u];
       if (paintCodes.isNotEmpty && paintGlyphs.length == paintCodes.length) {
         for (int i = 0; i < paintCodes.length; i++) {
           final String g = paintGlyphs[i];
@@ -1912,14 +1968,7 @@ class _Frame {
             );
           }
           final int unit = g.isEmpty ? 0 : g.runes.first;
-          textMatrix.multiply(
-            1,
-            0,
-            0,
-            1,
-            _advanceCode(paintCodes[i], unit),
-            0,
-          );
+          textMatrix.multiply(1, 0, 0, 1, _advanceCode(paintCodes[i], unit), 0);
         }
       } else {
         ops.add(
@@ -1959,10 +2008,25 @@ class _Frame {
     }
   }
 
+  /// Screen-space angle of the text baseline (y down, clockwise positive).
+  double _screenAngle() {
+    final _Matrix trm = ctm.copy();
+    trm.multiply(
+      textMatrix.a,
+      textMatrix.b,
+      textMatrix.c,
+      textMatrix.d,
+      textMatrix.e,
+      textMatrix.f,
+    );
+    final (double x0, double y0) = trm.map(0, 0);
+    final (double x1, double y1) = trm.map(1, 0);
+    return math.atan2(-(y1 - y0), x1 - x0);
+  }
+
   /// ISO 32000-1 §9.4.4: ((w0/1000)×Tfs + Tc + Tw)×Th; Tw only for space.
   double _advanceCode(int code, int unit) {
-    var w = font?.widthOfCodes(<int>[code], fontSize) ??
-        fontSize.abs() * 0.5;
+    var w = font?.widthOfCodes(<int>[code], fontSize) ?? fontSize.abs() * 0.5;
     w += charSpace;
     if (code == 32 || unit == 0x20) {
       w += wordSpace;
@@ -1971,7 +2035,8 @@ class _Frame {
   }
 
   double _textWidth(List<int> codes) {
-    var w = font?.widthOfCodes(codes, fontSize) ??
+    var w =
+        font?.widthOfCodes(codes, fontSize) ??
         codes.length * fontSize.abs() * 0.5;
     w += charSpace * codes.length;
     for (final int code in codes) {
@@ -2007,7 +2072,8 @@ class _Frame {
       final StringBuffer buf = StringBuffer();
       final List<int> codes = <int>[];
       final List<String> glyphs = <String>[];
-      final bool wide = font?.cid == true ||
+      final bool wide =
+          font?.cid == true ||
           (value.bytes.length >= 2 && value.bytes.length.isEven);
       if (wide && value.bytes.length >= 2) {
         for (int i = 0; i + 1 < value.bytes.length; i += 2) {
@@ -2074,18 +2140,10 @@ class _Frame {
         ],
       );
     }
-    return (
-      text: '',
-      codes: const <int>[],
-      glyphs: const <String>[],
-    );
+    return (text: '', codes: const <int>[], glyphs: const <String>[]);
   }
 
-  String _mapCid(
-    PdfToUnicode? cmap,
-    int cid, {
-    String? encoding,
-  }) {
+  String _mapCid(PdfToUnicode? cmap, int cid, {String? encoding}) {
     final String mapped = cmap?.mapCid(cid) ?? '';
     if (mapped.isNotEmpty) {
       return mapped.replaceAll(String.fromCharCode(0), '');
@@ -2094,9 +2152,7 @@ class _Frame {
       return '';
     }
     if (cid <= 0xFFFF) {
-      final int uni = encoding == null
-          ? cid
-          : PdfStd14.unicode(cid, encoding);
+      final int uni = encoding == null ? cid : PdfStd14.unicode(cid, encoding);
       return uni <= 0 ? '' : String.fromCharCode(uni);
     }
     return '';
@@ -2264,7 +2320,9 @@ class _Lexer {
         }
         break;
       }
-      return _Tok.val(double.tryParse(String.fromCharCodes(bytes.sublist(start, _i))) ?? 0);
+      return _Tok.val(
+        double.tryParse(String.fromCharCodes(bytes.sublist(start, _i))) ?? 0,
+      );
     }
     _i++;
     return next();
@@ -2274,9 +2332,7 @@ class _Lexer {
     final Map<String, Object> values = <String, Object>{};
     while (true) {
       _skip();
-      if (_i + 1 < bytes.length &&
-          bytes[_i] == 0x3E &&
-          bytes[_i + 1] == 0x3E) {
+      if (_i + 1 < bytes.length && bytes[_i] == 0x3E && bytes[_i + 1] == 0x3E) {
         _i += 2;
         return _Dict(values);
       }
@@ -2291,9 +2347,7 @@ class _Lexer {
         continue;
       }
       _skip();
-      if (_i + 1 < bytes.length &&
-          bytes[_i] == 0x3E &&
-          bytes[_i + 1] == 0x3E) {
+      if (_i + 1 < bytes.length && bytes[_i] == 0x3E && bytes[_i + 1] == 0x3E) {
         _i += 2;
         return _Dict(values);
       }
@@ -2307,7 +2361,12 @@ class _Lexer {
   void _skip() {
     while (_i < bytes.length) {
       final int b = bytes[_i];
-      if (b == 0x00 || b == 0x09 || b == 0x0A || b == 0x0C || b == 0x0D || b == 0x20) {
+      if (b == 0x00 ||
+          b == 0x09 ||
+          b == 0x0A ||
+          b == 0x0C ||
+          b == 0x0D ||
+          b == 0x20) {
         _i++;
         continue;
       }
@@ -2406,5 +2465,8 @@ class _Lexer {
   static bool _isNum(int b) => b >= 0x30 && b <= 0x39;
 
   static bool _isOpStart(int b) =>
-      (b >= 0x41 && b <= 0x5A) || (b >= 0x61 && b <= 0x7A) || b == 0x27 || b == 0x22;
+      (b >= 0x41 && b <= 0x5A) ||
+      (b >= 0x61 && b <= 0x7A) ||
+      b == 0x27 ||
+      b == 0x22;
 }

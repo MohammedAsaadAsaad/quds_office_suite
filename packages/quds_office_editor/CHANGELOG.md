@@ -2,6 +2,20 @@
 
 All notable changes to `quds_office_editor` are documented here.
 
+## 0.4.0
+
+PDF viewing matches the page that owns the text.
+
+- Selection stays on its page. Opening another file or scrolling to another
+  page does not repaint the old highlight at the same coordinates.
+- `Ctrl+A` / `selectAll()` selects every text run in the file.
+  `Ctrl+Shift+A` / `selectPage` selects every run on that page.
+- Find walks display-list runs, including matches that span runs. Hits are
+  page-tagged, the current hit scrolls into view, and next/previous wrap.
+  Arabic queries fold presentation forms, alef variants, and diacritics.
+- `/Rotate` is painted and hit-tested as a clockwise quarter-turn of the view.
+- Depends on `quds_office_engine` 0.4.0 (`PdfToolbox` graft, shaped watermark).
+
 ## 0.3.0
 
 **Four surfaces: Word · Excel · PowerPoint · PDF.** The editor now embeds a

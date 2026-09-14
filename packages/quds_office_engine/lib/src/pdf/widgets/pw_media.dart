@@ -113,7 +113,7 @@ class _ImageBox extends PwBox {
 /// Chart kind drawn with [PdfCanvas] paths.
 enum ChartType { bar, line, pie }
 
-/// Vector chart (no Flutter).
+/// Vector chart (no Flutter). Bars, line, and pie with axes, values, and legend.
 class Chart extends Widget {
   /// Chart API.
   const Chart({
@@ -122,6 +122,9 @@ class Chart extends Widget {
     this.title = '',
     this.width = 360,
     this.height = 180,
+    this.showValues = true,
+    this.showLegend = true,
+    this.showGrid = true,
   });
 
   /// type API.
@@ -139,27 +142,60 @@ class Chart extends Widget {
   /// height API.
   final double height;
 
+  /// Paint numeric labels on marks.
+  final bool showValues;
+
+  /// Color key beside pie charts, under bar/line charts when space allows.
+  final bool showLegend;
+
+  /// Horizontal guides on bar and line plots.
+  final bool showGrid;
+
   @override
   PwBox layout(Context context, BoxConstraints constraints) {
     context.useText(title);
     for (final ChartPoint p in points) {
       context.useText(p.label);
+      if (showValues) {
+        context.useText(_chartValue(p.value));
+      }
     }
     return _ChartBox(
       constraints.constrain(PwSize(width, height)),
       type,
       points,
       title,
+      showValues: showValues,
+      showLegend: showLegend,
+      showGrid: showGrid,
     );
   }
 }
 
+String _chartValue(double value) {
+  if (value == value.roundToDouble()) {
+    return value.round().toString();
+  }
+  return value.toStringAsFixed(1);
+}
+
 class _ChartBox extends PwBox {
-  _ChartBox(super.size, this.type, this.points, this.title);
+  _ChartBox(
+    super.size,
+    this.type,
+    this.points,
+    this.title, {
+    required this.showValues,
+    required this.showLegend,
+    required this.showGrid,
+  });
 
   final ChartType type;
   final List<ChartPoint> points;
   final String title;
+  final bool showValues;
+  final bool showLegend;
+  final bool showGrid;
 
   @override
   void paint(Context context, PwOffset offset) {
@@ -189,23 +225,30 @@ class _ChartBox extends PwBox {
         TextAlign.left,
       );
     }
-    final List<ChartPoint> pts = points.isEmpty
-        ? const <ChartPoint>[
-            ChartPoint(label: 'A', value: 4, color: '1A237E'),
-            ChartPoint(label: 'B', value: 7, color: '00897B'),
-            ChartPoint(label: 'C', value: 5, color: 'F9A825'),
-          ]
-        : points;
+    if (points.isEmpty) {
+      pwPaintParagraph(
+        context,
+        'No data',
+        PwOffset(offset.dx + 12, offset.dy + size.height / 2 - 6),
+        size.width - 24,
+        const TextStyle(fontSize: 9, color: '78909C'),
+        TextAlign.center,
+      );
+      return;
+    }
+    final List<ChartPoint> pts = points;
     var maxV = 1.0;
     for (final ChartPoint p in pts) {
       if (p.value > maxV) {
         maxV = p.value;
       }
     }
-    final double plotTop = offset.dy + (title.isEmpty ? 12 : 24);
-    final double plotLeft = offset.dx + 12;
-    final double plotW = size.width - 24;
-    final double plotH = size.height - (title.isEmpty ? 28 : 40);
+    final double plotTop = offset.dy + (title.isEmpty ? 14 : 26);
+    final double legendH = showLegend && type != ChartType.pie ? 16 : 0;
+    final double plotLeft = offset.dx + (type == ChartType.pie ? 12 : 28);
+    final double plotW = size.width - (type == ChartType.pie ? 24 : 40);
+    final double plotH =
+        size.height - (title.isEmpty ? 28 : 42) - legendH;
     switch (type) {
       case ChartType.bar:
         _bars(context, canvas, pts, maxV, plotLeft, plotTop, plotW, plotH);
@@ -213,6 +256,48 @@ class _ChartBox extends PwBox {
         _line(context, canvas, pts, maxV, plotLeft, plotTop, plotW, plotH);
       case ChartType.pie:
         _pie(context, canvas, pts, plotLeft, plotTop, plotW, plotH);
+    }
+    if (showLegend && type != ChartType.pie) {
+      _legendRow(context, canvas, pts, offset.dx + 12, offset.dy + size.height - 16, size.width - 24);
+    }
+  }
+
+  void _grid(
+    PdfCanvas canvas,
+    double x,
+    double y,
+    double w,
+    double h,
+    double maxV,
+  ) {
+    canvas.setStrokeColor('ECEFF1');
+    canvas.setLineWidth(0.4);
+    for (int i = 0; i <= 3; i++) {
+      final double gy = y + (h - 16) * i / 3;
+      canvas.moveTo(x, gy);
+      canvas.lineTo(x + w, gy);
+      canvas.stroke();
+    }
+  }
+
+  void _yLabels(
+    Context context,
+    double x,
+    double y,
+    double h,
+    double maxV,
+  ) {
+    for (int i = 0; i <= 3; i++) {
+      final double v = maxV * (1 - i / 3);
+      final double gy = y + (h - 16) * i / 3;
+      pwPaintParagraph(
+        context,
+        _chartValue(v),
+        PwOffset(x - 26, gy - 4),
+        24,
+        const TextStyle(fontSize: 6, color: '90A4AE'),
+        TextAlign.right,
+      );
     }
   }
 
@@ -226,6 +311,10 @@ class _ChartBox extends PwBox {
     double w,
     double h,
   ) {
+    if (showGrid) {
+      _grid(canvas, x, y, w, h, maxV);
+      _yLabels(context, x, y, h, maxV);
+    }
     final double slot = w / pts.length;
     final double barW = slot * 0.55;
     for (int i = 0; i < pts.length; i++) {
@@ -233,6 +322,16 @@ class _ChartBox extends PwBox {
       final double bx = x + i * slot + (slot - barW) / 2;
       final double by = y + h - 14 - bh;
       canvas.fillRect(bx, by, barW, bh, pts[i].color);
+      if (showValues) {
+        pwPaintParagraph(
+          context,
+          _chartValue(pts[i].value),
+          PwOffset(x + i * slot, by - 10),
+          slot,
+          const TextStyle(fontSize: 6, color: '37474F'),
+          TextAlign.center,
+        );
+      }
       pwPaintParagraph(
         context,
         pts[i].label,
@@ -254,6 +353,10 @@ class _ChartBox extends PwBox {
     double w,
     double h,
   ) {
+    if (showGrid) {
+      _grid(canvas, x, y, w, h, maxV);
+      _yLabels(context, x, y, h, maxV);
+    }
     canvas.setStrokeColor('1A237E');
     canvas.setLineWidth(1.4);
     for (int i = 0; i < pts.length; i++) {
@@ -272,6 +375,16 @@ class _ChartBox extends PwBox {
       canvas.setFillColor(pts[i].color);
       canvas.ellipse(px - 2.5, py - 2.5, 5, 5);
       canvas.fill();
+      if (showValues) {
+        pwPaintParagraph(
+          context,
+          _chartValue(pts[i].value),
+          PwOffset(px - 16, py - 12),
+          32,
+          const TextStyle(fontSize: 6, color: '37474F'),
+          TextAlign.center,
+        );
+      }
       pwPaintParagraph(
         context,
         pts[i].label,
@@ -299,7 +412,7 @@ class _ChartBox extends PwBox {
     if (sum <= 0) {
       sum = 1;
     }
-    final double cx = x + w * 0.38;
+    final double cx = x + w * (showLegend ? 0.36 : 0.5);
     final double cy = y + h / 2;
     final double r = math.min(w, h) * 0.32;
     var angle = -90.0;
@@ -314,20 +427,58 @@ class _ChartBox extends PwBox {
       }
       canvas.closePath();
       canvas.fill();
+      if (showValues && sweep > 18) {
+        final double mid = (angle + sweep / 2) * math.pi / 180;
+        final double lx = cx + r * 0.62 * math.cos(mid);
+        final double ly = cy + r * 0.62 * math.sin(mid);
+        pwPaintParagraph(
+          context,
+          '${(100 * p.value.abs() / sum).round()}%',
+          PwOffset(lx - 12, ly - 4),
+          24,
+          const TextStyle(fontSize: 6, color: 'FFFFFF'),
+          TextAlign.center,
+        );
+      }
       angle += sweep;
+    }
+    if (!showLegend) {
+      return;
     }
     var ly = y + 8;
     for (final ChartPoint p in pts) {
       canvas.fillRect(x + w * 0.72, ly, 8, 8, p.color);
       pwPaintParagraph(
         context,
-        p.label,
+        '${p.label}  ${_chartValue(p.value)}',
         PwOffset(x + w * 0.72 + 12, ly),
         w * 0.26,
         const TextStyle(fontSize: 8, color: '37474F'),
         TextAlign.left,
       );
       ly += 14;
+    }
+  }
+
+  void _legendRow(
+    Context context,
+    PdfCanvas canvas,
+    List<ChartPoint> pts,
+    double x,
+    double y,
+    double w,
+  ) {
+    final double slot = w / pts.length;
+    for (int i = 0; i < pts.length; i++) {
+      canvas.fillRect(x + i * slot, y, 7, 7, pts[i].color);
+      pwPaintParagraph(
+        context,
+        pts[i].label,
+        PwOffset(x + i * slot + 10, y - 1),
+        (slot - 12).clamp(8, slot),
+        const TextStyle(fontSize: 7, color: '546E7A'),
+        TextAlign.left,
+      );
     }
   }
 }
@@ -396,15 +547,11 @@ class _LinkBox extends PwBox {
     double? destY;
     final String? name = destination;
     if (page == null && name != null) {
-      final PwHeading? hit = context.anchors[name];
+      final PwHeading? hit =
+          context.headingNamed(name) ?? context.anchors[name];
       if (hit != null) {
         page = hit.pageNumber - 1;
         destY = hit.destY;
-      } else {
-        final int? numbered = context.pageOfHeading(name);
-        if (numbered != null) {
-          page = numbered - 1;
-        }
       }
     }
     context.links.add(
@@ -418,6 +565,11 @@ class _LinkBox extends PwBox {
         destY: destY,
       ),
     );
+  }
+
+  @override
+  void noteDestination(Context context, PwOffset offset) {
+    child.noteDestination(context, offset);
   }
 }
 
@@ -490,26 +642,31 @@ class TableOfContent extends Widget {
         continue;
       }
       final double indent = (heading.level - minLevel) * 14.0;
+      final bool rtl = context.textDirection == TextDirection.rtl;
+      final TextStyle linkStyle = TextStyle(
+        fontSize: heading.level == 1 ? 11 : 10,
+        color: '1565C0',
+        decoration: TextDecoration.underline,
+      );
       rows.add(
         Padding(
-          padding: EdgeInsets.only(left: indent, bottom: 4),
-          child: Row(
-            children: <Widget>[
-              Expanded(
-                child: Text(
-                  heading.title,
-                  style: TextStyle(
-                    fontSize: heading.level == 1 ? 11 : 10,
-                    color: '37474F',
+          padding: EdgeInsets.only(
+            left: rtl ? 0 : indent,
+            right: rtl ? indent : 0,
+            bottom: 4,
+          ),
+          child: Link(
+            destination: heading.title,
+            child: Row(
+              children: <Widget>[
+                Expanded(child: Text(heading.title, style: linkStyle)),
+                if (showPageNumbers)
+                  Text(
+                    '${heading.pageNumber}',
+                    style: const TextStyle(fontSize: 10, color: '546E7A'),
                   ),
-                ),
-              ),
-              if (showPageNumbers)
-                Text(
-                  '${heading.pageNumber}',
-                  style: const TextStyle(fontSize: 10, color: '546E7A'),
-                ),
-            ],
+              ],
+            ),
           ),
         ),
       );

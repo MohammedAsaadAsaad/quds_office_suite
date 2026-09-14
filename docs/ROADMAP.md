@@ -38,6 +38,17 @@ CFF→OTTO host wrap, ActualText, ViewerPreferences, layer toggle, Type 2/3
 (in-engine CFF raster, JBIG2/JPX, CMS verify, certified PDF/A) are in
 [STANDARDS.md](STANDARDS.md). Contract: [PDF.md](PDF.md).
 
+Widget composer follow-ups that landed after 0.3.1:
+
+- `MultiPage` splits [Table] across pages and repeats `repeat` header rows;
+  vertical columns flow as separate children so a nested table can span.
+- `BoxDecoration.gradient` (`LinearGradient`) paints as color strips.
+- `Chart` draws value labels, a y-axis guide, and a legend (bar / line / pie).
+
+Still out of the widget composer (do not pretend): PDF axial shading objects,
+package:pdf chart dataset API, barcode/svg, and MultiPage span inside a
+single `Expanded` row.
+
 - P6.1 COS + Standard encryption
 - P6.2 Display list + `QudsPdfViewer`
 - P6.3 Markup + incremental save + `QudsPdfEditor`

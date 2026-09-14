@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import '../fonts/office_font_set.dart';
 import '../fonts/sfnt_parser.dart';
 import '../pdf/file/io/pdf_incremental_save.dart';
 import '../pdf/file/model/pdf_file.dart';
@@ -43,10 +44,12 @@ abstract final class OfficePrint {
     WmlDocument document, {
     OfficePrintSettings settings = const OfficePrintSettings(),
     SfntFont? font,
+    OfficeFontSet? fonts,
   }) {
     return OfficePdfExport.word(
       document,
       font: font,
+      fonts: fonts,
       title: settings.title.isEmpty ? 'Document' : settings.title,
       pageFrom: settings.pageFrom,
       pageTo: settings.pageTo,
@@ -58,10 +61,10 @@ abstract final class OfficePrint {
     SmlWorkbook workbook, {
     OfficePrintSettings settings = const OfficePrintSettings(),
     SfntFont? font,
+    OfficeFontSet? fonts,
     PdfSheetPrintOptions? options,
   }) {
-    PdfSheetPrintOptions sheetOptions =
-        options ?? const PdfSheetPrintOptions();
+    PdfSheetPrintOptions sheetOptions = options ?? const PdfSheetPrintOptions();
     if (settings.landscape == true) {
       sheetOptions = PdfSheetPrintOptions(
         pageWidth: sheetOptions.pageHeight,
@@ -75,6 +78,7 @@ abstract final class OfficePrint {
     return OfficePdfExport.workbook(
       workbook,
       font: font,
+      fonts: fonts,
       title: settings.title.isEmpty ? 'Workbook' : settings.title,
       options: sheetOptions,
       sheetFrom: settings.pageFrom,
@@ -87,11 +91,13 @@ abstract final class OfficePrint {
     PmlPresentation presentation, {
     OfficePrintSettings settings = const OfficePrintSettings(),
     SfntFont? font,
+    OfficeFontSet? fonts,
     PdfSlideExportMode mode = PdfSlideExportMode.slides,
   }) {
     return OfficePdfExport.presentation(
       presentation,
       font: font,
+      fonts: fonts,
       title: settings.title.isEmpty ? 'Presentation' : settings.title,
       mode: mode,
       slideFrom: settings.pageFrom,

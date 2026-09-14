@@ -9,10 +9,12 @@ import 'package:quds_office_engine/quds_office_engine.dart';
 
 import '../core/command_pipeline.dart';
 import '../core/virtual_viewport.dart';
+import '../editor_pdf/pdf_find.dart';
 import '../editor_pdf/pdf_page_layout.dart';
 import '../editor_pdf/pdf_text_selection.dart';
 import 'office_clipboard.dart';
 import 'office_theme.dart';
+import 'office_uri.dart';
 
 /// View / select controller for an opened PDF.
 class PdfViewerController extends ChangeNotifier {
@@ -20,7 +22,9 @@ class PdfViewerController extends ChangeNotifier {
   PdfViewerController({
     PdfFile? file,
     List<PdfDisplayList>? lists,
-    this.config = const OfficeSurfaceConfig(mode: OfficeInteractionMode.viewing),
+    this.config = const OfficeSurfaceConfig(
+      mode: OfficeInteractionMode.viewing,
+    ),
   }) : _file = file,
        _lists = lists ?? file?.displayLists() ?? <PdfDisplayList>[];
 
@@ -45,8 +49,13 @@ class PdfViewerController extends ChangeNotifier {
   OfficeSurfaceConfig config;
   final VirtualViewport viewport = VirtualViewport();
   PdfTextSelection? selection;
-  final List<PdfTextRun> findHits = <PdfTextRun>[];
+  final List<PdfFindMark> findMarks = <PdfFindMark>[];
+  var findIndex = -1;
   var pageIndex = 0;
+
+  /// Host override for `http` / `https` / `mailto` link annots.
+  /// When null, the platform opener is used.
+  void Function(String uri)? onOpenUri;
 
   static const Duration _zoomAnimDuration = Duration(milliseconds: 200);
   var _zoomAnimating = false;
@@ -79,17 +88,23 @@ class PdfViewerController extends ChangeNotifier {
     _file = payload.file;
     _lists = payload.lists;
     selection = null;
-    findHits.clear();
+    _clearFind();
     pageIndex = 0;
     viewport.origin = Offset.zero;
     notifyListeners();
   }
 
   /// goToPage API.
-  void goToPage(int index) {
+  ///
+  /// [destY] is a top-left page offset. The page top stays visible when it is
+  /// omitted or already near the top.
+  void goToPage(int index, {double? destY}) {
     pageIndex = index.clamp(0, mathMax(0, pageCount - 1));
-    final double top = PdfPageLayout.stackTop(_lists, pageIndex, viewport.scale);
-    viewport.origin = Offset(viewport.origin.dx, top);
+    var top = PdfPageLayout.stackTop(_lists, pageIndex, viewport.scale);
+    if (destY != null && destY > 12) {
+      top += destY * PdfPageLayout.viewScale(viewport.scale) - 36;
+    }
+    viewport.origin = Offset(viewport.origin.dx, top < 0 ? 0 : top);
     if (viewport.extent.width > 0 && viewport.extent.height > 0) {
       viewport.clampTo(
         content: PdfPageLayout.contentSize(_lists, viewport.scale),
@@ -104,7 +119,8 @@ class PdfViewerController extends ChangeNotifier {
     if (_lists.isEmpty) {
       return;
     }
-    final double y = viewport.origin.dy +
+    final double y =
+        viewport.origin.dy +
         (viewport.extent.height > 0 ? viewport.extent.height * 0.35 : 0);
     pageIndex = PdfPageLayout.pageAtY(_lists, y, viewport.scale);
   }
@@ -212,8 +228,10 @@ class PdfViewerController extends ChangeNotifier {
     if (!_zoomAnimating) {
       return;
     }
-    final int elapsedMs =
-        (timestamp - _zoomStart).inMilliseconds.clamp(0, 1 << 30);
+    final int elapsedMs = (timestamp - _zoomStart).inMilliseconds.clamp(
+      0,
+      1 << 30,
+    );
     final double t = (elapsedMs / _zoomAnimDuration.inMilliseconds).clamp(
       0.0,
       1.0,
@@ -271,27 +289,112 @@ class PdfViewerController extends ChangeNotifier {
     );
   }
 
-  /// find API.
-  List<OfficeFindHit> find(String query) {
-    findHits.clear();
-    final PdfFile? file = _file;
-    if (file == null || query.isEmpty) {
+  /// Search the opened display lists. Empty [query] clears the marks.
+  List<PdfFindMark> find(String query) {
+    if (query.trim().isEmpty) {
+      _clearFind();
       notifyListeners();
-      return const <OfficeFindHit>[];
+      return const <PdfFindMark>[];
     }
-    final List<OfficeFindHit> hits = OfficeFind.inPdf(
-      file,
-      OfficeFindOptions(query: query),
-    );
-    for (final OfficeFindHit hit in hits) {
-      final int page = hit.pageIndex ?? 0;
-      if (page < 0 || page >= _lists.length) {
-        continue;
-      }
-      findHits.addAll(_lists[page].runs.where((PdfTextRun run) => run.text.contains(query)));
-    }
+    findMarks
+      ..clear()
+      ..addAll(PdfFind.search(_lists, query));
+    findIndex = findMarks.isEmpty ? -1 : 0;
+    _revealFind();
     notifyListeners();
-    return hits;
+    return findMarks;
+  }
+
+  /// Next match, wrapping. Reveals the hit.
+  PdfFindMark? findNext() {
+    if (findMarks.isEmpty) {
+      return null;
+    }
+    findIndex = (findIndex + 1) % findMarks.length;
+    _revealFind();
+    notifyListeners();
+    return findMarks[findIndex];
+  }
+
+  /// Previous match, wrapping. Reveals the hit.
+  PdfFindMark? findPrevious() {
+    if (findMarks.isEmpty) {
+      return null;
+    }
+    findIndex = findIndex <= 0 ? findMarks.length - 1 : findIndex - 1;
+    _revealFind();
+    notifyListeners();
+    return findMarks[findIndex];
+  }
+
+  void _clearFind() {
+    findMarks.clear();
+    findIndex = -1;
+  }
+
+  void _revealFind() {
+    if (findIndex < 0 || findIndex >= findMarks.length) {
+      return;
+    }
+    final PdfFindMark mark = findMarks[findIndex];
+    final double? destY = mark.rects.isEmpty ? null : mark.rects.first.top;
+    goToPage(mark.page, destY: destY);
+  }
+
+  /// Select every text run in the file.
+  void selectAll() {
+    if (_lists.isEmpty) {
+      return;
+    }
+    var first = -1;
+    var last = -1;
+    for (int i = 0; i < _lists.length; i++) {
+      if (_lists[i].runs.isNotEmpty) {
+        first = i;
+        break;
+      }
+    }
+    for (int i = _lists.length - 1; i >= 0; i--) {
+      if (_lists[i].runs.isNotEmpty) {
+        last = i;
+        break;
+      }
+    }
+    if (first < 0 || last < 0) {
+      selection = null;
+      notifyListeners();
+      return;
+    }
+    final List<PdfTextRun> end = _lists[last].runs;
+    selection = PdfTextSelection(
+      anchor: PdfTextHit(page: first, run: 0, offset: 0),
+      extent: PdfTextHit(
+        page: last,
+        run: end.length - 1,
+        offset: end.last.text.length,
+      ),
+    );
+    notifyListeners();
+  }
+
+  /// Select every text run on [index].
+  void selectPage(int index) {
+    if (index < 0 || index >= _lists.length) {
+      return;
+    }
+    final List<PdfTextRun> runs = _lists[index].runs;
+    if (runs.isEmpty) {
+      return;
+    }
+    selection = PdfTextSelection(
+      anchor: PdfTextHit(page: index, run: 0, offset: 0),
+      extent: PdfTextHit(
+        page: index,
+        run: runs.length - 1,
+        offset: runs.last.text.length,
+      ),
+    );
+    goToPage(index);
   }
 
   /// selectRun API.
@@ -306,7 +409,10 @@ class PdfViewerController extends ChangeNotifier {
   void setSelection(PdfTextSelection? range) {
     selection = range;
     if (range != null) {
-      pageIndex = range.normalized.extent.page.clamp(0, mathMax(0, pageCount - 1));
+      pageIndex = range.normalized.extent.page.clamp(
+        0,
+        mathMax(0, pageCount - 1),
+      );
     }
     notifyListeners();
   }
@@ -324,9 +430,32 @@ class PdfViewerController extends ChangeNotifier {
 
   /// followLink API.
   void followLink(PdfLinkAction action) {
-    if (action.pageIndex != null) {
-      goToPage(action.pageIndex!);
+    final int? page = action.pageIndex;
+    if (page != null) {
+      goToPage(page, destY: _topFromPdfY(action.destY, page));
     }
+    final String? uri = action.uri;
+    if (uri == null || !launchableUri(uri)) {
+      return;
+    }
+    final void Function(String uri)? host = onOpenUri;
+    if (host != null) {
+      host(uri);
+    } else {
+      openExternalUri(uri);
+    }
+  }
+
+  /// PDF `/XYZ` y is bottom-left. Null when the target is already the page top.
+  double? _topFromPdfY(double? pdfY, int page) {
+    if (pdfY == null || pdfY <= 0 || page < 0 || page >= _lists.length) {
+      return null;
+    }
+    final double height = _lists[page].page.height;
+    if (pdfY >= height - 1) {
+      return 0;
+    }
+    return height - pdfY;
   }
 
   /// stats API.
@@ -349,7 +478,9 @@ class PdfViewerController extends ChangeNotifier {
     if (usable <= 0) {
       return;
     }
-    setScale(usable / file.pageAt(pageIndex).width / PdfPageLayout.pointsToPixels);
+    setScale(
+      usable / file.pageAt(pageIndex).width / PdfPageLayout.pointsToPixels,
+    );
   }
 
   /// Fit the current page to the live canvas width.
@@ -367,9 +498,7 @@ class PdfViewerController extends ChangeNotifier {
     final PdfPageInfo page = file.pageAt(pageIndex);
     final double sx = viewportWidth / page.width;
     final double sy = viewportHeight / page.height;
-    setScale(
-      (sx < sy ? sx : sy) / PdfPageLayout.pointsToPixels,
-    );
+    setScale((sx < sy ? sx : sy) / PdfPageLayout.pointsToPixels);
   }
 
   /// isDirty API.
@@ -411,9 +540,17 @@ class PdfEditorController extends PdfViewerController {
 
   /// highlightSelection API.
   void highlightSelection({int color = 0x66FFE066}) {
+    markSelection('Highlight', color: color);
+  }
+
+  /// Markup the current selection (`Highlight`, `StrikeOut`, `Underline`).
+  void markSelection(String subtype, {int color = 0x66FFE066}) {
     final PdfFile? file = _file;
     final PdfTextSelection? range = selection;
-    if (file == null || range == null || range.isCollapsed || !config.allowsMutation) {
+    if (file == null ||
+        range == null ||
+        range.isCollapsed ||
+        !config.allowsMutation) {
       return;
     }
     if (file.permissions != null && !file.permissions!.canAnnotate) {
@@ -431,7 +568,7 @@ class PdfEditorController extends PdfViewerController {
           item.page,
           PdfAnnot(
             id: 0,
-            subtype: 'Highlight',
+            subtype: subtype,
             rect: PdfRect(
               x: box.left,
               y: box.top,
@@ -541,9 +678,25 @@ class PdfEditorController extends PdfViewerController {
   }
 
   /// rotatePage API.
-  void rotateCurrentPage(int degrees) {
-    _file?.rotatePage(pageIndex, degrees);
+  void rotateCurrentPage(int degrees) => rotatePageAt(pageIndex, degrees);
+
+  /// Rotate [index] by [degrees] and rebuild the display lists.
+  void rotatePageAt(int index, int degrees) {
+    _file?.rotatePage(index, degrees);
     _lists = _file?.displayLists() ?? _lists;
+    notifyListeners();
+  }
+
+  /// Remove a markup annotation, undoable.
+  void deleteAnnot(int page, PdfAnnot annot) {
+    final PdfFile? file = _file;
+    if (file == null || !config.allowsMutation) {
+      return;
+    }
+    if (file.permissions != null && !file.permissions!.canAnnotate) {
+      return;
+    }
+    commands.commit(_PdfRemoveAnnotCommand(file, page, annot));
     notifyListeners();
   }
 
@@ -581,7 +734,10 @@ class PdfEditorController extends PdfViewerController {
   void redactSelection({PdfRedactMode mode = PdfRedactMode.visual}) {
     final PdfFile? file = _file;
     final PdfTextSelection? range = selection;
-    if (file == null || range == null || range.isCollapsed || !config.allowsMutation) {
+    if (file == null ||
+        range == null ||
+        range.isCollapsed ||
+        !config.allowsMutation) {
       return;
     }
     for (final ({int page, Rect rect}) item in range.boxes(_lists)) {
@@ -626,6 +782,27 @@ class PdfEditorController extends PdfViewerController {
       notifyListeners();
     }
   }
+}
+
+class _PdfRemoveAnnotCommand implements OfficeCommand {
+  _PdfRemoveAnnotCommand(this.file, this.page, this.annot);
+
+  final PdfFile file;
+  final int page;
+  final PdfAnnot annot;
+
+  @override
+  void execute() {
+    file.removeAnnot(page, annot.id);
+  }
+
+  @override
+  void undo() {
+    file.addAnnot(page, annot);
+  }
+
+  @override
+  OfficeCommand invert() => this;
 }
 
 class _PdfAnnotCommand implements OfficeCommand {

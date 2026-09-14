@@ -22,7 +22,7 @@ typedef WidgetBuilder = Widget Function(Context context);
 /// Heading recorded for TOC / PDF outlines.
 class PwHeading {
   /// PwHeading API.
-  const PwHeading({
+  PwHeading({
     required this.level,
     required this.title,
     required this.pageNumber,
@@ -38,8 +38,11 @@ class PwHeading {
   /// 1-based page number.
   final int pageNumber;
 
-  /// destY API.
-  final double destY;
+  /// Set once the heading box has a page position.
+  var placed = false;
+
+  /// Top-left page Y, filled when the heading is placed.
+  double destY;
 }
 
 /// Layout / paint environment. Flutter-like, no `dart:ui`.
@@ -172,14 +175,31 @@ class Context {
 
   /// registerHeading API.
   void registerHeading(int level, String title, {double destY = 0}) {
-    headings.add(
-      PwHeading(
-        level: level,
-        title: title,
-        pageNumber: pageNumber,
-        destY: destY,
-      ),
+    final PwHeading heading = PwHeading(
+      level: level,
+      title: title,
+      pageNumber: pageNumber,
+      destY: destY,
     );
+    headings.add(heading);
+    if (title.isNotEmpty) {
+      anchors[title] = heading;
+    }
+  }
+
+  /// Stamp the first unplaced heading named [title] with a top-left [destY].
+  void placeHeading(String title, double destY) {
+    for (final PwHeading heading in headings) {
+      if (heading.title != title ||
+          heading.pageNumber != pageNumber ||
+          heading.placed) {
+        continue;
+      }
+      heading.destY = destY;
+      heading.placed = true;
+      anchors[title] = heading;
+      return;
+    }
   }
 
   /// registerAnchor API.
@@ -193,16 +213,39 @@ class Context {
   }
 
   /// pageOfHeading API.
-  int? pageOfHeading(String title) {
-    final List<PwHeading> source = frozenHeadings.isNotEmpty
-        ? frozenHeadings
-        : headings;
-    for (final PwHeading heading in source) {
+  int? pageOfHeading(String title) => headingNamed(title)?.pageNumber;
+
+  /// Frozen heading from the previous pass, else one recorded this pass.
+  PwHeading? headingNamed(String title) {
+    for (final PwHeading heading in frozenHeadings) {
       if (heading.title == title) {
-        return heading.pageNumber;
+        return heading;
+      }
+    }
+    for (final PwHeading heading in headings) {
+      if (heading.title == title) {
+        return heading;
       }
     }
     return null;
+  }
+
+  /// Headings registered during [child] layout do not yet know their page y.
+  void restampHeadings({
+    required int from,
+    required int pageNumber,
+    required double destY,
+  }) {
+    final int start = from < 0 ? 0 : from;
+    for (int i = start; i < headings.length; i++) {
+      final PwHeading heading = headings[i];
+      headings[i] = PwHeading(
+        level: heading.level,
+        title: heading.title,
+        pageNumber: pageNumber,
+        destY: destY,
+      );
+    }
   }
 }
 
@@ -216,6 +259,9 @@ abstract class PwBox {
 
   /// paint API.
   void paint(Context context, PwOffset offset);
+
+  /// Record heading destinations once page placement is known.
+  void noteDestination(Context context, PwOffset offset) {}
 }
 
 /// Empty box.
@@ -236,6 +282,7 @@ class ProxyBox extends PwBox {
     this.childOffset = PwOffset.zero,
     this.decoration,
     this.onPaint,
+    this.onNote,
   });
 
   /// child API.
@@ -249,6 +296,18 @@ class ProxyBox extends PwBox {
 
   /// Extra paint after the child (links, overlays).
   final void Function(Context context, PwOffset offset)? onPaint;
+
+  /// Called when the page position of this box is known.
+  final void Function(Context context, PwOffset offset)? onNote;
+
+  @override
+  void noteDestination(Context context, PwOffset offset) {
+    onNote?.call(context, offset);
+    child?.noteDestination(
+      context,
+      offset.translate(childOffset.dx, childOffset.dy),
+    );
+  }
 
   @override
   void paint(Context context, PwOffset offset) {
@@ -277,7 +336,10 @@ void _paintDeco(
     return;
   }
   canvas.endText();
-  if (decoration.color != null) {
+  final LinearGradient? gradient = decoration.gradient;
+  if (gradient != null && gradient.colors.length >= 2) {
+    _paintGradient(canvas, offset, size, gradient);
+  } else if (decoration.color != null) {
     if (decoration.shape == BoxShape.circle) {
       canvas.setFillColor(decoration.color!);
       canvas.ellipse(offset.dx, offset.dy, size.width, size.height);
@@ -332,6 +394,55 @@ void _paintDeco(
   side(border.left, offset.dx, offset.dy, offset.dx, b);
 }
 
+void _paintGradient(
+  PdfCanvas canvas,
+  PwOffset offset,
+  PwSize size,
+  LinearGradient gradient,
+) {
+  const int strips = 24;
+  final List<String> colors = gradient.colors;
+  for (int i = 0; i < strips; i++) {
+    final double t0 = i / strips;
+    final double t1 = (i + 1) / strips;
+    final String hex = _sampleGradient(colors, (t0 + t1) / 2);
+    if (gradient.vertical) {
+      final double y = offset.dy + size.height * t0;
+      final double h = size.height * (t1 - t0) + 0.15;
+      canvas.fillRect(offset.dx, y, size.width, h, hex);
+    } else {
+      final double x = offset.dx + size.width * t0;
+      final double w = size.width * (t1 - t0) + 0.15;
+      canvas.fillRect(x, offset.dy, w, size.height, hex);
+    }
+  }
+}
+
+String _sampleGradient(List<String> colors, double t) {
+  final double clamped = t.clamp(0.0, 1.0);
+  final double scaled = clamped * (colors.length - 1);
+  final int i = scaled.floor().clamp(0, colors.length - 2);
+  final double local = scaled - i;
+  return _lerpHex(colors[i], colors[i + 1], local);
+}
+
+String _lerpHex(String a, String b, double t) {
+  int ch(String hex, int shift) {
+    final String clean = hex.replaceAll('#', '');
+    final int n = int.tryParse(
+          clean.length >= 6 ? clean.substring(clean.length - 6) : clean,
+          radix: 16,
+        ) ??
+        0;
+    return (n >> shift) & 0xFF;
+  }
+
+  int mix(int shift) =>
+      (ch(a, shift) + (ch(b, shift) - ch(a, shift)) * t).round().clamp(0, 255);
+  final int rgb = (mix(16) << 16) | (mix(8) << 8) | mix(0);
+  return rgb.toRadixString(16).padLeft(6, '0');
+}
+
 /// Multi-child box with absolute child origins (relative to this box).
 class GroupBox extends PwBox {
   /// GroupBox API.
@@ -352,6 +463,28 @@ class GroupBox extends PwBox {
       box.paint(context, offset.translate(childOffset.dx, childOffset.dy));
     }
   }
+
+  @override
+  void noteDestination(Context context, PwOffset offset) {
+    for (final (PwBox box, PwOffset childOffset) in children) {
+      box.noteDestination(
+        context,
+        offset.translate(childOffset.dx, childOffset.dy),
+      );
+    }
+  }
+}
+
+/// One page-slice of a widget that can flow across [MultiPage].
+class SpanSlice {
+  /// SpanSlice API.
+  const SpanSlice(this.box, this.rest);
+
+  /// Content that fits the given height.
+  final PwBox box;
+
+  /// Remainder for the next page, or null when finished.
+  final Widget? rest;
 }
 
 /// Constraint-layout widget. Subclass and implement [layout] (like RenderBox).
@@ -361,6 +494,31 @@ abstract class Widget {
 
   /// layout API.
   PwBox layout(Context context, BoxConstraints constraints);
+
+  /// Split across pages when [constraints] has a bounded height.
+  ///
+  /// Return null to stay atomic (the default). [Table] overrides this so a
+  /// long table continues on the next [MultiPage] sheet, repeating header rows.
+  SpanSlice? layoutSpan(Context context, BoxConstraints constraints) => null;
+
+  /// Stamp paint. The default lays out and paints glyph by glyph.
+  void paintStamp(Context context, double pageW, double pageH) {
+    final PdfCanvas? canvas = context.canvas;
+    if (canvas == null) {
+      return;
+    }
+    final PwBox mark = layout(
+      context,
+      BoxConstraints(maxWidth: pageW * 0.8, maxHeight: 80),
+    );
+    mark.paint(
+      context,
+      PwOffset((pageW - mark.size.width) / 2, (pageH - mark.size.height) / 2),
+    );
+  }
+
+  /// Children [MultiPage] should flow individually (vertical columns).
+  List<Widget>? get flowChildren => null;
 }
 
 /// Overlay drawn on every [MultiPage] sheet (watermark).
@@ -524,9 +682,19 @@ class Page {
       footerH = footerBox.size.height;
     }
     final double bodyH = (contentH - headerH - footerH).clamp(1, contentH);
+    final int headingAt = ctx.headings.length;
     final PwBox body = build(ctx).layout(
       ctx,
-      BoxConstraints(maxWidth: contentW, maxHeight: bodyH),
+      BoxConstraints(
+        minWidth: contentW,
+        maxWidth: contentW,
+        maxHeight: bodyH,
+      ),
+    );
+    ctx.restampHeadings(
+      from: headingAt,
+      pageNumber: ctx.pageNumber,
+      destY: inset.top + headerH,
     );
     sink.emit(
       ctx: ctx,
@@ -615,29 +783,95 @@ class Page {
                 (footerProbe?.size.height ?? 0))
             .clamp(1, contentH);
 
+    void place(PwBox box, int headingAt) {
+      ctx.restampHeadings(
+        from: headingAt,
+        pageNumber: ctx.pageNumber,
+        destY: inset.top + (headerProbe?.size.height ?? 0) + used,
+      );
+      final double x = ctx.textDirection == TextDirection.rtl
+          ? (contentW - box.size.width).clamp(0.0, contentW)
+          : 0.0;
+      current.add((box, PwOffset(x, used)));
+      used += box.size.height;
+    }
+
+    void placeFlow(Widget child) {
+      final List<Widget>? flow = child.flowChildren;
+      if (flow != null) {
+        for (final Widget kid in flow) {
+          placeFlow(kid);
+        }
+        return;
+      }
+      Widget? pending = child;
+      var guard = 0;
+      while (pending != null) {
+        if (guard++ > 400) {
+          break;
+        }
+        if (pending is NewPage) {
+          if (current.isNotEmpty) {
+            flush();
+            headerProbe = layoutChrome(header, contentH * 0.25);
+            footerProbe = layoutChrome(footer, contentH * 0.2);
+          }
+          pending = null;
+          continue;
+        }
+        final double limit = bodyH();
+        final double remaining = (limit - used).clamp(0.0, limit);
+        ctx.pageNumber = sink.nextPageNumber;
+        final int headingAt = ctx.headings.length;
+        final SpanSlice? span = pending.layoutSpan(
+          ctx,
+          BoxConstraints(
+            minWidth: contentW,
+            maxWidth: contentW,
+            maxHeight: remaining < 8 ? limit : remaining,
+          ),
+        );
+        if (span != null) {
+          final bool tooTallForSlot =
+              used > 0.5 && span.box.size.height > remaining + 0.5;
+          if (tooTallForSlot && current.isNotEmpty) {
+            flush();
+            headerProbe = layoutChrome(header, contentH * 0.25);
+            footerProbe = layoutChrome(footer, contentH * 0.2);
+            ctx.pageNumber = sink.nextPageNumber;
+            continue;
+          }
+          place(span.box, headingAt);
+          pending = span.rest;
+          continue;
+        }
+        // Atomic child. package:pdf MultiPage uses width-only constraints so
+        // Align/Center shrink-wrap instead of expanding to leftover height.
+        final PwBox box = pending.layout(
+          ctx,
+          BoxConstraints(minWidth: contentW, maxWidth: contentW),
+        );
+        if (used + box.size.height > limit + 0.5 && current.isNotEmpty) {
+          flush();
+          headerProbe = layoutChrome(header, contentH * 0.25);
+          footerProbe = layoutChrome(footer, contentH * 0.2);
+          ctx.pageNumber = sink.nextPageNumber;
+        }
+        place(box, headingAt);
+        pending = null;
+      }
+    }
+
     for (final Widget child in children) {
       if (child is NewPage) {
         if (current.isNotEmpty) {
           flush();
+          headerProbe = layoutChrome(header, contentH * 0.25);
+          footerProbe = layoutChrome(footer, contentH * 0.2);
         }
         continue;
       }
-      final double limit = bodyH();
-      ctx.pageNumber = sink.nextPageNumber;
-      // package:pdf MultiPage uses width-only constraints so Align/Center
-      // shrink-wrap instead of expanding to the remaining body height.
-      final PwBox box = child.layout(
-        ctx,
-        BoxConstraints(maxWidth: contentW),
-      );
-      if (used + box.size.height > limit + 0.5 && current.isNotEmpty) {
-        flush();
-        headerProbe = layoutChrome(header, contentH * 0.25);
-        footerProbe = layoutChrome(footer, contentH * 0.2);
-        ctx.pageNumber = sink.nextPageNumber;
-      }
-      current.add((box, PwOffset(0, used)));
-      used += box.size.height;
+      placeFlow(child);
     }
     if (current.isNotEmpty || !sink.hasEmitted) {
       flush();
@@ -736,6 +970,8 @@ class Document {
     seed.pagesCount = _measure(seed);
     _freezeHeadings(seed);
     seed.pagesCount = _measure(seed);
+    // Second pass placed headings with the TOC present. Keep those positions.
+    _freezeHeadings(seed);
     final _PageSink paint = _PageSink(paint: true);
     seed.pageNumber = 1;
     seed.headings.clear();
@@ -823,6 +1059,14 @@ class _PageSink {
   }) {
     hasEmitted = true;
     ctx.pageNumber = pages.length + 1;
+    final double bodyTop = inset.top + headerH;
+    header?.noteDestination(ctx, PwOffset(inset.left, inset.top));
+    for (final (PwBox box, PwOffset offset) in body) {
+      box.noteDestination(
+        ctx,
+        PwOffset(inset.left + offset.dx, bodyTop + offset.dy),
+      );
+    }
     if (!paint) {
       pages.add(
         PdfPage(
@@ -845,20 +1089,9 @@ class _PageSink {
     if (watermark != null) {
       canvas.save();
       canvas.rotateAround(format.width / 2, format.height / 2, -32);
-      final PwBox mark = watermark.layout(
-        ctx,
-        BoxConstraints(maxWidth: format.width * 0.8, maxHeight: 80),
-      );
-      mark.paint(
-        ctx,
-        PwOffset(
-          (format.width - mark.size.width) / 2,
-          (format.height - mark.size.height) / 2,
-        ),
-      );
+      watermark.paintStamp(ctx, format.width, format.height);
       canvas.restore();
     }
-    final double bodyTop = inset.top + headerH;
     header?.paint(ctx, PwOffset(inset.left, inset.top));
     canvas.save();
     canvas.clipRect(

@@ -2,6 +2,25 @@
 
 All notable changes to `quds_office_engine` are documented here.
 
+## 0.4.0
+
+PDF is a file you can assemble, not only a file you can open or export.
+
+- `PdfToolbox` grafts a new PDF 1.7 so fonts and images survive merge, extract,
+  split, reorder, remove, reverse, insert, and mix. Range groups are
+  1-based (`1-3`, `8-10`, `15`). One source may contribute several groups.
+- `/Rotate` is a clockwise quarter-turn added to the existing value. It does
+  not rewrite MediaBox. `PdfPageView` maps view space to unrotated crop space.
+- Appearance overlays: Helvetica stamp, page numbers, Bates, and CropBox crop.
+  Stamp is Latin only. A shaped watermark belongs on `pdf_widgets`.
+- `pdf_widgets` watermark is one rotated string (ActualText + visual-order
+  glyphs) so Arabic stays joined.
+- Office slide export can stack two slides on one page (`slidesPerPage: 2`).
+  The default remains one slide per page.
+- `ArabicShaper.nominal` maps presentation forms back to isolated letters.
+- Package documentation covers the full public surface, including honest
+  limits (no OCR, no CMS verify, no certified PDF/A, no content-stream reflow).
+
 ## 0.3.1
 
 - Keep `pdf_widgets` on its own library import

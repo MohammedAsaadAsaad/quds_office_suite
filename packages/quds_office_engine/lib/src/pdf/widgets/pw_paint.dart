@@ -1,8 +1,10 @@
 /// Measure, wrap, and paint helpers for PDF widgets.
 library;
 
+import '../../bidi/arabic_shaping.dart';
 import '../../bidi/line_breaker.dart';
 import '../../fonts/font_metrics.dart';
+import '../../fonts/sfnt_parser.dart';
 import '../../fonts/font_subsetter.dart';
 import '../../pdf/file/text/pdf_std14.dart';
 import '../../pdf/pdf_canvas.dart';
@@ -36,10 +38,7 @@ class PwResolvedStyle {
     final double factor = merged.lineHeightFactor;
     final face = context.faceFor(bold: bold);
     if (face != null) {
-      return FontMetrics(
-            font: face,
-            fontSizePoints: fontSize,
-          ).lineHeight *
+      return FontMetrics(font: face, fontSizePoints: fontSize).lineHeight *
           factor;
     }
     return fontSize * factor;
@@ -49,10 +48,7 @@ class PwResolvedStyle {
   double baseline(Context context) {
     final face = context.faceFor(bold: bold);
     if (face != null) {
-      return FontMetrics(
-        font: face,
-        fontSizePoints: fontSize,
-      ).ascender;
+      return FontMetrics(font: face, fontSizePoints: fontSize).ascender;
     }
     return fontSize * 0.8;
   }
@@ -62,6 +58,7 @@ class PwResolvedStyle {
 double pwMeasureText(Context context, String text, TextStyle? style) {
   final PwResolvedStyle resolved = PwResolvedStyle(context, style);
   context.useText(text);
+  _recordShaped(context, text, resolved.bold);
   if (context.faceFor(bold: resolved.bold) != null) {
     final face = context.faceFor(bold: resolved.bold)!;
     double width = FontMetrics(
@@ -70,7 +67,10 @@ double pwMeasureText(Context context, String text, TextStyle? style) {
     ).measureText(text);
     final double tracking = resolved.merged.letterSpacing ?? 0;
     if (tracking != 0 && text.isNotEmpty) {
-      width += tracking * (text.runes.length - 1);
+      final int gaps = text.runes.where((int cp) => !_cursiveArabic(cp)).length;
+      if (gaps > 1) {
+        width += tracking * (gaps - 1);
+      }
     }
     return width;
   }
@@ -96,23 +96,24 @@ List<BrokenLine> pwWrapText(
 }) {
   final PwResolvedStyle resolved = PwResolvedStyle(context, style);
   context.useText(text);
+  _recordShaped(context, text, resolved.bold);
   final double tracking = resolved.merged.letterSpacing ?? 0;
   final face = context.faceFor(bold: resolved.bold);
-  final int units = text.runes.length;
-  final double perGlyphTrack =
-      units > 1 ? tracking * (units - 1) / units : 0;
+  final int units = text.runes.where((int cp) => !_cursiveArabic(cp)).length;
+  final double perGlyphTrack = units > 1 ? tracking * (units - 1) / units : 0;
   return LineBreaker.breakLines(
     text: text,
     maxWidth: maxWidth < 1 ? 1 : maxWidth,
     widthOf: (int cp) {
+      final double track = _cursiveArabic(cp) ? 0 : perGlyphTrack;
       if (face != null) {
         return FontMetrics(
               font: face,
               fontSizePoints: resolved.fontSize,
             ).characterWidth(cp) +
-            perGlyphTrack;
+            track;
       }
-      return _stdAdvance(cp, resolved.fontSize) + perGlyphTrack;
+      return _stdAdvance(cp, resolved.fontSize) + track;
     },
     glyphIdOf: (int cp) => face?.glyphIdFor(cp) ?? cp,
     baseLevel: context.textDirection == TextDirection.rtl ? 1 : 0,
@@ -139,16 +140,17 @@ void pwPaintLine(
   var startX = origin.dx;
   final double slack = (maxWidth - line.width).clamp(0, double.infinity);
   final bool rtl = context.textDirection == TextDirection.rtl;
-  switch (_resolvedAlign(align, rtl)) {
-    case TextAlign.right:
-      startX += slack;
-    case TextAlign.center:
-      startX += slack / 2;
-    default:
-      break;
+  final TextAlign resolvedAlign = _resolvedAlign(align, rtl);
+  if (resolvedAlign == TextAlign.right) {
+    startX += slack;
+  } else if (resolvedAlign == TextAlign.center) {
+    startX += slack / 2;
   }
   var x = startX;
   for (final ShapedGlyph glyph in line.glyphs) {
+    if (glyph.codePoint == 0 && glyph.advance == 0) {
+      continue;
+    }
     final double extra = glyph.isSpace && line.justificationRatio != 0
         ? line.justificationRatio * 3
         : 0;
@@ -161,7 +163,8 @@ void pwPaintLine(
     canvas.setStrokeColor(resolved.color);
     canvas.setLineWidth(0.6);
     final double x0 = startX;
-    final double x1 = startX + (maxWidth < line.width ? line.width : line.width);
+    final double x1 =
+        startX + (maxWidth < line.width ? line.width : line.width);
     if (deco.contains(TextDecoration.underline)) {
       canvas.moveTo(x0, baseline + 1.4);
       canvas.lineTo(x1, baseline + 1.4);
@@ -173,6 +176,57 @@ void pwPaintLine(
       canvas.stroke();
     }
   }
+}
+
+/// One watermark line: a single text showing so the word rotates together.
+void pwEmitStampLine(
+  Context context,
+  String text,
+  TextStyle? style,
+  double pageW,
+  double pageH,
+) {
+  final PdfCanvas? canvas = context.canvas;
+  if (canvas == null || text.isEmpty) {
+    return;
+  }
+  final PwResolvedStyle resolved = PwResolvedStyle(context, style);
+  context.useText(text);
+  _recordShaped(context, text, resolved.bold);
+  final List<BrokenLine> lines = pwWrapText(context, text, pageW * 0.9, style);
+  if (lines.isEmpty || lines.first.glyphs.isEmpty) {
+    return;
+  }
+  final BrokenLine line = lines.first;
+  final double width = line.width < 1
+      ? text.length * resolved.fontSize * 0.5
+      : line.width;
+  final double x = (pageW - width) / 2;
+  final double y = pageH / 2;
+  final SfntFont? face = context.faceFor(bold: resolved.bold);
+  final ({FontSubset? subset, String fontName}) embed = context.embedFor(
+    bold: resolved.bold,
+  );
+  final List<int> glyphIds = <int>[];
+  if (face != null && embed.subset != null) {
+    for (final ShapedGlyph glyph in line.glyphs) {
+      final int paintCp = _drawableCodePoint(face, glyph.codePoint);
+      glyphIds.add(
+        embed.subset!.unicodeToNewGlyph[paintCp] ??
+            embed.subset!.unicodeToNewGlyph[glyph.codePoint] ??
+            0,
+      );
+    }
+  }
+  canvas.showMarkedLine(
+    x: x,
+    y: y,
+    fontSize: resolved.fontSize,
+    logical: text,
+    color: resolved.color,
+    fontName: face == null ? 'F2' : embed.fontName,
+    glyphIds: glyphIds,
+  );
 }
 
 /// Paints wrapped paragraphs; returns the height used.
@@ -211,14 +265,17 @@ void _paintGlyph(
 ) {
   final face = context.faceFor(bold: style.bold);
   if (face != null) {
-    final ({FontSubset? subset, String fontName}) embed =
-        context.embedFor(bold: style.bold);
+    final ({FontSubset? subset, String fontName}) embed = context.embedFor(
+      bold: style.bold,
+    );
+    final int paintCp = _drawableCodePoint(face, codePoint);
     final int gid = embed.subset != null
-        ? (embed.subset!.unicodeToNewGlyph[codePoint] ?? 0)
-        : face.glyphIdFor(codePoint);
+        ? (embed.subset!.unicodeToNewGlyph[paintCp] ??
+              embed.subset!.unicodeToNewGlyph[codePoint] ??
+              0)
+        : face.glyphIdFor(paintCp);
     // Real bold face: never fake-stroke. Faux bold only without fontBold.
-    final bool fauxBold =
-        style.bold && context.document.fontBold == null;
+    final bool fauxBold = style.bold && context.document.fontBold == null;
     canvas.showGlyph(
       x: x,
       y: baseline,
@@ -242,6 +299,10 @@ void _paintGlyph(
   }
 }
 
+/// [TextAlign.start] / [TextAlign.end] resolved for [rtl].
+TextAlign pwResolvedTextAlign(TextAlign align, bool rtl) =>
+    _resolvedAlign(align, rtl);
+
 TextAlign _resolvedAlign(TextAlign align, bool rtl) {
   return switch (align) {
     TextAlign.start => rtl ? TextAlign.right : TextAlign.left,
@@ -249,6 +310,45 @@ TextAlign _resolvedAlign(TextAlign align, bool rtl) {
     TextAlign.justify => TextAlign.left,
     _ => align,
   };
+}
+
+/// Record joining forms so the subset ToUnicode can paint them.
+///
+/// Measure only sees source letters. Without the presentation forms in the
+/// subset, the viewer drops those glyphs and the letters that remain sit in
+/// the holes.
+void _recordShaped(Context context, String text, bool bold) {
+  final SfntFont? face = context.faceFor(bold: bold);
+  if (face == null || text.isEmpty) {
+    return;
+  }
+  for (final ShapedChar shaped in ArabicShaper.shape(text)) {
+    final int cp = _drawableCodePoint(face, shaped.codePoint);
+    if (face.glyphIdFor(cp) != 0) {
+      context.useText(String.fromCharCode(cp));
+    }
+  }
+}
+
+/// Presentation forms and Arabic letters must not take Latin tracking:
+/// a gap between them breaks the join, so «ملاحظة» looks shattered.
+bool _cursiveArabic(int cp) {
+  return (cp >= 0x0600 && cp <= 0x06FF) ||
+      (cp >= 0x0750 && cp <= 0x077F) ||
+      (cp >= 0x08A0 && cp <= 0x08FF) ||
+      (cp >= 0xFB50 && cp <= 0xFDFF) ||
+      (cp >= 0xFE70 && cp <= 0xFEFF);
+}
+
+int _drawableCodePoint(SfntFont face, int codePoint) {
+  if (face.glyphIdFor(codePoint) != 0) {
+    return codePoint;
+  }
+  final int? nominal = ArabicShaper.nominalOf(codePoint);
+  if (nominal != null && face.glyphIdFor(nominal) != 0) {
+    return nominal;
+  }
+  return codePoint;
 }
 
 double _stdAdvance(int codePoint, double fontSize) {

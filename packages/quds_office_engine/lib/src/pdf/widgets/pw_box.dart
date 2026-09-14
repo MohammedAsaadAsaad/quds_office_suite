@@ -264,7 +264,7 @@ class Container extends Widget {
         (boxSize.width - pad.horizontal).clamp(0, boxSize.width),
         (boxSize.height - pad.vertical).clamp(0, boxSize.height),
       );
-      final PwOffset aligned = (alignment ?? Alignment.topLeft).alongOffset(
+      final PwOffset aligned = (alignment ?? _startTop(context)).alongOffset(
         padBox,
         childSize,
       );
@@ -282,6 +282,13 @@ class Container extends Widget {
       decoration: decoration ?? (color == null ? null : BoxDecoration(color: color)),
     );
   }
+}
+
+/// Start edge of a box: right in RTL, left in LTR.
+Alignment _startTop(Context context) {
+  return context.textDirection == TextDirection.rtl
+      ? Alignment.topRight
+      : Alignment.topLeft;
 }
 
 /// Documented opacity. The writer has no ExtGState yet, so the child paints as-is.

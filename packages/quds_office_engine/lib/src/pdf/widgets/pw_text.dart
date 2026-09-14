@@ -2,6 +2,7 @@
 library;
 
 import '../../bidi/line_breaker.dart';
+import '../../pdf/pdf_canvas.dart';
 import 'pw_core.dart';
 import 'pw_paint.dart';
 import 'pw_style.dart';
@@ -68,6 +69,11 @@ class Text extends Widget {
   final bool softWrap;
 
   @override
+  void paintStamp(Context context, double pageW, double pageH) {
+    pwEmitStampLine(context, text, style, pageW, pageH);
+  }
+
+  @override
   PwBox layout(Context context, BoxConstraints constraints) {
     final Context ctx = textDirection == null
         ? context
@@ -80,14 +86,12 @@ class Text extends Widget {
       final double w = pwMeasureText(ctx, text, style);
       final double h = PwResolvedStyle(ctx, style).lineHeight(ctx);
       return _TextBox(
-        PwSize(
-          constraints.constrainWidth(w),
-          constraints.constrainHeight(h),
-        ),
+        PwSize(constraints.constrainWidth(w), constraints.constrainHeight(h)),
         text,
         style,
-        align,
+        pwResolvedTextAlign(align, ctx.textDirection == TextDirection.rtl),
         maxLines,
+        ctx.textDirection,
       );
     }
     final List<BrokenLine> lines = pwWrapText(
@@ -114,38 +118,53 @@ class Text extends Widget {
       ),
       text,
       style,
-      align,
+      pwResolvedTextAlign(align, ctx.textDirection == TextDirection.rtl),
       maxLines,
+      ctx.textDirection,
     );
   }
 }
 
 class _TextBox extends PwBox {
-  _TextBox(super.size, this.text, this.style, this.align, this.maxLines);
+  _TextBox(
+    super.size,
+    this.text,
+    this.style,
+    this.align,
+    this.maxLines,
+    this.direction,
+  );
 
   final String text;
   final TextStyle? style;
   final TextAlign align;
   final int? maxLines;
 
+  /// Direction from layout. Paint must not fall back to the page direction,
+  /// or an RTL phrase inside an LTR sheet is drawn backwards.
+  final TextDirection direction;
+
   @override
   void paint(Context context, PwOffset offset) {
+    final Context ctx = context.textDirection == direction
+        ? context
+        : context.copyWith(textDirection: direction);
     final List<BrokenLine> lines = pwWrapText(
-      context,
+      ctx,
       text,
       size.width,
       style,
       align: align,
     );
-    final PwResolvedStyle resolved = PwResolvedStyle(context, style);
-    final double lh = resolved.lineHeight(context);
+    final PwResolvedStyle resolved = PwResolvedStyle(ctx, style);
+    final double lh = resolved.lineHeight(ctx);
     final int keep = maxLines == null
         ? lines.length
         : lines.length.clamp(0, maxLines!);
     var y = offset.dy;
     for (int i = 0; i < keep; i++) {
       pwPaintLine(
-        context,
+        ctx,
         lines[i],
         PwOffset(offset.dx, y),
         size.width,
@@ -160,11 +179,7 @@ class _TextBox extends PwBox {
 /// Rich paragraph of [TextSpan] / [WidgetSpan] children.
 class RichText extends Widget {
   /// RichText API.
-  const RichText({
-    required this.text,
-    this.textAlign,
-    this.textDirection,
-  });
+  const RichText({required this.text, this.textAlign, this.textDirection});
 
   /// text API.
   final TextSpan text;
@@ -301,44 +316,64 @@ class Header extends Widget {
     if (label.isNotEmpty) {
       context.registerHeading(level, label);
     }
+    // Margin stays outside the rule. A border on the outer edge sits on the
+    // next paragraph and reads as a strike-through that runs to the margin.
     final EdgeInsets inset =
         margin ??
-        EdgeInsets.only(top: level <= 1 ? 10 : 8, bottom: 6);
-    final EdgeInsets pad = padding ?? EdgeInsets.zero;
-    final EdgeInsets all = EdgeInsets.fromLTRB(
-      inset.left + pad.left,
-      inset.top + pad.top,
-      inset.right + pad.right,
-      inset.bottom + pad.bottom,
-    );
+        EdgeInsets.only(top: level <= 1 ? 10 : 8, bottom: level <= 1 ? 14 : 6);
+    final EdgeInsets pad =
+        padding ?? EdgeInsets.only(bottom: level <= 1 ? 4 : 0);
     final Widget body =
         child ??
         Text(
           text ?? '',
           style: context.theme.headerStyle(level).merge(textStyle),
         );
-    final PwBox box = body.layout(context, constraints.deflate(all));
-    final BoxDecoration? deco = level <= 1
-        ? const BoxDecoration(
-            border: Border(
-              bottom: BorderSide(color: '90A4AE', width: 0.7),
-            ),
-          )
-        : null;
-    final double contentW = box.size.width + all.horizontal;
+    final BoxConstraints inner = constraints.deflate(inset).deflate(pad);
+    final PwBox box = body.layout(context, inner);
+    final bool rule = level <= 1;
     final double wide = constraints.hasBoundedWidth
-        ? (contentW > constraints.maxWidth ? contentW : constraints.maxWidth)
-        : contentW;
+        ? constraints.maxWidth
+        : box.size.width + inset.horizontal + pad.horizontal;
     return ProxyBox(
       PwSize(
         constraints.constrainWidth(wide),
         constraints.constrainHeight(
-          box.size.height + all.vertical + (deco != null ? 4 : 0),
+          box.size.height + inset.vertical + pad.vertical,
         ),
       ),
       child: box,
-      childOffset: PwOffset(all.left, all.top),
-      decoration: deco,
+      childOffset: PwOffset(inset.left + pad.left, inset.top + pad.top),
+      onPaint: rule
+          ? (Context context, PwOffset offset) {
+              final PdfCanvas? canvas = context.canvas;
+              if (canvas == null) {
+                return;
+              }
+              final double y =
+                  offset.dy +
+                  inset.top +
+                  pad.top +
+                  box.size.height +
+                  pad.bottom;
+              final double x0 = offset.dx + inset.left;
+              final double x1 = offset.dx + wide - inset.right;
+              if (x1 <= x0) {
+                return;
+              }
+              canvas.endText();
+              canvas.setStrokeColor('90A4AE');
+              canvas.setLineWidth(0.6);
+              canvas.moveTo(x0, y);
+              canvas.lineTo(x1, y);
+              canvas.stroke();
+            }
+          : null,
+      onNote: label.isEmpty
+          ? null
+          : (Context context, PwOffset offset) {
+              context.placeHeading(label, offset.dy + inset.top);
+            },
     );
   }
 }
@@ -379,10 +414,37 @@ abstract final class LoremText {
   /// generate API.
   static String generate({int words = 50}) {
     const List<String> source = <String>[
-      'lorem', 'ipsum', 'dolor', 'sit', 'amet', 'consectetur', 'adipiscing',
-      'elit', 'sed', 'do', 'eiusmod', 'tempor', 'incididunt', 'ut', 'labore',
-      'et', 'dolore', 'magna', 'aliqua', 'ut', 'enim', 'ad', 'minim', 'veniam',
-      'quis', 'nostrud', 'exercitation', 'ullamco', 'laboris', 'nisi', 'aliquip',
+      'lorem',
+      'ipsum',
+      'dolor',
+      'sit',
+      'amet',
+      'consectetur',
+      'adipiscing',
+      'elit',
+      'sed',
+      'do',
+      'eiusmod',
+      'tempor',
+      'incididunt',
+      'ut',
+      'labore',
+      'et',
+      'dolore',
+      'magna',
+      'aliqua',
+      'ut',
+      'enim',
+      'ad',
+      'minim',
+      'veniam',
+      'quis',
+      'nostrud',
+      'exercitation',
+      'ullamco',
+      'laboris',
+      'nisi',
+      'aliquip',
     ];
     final int count = words < 1 ? 1 : words;
     final StringBuffer buffer = StringBuffer();
@@ -407,9 +469,8 @@ class Lorem extends Widget {
 
   @override
   PwBox layout(Context context, BoxConstraints constraints) {
-    return Paragraph(text: LoremText.generate(words: length)).layout(
-      context,
-      constraints,
-    );
+    return Paragraph(
+      text: LoremText.generate(words: length),
+    ).layout(context, constraints);
   }
 }

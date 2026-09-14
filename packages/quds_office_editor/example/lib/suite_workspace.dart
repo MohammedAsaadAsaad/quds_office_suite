@@ -12,6 +12,8 @@ import 'studio_chrome.dart';
 import 'studio_files.dart';
 import 'studio_find_pane.dart';
 import 'studio_pdf_gallery.dart';
+import 'studio_pdf_gallery_dialog.dart';
+import 'studio_pdf_tools.dart';
 import 'studio_pdf_surface.dart';
 import 'studio_window.dart';
 
@@ -70,6 +72,7 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
   late final PdfEditorController _pdf;
   final TextEditingController _commentReply = TextEditingController();
   final TextEditingController _pdfFind = TextEditingController();
+  Timer? _pdfFindDebounce;
   final TextEditingController _slideNotesEdit = TextEditingController();
   int _notesSlideIndex = -1;
   final VirtualViewport _commentViewport = VirtualViewport();
@@ -119,9 +122,7 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
     _bindHostActions(_slides);
     _slides.onPlayMedia = (PmlShape shape) {
       _toast(
-        _arabic
-            ? 'تشغيل ${shape.mediaName}'
-            : 'Playing ${shape.mediaName}',
+        _arabic ? 'تشغيل ${shape.mediaName}' : 'Playing ${shape.mediaName}',
       );
     };
     _word.addListener(_rebuild);
@@ -178,7 +179,7 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
   };
 
   OfficeTheme get _officeTheme {
-    const String arabicBody = 'Noto Naskh Arabic';
+    const String arabicBody = 'Tajawal';
     return switch (_look) {
       SuiteLook.light => OfficeTheme.light.copyWith(
         focusRing: _accent,
@@ -245,6 +246,7 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
       ..removeListener(_rebuild)
       ..dispose();
     _commentReply.dispose();
+    _pdfFindDebounce?.cancel();
     _pdfFind.dispose();
     _pdfThumbScroll.dispose();
     _slideNotesEdit.dispose();
@@ -315,7 +317,8 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
             _exportPdf,
         const SingleActivator(LogicalKeyboardKey.keyP, meta: true): _exportPdf,
         const SingleActivator(LogicalKeyboardKey.f3): _findNext,
-        const SingleActivator(LogicalKeyboardKey.f3, shift: true): _findPrevious,
+        const SingleActivator(LogicalKeyboardKey.f3, shift: true):
+            _findPrevious,
         const SingleActivator(LogicalKeyboardKey.f7): _showSpelling,
         const SingleActivator(LogicalKeyboardKey.keyB, control: true):
             _toggleBold,
@@ -373,10 +376,7 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
                             config: _config,
                           ),
                         ),
-                        SizedBox(
-                          width: 260,
-                          child: _presenterPane(),
-                        ),
+                        SizedBox(width: 260, child: _presenterPane()),
                       ],
                     ),
                   )
@@ -467,7 +467,13 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
 
   void _redo() => _active.redo();
 
-  void _selectAll() => _active.selectAll();
+  void _selectAll() {
+    if (_app == SuiteApp.pdf) {
+      _pdf.selectAll();
+      return;
+    }
+    _active.selectAll();
+  }
 
   void _copy() {
     _active.copyToClipboard();
@@ -912,13 +918,15 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
   String _tabLabel(_RibbonTab tab) => switch (tab) {
     _RibbonTab.file => _arabic ? 'ملف' : 'File',
     _RibbonTab.home => _arabic ? 'الرئيسية' : 'Home',
-    _RibbonTab.insert => _app == SuiteApp.pdf
-        ? (_arabic ? 'نموذج' : 'Form')
-        : (_arabic ? 'إدراج' : 'Insert'),
+    _RibbonTab.insert =>
+      _app == SuiteApp.pdf
+          ? (_arabic ? 'نموذج' : 'Form')
+          : (_arabic ? 'إدراج' : 'Insert'),
     _RibbonTab.layout => _arabic ? 'تخطيط' : 'Layout',
-    _RibbonTab.review => _app == SuiteApp.pdf
-        ? (_arabic ? 'تعليق' : 'Annotate')
-        : (_arabic ? 'مراجعة' : 'Review'),
+    _RibbonTab.review =>
+      _app == SuiteApp.pdf
+          ? (_arabic ? 'تعليق' : 'Annotate')
+          : (_arabic ? 'مراجعة' : 'Review'),
     _RibbonTab.formulas => _arabic ? 'صيغ' : 'Formulas',
     _RibbonTab.data => _arabic ? 'بيانات' : 'Data',
     _RibbonTab.design =>
@@ -951,7 +959,8 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
               tooltip: _arabic ? 'تراجع' : 'Undo',
               accent: _accent,
               foreground: _officeTheme.chromeText,
-              onPressed: _canMutate &&
+              onPressed:
+                  _canMutate &&
                       (_app == SuiteApp.pdf ? _pdf.canUndo : _active.canUndo)
                   ? (_app == SuiteApp.pdf ? _pdf.undo : _active.undo)
                   : null,
@@ -961,12 +970,13 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
               tooltip: _arabic ? 'إعادة' : 'Redo',
               accent: _accent,
               foreground: _officeTheme.chromeText,
-              onPressed: _canMutate &&
+              onPressed:
+                  _canMutate &&
                       (_app == SuiteApp.pdf ? _pdf.canRedo : _active.canRedo)
                   ? (_app == SuiteApp.pdf ? _pdf.redo : _active.redo)
                   : null,
             ),
-              StudioIconCmd(
+            StudioIconCmd(
               icon: Icons.translate,
               tooltip: _arabic ? 'English' : 'العربية',
               accent: _accent,
@@ -1056,6 +1066,11 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
             _arabic ? 'معرض PDF' : 'PDF gallery',
             _opening || _isSaving ? null : _openPdfSampleGallery,
           ),
+          _cmd(
+            Icons.build_circle_outlined,
+            _arabic ? 'أدوات PDF' : 'PDF tools',
+            _opening || _isSaving ? null : _openPdfTools,
+          ),
         ],
       ),
     ];
@@ -1065,13 +1080,41 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
     final StudioPdfSample? sample = await showDialog<StudioPdfSample>(
       context: context,
       builder: (BuildContext context) {
-        return _PdfSampleGalleryDialog(arabic: _arabic, accent: _accent);
+        return PdfSampleGalleryDialog(arabic: _arabic, accent: _accent);
       },
     );
     if (sample == null || !mounted) {
       return;
     }
     await _loadPdfSample(sample);
+  }
+
+  Future<void> _openPdfTools() async {
+    final Uint8List current = _pdf.saveBytes();
+    final PdfToolOutput? output = await showDialog<PdfToolOutput>(
+      context: context,
+      builder: (BuildContext context) {
+        return PdfToolsLabDialog(
+          arabic: _arabic,
+          accent: _accent,
+          currentBytes: current.isEmpty ? null : current,
+          currentName: _pdfName,
+        );
+      },
+    );
+    if (output == null || !mounted) {
+      return;
+    }
+    _switchApp(SuiteApp.pdf);
+    await _pdf.loadBytesAsync(output.bytes);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _pdfPath = null;
+      _pdfName = output.name;
+      _pdfThumbSyncedPage = -1;
+    });
   }
 
   Future<void> _loadPdfSample(StudioPdfSample sample) async {
@@ -1095,14 +1138,12 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
       await SampleLibrary.preload();
       final OfficeFontSet fontSet = sample.id == 'office-tahreer-word'
           ? StudioFiles.exportFontSetForWord(SampleLibrary.wordBriefing())
-          : StudioFiles.exportFontSetCovering(
-              <String>[
-                sample.titleEn,
-                sample.blurbEn,
-                'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz',
-                'حي التحرير التعافي',
-              ],
-            );
+          : StudioFiles.exportFontSetCovering(<String>[
+              sample.titleEn,
+              sample.blurbEn,
+              'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz',
+              'حي التحرير التعافي',
+            ]);
       final SfntFont? font = fontSet.primary ?? StudioFiles.latinExportFont();
       final Uint8List bytes = await Future<Uint8List>(() {
         return sample.build(font: font, fonts: fontSet);
@@ -1132,9 +1173,7 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              _arabic
-                  ? 'تعذّر إنشاء العينة: $error'
-                  : 'Sample failed: $error',
+              _arabic ? 'تعذّر إنشاء العينة: $error' : 'Sample failed: $error',
             ),
           ),
         );
@@ -1175,6 +1214,15 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
   }
 
   Widget _pdfFindBar(bool dark) {
+    final int total = _pdf.findMarks.length;
+    final int current = total == 0 || _pdf.findIndex < 0
+        ? 0
+        : _pdf.findIndex + 1;
+    final String status = _pdfFind.text.isEmpty
+        ? ''
+        : total == 0
+        ? (_arabic ? 'لا نتائج' : 'No matches')
+        : (_arabic ? '$current من $total' : '$current of $total');
     return Material(
       elevation: 4,
       color: dark ? const Color(0xFF2A2A2A) : Colors.white,
@@ -1190,23 +1238,59 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
                   hintText: _arabic ? 'بحث في PDF' : 'Find in PDF',
                   border: const OutlineInputBorder(),
                 ),
-                onSubmitted: (String query) {
-                  _pdf.find(query);
-                },
+                onChanged: _schedulePdfFind,
+                onSubmitted: (_) => _pdfFindNext(),
               ),
             ),
+            if (status.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Text(status),
+              ),
             IconButton(
-              onPressed: () => _pdf.find(_pdfFind.text),
-              icon: const Icon(Icons.search),
+              tooltip: _arabic ? 'السابق' : 'Previous',
+              onPressed: total == 0 ? null : _pdfFindPrevious,
+              icon: const Icon(Icons.keyboard_arrow_up),
             ),
             IconButton(
-              onPressed: _closeFind,
-              icon: const Icon(Icons.close),
+              tooltip: _arabic ? 'التالي' : 'Next',
+              onPressed: total == 0 ? null : _pdfFindNext,
+              icon: const Icon(Icons.keyboard_arrow_down),
             ),
+            IconButton(onPressed: _closeFind, icon: const Icon(Icons.close)),
           ],
         ),
       ),
     );
+  }
+
+  void _schedulePdfFind(String query) {
+    _pdfFindDebounce?.cancel();
+    _pdfFindDebounce = Timer(const Duration(milliseconds: 160), () {
+      if (!mounted) {
+        return;
+      }
+      _pdf.find(query);
+      setState(() {});
+    });
+  }
+
+  void _pdfFindNext() {
+    if (_pdf.findMarks.isEmpty) {
+      _pdf.find(_pdfFind.text);
+    } else {
+      _pdf.findNext();
+    }
+    setState(() {});
+  }
+
+  void _pdfFindPrevious() {
+    if (_pdf.findMarks.isEmpty) {
+      _pdf.find(_pdfFind.text);
+    } else {
+      _pdf.findPrevious();
+    }
+    setState(() {});
   }
 
   List<StudioRibbonGroup> _pdfAnnotate() {
@@ -2427,21 +2511,13 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
       StudioRibbonGroup(
         title: _arabic ? 'تحرير المستند' : 'Proofing',
         children: <Widget>[
-          _cmd(
-            Icons.search,
-            _arabic ? 'بحث' : 'Find',
-            _openFind,
-          ),
+          _cmd(Icons.search, _arabic ? 'بحث' : 'Find', _openFind),
           _cmd(
             Icons.find_replace,
             _arabic ? 'استبدال' : 'Replace',
             _canMutate ? _openReplace : null,
           ),
-          _cmd(
-            Icons.spellcheck,
-            _arabic ? 'تدقيق' : 'Spelling',
-            _showSpelling,
-          ),
+          _cmd(Icons.spellcheck, _arabic ? 'تدقيق' : 'Spelling', _showSpelling),
           _cmd(
             Icons.info_outline,
             _arabic ? 'خصائص' : 'Properties',
@@ -2484,16 +2560,12 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
           _cmd(
             Icons.done_outline,
             _arabic ? 'قبول الكل' : 'Accept all',
-            _word.document.revisions.isEmpty
-                ? null
-                : _word.acceptAllRevisions,
+            _word.document.revisions.isEmpty ? null : _word.acceptAllRevisions,
           ),
           _cmd(
             Icons.remove_circle_outline,
             _arabic ? 'رفض الكل' : 'Reject all',
-            _word.document.revisions.isEmpty
-                ? null
-                : _word.rejectAllRevisions,
+            _word.document.revisions.isEmpty ? null : _word.rejectAllRevisions,
           ),
           _cmd(
             Icons.sync,
@@ -3108,16 +3180,12 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
           _cmd(
             Icons.align_horizontal_left,
             _arabic ? 'يسار' : 'Left',
-            _canMutate
-                ? () => _slides.alignShapes(PmlAlignAxis.left)
-                : null,
+            _canMutate ? () => _slides.alignShapes(PmlAlignAxis.left) : null,
           ),
           _cmd(
             Icons.align_horizontal_center,
             _arabic ? 'وسط' : 'Center',
-            _canMutate
-                ? () => _slides.alignShapes(PmlAlignAxis.center)
-                : null,
+            _canMutate ? () => _slides.alignShapes(PmlAlignAxis.center) : null,
           ),
           _cmd(
             Icons.align_vertical_top,
@@ -3944,9 +4012,8 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
     ];
   }
 
-  double get _viewScale => _app == SuiteApp.pdf
-      ? _pdf.viewport.scale
-      : _active.viewport.scale;
+  double get _viewScale =>
+      _app == SuiteApp.pdf ? _pdf.viewport.scale : _active.viewport.scale;
 
   int get _zoomPercent => (_viewScale * 100).round();
 
@@ -4074,21 +4141,26 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
         : _pdfOpenErrorFromText('$error');
     if (kind != null) {
       return switch (kind) {
-        PdfOpenError.encrypted || PdfOpenError.wrongPassword => _arabic
-            ? 'الملف محمي بكلمة مرور.'
-            : 'This PDF is password-protected.',
-        PdfOpenError.unsupportedFilter => _arabic
-            ? 'المحرّك لا يفكّ هذا النوع من ضغط مجاري PDF بعد.'
-            : 'This PDF uses a stream filter that is not decoded yet.',
-        PdfOpenError.unsupportedHandler => _arabic
-            ? 'معالج حماية PDF غير مدعوم.'
-            : 'This PDF uses an unsupported security handler.',
-        PdfOpenError.limit => _arabic
-            ? 'الملف أكبر من حد الأمان.'
-            : 'The file exceeds the safety limit.',
-        PdfOpenError.badHeader || PdfOpenError.badXref => _arabic
-            ? 'ملف PDF تالف أو جدول الإسناد غير صالح.'
-            : 'The PDF is damaged or its cross-reference table is invalid.',
+        PdfOpenError.encrypted || PdfOpenError.wrongPassword =>
+          _arabic
+              ? 'الملف محمي بكلمة مرور.'
+              : 'This PDF is password-protected.',
+        PdfOpenError.unsupportedFilter =>
+          _arabic
+              ? 'المحرّك لا يفكّ هذا النوع من ضغط مجاري PDF بعد.'
+              : 'This PDF uses a stream filter that is not decoded yet.',
+        PdfOpenError.unsupportedHandler =>
+          _arabic
+              ? 'معالج حماية PDF غير مدعوم.'
+              : 'This PDF uses an unsupported security handler.',
+        PdfOpenError.limit =>
+          _arabic
+              ? 'الملف أكبر من حد الأمان.'
+              : 'The file exceeds the safety limit.',
+        PdfOpenError.badHeader || PdfOpenError.badXref =>
+          _arabic
+              ? 'ملف PDF تالف أو جدول الإسناد غير صالح.'
+              : 'The PDF is damaged or its cross-reference table is invalid.',
       };
     }
     if ('$error'.contains('ZipDeflate') || '$error'.contains('Flate')) {
@@ -4338,12 +4410,12 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
         SuiteApp.powerpoint => 'presentation',
         SuiteApp.pdf => 'document',
       };
-      final SfntFont? font = switch (_app) {
-        SuiteApp.word => StudioFiles.exportFontForWord(
+      final OfficeFontSet fonts = switch (_app) {
+        SuiteApp.word => StudioFiles.exportFontSetForWord(
           _word.document,
           themeFamily: _officeTheme.fontFamily,
         ),
-        SuiteApp.excel => StudioFiles.exportFontCovering(<String>[
+        SuiteApp.excel => StudioFiles.exportFontSetCovering(<String>[
           'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
           for (final SmlWorksheet sheet in _sheet.workbook.sheets) ...<String>[
             sheet.name,
@@ -4353,8 +4425,8 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
               for (final ChartPoint point in drawing.visual.points) point.label,
             ],
           ],
-        ], preferred: _officeTheme.fontFamily),
-        SuiteApp.powerpoint => StudioFiles.exportFontCovering(<String>[
+        ]),
+        SuiteApp.powerpoint => StudioFiles.exportFontSetCovering(<String>[
           for (final PmlSlide slide in _slides.presentation.slides) ...<String>[
             slide.notes,
             for (final PmlShape shape in slide.shapes) ...<String>[
@@ -4365,12 +4437,13 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
                   point.label,
             ],
           ],
-        ], preferred: _officeTheme.fontFamily),
-        SuiteApp.pdf => null,
+        ]),
+        SuiteApp.pdf => const OfficeFontSet(),
       };
       final Uint8List bytes = _active.exportPdf(
         settings: OfficePrintSettings(title: stem),
-        font: font,
+        font: fonts.primary,
+        fonts: fonts.isEmpty ? null : fonts,
       );
       await StudioFiles.save(bytes: bytes, fileName: '$stem.pdf');
     } catch (error) {
@@ -4414,7 +4487,10 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
   void _openReplace() => _active.requestReplace();
 
   void _closeFind() {
-    if (_app != SuiteApp.pdf) {
+    _pdfFindDebounce?.cancel();
+    if (_app == SuiteApp.pdf) {
+      _pdf.find('');
+    } else {
       _active.closeFind();
     }
     setState(() => _findOpen = false);
@@ -4425,6 +4501,10 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
       _openFind();
       return;
     }
+    if (_app == SuiteApp.pdf) {
+      _pdfFindNext();
+      return;
+    }
     _active.findNext();
     setState(() {});
   }
@@ -4432,6 +4512,10 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
   void _findPrevious() {
     if (!_findOpen) {
       _openFind();
+      return;
+    }
+    if (_app == SuiteApp.pdf) {
+      _pdfFindPrevious();
       return;
     }
     _active.findPrevious();
@@ -4461,7 +4545,9 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
 
   Future<void> _showProperties() async {
     final OfficeDocumentProperties props = _active.documentProperties.copy();
-    final TextEditingController title = TextEditingController(text: props.title);
+    final TextEditingController title = TextEditingController(
+      text: props.title,
+    );
     final TextEditingController author = TextEditingController(
       text: props.creator,
     );
@@ -4852,17 +4938,12 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
     if (WordMailMerge.fieldsOf(_word.document).isEmpty) {
       _word.insertText(_arabic ? 'عزيزي «الاسم»،' : 'Dear «Name»,');
     }
-    _word.mergeMail(<String, String>{
-      'Name': 'Mohammed',
-      'الاسم': 'محمد',
-    });
+    _word.mergeMail(<String, String>{'Name': 'Mohammed', 'الاسم': 'محمد'});
   }
 
   void _studioCompareDocument() {
     _word.compareWith(
-      WmlDocument.empty(
-        text: _arabic ? 'نسخة للمقارنة' : 'Comparison copy',
-      ),
+      WmlDocument.empty(text: _arabic ? 'نسخة للمقارنة' : 'Comparison copy'),
     );
   }
 
@@ -6533,12 +6614,7 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
               ),
             },
             if (_findOpen && _app == SuiteApp.pdf)
-              Positioned(
-                top: 8,
-                left: 8,
-                right: 8,
-                child: _pdfFindBar(dark),
-              ),
+              Positioned(top: 8, left: 8, right: 8, child: _pdfFindBar(dark)),
             if (_findOpen && _app != SuiteApp.pdf)
               Positioned(
                 top: 0,
@@ -6602,7 +6678,9 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
   Widget _openProgressOverlay(bool dark) {
     final int percent = (_openProgress * 100).round().clamp(0, 100);
     final Color card = dark ? const Color(0xFF1E1E22) : Colors.white;
-    final Color track = dark ? const Color(0xFF3A3A42) : const Color(0xFFE8E8EE);
+    final Color track = dark
+        ? const Color(0xFF3A3A42)
+        : const Color(0xFFE8E8EE);
     return ColoredBox(
       color: const Color(0xB3000000),
       child: Center(
@@ -6622,10 +6700,7 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
                   height: 6,
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
-                      colors: <Color>[
-                        _accent,
-                        _accent.withValues(alpha: 0.55),
-                      ],
+                      colors: <Color>[_accent, _accent.withValues(alpha: 0.55)],
                     ),
                   ),
                 ),
@@ -6667,7 +6742,9 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
                         style: TextStyle(
                           fontSize: 12,
                           height: 1.35,
-                          color: _officeTheme.chromeText.withValues(alpha: 0.65),
+                          color: _officeTheme.chromeText.withValues(
+                            alpha: 0.65,
+                          ),
                         ),
                       ),
                       const SizedBox(height: 20),
@@ -7711,9 +7788,7 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
                 IconButton(
                   onPressed: _slides.pausePresenter,
                   icon: Icon(
-                    _slides.presenterPaused
-                        ? Icons.play_arrow
-                        : Icons.pause,
+                    _slides.presenterPaused ? Icons.play_arrow : Icons.pause,
                     color: Colors.white,
                     size: 20,
                   ),
@@ -8006,8 +8081,7 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
 
   Widget _pdfNav() {
     final PdfOutlineNode? outline = _pdf.file?.outline;
-    final bool hasOutline =
-        outline != null && outline.children.isNotEmpty;
+    final bool hasOutline = outline != null && outline.children.isNotEmpty;
     final int tab = hasOutline ? _pdfSideTab.clamp(0, 1) : 0;
     if (!hasOutline && _pdfSideTab != 0) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -8020,9 +8094,7 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
         Expanded(
-          child: tab == 0
-              ? _pdfThumbsPane()
-              : _pdfOutlinePane(outline!),
+          child: tab == 0 ? _pdfThumbsPane() : _pdfOutlinePane(outline!),
         ),
         if (hasOutline) _pdfSideTabBar(tab),
       ],
@@ -8065,7 +8137,7 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
     }
 
     return Material(
-            color: _officeTheme.chromeFill,
+      color: _officeTheme.chromeFill,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         decoration: BoxDecoration(
@@ -8106,17 +8178,15 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
         // ListView.builder may not have built the selected child yet, so
         // estimate offset from page aspect instead of ensureVisible alone.
         const double pad = 12;
-        final double contentW =
-            math.max(80, _pdfThumbScroll.position.viewportDimension > 0
-                ? 268 - pad * 2
-                : 244);
+        final double contentW = math.max(
+          80,
+          _pdfThumbScroll.position.viewportDimension > 0 ? 268 - pad * 2 : 244,
+        );
         var y = 4.0;
         for (int i = 0; i < current && i < lists.length; i++) {
           final PdfDisplayList list = lists[i];
-          final double pageW =
-              list.page.width <= 0 ? 595 : list.page.width;
-          final double pageH =
-              list.page.height <= 0 ? 842 : list.page.height;
+          final double pageW = list.page.width <= 0 ? 595 : list.page.width;
+          final double pageH = list.page.height <= 0 ? 842 : list.page.height;
           final double thumbH = contentW * pageH / pageW;
           y += thumbH + 6 + 16 + 12; // thumb + gap + label + padding
         }
@@ -8165,8 +8235,9 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 11,
-                          fontWeight:
-                              selected ? FontWeight.w700 : FontWeight.w500,
+                          fontWeight: selected
+                              ? FontWeight.w700
+                              : FontWeight.w500,
                           color: selected
                               ? _accent
                               : _officeTheme.chromeText.withValues(alpha: 0.7),
@@ -8187,10 +8258,7 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        StudioPaneTitle(
-          text: _arabic ? 'المخطط' : 'Outline',
-          accent: _accent,
-        ),
+        StudioPaneTitle(text: _arabic ? 'المخطط' : 'Outline', accent: _accent),
         Expanded(
           child: ListView(
             padding: const EdgeInsets.fromLTRB(4, 4, 8, 16),
@@ -8267,11 +8335,10 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
                             iconSize: 18,
                             onPressed: toggleExpand,
                             icon: Icon(
-                              open
-                                  ? Icons.expand_more
-                                  : Icons.chevron_right,
-                              color: _officeTheme.chromeText
-                                  .withValues(alpha: 0.55),
+                              open ? Icons.expand_more : Icons.chevron_right,
+                              color: _officeTheme.chromeText.withValues(
+                                alpha: 0.55,
+                              ),
                             ),
                           )
                         : const SizedBox.shrink(),
@@ -8285,8 +8352,9 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: depth == 0 ? 13 : 12,
-                        fontWeight:
-                            depth == 0 ? FontWeight.w700 : FontWeight.w500,
+                        fontWeight: depth == 0
+                            ? FontWeight.w700
+                            : FontWeight.w500,
                         color: _officeTheme.chromeText,
                       ),
                     ),
@@ -8298,7 +8366,9 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
                         '${page + 1}',
                         style: TextStyle(
                           fontSize: 11,
-                          color: _officeTheme.chromeText.withValues(alpha: 0.45),
+                          color: _officeTheme.chromeText.withValues(
+                            alpha: 0.45,
+                          ),
                         ),
                       ),
                     ),
@@ -8645,261 +8715,4 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
   }
 
   int get _wordCount => _word.documentStats.words;
-}
-
-/// Modal picker for experimental PDF samples.
-class _PdfSampleGalleryDialog extends StatelessWidget {
-  const _PdfSampleGalleryDialog({
-    required this.arabic,
-    required this.accent,
-  });
-
-  final bool arabic;
-  final Color accent;
-
-  @override
-  Widget build(BuildContext context) {
-    final Color surface = Theme.of(context).colorScheme.surface;
-    final Color onSurface = Theme.of(context).colorScheme.onSurface;
-    return Dialog(
-      insetPadding: const EdgeInsets.symmetric(horizontal: 28, vertical: 28),
-      backgroundColor: Colors.transparent,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 640, maxHeight: 620),
-        child: Material(
-          color: surface,
-          elevation: 18,
-          shadowColor: Colors.black45,
-          borderRadius: BorderRadius.circular(18),
-          clipBehavior: Clip.antiAlias,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: <Widget>[
-              Container(
-                padding: const EdgeInsets.fromLTRB(22, 18, 12, 16),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: <Color>[
-                      accent,
-                      Color.lerp(accent, const Color(0xFF1A1A1A), 0.35)!,
-                    ],
-                  ),
-                ),
-                child: Row(
-                  children: <Widget>[
-                    Container(
-                      width: 42,
-                      height: 42,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.16),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Icon(
-                        Icons.auto_awesome,
-                        color: Colors.white,
-                        size: 22,
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          Text(
-                            arabic ? 'معرض عينات PDF' : 'PDF sample gallery',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 18,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 0.2,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            arabic
-                                ? 'أوفيس ← PDF  ·  محرك PDF  ·  pdf_widgets'
-                                : 'Office → PDF  ·  PDF engine  ·  pdf_widgets',
-                            style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.85),
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    IconButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      icon: const Icon(Icons.close, color: Colors.white),
-                      tooltip: arabic ? 'إغلاق' : 'Close',
-                    ),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: ListView(
-                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
-                  children: <Widget>[
-                    Text(
-                      arabic
-                          ? 'اختر عينة ليُنشئها البرنامج ويعرضها فوراً (مع ملف مؤقت).'
-                          : 'Choose a sample to generate and open instantly (writes a temp file).',
-                      style: TextStyle(
-                        fontSize: 12.5,
-                        height: 1.4,
-                        color: onSurface.withValues(alpha: 0.65),
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    for (final StudioPdfSampleKind kind
-                        in StudioPdfSampleKind.values) ...<Widget>[
-                      _gallerySectionHeader(
-                        kind: kind,
-                        arabic: arabic,
-                        accent: accent,
-                        onSurface: onSurface,
-                      ),
-                      const SizedBox(height: 8),
-                      for (final StudioPdfSample sample
-                          in StudioPdfGallery.all.where(
-                        (StudioPdfSample s) => s.kind == kind,
-                      ))
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: _gallerySampleCard(
-                            sample: sample,
-                            kind: kind,
-                            arabic: arabic,
-                            accent: accent,
-                            onSurface: onSurface,
-                            onTap: () => Navigator.of(context).pop(sample),
-                          ),
-                        ),
-                      const SizedBox(height: 8),
-                    ],
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _gallerySectionHeader({
-    required StudioPdfSampleKind kind,
-    required bool arabic,
-    required Color accent,
-    required Color onSurface,
-  }) {
-    return Row(
-      children: <Widget>[
-        Container(
-          width: 4,
-          height: 18,
-          decoration: BoxDecoration(
-            color: accent,
-            borderRadius: BorderRadius.circular(4),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Text(
-          StudioPdfGallery.kindTitle(kind, arabic),
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w800,
-            color: accent,
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(
-            StudioPdfGallery.kindBlurb(kind, arabic),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 11,
-              color: onSurface.withValues(alpha: 0.45),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _gallerySampleCard({
-    required StudioPdfSample sample,
-    required StudioPdfSampleKind kind,
-    required bool arabic,
-    required Color accent,
-    required Color onSurface,
-    required VoidCallback onTap,
-  }) {
-    final IconData icon = switch (kind) {
-      StudioPdfSampleKind.officeToPdf => Icons.apps_rounded,
-      StudioPdfSampleKind.pdfEngine => Icons.picture_as_pdf_rounded,
-      StudioPdfSampleKind.pdfWidgets => Icons.widgets_rounded,
-    };
-    return Material(
-      color: accent.withValues(alpha: 0.04),
-      borderRadius: BorderRadius.circular(12),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(12, 12, 14, 12),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: accent.withValues(alpha: 0.12)),
-          ),
-          child: Row(
-            children: <Widget>[
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: accent.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(icon, color: accent, size: 20),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      sample.title(arabic),
-                      style: TextStyle(
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.w700,
-                        color: onSurface,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      sample.blurb(arabic),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 11.5,
-                        height: 1.3,
-                        color: onSurface.withValues(alpha: 0.6),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Icon(
-                Icons.chevron_right_rounded,
-                color: onSurface.withValues(alpha: 0.35),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 }

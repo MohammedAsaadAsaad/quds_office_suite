@@ -22,6 +22,7 @@ import '../word/model/word_link.dart';
 import '../word/model/word_toc.dart';
 import '../word/properties/wml_properties.dart';
 import '../word/serial/word_deserializer.dart';
+import 'file/text/pdf_std14.dart';
 import 'office_pdf_visuals.dart';
 import 'pdf_canvas.dart';
 import 'pdf_document.dart';
@@ -130,11 +131,7 @@ abstract final class OfficePdfExport {
     int? pageTo,
   }) {
     final OfficeFontSet set = fonts ?? OfficeFontSet.single(font);
-    final LaidOutDocument laid = _layoutWord(
-      document,
-      set,
-      laidOut,
-    );
+    final LaidOutDocument laid = _layoutWord(document, set, laidOut);
     final Set<int> cps = <int>{};
     _collectWordCodepoints(laid, cps);
     final _FontPack pack = _FontPack.build(set, cps);
@@ -227,15 +224,16 @@ abstract final class OfficePdfExport {
     final _PdfImageBank images = _PdfImageBank();
     var printed = 0;
     final int from = sheetFrom.clamp(1, math.max(1, book.sheets.length));
-    final int to = (sheetTo ?? book.sheets.length).clamp(from, book.sheets.length);
+    final int to = (sheetTo ?? book.sheets.length).clamp(
+      from,
+      book.sheets.length,
+    );
     for (int i = from - 1; i < to; i++) {
       final SmlWorksheet sheet = book.sheets[i];
       final int before = pdf.pages.length;
       printed += _printSheet(pdf, book, sheet, pack, options, images);
       if (pdf.pages.length > before) {
-        pdf.addOutline(
-          PdfOutlineItem(title: sheet.name, pageIndex: before),
-        );
+        pdf.addOutline(PdfOutlineItem(title: sheet.name, pageIndex: before));
       }
     }
     if (printed == 0) {
@@ -250,7 +248,7 @@ abstract final class OfficePdfExport {
     return pdf.save(faces: pack.faces, options: saveOptions);
   }
 
-  /// presentation API.
+  /// One landscape page per slide, or two slides stacked on one A4 page.
   static Uint8List presentation(
     PmlPresentation deck, {
     SfntFont? font,
@@ -258,6 +256,7 @@ abstract final class OfficePdfExport {
     PdfSaveOptions saveOptions = const PdfSaveOptions(),
     String title = 'Quds Office',
     PdfSlideExportMode mode = PdfSlideExportMode.slides,
+    int slidesPerPage = 1,
     int slideFrom = 1,
     int? slideTo,
   }) {
@@ -265,8 +264,12 @@ abstract final class OfficePdfExport {
     final double slideW = deck.slideWidth / 12700;
     final double slideH = deck.slideHeight / 12700;
     final bool notes = mode == PdfSlideExportMode.notesPages;
-    final double pageW = notes ? 595.28 : slideW;
-    final double pageH = notes ? 841.89 : slideH;
+    if (slidesPerPage != 1 && slidesPerPage != 2) {
+      throw ArgumentError('slides per page is 1 or 2, not an N-up sheet');
+    }
+    final bool pair = slidesPerPage == 2;
+    final double pageW = notes || pair ? 595.28 : slideW;
+    final double pageH = notes || pair ? 841.89 : slideH;
     final Set<int> cps = <int>{};
     for (final PmlSlide slide in deck.slides) {
       _collectShaped(slide.notes, cps);
@@ -287,8 +290,26 @@ abstract final class OfficePdfExport {
     final PdfDocument pdf = PdfDocument(title: title);
     final _PdfImageBank images = _PdfImageBank();
     final int from = slideFrom.clamp(1, math.max(1, deck.slides.length));
-    final int to =
-        (slideTo ?? deck.slides.length).clamp(from, deck.slides.length);
+    final int to = (slideTo ?? deck.slides.length).clamp(
+      from,
+      deck.slides.length,
+    );
+    if (pair) {
+      return _twoSlidesPerPage(
+        deck: deck,
+        pdf: pdf,
+        pack: pack,
+        images: images,
+        pageW: pageW,
+        pageH: pageH,
+        slideW: slideW,
+        slideH: slideH,
+        from: from,
+        to: to,
+        faces: pack.faces,
+        saveOptions: saveOptions,
+      );
+    }
     for (int i = from - 1; i < to; i++) {
       final PmlSlide slide = deck.slides[i];
       final _PageSink sink = _PageSink(pageW, pageH, pack, images);
@@ -390,6 +411,106 @@ abstract final class OfficePdfExport {
     return pdf.save(faces: pack.faces, options: saveOptions);
   }
 
+  /// Two slides stacked on one A4 page. Not a MediaBox swap and not booklet imposition.
+  static Uint8List _twoSlidesPerPage({
+    required PmlPresentation deck,
+    required PdfDocument pdf,
+    required _FontPack pack,
+    required _PdfImageBank images,
+    required double pageW,
+    required double pageH,
+    required double slideW,
+    required double slideH,
+    required int from,
+    required int to,
+    required List<PdfEmbeddedFace> faces,
+    required PdfSaveOptions saveOptions,
+  }) {
+    const double margin = 28;
+    const double gap = 22;
+    const double caption = 14;
+    final double bandH = (pageH - margin * 2 - gap - caption * 2) / 2;
+    final double bandW = pageW - margin * 2;
+    for (int i = from - 1; i < to; i += 2) {
+      final _PageSink sink = _PageSink(pageW, pageH, pack, images);
+      sink.canvas.fillRect(0, 0, pageW, pageH, 'FFFFFF');
+      final int count = i + 1 < to ? 2 : 1;
+      for (int slot = 0; slot < count; slot++) {
+        final int index = i + slot;
+        final PmlSlide slide = deck.slides[index];
+        final double scale = math.min(bandW / slideW, bandH / slideH);
+        final double drawnW = slideW * scale;
+        final double drawnH = slideH * scale;
+        final double ox = margin + (bandW - drawnW) / 2;
+        final double oy = margin + slot * (bandH + caption + gap);
+        sink.canvas.save();
+        sink.canvas.clipRect(ox, oy, drawnW, drawnH);
+        sink.canvas.translateScale(ox, oy, scale);
+        sink.canvas.fillRect(
+          0,
+          0,
+          slideW,
+          slideH,
+          deck.master.background.isEmpty ? 'FFFFFF' : deck.master.background,
+        );
+        for (final PmlShape shape in deck.master.shapes) {
+          _paintShape(sink, deck, slide, shape);
+        }
+        for (final PmlShape shape in slide.shapes) {
+          _paintShape(sink, deck, slide, shape);
+        }
+        sink.canvas.restore();
+        void linkShapes(Iterable<PmlShape> shapes) {
+          for (final PmlShape shape in shapes) {
+            if (shape.hyperlinkUrl.isEmpty) {
+              continue;
+            }
+            sink.links.add(
+              PdfLinkAnnot(
+                x: ox + shape.transform.xPoints * scale,
+                y: oy + shape.transform.yPoints * scale,
+                width: shape.transform.widthPoints * scale,
+                height: shape.transform.heightPoints * scale,
+                uri: shape.hyperlinkUrl,
+              ),
+            );
+          }
+        }
+
+        linkShapes(deck.master.shapes);
+        linkShapes(slide.shapes);
+        sink.drawText(
+          '${index + 1} / ${deck.slides.length}',
+          ox,
+          oy + drawnH + 3,
+          8,
+          '595959',
+        );
+        pdf.addOutline(
+          PdfOutlineItem(
+            title: _slideOutlineTitle(deck, slide, index),
+            pageIndex: pdf.pages.length,
+          ),
+        );
+      }
+      if (count == 2) {
+        final double ruleY = margin + bandH + caption + gap / 2;
+        sink.canvas.strokeRect(margin, ruleY, bandW, 0.6, 'E2E8F0');
+      }
+      sink.finish(pdf);
+    }
+    if (pdf.pages.isEmpty) {
+      pdf.addPage(
+        PdfPage(
+          width: pageW,
+          height: pageH,
+          content: PdfCanvas(pageW, pageH).toStream(),
+        ),
+      );
+    }
+    return pdf.save(faces: faces, options: saveOptions);
+  }
+
   static LaidOutDocument _layoutWord(
     WmlDocument document,
     OfficeFontSet set,
@@ -399,8 +520,8 @@ abstract final class OfficePdfExport {
     WordToc.refreshEmpty(document);
     WordToc.rebindHeadings(document);
     final WordLayoutEngine engine = WordLayoutEngine(
-      font: set.primary ??
-          (set.embeddable.isEmpty ? null : set.embeddable.first),
+      font:
+          set.primary ?? (set.embeddable.isEmpty ? null : set.embeddable.first),
       fonts: set.isEmpty ? null : set,
     );
     LaidOutDocument laid = laidOut ?? engine.layout(document);
@@ -590,6 +711,10 @@ abstract final class OfficePdfExport {
       }
       for (final LaidOutGlyph g in item.glyphs) {
         cps.add(g.glyph.codePoint);
+        final int? nominal = ArabicShaper.nominalOf(g.glyph.codePoint);
+        if (nominal != null) {
+          cps.add(nominal);
+        }
       }
     }
 
@@ -782,12 +907,15 @@ abstract final class OfficePdfExport {
 
   static void _paintWordLine(_PageSink sink, LaidOutLine line) {
     if (line.listLabel != null && line.isParagraphStart) {
-      final double markerX = line.listMarkerX != 0 ? line.listMarkerX : line.x - 14;
+      final double markerX = line.listMarkerX != 0
+          ? line.listMarkerX
+          : line.x - 14;
       final double baseline = line.glyphs.isNotEmpty
           ? line.glyphs.first.y
           : line.y + line.height * 0.78;
-      final double size =
-          line.glyphs.isNotEmpty ? line.glyphs.first.fontSize : 10;
+      final double size = line.glyphs.isNotEmpty
+          ? line.glyphs.first.fontSize
+          : 10;
       sink.drawText(line.listLabel!.trim(), markerX, baseline, size, '000000');
     }
     if (line.overlayText != null &&
@@ -814,11 +942,7 @@ abstract final class OfficePdfExport {
     if (line.overlayText != null &&
         line.overlayText!.isNotEmpty &&
         line.glyphs.isNotEmpty) {
-      final double pageNumW = _estimateTextWidth(
-        sink,
-        line.overlayText!,
-        10,
-      );
+      final double pageNumW = _estimateTextWidth(sink, line.overlayText!, 10);
       final double pageNumX = WordToc.pageNumberX(
         pageWidth: sink.width,
         marginRight: 72,
@@ -847,10 +971,7 @@ abstract final class OfficePdfExport {
   static double _estimateTextWidth(_PageSink sink, String text, double size) {
     final SfntFont? font = sink.pack.layoutFont;
     if (font != null) {
-      return FontMetrics(
-        font: font,
-        fontSizePoints: size,
-      ).measureText(text);
+      return FontMetrics(font: font, fontSizePoints: size).measureText(text);
     }
     return text.length * size * 0.5;
   }
@@ -1020,8 +1141,14 @@ abstract final class OfficePdfExport {
     final double usableH = pageH - margin * 2 - band - 16;
     var scale = 1.0;
     if (options.fitToPage) {
-      final double needW = colPts.fold<double>(0, (double a, double b) => a + b);
-      final double needH = rowPts.fold<double>(0, (double a, double b) => a + b);
+      final double needW = colPts.fold<double>(
+        0,
+        (double a, double b) => a + b,
+      );
+      final double needH = rowPts.fold<double>(
+        0,
+        (double a, double b) => a + b,
+      );
       if (needW > 0 && needH > 0) {
         scale = math.min(1, math.min(usableW / needW, usableH / needH));
       }
@@ -1047,14 +1174,17 @@ abstract final class OfficePdfExport {
         titleRowsHeight += rowPts[r - minRow];
       }
     }
-    final int dataMinRow =
-        hasTitleRows ? math.max(minRow, titleR1 + 1) : minRow;
+    final int dataMinRow = hasTitleRows
+        ? math.max(minRow, titleR1 + 1)
+        : minRow;
     final List<double> dataRowPts = <double>[
       for (int r = dataMinRow; r <= maxRow; r++) rowPts[r - minRow],
     ];
 
-    final List<({int start, int end})> colBands =
-        _packSheetAxis(colPts, usableW);
+    final List<({int start, int end})> colBands = _packSheetAxis(
+      colPts,
+      usableW,
+    );
     final double headingReserve = options.showHeadings
         ? math.max(12.0, rowPts.isEmpty ? 16.0 : rowPts.first)
         : 0;
@@ -1237,10 +1367,12 @@ abstract final class OfficePdfExport {
           paintRowRange(titleR0, titleR1, bodyY);
           bodyY += titleRowsHeight;
         }
-        final int bandStartAbs =
-            dataRowPts.isEmpty ? minRow + rb.start : dataMinRow + rb.start;
-        final int bandEndAbs =
-            dataRowPts.isEmpty ? minRow + rb.end : dataMinRow + rb.end;
+        final int bandStartAbs = dataRowPts.isEmpty
+            ? minRow + rb.start
+            : dataMinRow + rb.start;
+        final int bandEndAbs = dataRowPts.isEmpty
+            ? minRow + rb.end
+            : dataMinRow + rb.end;
         paintRowRange(bandStartAbs, bandEndAbs, bodyY);
 
         for (final SmlDrawing drawing in sheet.drawings) {
@@ -1305,9 +1437,7 @@ abstract final class OfficePdfExport {
       if (hf.headerRight.isNotEmpty)
         _expandSheetTokens(hf.headerRight, sheetName, page, pages),
     ];
-    return parts.isEmpty
-        ? '$sheetName  -  $page / $pages'
-        : parts.join('   ');
+    return parts.isEmpty ? '$sheetName  -  $page / $pages' : parts.join('   ');
   }
 
   static String _sheetFooterLine(
@@ -1611,10 +1741,6 @@ abstract final class OfficePdfExport {
   ) {
     final SfntFont? layoutFont = sink.pack.layoutFont;
     if (layoutFont != null) {
-      final FontMetrics metrics = FontMetrics(
-        font: layoutFont,
-        fontSizePoints: size,
-      );
       var cy = y;
       for (final String para in text.split('\n')) {
         if (para.isEmpty) {
@@ -1624,8 +1750,8 @@ abstract final class OfficePdfExport {
         final List<BrokenLine> lines = LineBreaker.breakLines(
           text: para,
           maxWidth: maxWidth,
-          widthOf: metrics.characterWidth,
-          glyphIdOf: layoutFont.glyphIdFor,
+          widthOf: (int cp) => sink.pack.widthOf(cp, size),
+          glyphIdOf: sink.pack.glyphIdOf,
         );
         for (final BrokenLine line in lines) {
           if (line.glyphs.isEmpty) {
@@ -1712,11 +1838,58 @@ class _FontPack {
   SfntFont? get layoutFont =>
       faces.isNotEmpty ? faces.first.source : set.primary;
 
+  /// Face that actually covers [codePoint], else the layout face.
+  SfntFont? fontFor(int codePoint) => set.faceFor(codePoint) ?? layoutFont;
+
+  /// Glyph id in the covering face, falling back from a missing presentation
+  /// form to the nominal Arabic letter.
+  int glyphIdOf(int codePoint) {
+    final SfntFont? face = fontFor(codePoint);
+    if (face == null) {
+      return 0;
+    }
+    final int gid = face.glyphIdFor(codePoint);
+    if (gid != 0) {
+      return gid;
+    }
+    final int? nominal = ArabicShaper.nominalOf(codePoint);
+    if (nominal == null) {
+      return 0;
+    }
+    return face.glyphIdFor(nominal);
+  }
+
+  /// Advance in points. Never returns 0 for a letter the covering face has,
+  /// so joining glyphs cannot stack on the previous letter.
+  double widthOf(int codePoint, double size) {
+    final SfntFont? face = fontFor(codePoint);
+    if (face == null || size <= 0) {
+      return size * 0.5;
+    }
+    var cp = codePoint;
+    if (face.glyphIdFor(cp) == 0) {
+      final int? nominal = ArabicShaper.nominalOf(cp);
+      if (nominal != null && face.glyphIdFor(nominal) != 0) {
+        cp = nominal;
+      }
+    }
+    final int gid = face.glyphIdFor(cp);
+    if (gid == 0) {
+      return size * 0.5;
+    }
+    final double width = FontMetrics(
+      font: face,
+      fontSizePoints: size,
+    ).advanceWidth(gid);
+    return width > 0 ? width : size * 0.5;
+  }
+
   /// build API.
   static _FontPack build(OfficeFontSet set, Set<int> cps) {
     final List<SfntFont> candidates = set.embeddable;
-    final SfntFont? metricsFont =
-        candidates.isNotEmpty ? candidates.first : set.primary;
+    final SfntFont? metricsFont = candidates.isNotEmpty
+        ? candidates.first
+        : set.primary;
     final FontMetrics? metrics = metricsFont == null
         ? null
         : FontMetrics(font: metricsFont, fontSizePoints: 11);
@@ -1887,15 +2060,11 @@ class _PageSink {
     }
     final SfntFont? layoutFont = pack.layoutFont;
     if (layoutFont != null && pack.faces.isNotEmpty) {
-      final FontMetrics metrics = FontMetrics(
-        font: layoutFont,
-        fontSizePoints: size,
-      );
       final List<BrokenLine> lines = LineBreaker.breakLines(
         text: text,
         maxWidth: maxWidth ?? 1e9,
-        widthOf: metrics.characterWidth,
-        glyphIdOf: layoutFont.glyphIdFor,
+        widthOf: (int cp) => pack.widthOf(cp, size),
+        glyphIdOf: pack.glyphIdOf,
       );
       var cy = y;
       for (int i = 0; i < lines.length; i++) {
@@ -1956,9 +2125,18 @@ class _PageSink {
     bool italic = false,
     bool bold = false,
   }) {
-    final PdfEmbeddedFace? face = pack.faceForCodePoint(codePoint);
+    final int? nominal = ArabicShaper.nominalOf(codePoint);
+    PdfEmbeddedFace? face = pack.faceForCodePoint(codePoint);
+    var drawable = codePoint;
+    if (face == null && nominal != null) {
+      face = pack.faceForCodePoint(nominal);
+      if (face != null) {
+        drawable = nominal;
+      }
+    }
     if (face != null) {
       final int gid =
+          face.subset.unicodeToNewGlyph[drawable] ??
           face.subset.unicodeToNewGlyph[codePoint] ??
           face.subset.oldToNewGlyph[oldGid] ??
           0;
@@ -1987,7 +2165,7 @@ class _PageSink {
     }
   }
 
-  static bool _isWinAnsi(int cp) => cp >= 0x20 && cp <= 0x7E;
+  static bool _isWinAnsi(int cp) => PdfStd14.winAnsiByte(cp) != null;
 
   static bool _winAnsiOnly(String text) {
     for (final int cp in text.runes) {
@@ -2005,10 +2183,7 @@ class _PageSink {
   double measure(String text, double size) {
     final SfntFont? font = pack.layoutFont;
     if (font != null) {
-      return FontMetrics(
-        font: font,
-        fontSizePoints: size,
-      ).measureText(text);
+      return FontMetrics(font: font, fontSizePoints: size).measureText(text);
     }
     return text.length * size * 0.5;
   }

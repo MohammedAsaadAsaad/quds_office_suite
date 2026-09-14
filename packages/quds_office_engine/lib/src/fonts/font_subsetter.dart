@@ -41,6 +41,9 @@ class FontSubsetter {
     final Map<int, int> unicodeToOld = <int, int>{};
     for (final int cp in codePoints) {
       final int gid = font.glyphIdFor(cp);
+      if (gid == 0) {
+        continue;
+      }
       wanted.add(gid);
       unicodeToOld[cp] = gid;
     }

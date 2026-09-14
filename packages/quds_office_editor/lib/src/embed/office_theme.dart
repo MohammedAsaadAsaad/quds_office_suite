@@ -452,6 +452,27 @@ class OfficeStrings {
     this.wordCount = 'Word count',
     this.pdfViewer = 'PDF viewer',
     this.pdfEditor = 'PDF editor',
+    this.selectPage = 'Select all on page',
+    this.zoomIn = 'Zoom in',
+    this.zoomOut = 'Zoom out',
+    this.actualSize = 'Actual size',
+    this.fitWidth = 'Fit width',
+    this.fitPage = 'Fit page',
+    this.previousPage = 'Previous page',
+    this.nextPage = 'Next page',
+    this.goToDestination = 'Go to destination',
+    this.highlight = 'Highlight',
+    this.strikethrough = 'Strikethrough',
+    this.underline = 'Underline',
+    this.deleteAnnotation = 'Delete annotation',
+    this.rotatePage = 'Rotate page',
+    this.rotatePageLeft = 'Rotate 90° left',
+    this.insertPage = 'Insert blank page',
+    this.deletePage = 'Delete page',
+    this.pdfMenuSelection = 'Selection',
+    this.pdfMenuView = 'View',
+    this.pdfMenuPage = 'Page',
+    this.pdfMenuMarkup = 'Markup',
   });
 
   /// wordEditor API.
@@ -637,6 +658,69 @@ class OfficeStrings {
   /// pdfEditor API.
   final String pdfEditor;
 
+  /// selectPage API.
+  final String selectPage;
+
+  /// zoomIn API.
+  final String zoomIn;
+
+  /// zoomOut API.
+  final String zoomOut;
+
+  /// actualSize API.
+  final String actualSize;
+
+  /// fitWidth API.
+  final String fitWidth;
+
+  /// fitPage API.
+  final String fitPage;
+
+  /// previousPage API.
+  final String previousPage;
+
+  /// nextPage API.
+  final String nextPage;
+
+  /// goToDestination API.
+  final String goToDestination;
+
+  /// highlight API.
+  final String highlight;
+
+  /// strikethrough API.
+  final String strikethrough;
+
+  /// underline API.
+  final String underline;
+
+  /// deleteAnnotation API.
+  final String deleteAnnotation;
+
+  /// rotatePage API.
+  final String rotatePage;
+
+  /// Clockwise is [rotatePage]. This is the other quarter-turn.
+  final String rotatePageLeft;
+
+  /// insertPage API.
+  final String insertPage;
+
+  /// deletePage API.
+  final String deletePage;
+
+  /// pdfMenuSelection API.
+  final String pdfMenuSelection;
+
+  /// pdfMenuView API.
+  final String pdfMenuView;
+
+  /// pdfMenuPage API.
+  final String pdfMenuPage;
+
+  /// pdfMenuMarkup API.
+  final String pdfMenuMarkup;
+
   /// english API.
   static const OfficeStrings english = OfficeStrings(
     wordEditor: 'Word document',
@@ -701,6 +785,27 @@ class OfficeStrings {
     wordCount: 'Word count',
     pdfViewer: 'PDF viewer',
     pdfEditor: 'PDF editor',
+    selectPage: 'Select all on page',
+    zoomIn: 'Zoom in',
+    zoomOut: 'Zoom out',
+    actualSize: 'Actual size',
+    fitWidth: 'Fit width',
+    fitPage: 'Fit page',
+    previousPage: 'Previous page',
+    nextPage: 'Next page',
+    goToDestination: 'Go to destination',
+    highlight: 'Highlight',
+    strikethrough: 'Strikethrough',
+    underline: 'Underline',
+    deleteAnnotation: 'Delete annotation',
+    rotatePage: 'Rotate 90° right',
+    rotatePageLeft: 'Rotate 90° left',
+    insertPage: 'Insert blank page',
+    deletePage: 'Delete page',
+    pdfMenuSelection: 'Selection',
+    pdfMenuView: 'View',
+    pdfMenuPage: 'Page',
+    pdfMenuMarkup: 'Markup',
   );
 
   /// arabic API.
@@ -767,5 +872,26 @@ class OfficeStrings {
     wordCount: 'عدد الكلمات',
     pdfViewer: 'عارض PDF',
     pdfEditor: 'محرر PDF',
+    selectPage: 'تحديد الصفحة',
+    zoomIn: 'تكبير',
+    zoomOut: 'تصغير',
+    actualSize: 'الحجم الفعلي',
+    fitWidth: 'ملاءمة العرض',
+    fitPage: 'ملاءمة الصفحة',
+    previousPage: 'الصفحة السابقة',
+    nextPage: 'الصفحة التالية',
+    goToDestination: 'الانتقال إلى الوجهة',
+    highlight: 'تمييز',
+    strikethrough: 'يتوسطه خط',
+    underline: 'تسطير',
+    deleteAnnotation: 'حذف التعليق',
+    rotatePage: 'تدوير 90° يميناً',
+    rotatePageLeft: 'تدوير 90° يساراً',
+    insertPage: 'إدراج صفحة فارغة',
+    deletePage: 'حذف الصفحة',
+    pdfMenuSelection: 'تحديد',
+    pdfMenuView: 'عرض',
+    pdfMenuPage: 'صفحة',
+    pdfMenuMarkup: 'تمييز',
   );
 }

@@ -10,6 +10,7 @@ import '../crypto/pdf_security.dart';
 import '../interp/pdf_display_list.dart';
 import '../interp/pdf_interpreter.dart';
 import '../io/pdf_page_io.dart';
+import '../tools/pdf_page_graft.dart';
 import 'pdf_annot.dart';
 import 'pdf_extra.dart';
 import 'pdf_form.dart';
@@ -392,13 +393,13 @@ class PdfFile {
     _reindex();
   }
 
-  /// extractPages API.
+  /// extractPages API. Copies page resources; indices may repeat a page.
   Uint8List extractPages(List<int> indices) {
-    final List<PdfExtractedPage> pages = <PdfExtractedPage>[
+    final List<PdfGraftSlot> slots = <PdfGraftSlot>[
       for (final int i in indices)
-        if (i >= 0 && i < _pages.length) PdfPageIo.snapshot(this, i),
+        if (i >= 0 && i < _pages.length) PdfGraftSlot.page(this, i),
     ];
-    return PdfPageIo.writePages(pages);
+    return PdfPageGraft.write(slots);
   }
 
   /// setLayerVisible API.

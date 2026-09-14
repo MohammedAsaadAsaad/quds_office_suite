@@ -244,6 +244,7 @@ abstract class OfficeController extends ChangeNotifier {
   Uint8List exportPdf({
     OfficePrintSettings settings = const OfficePrintSettings(),
     SfntFont? font,
+    OfficeFontSet? fonts,
   });
 
   /// revealFindHit API.
@@ -2387,11 +2388,7 @@ class WordEditorController extends OfficeController {
           selectedTableBand = null;
         },
         (WmlTable t) {
-          _placeCaretInTable(
-            t,
-            0,
-            a.clamp(0, WordTable.columnCount(t) - 1),
-          );
+          _placeCaretInTable(t, 0, a.clamp(0, WordTable.columnCount(t) - 1));
         },
       );
       return;
@@ -4376,7 +4373,9 @@ class WordEditorController extends OfficeController {
   WmlSection get _pageSection => sectionAtCaret;
 
   /// insertSectionBreak API.
-  void insertSectionBreak({WmlSectionBreakKind kind = WmlSectionBreakKind.nextPage}) {
+  void insertSectionBreak({
+    WmlSectionBreakKind kind = WmlSectionBreakKind.nextPage,
+  }) {
     if (!config.allowsMutation || isEditingComment || isEditingHeaderFooter) {
       return;
     }
@@ -5800,7 +5799,8 @@ class WordEditorController extends OfficeController {
       caret.logicalIndex,
       paragraph: paragraph,
       themeFamily: config.theme.fontFamily,
-      paragraphRtl: para?.properties.rightToLeft == true ||
+      paragraphRtl:
+          para?.properties.rightToLeft == true ||
           para?.properties.justification == WmlJustification.right ||
           config.textDirection == TextDirection.rtl,
       contentRight: documentLaidOut.pageSize.width - 72,
@@ -6085,8 +6085,14 @@ class WordEditorController extends OfficeController {
   Uint8List exportPdf({
     OfficePrintSettings settings = const OfficePrintSettings(),
     SfntFont? font,
+    OfficeFontSet? fonts,
   }) {
-    return OfficePrint.word(document, settings: settings, font: font);
+    return OfficePrint.word(
+      document,
+      settings: settings,
+      font: font,
+      fonts: fonts,
+    );
   }
 
   @override
@@ -6327,9 +6333,7 @@ class WordEditorController extends OfficeController {
     if (!config.allowsMutation) {
       return;
     }
-    _insertBlocksAfterCurrent(<WmlBlock>[
-      WordCitations.bibliography(document),
-    ]);
+    _insertBlocksAfterCurrent(<WmlBlock>[WordCitations.bibliography(document)]);
   }
 
   /// markIndexTerm API.
@@ -6477,17 +6481,13 @@ class WordEditorController extends OfficeController {
       start = range.startPara.clamp(0, paras.length - 1);
       end = range.endPara.clamp(0, paras.length - 1);
     }
-    _rulerTargets = <WmlParagraph>[
-      for (int i = start; i <= end; i++) paras[i],
-    ];
+    _rulerTargets = <WmlParagraph>[for (int i = start; i <= end; i++) paras[i]];
     _rulerParaSnap
       ..clear()
       ..addEntries(
         _rulerTargets.map(
-          (WmlParagraph p) => MapEntry<WmlParagraph, WmlParagraphProps>(
-            p,
-            p.properties.copy(),
-          ),
+          (WmlParagraph p) =>
+              MapEntry<WmlParagraph, WmlParagraphProps>(p, p.properties.copy()),
         ),
       );
     _rulerSection = sectionAtCaret;
@@ -6621,9 +6621,7 @@ class WordEditorController extends OfficeController {
   /// selectedRevision API.
   WmlRevision? get selectedRevision {
     final int? index = selectedRevisionIndex;
-    if (index == null ||
-        index < 0 ||
-        index >= document.revisions.length) {
+    if (index == null || index < 0 || index >= document.revisions.length) {
       return document.revisions.isEmpty ? null : document.revisions.first;
     }
     return document.revisions[index];
@@ -6644,8 +6642,7 @@ class WordEditorController extends OfficeController {
       return;
     }
     final int current = selectedRevisionIndex ?? 0;
-    selectedRevisionIndex =
-        (current + delta) % document.revisions.length;
+    selectedRevisionIndex = (current + delta) % document.revisions.length;
     if (selectedRevisionIndex! < 0) {
       selectedRevisionIndex = document.revisions.length - 1;
     }
@@ -8427,9 +8424,7 @@ class SheetEditorController extends OfficeController {
   }
 
   void _applyCellText(SmlCell cell, String text) {
-    if (sheet.protection != null &&
-        sheet.protection!.enabled &&
-        cell.locked) {
+    if (sheet.protection != null && sheet.protection!.enabled && cell.locked) {
       lastValidationError = 'The sheet is protected.';
       return;
     }
@@ -8486,11 +8481,7 @@ class SheetEditorController extends OfficeController {
   @override
   /// applyReplace API.
   int applyReplace(OfficeFindOptions options, {OfficeFindHit? only}) {
-    final int count = OfficeFind.replaceWorkbook(
-      workbook,
-      options,
-      only: only,
-    );
+    final int count = OfficeFind.replaceWorkbook(workbook, options, only: only);
     if (count > 0) {
       recalculateWorkbook();
       notifyListeners();
@@ -8503,8 +8494,14 @@ class SheetEditorController extends OfficeController {
   Uint8List exportPdf({
     OfficePrintSettings settings = const OfficePrintSettings(),
     SfntFont? font,
+    OfficeFontSet? fonts,
   }) {
-    return OfficePrint.workbook(workbook, settings: settings, font: font);
+    return OfficePrint.workbook(
+      workbook,
+      settings: settings,
+      font: font,
+      fonts: fonts,
+    );
   }
 
   @override
@@ -8545,8 +8542,8 @@ class SheetEditorController extends OfficeController {
     if (!config.allowsMutation) {
       return;
     }
-    final SmlAutoFilter filter = sheet.autoFilter ??
-        SmlAutoFilter(range: selection.range);
+    final SmlAutoFilter filter =
+        sheet.autoFilter ?? SmlAutoFilter(range: selection.range);
     sheet.autoFilter = filter;
     if (hide != null) {
       filter.hiddenValues[relativeCol] = hide;
@@ -8617,7 +8614,11 @@ class SheetEditorController extends OfficeController {
   }
 
   /// setCellComment API.
-  void setCellComment(String text, {SmlCellRef? ref, String author = 'Quds Office'}) {
+  void setCellComment(
+    String text, {
+    SmlCellRef? ref,
+    String author = 'Quds Office',
+  }) {
     if (!config.allowsMutation) {
       return;
     }
@@ -8701,9 +8702,7 @@ class SheetEditorController extends OfficeController {
     if (!config.allowsMutation) {
       return;
     }
-    sheet.tables.add(
-      SmlTable(name: name, range: range ?? selection.range),
-    );
+    sheet.tables.add(SmlTable(name: name, range: range ?? selection.range));
     notifyListeners();
   }
 
@@ -9457,7 +9456,8 @@ class SlideEditorController extends OfficeController {
     selectedShapes
       ..clear()
       ..addAll(shapes);
-    _selected = primary ?? (selectedShapes.isEmpty ? null : selectedShapes.last);
+    _selected =
+        primary ?? (selectedShapes.isEmpty ? null : selectedShapes.last);
   }
 
   /// selectShape API.
@@ -10071,10 +10071,8 @@ class SlideEditorController extends OfficeController {
             if (shapes.contains(shape))
               (index: shapes.indexOf(shape), shape: shape),
         ]..sort(
-          (
-            ({int index, PmlShape shape}) a,
-            ({int index, PmlShape shape}) b,
-          ) => a.index.compareTo(b.index),
+          (({int index, PmlShape shape}) a, ({int index, PmlShape shape}) b) =>
+              a.index.compareTo(b.index),
         );
     if (removed.isEmpty) {
       return;
@@ -10400,8 +10398,8 @@ class SlideEditorController extends OfficeController {
     if (!config.allowsMutation) {
       return;
     }
-    final List<PmlShape> items = shapes ??
-        (selectedShapes.isNotEmpty ? selectedShapes : slide.shapes);
+    final List<PmlShape> items =
+        shapes ?? (selectedShapes.isNotEmpty ? selectedShapes : slide.shapes);
     PmlArrange.ungroup(items);
     notifyListeners();
   }
@@ -10612,12 +10610,14 @@ class SlideEditorController extends OfficeController {
   Uint8List exportPdf({
     OfficePrintSettings settings = const OfficePrintSettings(),
     SfntFont? font,
+    OfficeFontSet? fonts,
     PdfSlideExportMode mode = PdfSlideExportMode.slides,
   }) {
     return OfficePrint.presentation(
       presentation,
       settings: settings,
       font: font,
+      fonts: fonts,
       mode: mode,
     );
   }
@@ -10639,7 +10639,11 @@ class SlideEditorController extends OfficeController {
   }
 
   /// setShapeMedia API.
-  void setShapeMedia(PmlShape shape, {String name = 'clip.mp4', List<int>? bytes}) {
+  void setShapeMedia(
+    PmlShape shape, {
+    String name = 'clip.mp4',
+    List<int>? bytes,
+  }) {
     if (!config.allowsMutation) {
       return;
     }

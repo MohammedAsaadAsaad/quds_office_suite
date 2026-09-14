@@ -65,7 +65,9 @@ abstract final class ArabicShaper {
     var logical = 0;
     for (int i = 0; i < cps.length; i++) {
       final int cp = cps[i];
-      if (joins[i] == _Join.transparent) {
+      if (joins[i] == _Join.transparent ||
+          joins[i] == _Join.causing ||
+          cp == 0x200C) {
         out.add(
           ShapedChar(
             codePoint: cp,
@@ -109,6 +111,16 @@ abstract final class ArabicShaper {
             );
             logical += cps[t] > 0xFFFF ? 2 : 1;
           }
+          // The alef is inside the ligature. A zero-advance marker keeps the
+          // line breaker from also painting a second alef beside لا.
+          out.add(
+            ShapedChar(
+              codePoint: 0,
+              form: ArabicJoinForm.isolated,
+              advanceFactor: 0,
+              logicalIndex: logical,
+            ),
+          );
           logical += cps[k] > 0xFFFF ? 2 : 1;
           i = k;
           continue;
@@ -127,6 +139,20 @@ abstract final class ArabicShaper {
     return out;
   }
 
+  /// Nominal letter for an Arabic presentation form, if [cp] is one.
+  ///
+  /// Lam-Alef ligatures (U+FEF5–U+FEFC) have no single nominal and return null.
+  static int? nominalOf(int cp) => _nominal[cp];
+
+  /// Fold presentation forms in [text] back to nominal Arabic.
+  static String foldPresentation(String text) {
+    final StringBuffer out = StringBuffer();
+    for (final int cp in text.runes) {
+      out.writeCharCode(nominalOf(cp) ?? cp);
+    }
+    return out.toString();
+  }
+
   static bool _joinsLeft(List<_Join> joins, int i) {
     int j = i - 1;
     while (j >= 0 && joins[j] == _Join.transparent) {
@@ -135,7 +161,7 @@ abstract final class ArabicShaper {
     if (j < 0) {
       return false;
     }
-    return joins[j] == _Join.dual;
+    return joins[j] == _Join.dual || joins[j] == _Join.causing;
   }
 
   static bool _joinsRight(List<_Join> joins, int i) {
@@ -146,7 +172,9 @@ abstract final class ArabicShaper {
     if (j >= joins.length) {
       return false;
     }
-    return joins[j] == _Join.dual || joins[j] == _Join.right;
+    return joins[j] == _Join.dual ||
+        joins[j] == _Join.right ||
+        joins[j] == _Join.causing;
   }
 
   /// Isolated presentation-form start for Lam-Alef pairs (FEF5, FEF7, FEF9, FEFB).
@@ -179,8 +207,14 @@ abstract final class ArabicShaper {
   }
 
   static _Join _joinType(int cp) {
+    if (cp == 0x200D) {
+      return _Join.causing;
+    }
     if (_transparent(cp)) {
       return _Join.transparent;
+    }
+    if (cp == 0x200C) {
+      return _Join.none;
     }
     if (_rightJoining.contains(cp)) {
       return _Join.right;
@@ -276,6 +310,14 @@ abstract final class ArabicShaper {
     0x0649: <int>[0xFEEF, 0xFEF0, 0xFEEF, 0xFEF0],
     0x064A: <int>[0xFEF1, 0xFEF2, 0xFEF3, 0xFEF4],
   };
+
+  static final Map<int, int> _nominal = <int, int>{
+    for (final MapEntry<int, List<int>> entry in _forms.entries)
+      for (final int form in entry.value) form: entry.key,
+  };
+
+  /// Presentation form → isolated Arabic letter, or [codePoint] if none.
+  static int nominal(int codePoint) => _nominal[codePoint] ?? codePoint;
 }
 
-enum _Join { none, dual, right, transparent }
+enum _Join { none, dual, right, transparent, causing }

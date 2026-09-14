@@ -444,11 +444,27 @@ class Border {
   final BorderSide left;
 }
 
+/// Axis-aligned color blend (painted as strips — no PDF shading object).
+class LinearGradient {
+  /// LinearGradient API.
+  const LinearGradient({
+    required this.colors,
+    this.vertical = true,
+  });
+
+  /// Two or more RRGGBB stops, evenly spaced.
+  final List<String> colors;
+
+  /// Top→bottom when true, left→right when false.
+  final bool vertical;
+}
+
 /// Box decoration (fill + stroke).
 class BoxDecoration {
   /// BoxDecoration API.
   const BoxDecoration({
     this.color,
+    this.gradient,
     this.border,
     this.borderRadius = 0,
     this.shape = BoxShape.rectangle,
@@ -456,6 +472,9 @@ class BoxDecoration {
 
   /// color API.
   final String? color;
+
+  /// gradient API. Painted instead of [color] when set.
+  final LinearGradient? gradient;
 
   /// border API.
   final Border? border;

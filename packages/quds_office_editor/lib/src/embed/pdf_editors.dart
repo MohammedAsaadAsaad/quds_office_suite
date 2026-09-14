@@ -3,6 +3,7 @@ import 'package:flutter/widgets.dart';
 import 'package:quds_office_engine/pdf_file.dart';
 
 import '../editor_pdf/render_pdf_canvas.dart';
+import 'office_context_menu.dart';
 import 'office_theme.dart';
 import 'pdf_controller.dart';
 
@@ -40,6 +41,8 @@ class QudsPdfViewer extends StatefulWidget {
 }
 
 class _QudsPdfViewerState extends State<QudsPdfViewer> {
+  OverlayEntry? _contextMenu;
+
   @override
   void initState() {
     super.initState();
@@ -51,8 +54,101 @@ class _QudsPdfViewerState extends State<QudsPdfViewer> {
 
   @override
   void dispose() {
+    OfficeContextMenu.dismiss(_contextMenu);
     widget.controller.removeListener(_tick);
     super.dispose();
+  }
+
+  void _showContext(PdfContextHit hit) {
+    OfficeContextMenu.dismiss(_contextMenu);
+    _contextMenu = OfficeContextMenu.show(
+      context: context,
+      globalPosition: hit.globalPosition,
+      actions: OfficeContextMenu.pdf(controller: widget.controller, hit: hit),
+      onSelect: (String id) {
+        _contextMenu = null;
+        _runContext(id, hit);
+      },
+    );
+  }
+
+  void _runContext(String id, PdfContextHit hit) {
+    final PdfViewerController c = widget.controller;
+    final Size view = c.viewport.extent;
+    switch (id) {
+      case 'copy':
+        c.copyToClipboard();
+      case 'selectAll':
+        c.selectAll();
+      case 'selectPage':
+        c.selectPage(hit.pageIndex);
+      case 'followLink':
+        final PdfLinkAction? link = hit.link;
+        if (link != null) {
+          c.followLink(link);
+          widget.onFollowLink?.call(link);
+        }
+      case 'zoomIn':
+        c.zoomBy(1.1);
+      case 'zoomOut':
+        c.zoomBy(1 / 1.1);
+      case 'actualSize':
+        c.setScale(1);
+      case 'fitWidth':
+        c.fitWidth(view.width > 0 ? view.width : 720);
+      case 'fitPage':
+        c.fitPage(
+          view.width > 0 ? view.width : 720,
+          view.height > 0 ? view.height : 900,
+        );
+      case 'previousPage':
+        c.goToPage(hit.pageIndex - 1);
+      case 'nextPage':
+        c.goToPage(hit.pageIndex + 1);
+      case 'highlight':
+      case 'strikethrough':
+      case 'underline':
+      case 'deleteAnnot':
+      case 'rotatePage':
+      case 'rotatePageLeft':
+      case 'insertPage':
+      case 'deletePage':
+      case 'undo':
+      case 'redo':
+        _runEdit(id, hit);
+    }
+  }
+
+  void _runEdit(String id, PdfContextHit hit) {
+    final PdfViewerController viewer = widget.controller;
+    if (viewer is! PdfEditorController || !viewer.config.allowsMutation) {
+      return;
+    }
+    switch (id) {
+      case 'highlight':
+        viewer.markSelection('Highlight');
+      case 'strikethrough':
+        viewer.markSelection('StrikeOut', color: 0xCCE53935);
+      case 'underline':
+        viewer.markSelection('Underline', color: 0xCC1565C0);
+      case 'deleteAnnot':
+        final PdfAnnot? annot = hit.annot;
+        if (annot != null) {
+          viewer.deleteAnnot(hit.pageIndex, annot);
+        }
+      case 'rotatePage':
+        viewer.rotatePageAt(hit.pageIndex, 90);
+      case 'rotatePageLeft':
+        viewer.rotatePageAt(hit.pageIndex, -90);
+      case 'insertPage':
+        viewer.insertBlankPage(hit.pageIndex + 1);
+      case 'deletePage':
+        viewer.deletePageAt(hit.pageIndex);
+      case 'undo':
+        viewer.undo();
+      case 'redo':
+        viewer.redo();
+    }
   }
 
   void _tick() {
@@ -80,6 +176,36 @@ class _QudsPdfViewerState extends State<QudsPdfViewer> {
               if (shortcut && event.logicalKey == LogicalKeyboardKey.keyC) {
                 c.copyToClipboard();
                 return KeyEventResult.handled;
+              }
+              if (shortcut && event.logicalKey == LogicalKeyboardKey.keyA) {
+                if (HardwareKeyboard.instance.isShiftPressed) {
+                  c.selectPage(c.pageIndex);
+                } else {
+                  c.selectAll();
+                }
+                return KeyEventResult.handled;
+              }
+              if (shortcut && event.logicalKey == LogicalKeyboardKey.keyZ) {
+                final PdfEditorController? editor = c is PdfEditorController
+                    ? c
+                    : null;
+                if (editor != null && editor.config.allowsMutation) {
+                  if (HardwareKeyboard.instance.isShiftPressed) {
+                    editor.redo();
+                  } else {
+                    editor.undo();
+                  }
+                  return KeyEventResult.handled;
+                }
+              }
+              if (shortcut && event.logicalKey == LogicalKeyboardKey.keyY) {
+                final PdfEditorController? editor = c is PdfEditorController
+                    ? c
+                    : null;
+                if (editor != null && editor.config.allowsMutation) {
+                  editor.redo();
+                  return KeyEventResult.handled;
+                }
               }
               if (shortcut &&
                   (event.logicalKey == LogicalKeyboardKey.equal ||
@@ -110,7 +236,8 @@ class _QudsPdfViewerState extends State<QudsPdfViewer> {
               scale: c.viewport.scale,
               config: c.config,
               selection: c.selection,
-              findHits: c.findHits,
+              findMarks: c.findMarks,
+              findIndex: c.findIndex,
               annots: <List<PdfAnnot>>[
                 if (c.file != null)
                   for (int i = 0; i < c.pageCount; i++) c.file!.annotsOn(i),
@@ -124,10 +251,12 @@ class _QudsPdfViewerState extends State<QudsPdfViewer> {
                 widget.onFollowLink?.call(action);
               },
               onSelectText: c.setSelection,
+              onContextMenu: _showContext,
             ),
           ),
         ),
-        if (widget.statusBarBuilder != null) widget.statusBarBuilder!(context, c),
+        if (widget.statusBarBuilder != null)
+          widget.statusBarBuilder!(context, c),
       ],
     );
   }

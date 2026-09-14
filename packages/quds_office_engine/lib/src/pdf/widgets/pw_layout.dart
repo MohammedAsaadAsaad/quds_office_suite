@@ -69,6 +69,20 @@ class Flex extends Widget {
   /// mainAxisSize API.
   final MainAxisSize mainAxisSize;
 
+  /// Vertical columns flow as separate MultiPage children so a nested [Table] can span.
+  @override
+  List<Widget>? get flowChildren {
+    if (direction != Axis.vertical) {
+      return null;
+    }
+    for (final Widget child in children) {
+      if (child is Flexible) {
+        return null;
+      }
+    }
+    return children;
+  }
+
   @override
   PwBox layout(Context context, BoxConstraints constraints) {
     final bool horiz = direction == Axis.horizontal;
@@ -173,11 +187,13 @@ class Flex extends Widget {
     var cursor = 0.0;
     var gap = 0.0;
     final double leftover = (main - allocated).clamp(0, double.infinity);
+    final bool reverseMain =
+        horiz && context.textDirection == TextDirection.rtl;
     switch (mainAxisAlignment) {
       case MainAxisAlignment.start:
-        cursor = 0;
+        cursor = reverseMain ? leftover : 0;
       case MainAxisAlignment.end:
-        cursor = leftover;
+        cursor = reverseMain ? 0 : leftover;
       case MainAxisAlignment.center:
         cursor = leftover / 2;
       case MainAxisAlignment.spaceBetween:
@@ -189,12 +205,25 @@ class Flex extends Widget {
         gap = leftover / (boxes.length + 1);
         cursor = gap;
     }
-    for (int i = 0; i < boxes.length; i++) {
+    final List<int> order = <int>[
+      for (int i = 0; i < boxes.length; i++)
+        reverseMain ? boxes.length - 1 - i : i,
+    ];
+    for (final int i in order) {
       final PwBox box = boxes[i]!;
       final double crossOff = switch (crossAxisAlignment) {
-        CrossAxisAlignment.start => 0,
-        CrossAxisAlignment.end =>
-          horiz ? size.height - box.size.height : size.width - box.size.width,
+        CrossAxisAlignment.start => _crossStart(
+          horiz: horiz,
+          rtl: context.textDirection == TextDirection.rtl,
+          size: size,
+          box: box,
+        ),
+        CrossAxisAlignment.end => _crossEnd(
+          horiz: horiz,
+          rtl: context.textDirection == TextDirection.rtl,
+          size: size,
+          box: box,
+        ),
         CrossAxisAlignment.center => horiz
             ? (size.height - box.size.height) / 2
             : (size.width - box.size.width) / 2,
@@ -208,6 +237,33 @@ class Flex extends Widget {
     }
     return GroupBox(size, placed);
   }
+}
+
+double _crossStart({
+  required bool horiz,
+  required bool rtl,
+  required PwSize size,
+  required PwBox box,
+}) {
+  if (horiz || !rtl) {
+    return 0;
+  }
+  return size.width - box.size.width;
+}
+
+double _crossEnd({
+  required bool horiz,
+  required bool rtl,
+  required PwSize size,
+  required PwBox box,
+}) {
+  if (horiz) {
+    return size.height - box.size.height;
+  }
+  if (rtl) {
+    return 0;
+  }
+  return size.width - box.size.width;
 }
 
 /// Horizontal flex.

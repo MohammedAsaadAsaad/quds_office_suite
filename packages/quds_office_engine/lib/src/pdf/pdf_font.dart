@@ -118,6 +118,18 @@ class PdfCidFont {
     return buffer.toString();
   }
 
+  /// When a subset glyph is reachable from both a nominal letter and a
+  /// presentation form, paint/extract the presentation form so Yeh is not
+  /// redrawn as the isolated nominal at a joining position.
+  static bool _preferUnicode(int candidate, int current) {
+    final bool candForm = candidate >= 0xFB50 && candidate <= 0xFEFF;
+    final bool currForm = current >= 0xFB50 && current <= 0xFEFF;
+    if (candForm != currForm) {
+      return candForm;
+    }
+    return candidate > current;
+  }
+
   static int _toPdfWidth(int units, int upem) {
     if (upem == 0) {
       return 0;
@@ -129,8 +141,15 @@ class PdfCidFont {
       name.replaceAll(RegExp(r'[^A-Za-z0-9]'), '');
 
   static String _toUnicode(Map<int, int> unicodeToGid) {
-    final List<MapEntry<int, int>> entries = unicodeToGid.entries.toList()
-      ..sort((a, b) => a.value - b.value);
+    final Map<int, int> gidToUnicode = <int, int>{};
+    for (final MapEntry<int, int> entry in unicodeToGid.entries) {
+      final int? existing = gidToUnicode[entry.value];
+      if (existing == null || _preferUnicode(entry.key, existing)) {
+        gidToUnicode[entry.value] = entry.key;
+      }
+    }
+    final List<MapEntry<int, int>> entries = gidToUnicode.entries.toList()
+      ..sort((MapEntry<int, int> a, MapEntry<int, int> b) => a.key - b.key);
     final StringBuffer bf = StringBuffer();
     const int chunk = 100;
     for (int i = 0; i < entries.length; i += chunk) {
@@ -138,8 +157,8 @@ class PdfCidFont {
       bf.writeln('${end - i} beginbfchar');
       for (int j = i; j < end; j++) {
         final MapEntry<int, int> e = entries[j];
-        bf.write('<${e.value.toRadixString(16).padLeft(4, '0')}>');
-        bf.writeln('<${e.key.toRadixString(16).padLeft(4, '0')}>');
+        bf.write('<${e.key.toRadixString(16).padLeft(4, '0')}>');
+        bf.writeln('<${e.value.toRadixString(16).padLeft(4, '0')}>');
       }
       bf.writeln('endbfchar');
     }

@@ -79,6 +79,7 @@ abstract final class LineBreaker {
     int? baseLevel,
     double spaceStretch = 3,
     double spaceShrink = 1,
+
     /// When false, do not stretch spaces to the line edge (pdf_widgets
     /// non-justify aligns). Word layout keeps the default [true].
     bool justify = true,
@@ -112,7 +113,8 @@ abstract final class LineBreaker {
     var start = 0;
     for (int i = 0; i <= logical.length; i++) {
       final bool atEnd = i == logical.length;
-      final bool hard = !atEnd &&
+      final bool hard =
+          !atEnd &&
           (logical[i].codePoint == 0x0A || logical[i].codePoint == 0x0D);
       if (!atEnd && !hard) {
         continue;
@@ -181,10 +183,7 @@ abstract final class LineBreaker {
         }
       }
       var ratio = 0.0;
-      if (justify &&
-          spaces > 0 &&
-          width < maxWidth &&
-          i != breaks.length - 2) {
+      if (justify && spaces > 0 && width < maxWidth && i != breaks.length - 2) {
         ratio = (maxWidth - width) / (spaces * spaceStretch);
         width = maxWidth;
       }
@@ -280,10 +279,35 @@ abstract final class LineBreaker {
       if (s == null) {
         return g;
       }
+      // Prefer the joining presentation form. Fonts that only encode the
+      // nominal letter (GSUB shaping, no FE7x cmap) still get a non-zero
+      // advance so the glyph is not painted on top of the previous letter.
+      var cp = s.codePoint;
+      if (cp == 0 && s.advanceFactor == 0) {
+        return ShapedGlyph(
+          codePoint: 0,
+          glyphId: 0,
+          advance: 0,
+          logicalIndex: g.logicalIndex,
+          level: g.level,
+        );
+      }
+      if (glyphIdOf(cp) == 0) {
+        final int? nominal = ArabicShaper.nominalOf(cp);
+        if (nominal != null && glyphIdOf(nominal) != 0) {
+          cp = nominal;
+        }
+      }
+      final int gid = glyphIdOf(cp);
+      var advance = s.advanceFactor == 0 ? 0.0 : widthOf(cp);
+      if (s.advanceFactor != 0 && advance <= 0 && gid != 0) {
+        final double space = widthOf(0x0020);
+        advance = space > 0 ? space : 1;
+      }
       return ShapedGlyph(
-        codePoint: s.codePoint,
-        glyphId: glyphIdOf(s.codePoint),
-        advance: s.advanceFactor == 0 ? 0 : widthOf(s.codePoint),
+        codePoint: cp,
+        glyphId: gid,
+        advance: advance,
         logicalIndex: g.logicalIndex,
         level: g.level,
         isSpace: g.isSpace,

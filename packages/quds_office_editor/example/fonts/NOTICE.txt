@@ -1,0 +1,12 @@
+Cairo-Regular.ttf is the default instance (weight 400, slant 0) of the
+official variable font Cairo[slnt,wght].ttf from
+https://github.com/google/fonts/tree/main/ofl/cairo
+(SIL Open Font License 1.1, see OFL-Cairo.txt).
+Variation tables were removed so PDF subsetting embeds the Regular
+glyf outlines, including Arabic presentation forms. The family name
+Cairo is unchanged. Google Fonts publishes Cairo as a variable font
+only, so this package does not ship a separate Cairo Bold file.
+
+Tajawal-Regular.ttf and Tajawal-Bold.ttf are the official static files
+from https://github.com/google/fonts/tree/main/ofl/tajawal
+(SIL Open Font License 1.1, see OFL-Tajawal.txt).

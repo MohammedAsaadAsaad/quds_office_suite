@@ -231,6 +231,13 @@ void main() {
     if (font == null) {
       expect(_inflated(notes).join(), contains('Speaker notes'));
     }
+
+    final Uint8List paired = OfficePdfExport.presentation(
+      deck,
+      slidesPerPage: 2,
+    );
+    expect(_pageCount(paired), 1);
+    expect(_ascii(paired), contains('595.28'));
   });
 
   test('fromBytes dispatches Word, Excel, and PowerPoint packages', () {

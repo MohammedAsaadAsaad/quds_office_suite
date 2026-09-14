@@ -14,6 +14,7 @@ export 'src/embed/office_editors.dart';
 export 'src/embed/office_host_fonts.dart';
 export 'src/embed/pdf_controller.dart';
 export 'src/embed/pdf_editors.dart';
+export 'src/editor_pdf/pdf_find.dart';
 export 'src/editor_pdf/pdf_page_thumb.dart';
 export 'src/editor_pdf/pdf_text_selection.dart';
 export 'src/editor_pdf/render_pdf_canvas.dart';

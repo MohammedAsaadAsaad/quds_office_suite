@@ -1,25 +1,19 @@
-import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:flutter/foundation.dart';
 import 'package:quds_office_editor/quds_office_editor.dart';
+
+import 'studio_files.dart';
 
 /// Multi-page showcase used by the studio PDF workspace.
 Uint8List studioSamplePdf() {
-  final _Face? latin = _Face.load(
+  final _Face? latin = _Face.fromFont(
+    StudioFiles.latinExportFont(),
     resource: 'F1',
-    paths: const <String>[
-      '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf',
-      '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
-    ],
     extra: _latinCps(),
   );
-  final _Face? arabic = _Face.load(
+  final _Face? arabic = _Face.fromFont(
+    StudioFiles.arabicExportFont(),
     resource: 'F3',
-    paths: const <String>[
-      '/usr/share/fonts/truetype/noto/NotoNaskhArabic-Regular.ttf',
-      '/usr/share/fonts/truetype/noto/NotoSansArabic-Regular.ttf',
-    ],
     extra: _arabicCps(),
   );
   final PdfDocument doc = PdfDocument(
@@ -107,7 +101,8 @@ List<int> _arabicCps() {
       'هذا المحرّر يفتح الملف نفسه الذي يكتبه المحرّك '
       'لا وسيط سحابي ولا تحويل إلى صورة '
       'الخط في المعاينة هو خط الملف المضمّن '
-      'قدرات المحرك مكتوبة بصدق بلا مبالغة';
+      'قدرات المحرك مكتوبة بصدق بلا مبالغة '
+      'خطوط تشكيل سياقي لوحة هندسة مسار قدرات';
   final Set<int> cps = <int>{};
   for (final ShapedChar ch in ArabicShaper.shape(s)) {
     cps.add(ch.codePoint);
@@ -121,11 +116,12 @@ void _banner(
   _Face? latin,
   String hex,
   String title,
-  String page,
-) {
+  String page, {
+  _Face? arabic,
+}) {
   c.fillRect(0, 0, 595.28, 64, hex);
   c.fillRect(0, 64, 595.28, 3, 'C9A227');
-  _run(c, latin, 36, 40, 18, title, 'FFFFFF', bold: true);
+  _mixed(c, latin, arabic, 36, 40, 18, title, 'FFFFFF');
   _run(c, latin, 500, 40, 11, page, 'D6DEE8');
 }
 
@@ -142,15 +138,31 @@ void _cover(PdfDocument doc, _Face? latin, _Face? arabic) {
   c.fillRect(40, 96, 515, 4, 'C9A227');
   _run(c, latin, 48, 168, 14, 'QUDS OFFICE SUITE', 'C9A227', bold: true);
   _run(c, latin, 48, 230, 46, 'PDF Gallery', 'FFFFFF', bold: true);
-  _run(c, latin, 48, 278, 16, 'Native engine  ·  RenderBox editor  ·  12 pages', 'D6DEE8');
-  _shaped(c, arabic, 48, 330, 20, 'عارض ومحرر PDF أصلي — بلا تحويل سحابي', 'F4E4A6');
+  _run(
+    c,
+    latin,
+    48,
+    278,
+    16,
+    'Native engine  ·  RenderBox editor  ·  12 pages',
+    'D6DEE8',
+  );
+  _shaped(
+    c,
+    arabic,
+    48,
+    330,
+    20,
+    'عارض ومحرر PDF أصلي — بلا تحويل سحابي',
+    'F4E4A6',
+  );
   const List<({String hex, String k, String v})> tiles =
       <({String hex, String k, String v})>[
-    (hex: '2B579A', k: '12 pages', v: 'Live thumbs'),
-    (hex: '217346', k: 'Glyf embed', v: 'ToUnicode'),
-    (hex: 'B7472A', k: 'Annotate', v: 'Incremental'),
-    (hex: 'C9A227', k: 'Find / print', v: 'Isolate open'),
-  ];
+        (hex: '2B579A', k: '12 pages', v: 'Live thumbs'),
+        (hex: '217346', k: 'Glyf embed', v: 'ToUnicode'),
+        (hex: 'B7472A', k: 'Annotate', v: 'Incremental'),
+        (hex: 'C9A227', k: 'Find / print', v: 'Isolate open'),
+      ];
   for (int i = 0; i < tiles.length; i++) {
     final double x = 48 + (i % 2) * 250;
     final double y = 400 + (i ~/ 2) * 110;
@@ -161,15 +173,32 @@ void _cover(PdfDocument doc, _Face? latin, _Face? arabic) {
     _run(c, latin, x + 18, y + 40, 16, tiles[i].k, 'FFFFFF', bold: true);
     _run(c, latin, x + 18, y + 68, 12, tiles[i].v, 'F4F6F9');
   }
-  _run(c, latin, 48, 780, 11, 'ISO 32000-1  ·  Parallel to the PdfDocument writer', '8A93A3');
+  _run(
+    c,
+    latin,
+    48,
+    780,
+    11,
+    'ISO 32000-1  ·  Parallel to the PdfDocument writer',
+    '8A93A3',
+  );
   c.endText();
   doc.addPage(PdfPage(width: 595.28, height: 841.89, content: c.toStream()));
 }
 
 void _type(PdfDocument doc, _Face? latin, _Face? arabic) {
   final PdfCanvas c = PdfCanvas(595.28, 841.89);
-  _banner(c, latin, '0B1F3A', 'Typography  ·  خطوط', '02 / 12');
-  _run(c, latin, 36, 110, 28, 'A face that matches the file', '0B1F3A', bold: true);
+  _banner(c, latin, '0B1F3A', 'Typography  ·  خطوط', '02 / 12', arabic: arabic);
+  _run(
+    c,
+    latin,
+    36,
+    110,
+    28,
+    'A face that matches the file',
+    '0B1F3A',
+    bold: true,
+  );
   _run(
     c,
     latin,
@@ -180,10 +209,44 @@ void _type(PdfDocument doc, _Face? latin, _Face? arabic) {
     '3D4654',
   );
   _run(c, latin, 36, 200, 42, 'Aa Bb 123', '2B579A', bold: true);
-  _run(c, latin, 36, 250, 18, 'Regular 18 pt  ·  The quick brown fox jumps.', '1A1A1A');
-  _run(c, latin, 36, 280, 18, 'Bold 18 pt  ·  The quick brown fox jumps.', '1A1A1A', bold: true);
-  _run(c, latin, 36, 310, 18, 'Italic 18 pt  ·  The quick brown fox jumps.', '1A1A1A', italic: true);
-  _run(c, latin, 36, 350, 12, 'Regular 12 pt  ·  Liberation Sans metrics, not the theme Naskh.', '5A6573');
+  _run(
+    c,
+    latin,
+    36,
+    250,
+    18,
+    'Regular 18 pt  ·  The quick brown fox jumps.',
+    '1A1A1A',
+  );
+  _run(
+    c,
+    latin,
+    36,
+    280,
+    18,
+    'Bold 18 pt  ·  The quick brown fox jumps.',
+    '1A1A1A',
+    bold: true,
+  );
+  _run(
+    c,
+    latin,
+    36,
+    310,
+    18,
+    'Italic 18 pt  ·  The quick brown fox jumps.',
+    '1A1A1A',
+    italic: true,
+  );
+  _run(
+    c,
+    latin,
+    36,
+    350,
+    12,
+    'Regular 12 pt  ·  Liberation Sans metrics, not the theme Naskh.',
+    '5A6573',
+  );
   _mixed(
     c,
     latin,
@@ -200,17 +263,52 @@ void _type(PdfDocument doc, _Face? latin, _Face? arabic) {
     ..moveTo(36, 440)
     ..lineTo(559, 440)
     ..stroke();
-  _run(c, latin, 36, 470, 13, 'Standard 14 mapping: Helvetica → Liberation Sans', '5A6573');
-  _run(c, latin, 36, 500, 13, 'CIDFontType2 + Identity-H + ToUnicode for subset faces.', '5A6573');
+  _run(
+    c,
+    latin,
+    36,
+    470,
+    13,
+    'Standard 14 mapping: Helvetica → Liberation Sans',
+    '5A6573',
+  );
+  _run(
+    c,
+    latin,
+    36,
+    500,
+    13,
+    'CIDFontType2 + Identity-H + ToUnicode for subset faces.',
+    '5A6573',
+  );
   _run(c, latin, 36, 560, 72, 'Quds', '0B1F3A', bold: true);
-  _footer(c, latin, 'Open the saved file in any viewer — the same glyf is on the page.');
+  _footer(
+    c,
+    latin,
+    'Open the saved file in any viewer — the same glyf is on the page.',
+  );
   doc.addPage(PdfPage(width: 595.28, height: 841.89, content: c.toStream()));
 }
 
 void _arabicPage(PdfDocument doc, _Face? latin, _Face? arabic) {
   final PdfCanvas c = PdfCanvas(595.28, 841.89);
-  _banner(c, latin, '1B4332', 'Arabic  ·  تشكيل سياقي', '03 / 12');
-  _shaped(c, arabic, 36, 130, 26, 'الخط في المعاينة هو خط الملف المضمّن', '0B1F3A');
+  _banner(
+    c,
+    latin,
+    '1B4332',
+    'Arabic  ·  تشكيل سياقي',
+    '03 / 12',
+    arabic: arabic,
+  );
+  _shaped(
+    c,
+    arabic,
+    36,
+    130,
+    26,
+    'الخط في المعاينة هو خط الملف المضمّن',
+    '0B1F3A',
+  );
   _shaped(
     c,
     arabic,
@@ -220,7 +318,15 @@ void _arabicPage(PdfDocument doc, _Face? latin, _Face? arabic) {
     'هذا المحرّر يفتح الملف نفسه الذي يكتبه المحرّك.',
     '3D4654',
   );
-  _shaped(c, arabic, 36, 230, 16, 'لا وسيط سحابي ولا تحويل إلى صورة.', '3D4654');
+  _shaped(
+    c,
+    arabic,
+    36,
+    230,
+    16,
+    'لا وسيط سحابي ولا تحويل إلى صورة.',
+    '3D4654',
+  );
   const List<String> lines = <String>[
     'تفسير مجرى المحتوى → قائمة العرض → صندوق الرسم',
     'قوة المحرك والعارض في صفحات ومعاينة حيّة',
@@ -231,8 +337,21 @@ void _arabicPage(PdfDocument doc, _Face? latin, _Face? arabic) {
     c.fillRect(36, y, 523, 56, i.isEven ? 'F3F6FB' : 'FFF8E7');
     _shaped(c, arabic, 52, y + 36, 16, lines[i], '0B1F3A');
   }
-  _mixed(c, latin, arabic, 36, 560, 14, 'Quds مكتب  ·  COS / xref  ·  مجموعة القدس', '2B579A');
-  _footer(c, latin, 'Arabic is shaped before CID emission; the viewer does not reshape.');
+  _mixed(
+    c,
+    latin,
+    arabic,
+    36,
+    560,
+    14,
+    'Quds مكتب  ·  COS / xref  ·  مجموعة القدس',
+    '2B579A',
+  );
+  _footer(
+    c,
+    latin,
+    'Arabic is shaped before CID emission; the viewer does not reshape.',
+  );
   doc.addPage(PdfPage(width: 595.28, height: 841.89, content: c.toStream()));
 }
 
@@ -276,9 +395,19 @@ void _shapes(PdfDocument doc, _Face? latin) {
     '3D4654',
   );
   for (int i = 0; i < 8; i++) {
-    c.fillRect(40.0 + i * 64, 540, 52, 18.0 + i * 14, i.isEven ? '0B1F3A' : '2B579A');
+    c.fillRect(
+      40.0 + i * 64,
+      540,
+      52,
+      18.0 + i * 14,
+      i.isEven ? '0B1F3A' : '2B579A',
+    );
   }
-  _footer(c, latin, 'Every verb is a typed PdfPaintOp. No screenshot, no HTML canvas.');
+  _footer(
+    c,
+    latin,
+    'Every verb is a typed PdfPaintOp. No screenshot, no HTML canvas.',
+  );
   doc.addPage(PdfPage(width: 595.28, height: 841.89, content: c.toStream()));
 }
 
@@ -296,7 +425,13 @@ void _table(PdfDocument doc, _Face? latin, _Face? arabic) {
   var y = 100.0;
   for (int r = 0; r < rows.length; r++) {
     var x = 40.0;
-    c.fillRect(40, y, 480, 36, r == 0 ? '0B1F3A' : (r.isOdd ? 'F3F6FB' : 'FFFFFF'));
+    c.fillRect(
+      40,
+      y,
+      480,
+      36,
+      r == 0 ? '0B1F3A' : (r.isOdd ? 'F3F6FB' : 'FFFFFF'),
+    );
     for (int i = 0; i < rows[r].length; i++) {
       _run(
         c,
@@ -317,26 +452,46 @@ void _table(PdfDocument doc, _Face? latin, _Face? arabic) {
     ..setLineWidth(0.6)
     ..rect(40, 100, 480, 180)
     ..stroke();
-  _run(c, latin, 40, 320, 12, 'Totals stay typed in the model. Find “North” from the View tab.', '5A6573');
-  _shaped(c, arabic, 40, 360, 14, 'جدول ربع سنوي — شمال جنوب شرق غرب', '0B1F3A');
+  _run(
+    c,
+    latin,
+    40,
+    320,
+    12,
+    'Totals stay typed in the model. Find “North” from the View tab.',
+    '5A6573',
+  );
+  _shaped(
+    c,
+    arabic,
+    40,
+    360,
+    14,
+    'جدول ربع سنوي — شمال جنوب شرق غرب',
+    '0B1F3A',
+  );
   const List<int> spark = <int>[120, 134, 141, 158, 88, 91, 104, 119];
   for (int i = 0; i < spark.length; i++) {
     final double h = spark[i] * 1.4;
     c.fillRect(40.0 + i * 64, 700 - h, 48, h, i < 4 ? '2B579A' : 'C9A227');
   }
-  _footer(c, latin, 'Typed COS numbers — extract and find share the same runs.');
+  _footer(
+    c,
+    latin,
+    'Typed COS numbers — extract and find share the same runs.',
+  );
   doc.addPage(PdfPage(width: 595.28, height: 841.89, content: c.toStream()));
 }
 
 void _dashboard(PdfDocument doc, _Face? latin, _Face? arabic) {
   final PdfCanvas c = PdfCanvas(595.28, 841.89);
-  _banner(c, latin, 'B7472A', 'Dashboard  ·  لوحة', '06 / 12');
+  _banner(c, latin, 'B7472A', 'Dashboard  ·  لوحة', '06 / 12', arabic: arabic);
   final List<({String k, String v, String hex})> cards =
       <({String k, String v, String hex})>[
-    (k: 'Revenue', v: '2.4M', hex: '2B579A'),
-    (k: 'Win 61%', v: '61%', hex: '217346'),
-    (k: 'NPS 72', v: '72', hex: 'C9A227'),
-  ];
+        (k: 'Revenue', v: '2.4M', hex: '2B579A'),
+        (k: 'Win 61%', v: '61%', hex: '217346'),
+        (k: 'NPS 72', v: '72', hex: 'C9A227'),
+      ];
   for (int i = 0; i < cards.length; i++) {
     final double x = 36.0 + i * 180;
     c
@@ -352,8 +507,20 @@ void _dashboard(PdfDocument doc, _Face? latin, _Face? arabic) {
     c.fillRect(60.0 + i * 80, 360 - h, 48, h, i.isEven ? '2B579A' : '0B1F3A');
     _run(c, latin, 68.0 + i * 80, 380, 10, 'M${i + 1}', '5A6573');
   }
-  _shaped(c, arabic, 36, 430, 16, 'أرقام حية من المحرك — ليست لقطة شاشة.', '0B1F3A');
-  _footer(c, latin, 'KPI tiles and bars are path fills — zoom never pixelates.');
+  _shaped(
+    c,
+    arabic,
+    36,
+    430,
+    16,
+    'أرقام حية من المحرك — ليست لقطة شاشة.',
+    '0B1F3A',
+  );
+  _footer(
+    c,
+    latin,
+    'KPI tiles and bars are path fills — zoom never pixelates.',
+  );
   doc.addPage(PdfPage(width: 595.28, height: 841.89, content: c.toStream()));
 }
 
@@ -370,7 +537,15 @@ void _picture(PdfDocument doc, _Face? latin) {
     '3D4654',
   );
   c.drawImage('Im1', 36, 140, 523, 240);
-  _run(c, latin, 36, 410, 12, 'JPEG/Flate images use the same display-list blit as Office export.', '5A6573');
+  _run(
+    c,
+    latin,
+    36,
+    410,
+    12,
+    'JPEG/Flate images use the same display-list blit as Office export.',
+    '5A6573',
+  );
   c.drawImage('Im2', 36, 450, 250, 160);
   c.drawImage('Im3', 309, 450, 250, 160);
   _footer(c, latin, 'XObject /Do — DCT and Flate, not a Flutter AssetImage.');
@@ -380,9 +555,24 @@ void _picture(PdfDocument doc, _Face? latin) {
       height: 841.89,
       content: c.toStream(),
       images: <PdfEmbeddedImage>[
-        PdfEmbeddedImage(name: 'Im1', width: 240, height: 120, bytes: _gradient(240, 120, 0)),
-        PdfEmbeddedImage(name: 'Im2', width: 160, height: 100, bytes: _gradient(160, 100, 1)),
-        PdfEmbeddedImage(name: 'Im3', width: 160, height: 100, bytes: _gradient(160, 100, 2)),
+        PdfEmbeddedImage(
+          name: 'Im1',
+          width: 240,
+          height: 120,
+          bytes: _gradient(240, 120, 0),
+        ),
+        PdfEmbeddedImage(
+          name: 'Im2',
+          width: 160,
+          height: 100,
+          bytes: _gradient(160, 100, 1),
+        ),
+        PdfEmbeddedImage(
+          name: 'Im3',
+          width: 160,
+          height: 100,
+          bytes: _gradient(160, 100, 2),
+        ),
       ],
     ),
   );
@@ -390,23 +580,39 @@ void _picture(PdfDocument doc, _Face? latin) {
 
 void _org(PdfDocument doc, _Face? latin, _Face? arabic) {
   final PdfCanvas c = PdfCanvas(595.28, 841.89);
-  _banner(c, latin, '2B579A', 'Architecture  ·  هندسة', '08 / 12');
+  _banner(
+    c,
+    latin,
+    '2B579A',
+    'Architecture  ·  هندسة',
+    '08 / 12',
+    arabic: arabic,
+  );
   const List<({double x, double y, String t, String hex})> boxes =
       <({double x, double y, String t, String hex})>[
-    (x: 190, y: 110, t: 'PdfFile.open', hex: '0B1F3A'),
-    (x: 40, y: 240, t: 'COS / xref', hex: '2B579A'),
-    (x: 220, y: 240, t: 'Filters', hex: '217346'),
-    (x: 400, y: 240, t: 'Security', hex: 'B7472A'),
-    (x: 130, y: 390, t: 'Interpreter', hex: '2B579A'),
-    (x: 330, y: 390, t: 'Display list', hex: 'C9A227'),
-    (x: 190, y: 540, t: 'RenderBox', hex: '0B1F3A'),
-  ];
+        (x: 190, y: 110, t: 'PdfFile.open', hex: '0B1F3A'),
+        (x: 40, y: 240, t: 'COS / xref', hex: '2B579A'),
+        (x: 220, y: 240, t: 'Filters', hex: '217346'),
+        (x: 400, y: 240, t: 'Security', hex: 'B7472A'),
+        (x: 130, y: 390, t: 'Interpreter', hex: '2B579A'),
+        (x: 330, y: 390, t: 'Display list', hex: 'C9A227'),
+        (x: 190, y: 540, t: 'RenderBox', hex: '0B1F3A'),
+      ];
   for (final ({double x, double y, String t, String hex}) b in boxes) {
     c
       ..setFillColor(b.hex)
       ..roundedRect(b.x, b.y, 170, 56, 10)
       ..fill();
-    _run(c, latin, b.x + 16, b.y + 36, 13, b.t, b.hex == 'C9A227' ? '0B1F3A' : 'FFFFFF', bold: true);
+    _run(
+      c,
+      latin,
+      b.x + 16,
+      b.y + 36,
+      13,
+      b.t,
+      b.hex == 'C9A227' ? '0B1F3A' : 'FFFFFF',
+      bold: true,
+    );
   }
   c
     ..setStrokeColor('C5CDD8')
@@ -426,14 +632,26 @@ void _org(PdfDocument doc, _Face? latin, _Face? arabic) {
     ..moveTo(415, 446)
     ..lineTo(275, 540)
     ..stroke();
-  _shaped(c, arabic, 36, 640, 14, 'تفسير مجرى المحتوى قائمة العرض صندوق الرسم', '0B1F3A');
-  _footer(c, latin, 'Engine stays pure Dart. The editor never imports the COS tree.');
+  _shaped(
+    c,
+    arabic,
+    36,
+    640,
+    14,
+    'تفسير مجرى المحتوى قائمة العرض صندوق الرسم',
+    '0B1F3A',
+  );
+  _footer(
+    c,
+    latin,
+    'Engine stays pure Dart. The editor never imports the COS tree.',
+  );
   doc.addPage(PdfPage(width: 595.28, height: 841.89, content: c.toStream()));
 }
 
 void _timeline(PdfDocument doc, _Face? latin, _Face? arabic) {
   final PdfCanvas c = PdfCanvas(595.28, 841.89);
-  _banner(c, latin, '0B1F3A', 'Timeline  ·  مسار', '09 / 12');
+  _banner(c, latin, '0B1F3A', 'Timeline  ·  مسار', '09 / 12', arabic: arabic);
   c
     ..setStrokeColor('C9A227')
     ..setLineWidth(3)
@@ -457,14 +675,33 @@ void _timeline(PdfDocument doc, _Face? latin, _Face? arabic) {
     _run(c, latin, 120, y + 16, 16, steps[i].t, '0B1F3A', bold: true);
     _run(c, latin, 120, y + 38, 12, steps[i].d, '5A6573');
   }
-  _shaped(c, arabic, 120, 720, 14, 'مسار زمني من البايت إلى الحفظ التزايدي', '0B1F3A');
-  _footer(c, latin, 'Phase 6 file stack — not a rewrite of the PdfDocument writer.');
+  _shaped(
+    c,
+    arabic,
+    120,
+    720,
+    14,
+    'مسار زمني من البايت إلى الحفظ التزايدي',
+    '0B1F3A',
+  );
+  _footer(
+    c,
+    latin,
+    'Phase 6 file stack — not a rewrite of the PdfDocument writer.',
+  );
   doc.addPage(PdfPage(width: 595.28, height: 841.89, content: c.toStream()));
 }
 
 void _matrix(PdfDocument doc, _Face? latin, _Face? arabic) {
   final PdfCanvas c = PdfCanvas(595.28, 841.89);
-  _banner(c, latin, '217346', 'Capabilities  ·  قدرات', '10 / 12');
+  _banner(
+    c,
+    latin,
+    '217346',
+    'Capabilities  ·  قدرات',
+    '10 / 12',
+    arabic: arabic,
+  );
   const List<({String k, bool ok})> rows = <({String k, bool ok})>[
     (k: 'COS + xref + ObjStm + incremental', ok: true),
     (k: 'Flate / ASCII85 / LZW / DCT', ok: true),
@@ -482,23 +719,68 @@ void _matrix(PdfDocument doc, _Face? latin, _Face? arabic) {
       ..setFillColor(rows[i].ok ? '217346' : 'B7472A')
       ..ellipse(52, y + 16, 28, 28)
       ..fill();
-    _run(c, latin, 56, y + 36, 12, rows[i].ok ? 'OK' : 'NO', 'FFFFFF', bold: true);
+    _run(
+      c,
+      latin,
+      56,
+      y + 36,
+      12,
+      rows[i].ok ? 'OK' : 'NO',
+      'FFFFFF',
+      bold: true,
+    );
     _run(c, latin, 100, y + 36, 14, rows[i].k, '1A1A1A');
   }
-  _shaped(c, arabic, 36, 690, 13, 'قدرات المحرك مكتوبة بصدق — بلا مبالغة.', '0B1F3A');
-  _footer(c, latin, 'Honesty over marketing — STANDARDS lists the remaining limits.');
+  _shaped(
+    c,
+    arabic,
+    36,
+    690,
+    13,
+    'قدرات المحرك مكتوبة بصدق — بلا مبالغة.',
+    '0B1F3A',
+  );
+  _footer(
+    c,
+    latin,
+    'Honesty over marketing — STANDARDS lists the remaining limits.',
+  );
   doc.addPage(PdfPage(width: 595.28, height: 841.89, content: c.toStream()));
 }
 
 void _links(PdfDocument doc, _Face? latin, _Face? arabic) {
   final PdfCanvas c = PdfCanvas(595.28, 841.89);
   _banner(c, latin, '2B579A', 'Links & outlines', '11 / 12');
-  _run(c, latin, 36, 110, 14, 'Click the blue row to jump to the cover (GoTo).', '1A1A1A');
+  _run(
+    c,
+    latin,
+    36,
+    110,
+    14,
+    'Click the blue row to jump to the cover (GoTo).',
+    '1A1A1A',
+  );
   c.fillRect(36, 140, 360, 28, 'E8F0FA');
   _run(c, latin, 48, 160, 13, 'Back to cover', '2B579A', bold: true);
-  _run(c, latin, 36, 210, 14, 'URI actions call the host callback — never /Launch.', '1A1A1A');
+  _run(
+    c,
+    latin,
+    36,
+    210,
+    14,
+    'URI actions call the host callback — never /Launch.',
+    '1A1A1A',
+  );
   c.fillRect(36, 240, 360, 28, 'FFF4D6');
-  _run(c, latin, 48, 260, 13, 'https://pub.dev/packages/quds_office_engine', 'B7472A');
+  _run(
+    c,
+    latin,
+    48,
+    260,
+    13,
+    'https://pub.dev/packages/quds_office_engine',
+    'B7472A',
+  );
   _shaped(c, arabic, 36, 320, 16, 'المخطط الجانبي يقفز بين الصفحات.', '0B1F3A');
   c.fillRect(36, 380, 360, 28, 'F3F6FB');
   _run(c, latin, 48, 400, 13, 'Jump to the dashboard', '217346', bold: true);
@@ -509,7 +791,14 @@ void _links(PdfDocument doc, _Face? latin, _Face? arabic) {
       height: 841.89,
       content: c.toStream(),
       links: const <PdfLinkAnnot>[
-        PdfLinkAnnot(x: 36, y: 140, width: 360, height: 28, destPage: 0, destY: 0),
+        PdfLinkAnnot(
+          x: 36,
+          y: 140,
+          width: 360,
+          height: 28,
+          destPage: 0,
+          destY: 0,
+        ),
         PdfLinkAnnot(
           x: 36,
           y: 240,
@@ -517,7 +806,14 @@ void _links(PdfDocument doc, _Face? latin, _Face? arabic) {
           height: 28,
           uri: 'https://pub.dev/packages/quds_office_engine',
         ),
-        PdfLinkAnnot(x: 36, y: 380, width: 360, height: 28, destPage: 5, destY: 0),
+        PdfLinkAnnot(
+          x: 36,
+          y: 380,
+          width: 360,
+          height: 28,
+          destPage: 5,
+          destY: 0,
+        ),
       ],
     ),
   );
@@ -529,9 +825,24 @@ void _wide(PdfDocument doc, _Face? latin) {
   final PdfCanvas c = PdfCanvas(w, h);
   c.fillRect(0, 0, w, 56, '0B1F3A');
   c.fillRect(0, 56, w, 3, 'C9A227');
-  _run(c, latin, 36, 36, 18, 'Landscape  ·  open → interpret → display list → RenderBox', 'FFFFFF', bold: true);
+  _run(
+    c,
+    latin,
+    36,
+    36,
+    18,
+    'Landscape  ·  open → interpret → display list → RenderBox',
+    'FFFFFF',
+    bold: true,
+  );
   _run(c, latin, 720, 36, 11, '12 / 12', 'D6DEE8');
-  const List<String> steps = <String>['Bytes', 'COS', 'Display', 'Canvas', 'Save'];
+  const List<String> steps = <String>[
+    'Bytes',
+    'COS',
+    'Display',
+    'Canvas',
+    'Save',
+  ];
   for (int i = 0; i < steps.length; i++) {
     final double x = 40.0 + i * 155;
     c
@@ -589,7 +900,10 @@ void _run(
   var cx = x;
   for (final int cp in text.runes) {
     final int old = face.font.glyphIdFor(cp);
-    final int gid = face.subset.unicodeToNewGlyph[cp] ?? face.subset.oldToNewGlyph[old] ?? 0;
+    final int gid =
+        face.subset.unicodeToNewGlyph[cp] ??
+        face.subset.oldToNewGlyph[old] ??
+        0;
     if (gid != 0) {
       canvas.showGlyph(
         x: cx,
@@ -643,7 +957,8 @@ void _shaped(
         face.subset.unicodeToNewGlyph[ch.codePoint] ??
         face.subset.oldToNewGlyph[old] ??
         0;
-    final double adv = face.font.advanceWidth(old) / face.font.unitsPerEm * size;
+    final double adv =
+        face.font.advanceWidth(old) / face.font.unitsPerEm * size;
     if (ch.advanceFactor != 0) {
       cx -= adv;
     }
@@ -681,7 +996,8 @@ void _mixed(
     _run(canvas, latin, cx, y, size, part, color);
     if (latin != null) {
       for (final int cp in part.runes) {
-        cx += latin.font.advanceWidth(latin.font.glyphIdFor(cp)) /
+        cx +=
+            latin.font.advanceWidth(latin.font.glyphIdFor(cp)) /
             latin.font.unitsPerEm *
             size;
       }
@@ -706,7 +1022,8 @@ void _mixed(
           if (ch.advanceFactor == 0) {
             continue;
           }
-          w += arabic.font.advanceWidth(arabic.font.glyphIdFor(ch.codePoint)) /
+          w +=
+              arabic.font.advanceWidth(arabic.font.glyphIdFor(ch.codePoint)) /
               arabic.font.unitsPerEm *
               size;
         }
@@ -756,34 +1073,35 @@ class _Face {
   PdfEmbeddedFace get embedded =>
       PdfEmbeddedFace(subset: subset, source: font, resourceName: resource);
 
-  static _Face? load({
+  static _Face? fromFont(
+    SfntFont? font, {
     required String resource,
-    required List<String> paths,
     required List<int> extra,
   }) {
-    if (kIsWeb) {
+    if (font == null || !font.hasTable('glyf')) {
       return null;
     }
-    for (final String path in paths) {
-      final File file = File(path);
-      if (!file.existsSync()) {
-        continue;
-      }
-      final SfntFont font = SfntFont.parse(file.readAsBytesSync());
-      final Set<int> cps = <int>{
-        ...extra,
-        32,
-        46,
-        45,
-        47,
-        0x2013,
-        0x2014,
-        0x201C,
-        0x201D,
-        0x2192,
-      };
-      return _Face(font, FontSubsetter(font).subset(cps), resource);
-    }
-    return null;
+    return _Face(
+      font,
+      FontSubsetter(font).subset(_subsetPoints(extra)),
+      resource,
+    );
   }
+
+  static Set<int> _subsetPoints(List<int> extra) => <int>{
+    ...extra,
+    32,
+    46,
+    45,
+    47,
+    0x00B7,
+    0x2013,
+    0x2014,
+    0x2018,
+    0x2019,
+    0x201C,
+    0x201D,
+    0x2022,
+    0x2192,
+  };
 }

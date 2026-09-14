@@ -5,6 +5,10 @@ import 'package:quds_office_engine/quds_office_engine.dart';
 
 import 'sample_library.dart';
 import 'studio_files.dart';
+import 'studio_pdf_face_samples.dart';
+import 'studio_pdf_rich_samples.dart';
+import 'studio_pdf_showcase.dart';
+import 'studio_pdf_toc_samples.dart';
 import 'studio_sample_pdf.dart';
 
 /// How a gallery sample is produced.
@@ -17,6 +21,9 @@ enum StudioPdfSampleKind {
 
   /// Constraint-layout [pw.Document] (`pdf_widgets`).
   pdfWidgets,
+
+  /// Bilingual showcase: gradients, charts, and tables that span pages.
+  showcase,
 }
 
 /// One selectable PDF sample for the studio gallery.
@@ -71,6 +78,7 @@ abstract final class StudioPdfGallery {
         ...officeSamples,
         ...engineSamples,
         ...widgetSamples,
+        ...showcaseSamples,
       ];
 
   /// Office → PDF samples.
@@ -184,17 +192,18 @@ abstract final class StudioPdfGallery {
     StudioPdfSample(
       id: 'office-notes-pages',
       kind: StudioPdfSampleKind.officeToPdf,
-      titleEn: 'Slides with notes pages',
-      titleAr: 'شرائح مع صفحات ملاحظات',
-      blurbEn: 'Presentation export in notes-pages mode.',
-      blurbAr: 'تصدير بوضع صفحات الملاحظات.',
+      titleEn: 'Two slides per page',
+      titleAr: 'شريحتان في كل صفحة',
+      blurbEn: 'Every two slides export onto one A4 page.',
+      blurbAr: 'كل شريحتين تُصدَّران في صفحة واحدة.',
       fileName: 'office_notes_pages.pdf',
       build: ({SfntFont? font, OfficeFontSet? fonts}) => OfficePdfExport.presentation(
         SampleLibrary.slideDeck(),
         font: font,
         fonts: fonts,
-        title: 'Notes pages',
+        title: 'Two slides per page',
         mode: PdfSlideExportMode.notesPages,
+        slidesPerPage: 2,
       ),
     ),
   ];
@@ -305,6 +314,138 @@ abstract final class StudioPdfGallery {
       fileName: 'widgets_dossier.pdf',
       build: ({SfntFont? font, OfficeFontSet? fonts}) => _dossierCard(font),
     ),
+    StudioPdfSample(
+      id: 'widgets-cairo-quarterly',
+      kind: StudioPdfSampleKind.pdfWidgets,
+      titleEn: 'Cairo — quarterly report',
+      titleAr: 'Cairo — تقرير ربع سنوي',
+      blurbEn:
+          'Arabic title, heading, and body in Cairo, with an English LTR panel.',
+      blurbAr: 'عنوان وفقرة عربية بخط Cairo مع لوحة إنجليزية LTR.',
+      fileName: 'widgets_cairo_quarterly.pdf',
+      build: ({SfntFont? font, OfficeFontSet? fonts}) =>
+          studioCairoQuarterlyPdf(),
+    ),
+    StudioPdfSample(
+      id: 'widgets-tajawal-briefing',
+      kind: StudioPdfSampleKind.pdfWidgets,
+      titleEn: 'Tajawal — bilingual briefing',
+      titleAr: 'Tajawal — إحاطة ثنائية اللغة',
+      blurbEn:
+          'English title, heading, and body in Tajawal, with an Arabic RTL panel.',
+      blurbAr: 'عنوان وفقرة إنجليزية بخط Tajawal مع لوحة عربية RTL.',
+      fileName: 'widgets_tajawal_briefing.pdf',
+      build: ({SfntFont? font, OfficeFontSet? fonts}) =>
+          studioTajawalBriefingPdf(),
+    ),
+    StudioPdfSample(
+      id: 'widgets-atlas',
+      kind: StudioPdfSampleKind.pdfWidgets,
+      titleEn: 'Widget atlas',
+      titleAr: 'أطلس الأدوات',
+      blurbEn: 'Charts, table, checklist, chips, watermark, and an Arabic page.',
+      blurbAr: 'رسوم وجدول وقائمة وشرائح وعلامة مائية وصفحة عربية.',
+      fileName: 'widgets_atlas.pdf',
+      build: ({SfntFont? font, OfficeFontSet? fonts}) => studioWidgetAtlasPdf(),
+    ),
+    StudioPdfSample(
+      id: 'widgets-field-clinic',
+      kind: StudioPdfSampleKind.pdfWidgets,
+      titleEn: 'Field clinic day sheet',
+      titleAr: 'كشف عيادة ميدانية',
+      blurbEn: 'Arabic Cairo clinic roster, chart, and pharmacy checklist.',
+      blurbAr: 'كشف عيادة بالقاهرة مع رسم بياني وقائمة صيدلية.',
+      fileName: 'widgets_field_clinic.pdf',
+      build: ({SfntFont? font, OfficeFontSet? fonts}) => studioFieldClinicPdf(),
+    ),
+    StudioPdfSample(
+      id: 'widgets-board-packet',
+      kind: StudioPdfSampleKind.pdfWidgets,
+      titleEn: 'Board packet',
+      titleAr: 'حزمة مجلس الإدارة',
+      blurbEn: 'Agenda, decisions, budget table, spend chart, Arabic minutes.',
+      blurbAr: 'جدول أعمال وقرارات وميزانية ورسم إنفاق ومحضر عربي.',
+      fileName: 'widgets_board_packet.pdf',
+      build: ({SfntFont? font, OfficeFontSet? fonts}) => studioBoardPacketPdf(),
+    ),
+    StudioPdfSample(
+      id: 'widgets-recovery-brief',
+      kind: StudioPdfSampleKind.pdfWidgets,
+      titleEn: 'Recovery corridor',
+      titleAr: 'ممر التعافي',
+      blurbEn: 'Neighbourhood cards, access chart, and an Arabic note.',
+      blurbAr: 'بطاقات أحياء ورسم وصول إلى المياه وملاحظة عربية.',
+      fileName: 'widgets_recovery_brief.pdf',
+      build: ({SfntFont? font, OfficeFontSet? fonts}) =>
+          studioRecoveryBriefPdf(),
+    ),
+    StudioPdfSample(
+      id: 'widgets-contents-guide',
+      kind: StudioPdfSampleKind.pdfWidgets,
+      titleEn: 'Contents guide',
+      titleAr: 'دليل المحتويات',
+      blurbEn: 'Table of contents. Hover a row to preview the landing page.',
+      blurbAr: 'فهرس. مرّر فوق البند لترى الصفحة التي يفتحها.',
+      fileName: 'widgets_contents_guide.pdf',
+      build: ({SfntFont? font, OfficeFontSet? fonts}) =>
+          studioContentsGuidePdf(),
+    ),
+    StudioPdfSample(
+      id: 'widgets-arabic-contents',
+      kind: StudioPdfSampleKind.pdfWidgets,
+      titleEn: 'Arabic contents',
+      titleAr: 'فهرس عربي',
+      blurbEn: 'Arabic table of contents with links into later pages.',
+      blurbAr: 'فهرس عربي وروابطه تفتح الصفحات التالية.',
+      fileName: 'widgets_arabic_contents.pdf',
+      build: ({SfntFont? font, OfficeFontSet? fonts}) =>
+          studioArabicContentsPdf(),
+    ),
+  ];
+
+  /// Distinct bilingual documents for the gallery's first tab.
+  static final List<StudioPdfSample> showcaseSamples = <StudioPdfSample>[
+    StudioPdfSample(
+      id: 'showcase-harbour-close',
+      kind: StudioPdfSampleKind.showcase,
+      titleEn: 'Harbour close',
+      titleAr: 'إغلاق الميناء',
+      blurbEn:
+          'English night ledger: gradient, charts, and a table that spans pages.',
+      blurbAr: 'دفتر إنجليزي: تدرج ورسوم وجدول يمتد عبر الصفحات.',
+      fileName: 'showcase_harbour_close.pdf',
+      build: ({SfntFont? font, OfficeFontSet? fonts}) => studioHarbourClosePdf(),
+    ),
+    StudioPdfSample(
+      id: 'showcase-layl-al-qamar',
+      kind: StudioPdfSampleKind.showcase,
+      titleEn: 'Night of al-Qamar',
+      titleAr: 'ليل القمر',
+      blurbEn: 'Arabic Tajawal ledger with a repeated header on the next page.',
+      blurbAr: 'دفتر عربي بتجوال، وصف العناوين يعود في الصفحة التالية.',
+      fileName: 'showcase_layl_al_qamar.pdf',
+      build: ({SfntFont? font, OfficeFontSet? fonts}) => studioLaylAlQamarPdf(),
+    ),
+    StudioPdfSample(
+      id: 'showcase-two-shores',
+      kind: StudioPdfSampleKind.showcase,
+      titleEn: 'Two shores',
+      titleAr: 'ضفتان',
+      blurbEn: 'Landscape sheet: English quay beside an Arabic quay.',
+      blurbAr: 'ورقة أفقية: رصيف إنجليزي بجانب رصيف عربي.',
+      fileName: 'showcase_two_shores.pdf',
+      build: ({SfntFont? font, OfficeFontSet? fonts}) => studioTwoShoresPdf(),
+    ),
+    StudioPdfSample(
+      id: 'showcase-cairo-night',
+      kind: StudioPdfSampleKind.showcase,
+      titleEn: 'Cairo night clinic',
+      titleAr: 'ليل عيادة القاهرة',
+      blurbEn: 'Arabic Cairo close, then a short English hand-off page.',
+      blurbAr: 'إغلاق عربي بخط Cairo ثم صفحة تسليم إنجليزية.',
+      fileName: 'showcase_cairo_night.pdf',
+      build: ({SfntFont? font, OfficeFontSet? fonts}) => studioCairoNightPdf(),
+    ),
   ];
 
   /// Category label.
@@ -315,6 +456,7 @@ abstract final class StudioPdfGallery {
       StudioPdfSampleKind.pdfEngine => arabic ? 'محرك PDF' : 'PDF engine',
       StudioPdfSampleKind.pdfWidgets =>
         arabic ? 'pdf_widgets' : 'pdf_widgets',
+      StudioPdfSampleKind.showcase => arabic ? 'عرض ثنائي' : 'Showcase',
     };
   }
 
@@ -330,6 +472,9 @@ abstract final class StudioPdfGallery {
       StudioPdfSampleKind.pdfWidgets => arabic
           ? 'تخطيط قيود شبيه بـ Flutter.'
           : 'Flutter-like constraint layout composer.',
+      StudioPdfSampleKind.showcase => arabic
+          ? 'عربي وإنجليزي: تدرج ورسوم وجداول تمتد.'
+          : 'Arabic and English: gradients, charts, spanning tables.',
     };
   }
 }

@@ -11,6 +11,7 @@ abstract final class OfficeTypeface {
     'Noto Naskh Arabic',
     'Noto Sans Arabic',
     'Tajawal',
+    'Cairo',
     'Tahoma',
     'Georgia',
     'Courier New',
@@ -51,6 +52,7 @@ abstract final class OfficeTypeface {
         lower.contains('naskh') ||
         lower.contains('kufi') ||
         lower.contains('tajawal') ||
+        lower.contains('cairo') ||
         lower.contains('amiri') ||
         lower.contains('scheherazade');
   }
