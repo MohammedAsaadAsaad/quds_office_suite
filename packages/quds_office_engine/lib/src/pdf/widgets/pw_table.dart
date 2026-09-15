@@ -241,10 +241,10 @@ class Table extends Widget {
     TextStyle? headerStyle,
     TextStyle? cellStyle,
     TextStyle? oddCellStyle,
-    Alignment headerAlignment = Alignment.center,
-    Alignment cellAlignment = Alignment.topLeft,
-    Map<int, Alignment>? cellAlignments,
-    Map<int, Alignment>? headerAlignments,
+    AlignmentGeometry headerAlignment = Alignment.center,
+    AlignmentGeometry cellAlignment = AlignmentDirectional.topStart,
+    Map<int, AlignmentGeometry>? cellAlignments,
+    Map<int, AlignmentGeometry>? headerAlignments,
     EdgeInsets cellPadding = const EdgeInsets.all(5),
     EdgeInsets? headerPadding,
     double cellHeight = 0,
@@ -262,8 +262,9 @@ class Table extends Widget {
     final String? oddBand = oddRowDecoration;
     final String? evenBand = rowDecoration;
     oddCellStyle ??= cellStyle;
-    final Map<int, Alignment> cellAlign = cellAlignments ?? const <int, Alignment>{};
-    final Map<int, Alignment> headerAlign =
+    final Map<int, AlignmentGeometry> cellAlign =
+        cellAlignments ?? const <int, AlignmentGeometry>{};
+    final Map<int, AlignmentGeometry> headerAlign =
         headerAlignments ?? cellAlign;
 
     final List<TableRow> rows = <TableRow>[];

@@ -1,5 +1,3 @@
-import 'dart:typed_data';
-
 import 'package:flutter/services.dart';
 
 /// Loads embedded PDF `/FontFile2` faces so paint matches the file.

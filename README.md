@@ -58,6 +58,7 @@ Most Dart “Office” libraries stop at writing a simple DOCX. Quds goes furthe
 - **Own the stack** — ZIP, Deflate, CFBF/OLE, XML, fonts, BiDi, and PDF are implemented here. Fewer mystery dependencies.
 - **Many languages, many directions** — UAX #9 BiDi, Arabic shaping, mixed LTR/RTL, and logical caret movement live in the engine; the editor paints them.
 - **Editors that look like Office** — paginated Word, virtualized Excel, a slide stage with Morph, wipe, push, and **reverse** slideshow playback.
+- **100+ PDF report templates** — classified by domain, direction-aware, with distinct `SheetSkin` layouts (not text-only clones).
 - **Server or UI** — generate reports on a CLI/server with the engine; embed the same models in Flutter with the editor.
 
 ---
@@ -68,14 +69,14 @@ Most Dart “Office” libraries stop at writing a simple DOCX. Quds goes furthe
 
 ```yaml
 dependencies:
-  quds_office_engine: ^0.4.0
+  quds_office_engine: ^0.5.0
 ```
 
 ### Editor (pulls the engine)
 
 ```yaml
 dependencies:
-  quds_office_editor: ^0.4.0
+  quds_office_editor: ^0.5.0
 ```
 
 This repository is a [Dart workspace](https://dart.dev/tools/pub/workspaces). From the root:

@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 
 import 'studio_pdf_gallery.dart';
 
-/// Tabbed picker for studio PDF samples.
-class PdfSampleGalleryDialog extends StatelessWidget {
+/// Picker for studio PDF samples. Report templates are the first category.
+class PdfSampleGalleryDialog extends StatefulWidget {
   /// PdfSampleGalleryDialog API.
   const PdfSampleGalleryDialog({
     super.key,
@@ -17,12 +17,26 @@ class PdfSampleGalleryDialog extends StatelessWidget {
   /// Accent from the studio theme.
   final Color accent;
 
-  static const List<StudioPdfSampleKind> _tabs = <StudioPdfSampleKind>[
+  /// Report templates first so they are the landing list, not a hidden tab.
+  static const List<StudioPdfSampleKind> categories = <StudioPdfSampleKind>[
+    StudioPdfSampleKind.templates,
     StudioPdfSampleKind.showcase,
     StudioPdfSampleKind.pdfWidgets,
     StudioPdfSampleKind.pdfEngine,
     StudioPdfSampleKind.officeToPdf,
   ];
+
+  @override
+  State<PdfSampleGalleryDialog> createState() => _PdfSampleGalleryDialogState();
+}
+
+class _PdfSampleGalleryDialogState extends State<PdfSampleGalleryDialog> {
+  StudioPdfSampleKind _kind = StudioPdfSampleKind.templates;
+  String _group = StudioPdfGallery.templateGroups.first;
+
+  bool get arabic => widget.arabic;
+
+  Color get accent => widget.accent;
 
   @override
   Widget build(BuildContext context) {
@@ -41,44 +55,20 @@ class PdfSampleGalleryDialog extends StatelessWidget {
             shadowColor: Colors.black45,
             borderRadius: BorderRadius.circular(18),
             clipBehavior: Clip.antiAlias,
-            child: DefaultTabController(
-              length: _tabs.length,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: <Widget>[
-                  _header(context),
-                  TabBar(
-                    isScrollable: true,
-                    tabAlignment: TabAlignment.start,
-                    indicatorColor: accent,
-                    labelColor: accent,
-                    unselectedLabelColor: onSurface.withValues(alpha: 0.55),
-                    labelStyle: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                    ),
-                    tabs: <Widget>[
-                      for (final StudioPdfSampleKind kind in _tabs)
-                        Tab(
-                          text: StudioPdfGallery.kindTitle(kind, arabic),
-                          icon: Icon(_icon(kind), size: 18),
-                        ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                _header(context),
+                Expanded(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: <Widget>[
+                      _rail(onSurface),
+                      Expanded(child: _tabBody(onSurface: onSurface)),
                     ],
                   ),
-                  Expanded(
-                    child: TabBarView(
-                      children: <Widget>[
-                        for (final StudioPdfSampleKind kind in _tabs)
-                          _tabBody(
-                            context,
-                            kind: kind,
-                            onSurface: onSurface,
-                          ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ),
@@ -126,8 +116,8 @@ class PdfSampleGalleryDialog extends StatelessWidget {
                 const SizedBox(height: 3),
                 Text(
                   arabic
-                      ? 'تبويبات: عرض ثنائي، أدوات، محرك، أوفيس.'
-                      : 'Tabs: bilingual showcase, widgets, engine, Office.',
+                      ? 'قوالب التقارير أولاً. كل مثال صفحة إنجليزية ثم عربية.'
+                      : 'Report templates first. Each sample is English, then Arabic.',
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: 0.85),
                     fontSize: 12,
@@ -146,15 +136,74 @@ class PdfSampleGalleryDialog extends StatelessWidget {
     );
   }
 
-  Widget _tabBody(
-    BuildContext context, {
-    required StudioPdfSampleKind kind,
-    required Color onSurface,
-  }) {
+  Widget _rail(Color onSurface) {
+    return SizedBox(
+      width: 196,
+      child: Material(
+        color: onSurface.withValues(alpha: 0.04),
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(8, 10, 8, 10),
+          children: <Widget>[
+            for (final StudioPdfSampleKind kind
+                in PdfSampleGalleryDialog.categories)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: _railItem(kind, onSurface),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _railItem(StudioPdfSampleKind kind, Color onSurface) {
+    final bool selected = kind == _kind;
+    return Material(
+      color: selected ? accent.withValues(alpha: 0.14) : Colors.transparent,
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: () => setState(() => _kind = kind),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 9),
+          child: Row(
+            children: <Widget>[
+              Icon(
+                _icon(kind),
+                size: 18,
+                color: selected ? accent : onSurface.withValues(alpha: 0.55),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  StudioPdfGallery.kindTitle(kind, arabic),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                    color: selected ? accent : onSurface.withValues(alpha: 0.78),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _tabBody({required Color onSurface}) {
+    final StudioPdfSampleKind kind = _kind;
+    final bool templates = kind == StudioPdfSampleKind.templates;
     final List<StudioPdfSample> samples = StudioPdfGallery.all
         .where((StudioPdfSample sample) => sample.kind == kind)
+        .where(
+          (StudioPdfSample sample) =>
+              !templates || sample.group == _group,
+        )
         .toList(growable: false);
-    return ListView(
+    final Widget list = ListView(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
       children: <Widget>[
         Text(
@@ -171,21 +220,53 @@ class PdfSampleGalleryDialog extends StatelessWidget {
             padding: const EdgeInsets.only(bottom: 8),
             child: _card(
               sample: sample,
-              kind: kind,
               onSurface: onSurface,
               onTap: () => Navigator.of(context).pop(sample),
             ),
           ),
       ],
     );
+    if (!templates) {
+      return list;
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        SizedBox(
+          height: 42,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+            children: <Widget>[
+              for (final String group in StudioPdfGallery.templateGroups)
+                Padding(
+                  padding: const EdgeInsetsDirectional.only(end: 6),
+                  child: ChoiceChip(
+                    label: Text(StudioPdfGallery.templateGroupTitle(group, arabic)),
+                    selected: group == _group,
+                    selectedColor: accent.withValues(alpha: 0.18),
+                    labelStyle: TextStyle(
+                      fontSize: 12,
+                      fontWeight: group == _group ? FontWeight.w700 : FontWeight.w500,
+                      color: group == _group ? accent : onSurface,
+                    ),
+                    onSelected: (_) => setState(() => _group = group),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        Expanded(child: list),
+      ],
+    );
   }
 
   Widget _card({
     required StudioPdfSample sample,
-    required StudioPdfSampleKind kind,
     required Color onSurface,
     required VoidCallback onTap,
   }) {
+    final StudioPdfSampleKind kind = _kind;
     return Material(
       color: accent.withValues(alpha: 0.04),
       borderRadius: BorderRadius.circular(12),
@@ -254,6 +335,7 @@ class PdfSampleGalleryDialog extends StatelessWidget {
       StudioPdfSampleKind.officeToPdf => Icons.apps_rounded,
       StudioPdfSampleKind.pdfEngine => Icons.picture_as_pdf_rounded,
       StudioPdfSampleKind.pdfWidgets => Icons.widgets_rounded,
+      StudioPdfSampleKind.templates => Icons.dashboard_customize_rounded,
       StudioPdfSampleKind.showcase => Icons.auto_awesome_rounded,
     };
   }

@@ -2,6 +2,19 @@
 
 All notable changes to `quds_office_editor` are documented here.
 
+## 0.5.0
+
+**Studio gallery ships the report template library.**
+
+- Templates are the landing gallery rail. Category chips filter commerce,
+  finance, people, operations, narrative, data, education, property,
+  logistics, and programs.
+- Every template sample is **two pages** in one PDF: English, then Arabic.
+- Depends on `quds_office_engine` **0.5.0** (`pdf_templates`, `SheetSkin`,
+  RTL table cell start alignment, Flutter twins).
+- Gallery also covers Flutter-twins widgets and the existing showcase /
+  Office → PDF samples.
+
 ## 0.4.0
 
 PDF viewing matches the page that owns the text.

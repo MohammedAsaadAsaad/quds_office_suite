@@ -11,7 +11,8 @@
 
 **A pure Dart Office and PDF engine.** Open, build, and write `.docx`, `.xlsx`,
 and `.pptx`. Open real PDF files. Compose pages with a Flutter-like widget
-layout. Export Office models to native **PDF 1.7**. Assemble, rotate, stamp,
+layout. Pick from **100+ direction-aware report templates** with distinct
+skins. Export Office models to native **PDF 1.7**. Assemble, rotate, stamp,
 and crop PDF pages without a native library.
 
 No Flutter. No `dart:ui`. No Microsoft Office, LibreOffice, or cloud conversion
@@ -41,6 +42,7 @@ native binary. This engine owns the stack a real suite needs:
 | Spreadsheets that calculate | Formula AST, Excel-style functions, dependency graph |
 | Text that reads correctly worldwide | Unicode, LTR / RTL / mixed BiDi, Arabic shaping |
 | Compose polished PDFs | Constraint layout (`Document` / `Table` / `MultiPage`) |
+| Ship domain reports fast | `pdf_templates` — 100+ skins, not text-only clones |
 | Print and archive from Office | Native PDF 1.7 with subsetted TrueType fonts |
 | Rearrange an existing PDF | Graft pages so fonts and images survive |
 | Large files in a UI | Isolate open and save so the UI isolate stays responsive |
@@ -59,6 +61,7 @@ quds_office_engine          pure Dart, no dart:ui
 ├── PdfFile                 open, display list, extract, annotate
 ├── PdfToolbox              merge, split, rotate, stamp, crop
 ├── pdf_widgets             constraint layout → PdfDocument
+├── pdf_templates           100+ report skins on top of widgets
 └── OfficePdfExport         Word / Excel / PowerPoint → PDF 1.7
          │
          ▼
@@ -83,10 +86,14 @@ Three entry points. Do not mix them carelessly:
 | --- | --- |
 | `package:quds_office_engine/quds_office_engine.dart` | Office models, builders, formulas, `PdfFile`, export |
 | `package:quds_office_engine/pdf_widgets.dart` | Flutter-like PDF layout (`Document`, `Text`, `Table`) |
+| `package:quds_office_engine/pdf_templates.dart` | Classified report templates on top of the widgets |
 | `package:quds_office_engine/quds_office_engine_optional.dart` | Optional PowerPoint media hydrate |
 
 `pdf_widgets` is a **separate library** on purpose. Its `Text`, `TextStyle`,
 and `Widget` names must not collide with Flutter. Import it with a prefix.
+
+`pdf_templates` is a third library. It does not re-export the widgets.
+Import it as `tpl` in a Flutter file so `TextDirection` does not collide.
 
 `PdfDocument` is the **writer**. `PdfFile` is an **opened** ISO 32000 file.
 They are parallel types. The writer is not renamed, and the file model does
@@ -117,7 +124,10 @@ direction where the document requires it.
 
 ```dart
 final theme = OfficeDocumentTheme.custom(
-  palette: const OfficePalette(primary: '2B579A', accent: 'C9A227'),
+  palette: const OfficePalette(
+    primary: OfficeColors.wordBlue,
+    accent: OfficeColors.antiqueGold,
+  ),
   rtl: true,
   page: OfficePageSize.a4Portrait,
 );
@@ -134,7 +144,7 @@ along the diagonal — Arabic cannot be cut glyph by glyph and still join.
 
 ```yaml
 dependencies:
-  quds_office_engine: ^0.4.0
+  quds_office_engine: ^0.5.0
 ```
 
 ```bash
@@ -161,6 +171,7 @@ import 'package:quds_office_engine/pdf_widgets.dart' as pw;
 | **PowerPoint** | Build, open, and write PPTX. Shapes, tables, notes, masters (subset), transitions and animations including Morph, reverse playback clock |
 | **Office → PDF** | Replay Word layout, Excel grid, and slides (or notes pages, including two slides on one page) to PDF 1.7 with subsetted fonts, links, and outlines |
 | **pdf_widgets** | Constraint layout: flex, text, tables, charts, images, TOC, headers, footers, watermarks. Synchronous `Document.save()` |
+| **pdf_templates** | 100+ classified reports with **distinct `SheetSkin` layouts**, LTR/RTL, and brand themes |
 | **PdfFile** | Open PDF 1.7, paint a display list, extract text, annotate, fill AcroForm, incremental save |
 | **PdfToolbox** | Merge, extract, split, reorder, remove, rotate, reverse, insert, mix, stamp, number, Bates, crop — a new file with resources grafted |
 | **Platform** | Own ZIP, Deflate, CFBF/OLE, XML, AES, repair, and isolate open/save |
@@ -187,7 +198,10 @@ import 'package:quds_office_engine/quds_office_engine.dart';
 
 void main() {
   final theme = OfficeDocumentTheme.custom(
-    palette: const OfficePalette(primary: '2B579A', accent: 'C9A227'),
+    palette: const OfficePalette(
+    primary: OfficeColors.wordBlue,
+    accent: OfficeColors.antiqueGold,
+  ),
     rtl: true,
   );
 
@@ -261,7 +275,11 @@ model.
 
 ```dart
 final book = XlsxWorkbookBuilder(theme: theme);
-final header = book.style(bold: true, fillRgb: '2B579A', color: 'FFFFFFFF');
+final header = book.style(
+  bold: true,
+  fillRgb: OfficeColors.wordBlue,
+  color: OfficeColors.white,
+);
 final sheet = book.addSheet('Budget')
   ..rightToLeft = true
   ..freezeRows = 1
@@ -485,6 +503,59 @@ script.
 Word does **not** have this DSL. OOXML is flow, not boxes. Generate DOCX with
 `DocxDocumentBuilder`. Compose PDF pages with `pdf_widgets`.
 
+### Report templates (`pdf_templates.dart`)
+
+**100+ ready reports that look different from each other.** Labels are the
+language. `TextDirection` is the layout. `TemplateTheme.copyWith` is the
+brand. **`SheetSkin`** is the page composition — invoice, receipt, letter,
+certificate, payslip split, checklist, route, voucher, grades, identity,
+notice, journal, comparison, and more. Amounts stay formatted strings.
+
+| Category | Templates |
+| --- | --- |
+| Commerce | Invoice, quote, receipt, delivery, purchase order, credit note, packing list, and more |
+| Finance | Statement, expense, payslip, profit and loss, aging, vouchers, journal |
+| People | Letter, certificate, offer, appointment, attendance, profile |
+| Operations | Agenda, minutes, checklist, inspection, roster, incident, permit |
+| Narrative | Memo, briefing, proposal, policy, decision |
+| Data | KPI sheet, listing, scorecard, timesheet, risk register |
+| Education | Report card, transcript, syllabus, fee receipt |
+| Property | Rent receipt, lease summary, tenant statement |
+| Logistics | Bill of lading, pick list, waybill, manifest |
+| Programs | Grant report, distribution, donation receipt |
+
+`TemplateCatalog.all` is the full index. Studio gallery samples are two
+pages: English, then Arabic, in one PDF via `joinTemplateFiles`.
+
+Named classes stay open for customization — grow with `SheetTemplate`,
+`SheetSkin`, and `TemplateDocument.save` instead of forking a closed file.
+
+```dart
+import 'package:quds_office_engine/pdf_templates.dart' as tpl;
+
+final bytes = tpl.InvoiceTemplate(
+  direction: tpl.TextDirection.rtl,
+  theme: tpl.TemplateThemes.commerce.copyWith(accent: '0F766E'),
+  labels: const tpl.TradeLabels(document: 'فاتورة', from: 'من', to: 'إلى'),
+  seller: const tpl.TemplateParty(name: 'الورشة'),
+  buyer: const tpl.TemplateParty(name: 'الحيّ'),
+  totals: const tpl.MoneyTotals(subtotal: '100', total: '100'),
+).save();
+```
+
+Swap composition without rewriting the document:
+
+```dart
+tpl.SheetTemplate(
+  kind: tpl.SheetKind.trade,
+  skin: tpl.SheetSkin.receipt, // or invoice, voucher, route, …
+  direction: tpl.TextDirection.ltr,
+  theme: tpl.TemplateThemes.commerce,
+  owner: const tpl.TemplateParty(name: 'North Dock'),
+  labels: const tpl.SheetLabels(document: 'Receipt'),
+).save();
+```
+
 ### 3. Open a PDF (`PdfFile`)
 
 ```dart
@@ -647,10 +718,10 @@ hardcode a product name into documents.
 ```dart
 final theme = OfficeDocumentTheme.custom(
   palette: const OfficePalette(
-    primary: '2B579A',
-    accent: '217346',
-    muted: '5B5B5B',
-    highlight: 'C9A227',
+    primary: OfficeColors.wordBlue,
+    accent: OfficeColors.excelGreen,
+    muted: OfficeColors.gray,
+    highlight: OfficeColors.antiqueGold,
   ),
   rtl: true,
   page: OfficePageSize.a4Portrait,
@@ -686,6 +757,7 @@ lib/
 ├── quds_office_engine_optional.dart     optional extras
 ├── pdf_file.dart                        PdfFile, PdfToolbox, extract
 ├── pdf_widgets.dart                     constraint layout (separate library)
+├── pdf_templates.dart                   classified report templates
 └── src/
     ├── opc/        ZIP, relationships, OLE, crypto, repair, isolates
     ├── word/       WML model, layout, OMML, serialize

@@ -1,13 +1,16 @@
 import 'dart:typed_data';
 
+import 'package:quds_office_engine/pdf_templates.dart' as tpl;
 import 'package:quds_office_engine/pdf_widgets.dart' as pw;
 import 'package:quds_office_engine/quds_office_engine.dart';
 
 import 'sample_library.dart';
 import 'studio_files.dart';
 import 'studio_pdf_face_samples.dart';
+import 'studio_pdf_flutter_samples.dart';
 import 'studio_pdf_rich_samples.dart';
 import 'studio_pdf_showcase.dart';
+import 'studio_pdf_template_samples.dart';
 import 'studio_pdf_toc_samples.dart';
 import 'studio_sample_pdf.dart';
 
@@ -21,6 +24,9 @@ enum StudioPdfSampleKind {
 
   /// Constraint-layout [pw.Document] (`pdf_widgets`).
   pdfWidgets,
+
+  /// Classified report templates (`pdf_templates`).
+  templates,
 
   /// Bilingual showcase: gradients, charts, and tables that span pages.
   showcase,
@@ -38,6 +44,7 @@ class StudioPdfSample {
     required this.blurbAr,
     required this.fileName,
     required this.build,
+    this.group = '',
   });
 
   /// Stable id.
@@ -61,6 +68,9 @@ class StudioPdfSample {
   /// Suggested file name (also used under system temp).
   final String fileName;
 
+  /// Sub-group inside a kind. Template samples use the catalog category name.
+  final String group;
+
   /// Builds PDF bytes (may use [font] / [fonts] when embedding text).
   final Uint8List Function({SfntFont? font, OfficeFontSet? fonts}) build;
 
@@ -78,6 +88,7 @@ abstract final class StudioPdfGallery {
         ...officeSamples,
         ...engineSamples,
         ...widgetSamples,
+        ...templateSamples,
         ...showcaseSamples,
       ];
 
@@ -401,7 +412,67 @@ abstract final class StudioPdfGallery {
       build: ({SfntFont? font, OfficeFontSet? fonts}) =>
           studioArabicContentsPdf(),
     ),
+    StudioPdfSample(
+      id: 'widgets-flutter-twins',
+      kind: StudioPdfSampleKind.pdfWidgets,
+      titleEn: 'Flutter twins',
+      titleAr: 'توائم Flutter',
+      blurbEn:
+          'Transform, clip, slots, ellipsis, and a right-to-left pin page.',
+      blurbAr: 'تدوير وقص وفتحات وقطع، ثم صفحة تثبيت من اليمين.',
+      fileName: 'widgets_flutter_twins.pdf',
+      build: ({SfntFont? font, OfficeFontSet? fonts}) =>
+          studioFlutterTwinsPdf(),
+    ),
   ];
+
+  /// One bilingual sample per catalog template. Page 1 English, page 2 Arabic.
+  static List<StudioPdfSample> get templateSamples => <StudioPdfSample>[
+        for (final tpl.TemplateRef ref in tpl.TemplateCatalog.all)
+          StudioPdfSample(
+            id: 'templates-${ref.id}',
+            kind: StudioPdfSampleKind.templates,
+            group: ref.category.name,
+            titleEn: ref.nameEn,
+            titleAr: ref.nameAr,
+            blurbEn: 'English page, then Arabic. ${ref.blurbEn}',
+            blurbAr: 'صفحة إنجليزية ثم عربية. ${ref.blurbAr}',
+            fileName: 'templates_${ref.id.replaceAll('.', '_')}.pdf',
+            build: ({SfntFont? font, OfficeFontSet? fonts}) =>
+                studioTemplatePair(ref.id),
+          ),
+      ];
+
+  /// Sub-tabs under the templates section, in catalog order.
+  static const List<String> templateGroups = <String>[
+    'commerce',
+    'finance',
+    'people',
+    'operations',
+    'narrative',
+    'data',
+    'education',
+    'property',
+    'logistics',
+    'programs',
+  ];
+
+  /// Localized name for a template sub-tab.
+  static String templateGroupTitle(String group, bool arabic) {
+    return switch (group) {
+      'commerce' => arabic ? 'تجارة' : 'Commerce',
+      'finance' => arabic ? 'مال' : 'Finance',
+      'people' => arabic ? 'أشخاص' : 'People',
+      'operations' => arabic ? 'تشغيل' : 'Operations',
+      'narrative' => arabic ? 'سرد' : 'Narrative',
+      'data' => arabic ? 'بيانات' : 'Data',
+      'education' => arabic ? 'تعليم' : 'Education',
+      'property' => arabic ? 'عقار' : 'Property',
+      'logistics' => arabic ? 'شحن' : 'Logistics',
+      'programs' => arabic ? 'برامج' : 'Programs',
+      _ => group,
+    };
+  }
 
   /// Distinct bilingual documents for the gallery's first tab.
   static final List<StudioPdfSample> showcaseSamples = <StudioPdfSample>[
@@ -456,6 +527,8 @@ abstract final class StudioPdfGallery {
       StudioPdfSampleKind.pdfEngine => arabic ? 'محرك PDF' : 'PDF engine',
       StudioPdfSampleKind.pdfWidgets =>
         arabic ? 'pdf_widgets' : 'pdf_widgets',
+      StudioPdfSampleKind.templates =>
+        arabic ? 'قوالب التقارير' : 'Report templates',
       StudioPdfSampleKind.showcase => arabic ? 'عرض ثنائي' : 'Showcase',
     };
   }
@@ -472,6 +545,9 @@ abstract final class StudioPdfGallery {
       StudioPdfSampleKind.pdfWidgets => arabic
           ? 'تخطيط قيود شبيه بـ Flutter.'
           : 'Flutter-like constraint layout composer.',
+      StudioPdfSampleKind.templates => arabic
+          ? 'كل قالب صفحتان: إنجليزية ثم عربية. الشرائح تصنّف المجالات.'
+          : 'Each template is two pages: English, then Arabic. Chips classify the domains.',
       StudioPdfSampleKind.showcase => arabic
           ? 'عربي وإنجليزي: تدرج ورسوم وجداول تمتد.'
           : 'Arabic and English: gradients, charts, spanning tables.',

@@ -12,21 +12,22 @@ class Padding extends Widget {
   const Padding({required this.padding, required this.child});
 
   /// padding API.
-  final EdgeInsets padding;
+  final EdgeInsetsGeometry padding;
 
   /// child API.
   final Widget child;
 
   @override
   PwBox layout(Context context, BoxConstraints constraints) {
-    final PwBox box = child.layout(context, constraints.deflate(padding));
+    final EdgeInsets pad = padding.resolve(context.textDirection);
+    final PwBox box = child.layout(context, constraints.deflate(pad));
     return ProxyBox(
       PwSize(
-        constraints.constrainWidth(box.size.width + padding.horizontal),
-        constraints.constrainHeight(box.size.height + padding.vertical),
+        constraints.constrainWidth(box.size.width + pad.horizontal),
+        constraints.constrainHeight(box.size.height + pad.vertical),
       ),
       child: box,
-      childOffset: PwOffset(padding.left, padding.top),
+      childOffset: PwOffset(pad.left, pad.top),
     );
   }
 }
@@ -42,7 +43,7 @@ class Align extends Widget {
   });
 
   /// alignment API.
-  final Alignment alignment;
+  final AlignmentGeometry alignment;
 
   /// widthFactor API.
   final double? widthFactor;
@@ -67,10 +68,11 @@ class Align extends Widget {
         ? constraints.maxHeight
         : box.size.height;
     final PwSize size = constraints.constrain(PwSize(w, h));
+    final Alignment resolved = alignment.resolve(context.textDirection);
     return ProxyBox(
       size,
       child: box,
-      childOffset: alignment.alongOffset(size, box.size),
+      childOffset: resolved.alongOffset(size, box.size),
     );
   }
 }
@@ -200,13 +202,13 @@ class Container extends Widget {
   final double? height;
 
   /// padding API.
-  final EdgeInsets? padding;
+  final EdgeInsetsGeometry? padding;
 
   /// margin API.
-  final EdgeInsets? margin;
+  final EdgeInsetsGeometry? margin;
 
   /// alignment API.
-  final Alignment? alignment;
+  final AlignmentGeometry? alignment;
 
   /// decoration API.
   final BoxDecoration? decoration;
@@ -219,8 +221,12 @@ class Container extends Widget {
 
   @override
   PwBox layout(Context context, BoxConstraints incoming) {
-    final EdgeInsets outer = margin ?? EdgeInsets.zero;
-    final EdgeInsets pad = padding ?? EdgeInsets.zero;
+    final EdgeInsets outer = (margin ?? EdgeInsets.zero).resolve(
+      context.textDirection,
+    );
+    final EdgeInsets pad = (padding ?? EdgeInsets.zero).resolve(
+      context.textDirection,
+    );
     BoxConstraints inner = incoming.deflate(outer);
     final BoxConstraints? extra = constraints;
     if (extra != null) {
@@ -264,7 +270,9 @@ class Container extends Widget {
         (boxSize.width - pad.horizontal).clamp(0, boxSize.width),
         (boxSize.height - pad.vertical).clamp(0, boxSize.height),
       );
-      final PwOffset aligned = (alignment ?? _startTop(context)).alongOffset(
+      final Alignment resolved =
+          alignment?.resolve(context.textDirection) ?? _startTop(context);
+      final PwOffset aligned = resolved.alongOffset(
         padBox,
         childSize,
       );
@@ -321,7 +329,7 @@ class FittedBox extends Widget {
   final BoxFit fit;
 
   /// alignment API.
-  final Alignment alignment;
+  final AlignmentGeometry alignment;
 
   /// child API.
   final Widget child;
@@ -345,7 +353,7 @@ class _FittedBox extends PwBox {
 
   final PwBox child;
   final BoxFit fit;
-  final Alignment alignment;
+  final AlignmentGeometry alignment;
 
   @override
   void paint(Context context, PwOffset offset) {
@@ -367,7 +375,8 @@ class _FittedBox extends PwBox {
     final PwSize drawn = fit == BoxFit.fill
         ? size
         : PwSize(sw * scale, sh * scale);
-    final PwOffset aligned = alignment.alongOffset(size, drawn);
+    final Alignment resolved = alignment.resolve(context.textDirection);
+    final PwOffset aligned = resolved.alongOffset(size, drawn);
     final PdfCanvas? canvas = context.canvas;
     if (canvas == null) {
       child.paint(context, offset);
@@ -470,6 +479,78 @@ class _DividerBox extends PwBox {
     final double y = offset.dy + size.height / 2;
     canvas.moveTo(offset.dx + indent, y);
     canvas.lineTo(offset.dx + size.width - endIndent, y);
+    canvas.stroke();
+  }
+}
+
+/// Vertical rule. [width] is the slot; the stroke sits in the middle.
+class VerticalDivider extends Widget {
+  /// VerticalDivider API.
+  const VerticalDivider({
+    this.width,
+    this.thickness,
+    this.color,
+    this.indent = 0,
+    this.endIndent = 0,
+  });
+
+  /// width API.
+  final double? width;
+
+  /// thickness API.
+  final double? thickness;
+
+  /// color API.
+  final String? color;
+
+  /// indent API.
+  final double indent;
+
+  /// endIndent API.
+  final double endIndent;
+
+  @override
+  PwBox layout(Context context, BoxConstraints constraints) {
+    final double w = width ?? 16;
+    final double h = constraints.hasBoundedHeight ? constraints.maxHeight : 24;
+    final double t = thickness ?? 0.8;
+    final String c = color ?? 'B0BEC5';
+    return _VerticalDividerBox(
+      PwSize(w, h),
+      t,
+      c,
+      indent,
+      endIndent,
+    );
+  }
+}
+
+class _VerticalDividerBox extends PwBox {
+  _VerticalDividerBox(
+    super.size,
+    this.thickness,
+    this.color,
+    this.indent,
+    this.endIndent,
+  );
+
+  final double thickness;
+  final String color;
+  final double indent;
+  final double endIndent;
+
+  @override
+  void paint(Context context, PwOffset offset) {
+    final PdfCanvas? canvas = context.canvas;
+    if (canvas == null) {
+      return;
+    }
+    canvas.endText();
+    canvas.setStrokeColor(color);
+    canvas.setLineWidth(thickness);
+    final double x = offset.dx + size.width / 2;
+    canvas.moveTo(x, offset.dy + indent);
+    canvas.lineTo(x, offset.dy + size.height - endIndent);
     canvas.stroke();
   }
 }

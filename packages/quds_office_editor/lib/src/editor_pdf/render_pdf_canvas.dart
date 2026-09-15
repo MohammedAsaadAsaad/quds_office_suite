@@ -151,10 +151,10 @@ class RenderPdfCanvas extends RenderBox implements MouseTrackerAnnotation {
     this.onAnnotTap,
     this.onContextMenu,
   }) : _lists = lists,
-       _selection = selection,
        _viewport = viewport,
        _scale = scale,
-       _config = config;
+       _config = config,
+       _selection = selection;
 
   List<PdfDisplayList> _lists;
   VirtualViewport _viewport;

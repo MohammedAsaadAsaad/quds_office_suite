@@ -187,6 +187,20 @@ class PdfCanvas {
     _buf.writeln('${_n(scale)} 0 0 ${_n(scale)} ${_n(x)} ${_n(y)} cm');
   }
 
+  /// Shift subsequent drawing by ([dx], [dy]) in the current user space.
+  void translate(double dx, double dy) {
+    endText();
+    _buf.writeln('1 0 0 1 ${_n(dx)} ${_n(dy)} cm');
+  }
+
+  /// Scale around ([cx], [cy]). [sy] is independent so a bar can stretch.
+  void scaleAround(double cx, double cy, double sx, double sy) {
+    endText();
+    _buf.writeln('1 0 0 1 ${_n(cx)} ${_n(cy)} cm');
+    _buf.writeln('${_n(sx)} 0 0 ${_n(sy)} 0 0 cm');
+    _buf.writeln('1 0 0 1 ${_n(-cx)} ${_n(-cy)} cm');
+  }
+
   /// rotateAround API.
   void rotateAround(double cx, double cy, double degrees) {
     endText();

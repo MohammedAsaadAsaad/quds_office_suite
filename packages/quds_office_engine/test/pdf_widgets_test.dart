@@ -113,6 +113,53 @@ void main() {
     expect(firstCellSize.height, closeTo(30, 0.1));
   });
 
+  test('RTL fromTextArray pins cell text to the start edge', () {
+    late double ltrDx;
+    late double rtlDx;
+    final pw.Document doc = pw.Document(font: font);
+    doc.addPage(
+      pw.Page(
+        pageFormat: pw.PdfPageFormat.a4,
+        textDirection: pw.TextDirection.ltr,
+        build: (pw.Context context) {
+          final pw.Container cell = pw.Container(
+            width: 200,
+            height: 30,
+            padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+            alignment: pw.AlignmentDirectional.topStart,
+            child: const pw.Text('x'),
+          );
+          final pw.ProxyBox box =
+              cell.layout(context, const pw.BoxConstraints()) as pw.ProxyBox;
+          ltrDx = box.childOffset.dx;
+          return cell;
+        },
+      ),
+    );
+    doc.addPage(
+      pw.Page(
+        pageFormat: pw.PdfPageFormat.a4,
+        textDirection: pw.TextDirection.rtl,
+        build: (pw.Context context) {
+          final pw.Container cell = pw.Container(
+            width: 200,
+            height: 30,
+            padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+            alignment: pw.AlignmentDirectional.topStart,
+            child: const pw.Text('x'),
+          );
+          final pw.ProxyBox box =
+              cell.layout(context, const pw.BoxConstraints()) as pw.ProxyBox;
+          rtlDx = box.childOffset.dx;
+          return cell;
+        },
+      ),
+    );
+    doc.save();
+    expect(ltrDx, lessThan(20));
+    expect(rtlDx, greaterThan(150));
+  });
+
   test('Row and Column honor flex and produce a non-empty box', () {
     final pw.Document doc = pw.Document(font: font);
     late pw.PwSize size;
@@ -511,6 +558,82 @@ void main() {
     final List<PdfDrawText> arabic = marks(stamp('ملاحظة'));
     expect(arabic, hasLength(1));
     expect(arabic.single.text, 'ملاحظة');
+  });
+
+  test('directional insets and alignments flip with reading direction', () {
+    expect(
+      const pw.EdgeInsetsDirectional.fromSTEB(8, 1, 2, 3)
+          .resolve(pw.TextDirection.ltr)
+          .left,
+      8,
+    );
+    expect(
+      const pw.EdgeInsetsDirectional.fromSTEB(8, 1, 2, 3)
+          .resolve(pw.TextDirection.rtl)
+          .left,
+      2,
+    );
+    expect(
+      pw.AlignmentDirectional.centerStart.resolve(pw.TextDirection.ltr).x,
+      -1,
+    );
+    expect(
+      pw.AlignmentDirectional.centerStart.resolve(pw.TextDirection.rtl).x,
+      1,
+    );
+  });
+
+  test('flutter twins save and ellipsize a narrow line', () {
+    final pw.Document doc = pw.Document(title: 'Twins', font: font);
+    doc.addPage(
+      pw.Page(
+        pageFormat: pw.PdfPageFormat.a4,
+        build: (pw.Context context) => pw.Column(
+          children: <pw.Widget>[
+            pw.SizedBox(
+              width: 80,
+              child: pw.Text(
+                'Harbour close is a long line',
+                maxLines: 1,
+                overflow: pw.TextOverflow.ellipsis,
+                style: const pw.TextStyle(fontSize: 12),
+              ),
+            ),
+            pw.ListTile(
+              leading: const pw.Icon(0x51),
+              title: pw.Text('List title'),
+              subtitle: pw.Text('slot row'),
+              trailing: const pw.Radio(value: true),
+            ),
+            pw.Row(
+              children: <pw.Widget>[
+                const pw.Switch(value: true),
+                const pw.VerticalDivider(),
+                pw.RotatedBox(quarterTurns: 1, child: pw.Text('SIDE')),
+              ],
+            ),
+            pw.ClipOval(
+              child: pw.Container(
+                width: 20,
+                height: 20,
+                color: '0F766E',
+              ),
+            ),
+            pw.Transform.rotate(
+              angle: -0.2,
+              child: pw.Text('draft'),
+            ),
+          ],
+        ),
+      ),
+    );
+    final bytes = doc.save();
+    expect(bytes.length, greaterThan(200));
+    final String text = PdfExtract.pageText(PdfFile.open(bytes), 0);
+    expect(text.contains('List title'), isTrue);
+    if (font != null) {
+      expect(text.contains('\u2026') || text.contains('...'), isTrue);
+    }
   });
 }
 

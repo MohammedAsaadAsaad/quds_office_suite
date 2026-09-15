@@ -2,6 +2,30 @@
 
 All notable changes to `quds_office_engine` are documented here.
 
+## 0.5.0
+
+**Report templates that look different, not only read different.**
+
+- `pdf_templates.dart` ships **100+** classified report templates across
+  commerce, finance, people, operations, narrative, data, education,
+  property, logistics, and programs. Pick a named class
+  (`InvoiceTemplate`, `PurchaseOrderTemplate`, …) and keep developing it.
+- **`SheetSkin`** is the composition surface: invoice bar, receipt slip,
+  letterhead, certificate frame, payslip split, checklist boxes, route
+  endpoints, voucher, grades, identity panel, notice strip, journal,
+  comparison columns, and more. Labels stay language. Direction stays
+  layout. `TemplateTheme.copyWith` stays brand.
+- `TemplateCatalog.all` / `inCategory` index every entry.
+  `TemplateSuite.demo` writes a sample page. `joinTemplateFiles` joins
+  English and Arabic into one PDF.
+- `Table.fromTextArray` defaults to `AlignmentDirectional.topStart`, so
+  Arabic table cells pin text to the start edge in RTL.
+- `pdf_widgets` Flutter twins: `Transform`, clips, `FractionallySizedBox`,
+  `IntrinsicHeight`, `CustomPaint`, `ListTile`, directional insets, and
+  more. `TextOverflow.ellipsis` cuts a line.
+- `OfficeColors.red` and other common names are `RRGGBB` strings for
+  `OfficePalette` without touching Flutter `Colors`.
+
 ## 0.4.0
 
 PDF is a file you can assemble, not only a file you can open or export.
@@ -54,41 +78,14 @@ citizen alongside DOCX / XLSX / PPTX — open, compose, and export without Flutt
 - `OfficePdfExport` still compiles Word / Excel / PowerPoint to PDF 1.7.
 
 ### Breaking
-- Word widget DSL (`word_widgets.dart`) removed — use `DocxDocumentBuilder` /
-  `WmlDocument` for OOXML; use `pdf_widgets.dart` for PDF composition.
+- Word widget DSL removed. Use `pdf_widgets` for PDF layout and
+  `DocxDocumentBuilder` for DOCX.
 
 ## 0.2.0
 
-Word widget DSL, independent landscape sections, find/print/stats helpers,
-font sets, notes/fields/styles, and richer PDF embedding. English-only
-package documentation; multilingual and multi-direction text remain first-class.
+- English package documentation, Word widget DSL (later removed), and
+  PDF export polish.
 
 ## 0.1.0
 
-First public release.
-
-### Word
-- Open, edit, and write `.docx` (WordprocessingML) with sections, headers, footers, tables, comments, hyperlinks, bookmarks, and TOC.
-- OMML math gallery, linear input, and layout.
-- Print-faithful pagination used by PDF export.
-
-### Excel
-- Open and write `.xlsx` (SpreadsheetML) with styles, shared strings, freeze panes, RTL sheets, and charts.
-- Formula engine with Excel-style functions (`SUM`, `IF`, `VLOOKUP`, `INDEX`/`MATCH`, dates, text, stats, …).
-- Dependency graph and isolate-friendly recalculation.
-
-### PowerPoint
-- Open and write `.pptx` (PresentationML) with DrawingML shapes, tables, notes, hidden slides.
-- Click-driven animations and slide transitions, including Morph.
-- Slideshow clock that can play a transition or animation **forward or in reverse**.
-
-### Platform
-- Pure Dart: no Flutter, no `dart:ui`.
-- Own OPC/ZIP, CFBF/OLE, Deflate, and XML stack.
-- Password-aware open, repair of damaged packages, isolate open/save for large files.
-- Native PDF 1.7 export for Word, Excel, and PowerPoint (fonts, images, links, notes pages).
-- Fluent builders: `DocxDocumentBuilder`, `XlsxWorkbookBuilder`, `PptxDeckBuilder`, `PdfReportBuilder`.
-- Widget-style Word DSL (`word_widgets.dart`) with independent portrait / landscape sections.
-- `OfficeTextExtractor` for DOCX / XLSX / PPTX / ODF.
-- Find / replace, print ranges, text statistics, and document properties.
-- UAX #9 BiDi, Arabic shaping, grapheme-aware line breaking, and mixed writing directions.
+- First public release: Office builders, models, formulas, BiDi, PDF export.

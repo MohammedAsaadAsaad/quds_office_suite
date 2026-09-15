@@ -48,6 +48,7 @@ class Text extends Widget {
     this.textDirection,
     this.maxLines,
     this.softWrap = true,
+    this.overflow = TextOverflow.clip,
   });
 
   /// text API.
@@ -68,6 +69,9 @@ class Text extends Widget {
   /// softWrap API.
   final bool softWrap;
 
+  /// overflow API.
+  final TextOverflow overflow;
+
   @override
   void paintStamp(Context context, double pageW, double pageH) {
     pwEmitStampLine(context, text, style, pageW, pageH);
@@ -85,42 +89,65 @@ class Text extends Widget {
     if (!softWrap) {
       final double w = pwMeasureText(ctx, text, style);
       final double h = PwResolvedStyle(ctx, style).lineHeight(ctx);
+      final List<BrokenLine> raw = pwWrapText(
+        ctx,
+        text,
+        w < 1 ? 1 : w,
+        style,
+        align: align,
+      );
+      final List<BrokenLine> lines = pwApplyOverflow(
+        ctx,
+        raw,
+        maxW,
+        style,
+        maxLines: maxLines,
+        overflow: overflow,
+        softWrap: false,
+      );
       return _TextBox(
         PwSize(constraints.constrainWidth(w), constraints.constrainHeight(h)),
-        text,
+        lines,
         style,
         pwResolvedTextAlign(align, ctx.textDirection == TextDirection.rtl),
-        maxLines,
         ctx.textDirection,
+        PwResolvedStyle(ctx, style).baseline(ctx),
       );
     }
-    final List<BrokenLine> lines = pwWrapText(
+    final List<BrokenLine> raw = pwWrapText(
       ctx,
       text,
       maxW,
       style,
       align: align,
     );
-    final int keep = maxLines == null
-        ? lines.length
-        : lines.length.clamp(0, maxLines!);
+    final List<BrokenLine> lines = pwApplyOverflow(
+      ctx,
+      raw,
+      maxW,
+      style,
+      maxLines: maxLines,
+      overflow: overflow,
+      softWrap: true,
+    );
     final double lh = PwResolvedStyle(ctx, style).lineHeight(ctx);
     var usedW = 0.0;
-    for (int i = 0; i < keep; i++) {
-      if (lines[i].width > usedW) {
-        usedW = lines[i].width;
+    for (final BrokenLine line in lines) {
+      if (line.width > usedW) {
+        usedW = line.width;
       }
     }
+    final int rows = lines.isEmpty ? 1 : lines.length;
     return _TextBox(
       PwSize(
         constraints.constrainWidth(usedW < 1 ? maxW : usedW),
-        constraints.constrainHeight(lh * (keep < 1 ? 1 : keep)),
+        constraints.constrainHeight(lh * rows),
       ),
-      text,
+      lines,
       style,
       pwResolvedTextAlign(align, ctx.textDirection == TextDirection.rtl),
-      maxLines,
       ctx.textDirection,
+      PwResolvedStyle(ctx, style).baseline(ctx),
     );
   }
 }
@@ -128,44 +155,38 @@ class Text extends Widget {
 class _TextBox extends PwBox {
   _TextBox(
     super.size,
-    this.text,
+    this.lines,
     this.style,
     this.align,
-    this.maxLines,
     this.direction,
+    this.textBaseline,
   );
 
-  final String text;
+  final List<BrokenLine> lines;
   final TextStyle? style;
   final TextAlign align;
-  final int? maxLines;
 
   /// Direction from layout. Paint must not fall back to the page direction,
   /// or an RTL phrase inside an LTR sheet is drawn backwards.
   final TextDirection direction;
+
+  final double textBaseline;
+
+  @override
+  double? get baseline => textBaseline;
 
   @override
   void paint(Context context, PwOffset offset) {
     final Context ctx = context.textDirection == direction
         ? context
         : context.copyWith(textDirection: direction);
-    final List<BrokenLine> lines = pwWrapText(
-      ctx,
-      text,
-      size.width,
-      style,
-      align: align,
-    );
     final PwResolvedStyle resolved = PwResolvedStyle(ctx, style);
     final double lh = resolved.lineHeight(ctx);
-    final int keep = maxLines == null
-        ? lines.length
-        : lines.length.clamp(0, maxLines!);
     var y = offset.dy;
-    for (int i = 0; i < keep; i++) {
+    for (final BrokenLine line in lines) {
       pwPaintLine(
         ctx,
-        lines[i],
+        line,
         PwOffset(offset.dx, y),
         size.width,
         style,

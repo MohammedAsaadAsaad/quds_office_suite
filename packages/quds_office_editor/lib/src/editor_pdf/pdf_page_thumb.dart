@@ -1,7 +1,6 @@
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
-import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 import 'package:quds_office_engine/pdf_file.dart';
 
@@ -31,7 +30,11 @@ class PdfPageThumb extends LeafRenderObjectWidget {
 
   @override
   RenderObject createRenderObject(BuildContext context) {
-    return RenderPdfPageThumb(list: list, selected: selected, annots: annots);
+    return RenderPdfPageThumb(
+      list: list,
+      selected: selected,
+      annots: annots,
+    );
   }
 
   @override

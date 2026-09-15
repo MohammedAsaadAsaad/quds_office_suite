@@ -5807,33 +5807,6 @@ class WordEditorController extends OfficeController {
     );
   }
 
-  static int _lineLogicalStart(LaidOutLine line) {
-    if (line.glyphs.isEmpty) {
-      return 0;
-    }
-    var min = line.glyphs.first.glyph.logicalIndex;
-    for (final LaidOutGlyph glyph in line.glyphs) {
-      if (glyph.glyph.logicalIndex < min) {
-        min = glyph.glyph.logicalIndex;
-      }
-    }
-    return min;
-  }
-
-  static int _lineLogicalEnd(LaidOutLine line) {
-    if (line.glyphs.isEmpty) {
-      return 0;
-    }
-    var max = 0;
-    for (final LaidOutGlyph glyph in line.glyphs) {
-      final int end = glyph.glyph.logicalIndex + 1;
-      if (end > max) {
-        max = end;
-      }
-    }
-    return max;
-  }
-
   static int _logicalAtX(LaidOutLine line, double x) {
     return CaretEngine.hitLogicalIndex(line, x);
   }

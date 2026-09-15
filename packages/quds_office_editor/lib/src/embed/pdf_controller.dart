@@ -1,10 +1,8 @@
-import 'dart:typed_data';
 import 'dart:ui' show Offset, Rect, Size, lerpDouble;
 
 import 'package:flutter/animation.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
-import 'package:quds_office_engine/pdf_file.dart';
 import 'package:quds_office_engine/quds_office_engine.dart';
 
 import '../core/command_pipeline.dart';

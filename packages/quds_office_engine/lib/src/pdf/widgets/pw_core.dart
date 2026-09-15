@@ -64,6 +64,7 @@ class Context {
     List<PwHeading>? headings,
     List<PwHeading>? frozenHeadings,
     Map<String, PwHeading>? anchors,
+    this.measuring = false,
   }) : usedCodePoints = usedCodePoints ?? <int>{},
        images = images ?? <PdfEmbeddedImage>[],
        links = links ?? <PdfLinkAnnot>[],
@@ -116,6 +117,9 @@ class Context {
   /// Named destinations.
   final Map<String, PwHeading> anchors;
 
+  /// Probe pass ([IntrinsicHeight]). Headings recorded here are discarded.
+  final bool measuring;
+
   /// font API.
   SfntFont? get font => document.font;
 
@@ -143,6 +147,7 @@ class Context {
     ThemeData? theme,
     TextDirection? textDirection,
     PdfPageFormat? pageFormat,
+    bool? measuring,
   }) {
     return Context(
       document: document,
@@ -160,6 +165,7 @@ class Context {
       headings: headings,
       frozenHeadings: frozenHeadings,
       anchors: anchors,
+      measuring: measuring ?? this.measuring,
     );
   }
 
@@ -175,6 +181,9 @@ class Context {
 
   /// registerHeading API.
   void registerHeading(int level, String title, {double destY = 0}) {
+    if (measuring) {
+      return;
+    }
     final PwHeading heading = PwHeading(
       level: level,
       title: title,
@@ -204,6 +213,9 @@ class Context {
 
   /// registerAnchor API.
   void registerAnchor(String name, {double destY = 0}) {
+    if (measuring) {
+      return;
+    }
     anchors[name] = PwHeading(
       level: 0,
       title: name,
@@ -257,6 +269,9 @@ abstract class PwBox {
   /// size API.
   final PwSize size;
 
+  /// Distance from the top of this box to the alphabetic baseline, if any.
+  double? get baseline => null;
+
   /// paint API.
   void paint(Context context, PwOffset offset);
 
@@ -283,6 +298,7 @@ class ProxyBox extends PwBox {
     this.decoration,
     this.onPaint,
     this.onNote,
+    this.baselineOverride,
   });
 
   /// child API.
@@ -299,6 +315,14 @@ class ProxyBox extends PwBox {
 
   /// Called when the page position of this box is known.
   final void Function(Context context, PwOffset offset)? onNote;
+
+  /// Alphabetic baseline of this box, if known.
+  final double? baselineOverride;
+
+  @override
+  double? get baseline =>
+      baselineOverride ??
+      (child?.baseline == null ? null : child!.baseline! + childOffset.dy);
 
   @override
   void noteDestination(Context context, PwOffset offset) {
@@ -562,7 +586,7 @@ class PageTheme {
   final PageOrientation orientation;
 
   /// margin API.
-  final EdgeInsets? margin;
+  final EdgeInsetsGeometry? margin;
 
   /// textDirection API.
   final TextDirection? textDirection;
@@ -578,8 +602,9 @@ class PageTheme {
 
   /// resolvedMargin API.
   EdgeInsets resolvedMargin() {
-    if (margin != null) {
-      return margin!;
+    final EdgeInsetsGeometry? inset = margin;
+    if (inset != null) {
+      return inset.resolve(textDirection ?? TextDirection.ltr);
     }
     final PdfPageFormat format = resolvedFormat;
     return EdgeInsets.fromLTRB(
@@ -600,7 +625,7 @@ class Page {
     required BuildCallback build,
     ThemeData? theme,
     PageOrientation? orientation,
-    EdgeInsets? margin,
+    EdgeInsetsGeometry? margin,
     TextDirection? textDirection,
     this.header,
     this.footer,
@@ -888,7 +913,7 @@ class MultiPage extends Page {
     required BuildListCallback build,
     ThemeData? theme,
     PageOrientation? orientation,
-    EdgeInsets? margin,
+    EdgeInsetsGeometry? margin,
     TextDirection? textDirection,
     BuildCallback? header,
     BuildCallback? footer,

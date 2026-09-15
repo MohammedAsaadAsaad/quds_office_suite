@@ -7,6 +7,13 @@ This repository is a Dart workspace. Each published package keeps its own change
 
 ## Unreleased
 
+## 0.5.0
+
+- Engine: `pdf_templates` with 100+ skins (`SheetSkin`), Flutter twins,
+  named `OfficeColors`, RTL table cell start alignment.
+- Editor: Studio gallery lands on templates; each sample is English then
+  Arabic; category chips for every domain.
+
 ## 0.4.0
 
 - Engine: `PdfToolbox` page graft, quarter-turn `/Rotate`, shaped PDF watermark,

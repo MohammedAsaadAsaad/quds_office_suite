@@ -1,7 +1,173 @@
+/// Named `RRGGBB` colors for [OfficePalette], cell fills, and PDF text.
+///
+/// Each name is a string, not a paint object, so it stays const and does not
+/// import Flutter. `OfficeColors.red` is `'FF0000'`. Flutter already owns
+/// `Colors`; this is the Office set.
+///
+/// ```dart
+/// const OfficePalette(
+///   primary: OfficeColors.wordBlue,
+///   accent: OfficeColors.antiqueGold,
+/// );
+/// ```
+abstract final class OfficeColors {
+  /// black API.
+  static const String black = '000000';
+
+  /// white API.
+  static const String white = 'FFFFFF';
+
+  /// red API.
+  static const String red = 'FF0000';
+
+  /// green API.
+  static const String green = '008000';
+
+  /// lime API.
+  static const String lime = '00FF00';
+
+  /// blue API.
+  static const String blue = '0000FF';
+
+  /// yellow API.
+  static const String yellow = 'FFFF00';
+
+  /// orange API.
+  static const String orange = 'FFA500';
+
+  /// purple API.
+  static const String purple = '800080';
+
+  /// pink API.
+  static const String pink = 'FFC0CB';
+
+  /// brown API.
+  static const String brown = 'A52A2A';
+
+  /// cyan API.
+  static const String cyan = '00FFFF';
+
+  /// aqua API.
+  static const String aqua = cyan;
+
+  /// teal API.
+  static const String teal = '008080';
+
+  /// navy API.
+  static const String navy = '000080';
+
+  /// gold API.
+  static const String gold = 'FFD700';
+
+  /// silver API.
+  static const String silver = 'C0C0C0';
+
+  /// gray API.
+  static const String gray = '808080';
+
+  /// grey API.
+  static const String grey = gray;
+
+  /// maroon API.
+  static const String maroon = '800000';
+
+  /// olive API.
+  static const String olive = '808000';
+
+  /// magenta API.
+  static const String magenta = 'FF00FF';
+
+  /// fuchsia API.
+  static const String fuchsia = magenta;
+
+  /// darkRed API.
+  static const String darkRed = '8B0000';
+
+  /// darkGreen API.
+  static const String darkGreen = '006400';
+
+  /// darkBlue API.
+  static const String darkBlue = '00008B';
+
+  /// lightGray API.
+  static const String lightGray = 'D3D3D3';
+
+  /// darkGray API.
+  static const String darkGray = '404040';
+
+  /// Word ribbon blue (`2B579A`).
+  static const String wordBlue = '2B579A';
+
+  /// Excel ribbon green (`217346`).
+  static const String excelGreen = '217346';
+
+  /// PowerPoint ribbon red (`B7472A`).
+  static const String slideRed = 'B7472A';
+
+  /// Suite highlight gold (`C9A227`).
+  static const String antiqueGold = 'C9A227';
+
+  /// names API.
+  static const Map<String, String> names = <String, String>{
+    'black': black,
+    'white': white,
+    'red': red,
+    'green': green,
+    'lime': lime,
+    'blue': blue,
+    'yellow': yellow,
+    'orange': orange,
+    'purple': purple,
+    'pink': pink,
+    'brown': brown,
+    'cyan': cyan,
+    'aqua': aqua,
+    'teal': teal,
+    'navy': navy,
+    'gold': gold,
+    'silver': silver,
+    'gray': gray,
+    'grey': grey,
+    'maroon': maroon,
+    'olive': olive,
+    'magenta': magenta,
+    'fuchsia': fuchsia,
+    'darkred': darkRed,
+    'darkgreen': darkGreen,
+    'darkblue': darkBlue,
+    'lightgray': lightGray,
+    'lightgrey': lightGray,
+    'darkgray': darkGray,
+    'darkgrey': darkGray,
+    'wordblue': wordBlue,
+    'excelgreen': excelGreen,
+    'slidered': slideRed,
+    'antiquegold': antiqueGold,
+  };
+
+  /// A named color, or [value] itself when it is already hex.
+  ///
+  /// Accepts `red`, `OfficeColors.red`, `#FF0000`, and `FF0000`.
+  static String parse(String value) {
+    final String raw = value.trim();
+    if (raw.isEmpty) {
+      return raw;
+    }
+    final String named = names[raw.toLowerCase().replaceAll(RegExp(r'[\s_-]'), '')] ?? '';
+    if (named.isNotEmpty) {
+      return named;
+    }
+    final String hex = raw.startsWith('#') ? raw.substring(1) : raw;
+    return hex.toUpperCase();
+  }
+}
+
 /// Document-level colors, type, and page size shared by Word, PPTX, XLSX, and PDF.
 ///
 /// This is a pure-Dart brand token set. It is intentionally separate from the
 /// Flutter editor chrome theme (`OfficeTheme` in `quds_office_editor`).
+/// Color fields are `RRGGBB` strings — use [OfficeColors.red] instead of a
+/// literal when a common name is enough.
 class OfficePalette {
   /// OfficePalette API.
   const OfficePalette({

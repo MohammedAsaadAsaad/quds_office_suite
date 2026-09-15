@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:quds_office_engine/pdf_file.dart';
 import 'package:quds_office_engine/quds_office_engine.dart';
 
 import '../editor_pdf/pdf_text_selection.dart';
@@ -488,10 +487,10 @@ abstract final class OfficeContextMenu {
         enabled: page + 1 < controller.pageCount,
       ),
     ];
-    if (!mutate || controller is! PdfEditorController) {
+    if (!mutate) {
       return items;
     }
-    final PdfEditorController editor = controller;
+    final PdfEditorController editor = controller as PdfEditorController;
     final bool locked =
         editor.file?.permissions != null &&
         !editor.file!.permissions!.canAnnotate;

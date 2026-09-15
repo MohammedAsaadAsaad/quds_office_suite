@@ -23,6 +23,7 @@ library;
 export 'src/builders/office_markup.dart' show ChartPoint;
 export 'src/pdf/widgets/pw_box.dart';
 export 'src/pdf/widgets/pw_core.dart';
+export 'src/pdf/widgets/pw_flutter.dart';
 export 'src/pdf/widgets/pw_layout.dart';
 export 'src/pdf/widgets/pw_media.dart';
 export 'src/pdf/widgets/pw_style.dart';

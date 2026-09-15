@@ -255,6 +255,102 @@ double pwPaintParagraph(
   return y - origin.dy;
 }
 
+/// Drops lines past [maxLines] and, for [TextOverflow.ellipsis], marks the cut.
+List<BrokenLine> pwApplyOverflow(
+  Context context,
+  List<BrokenLine> lines,
+  double maxWidth,
+  TextStyle? style, {
+  required int? maxLines,
+  required TextOverflow overflow,
+  required bool softWrap,
+}) {
+  if (lines.isEmpty || overflow == TextOverflow.visible) {
+    return lines;
+  }
+  final bool oneLineOverflow =
+      overflow == TextOverflow.ellipsis &&
+      !softWrap &&
+      maxLines == null &&
+      lines.first.width > maxWidth + 0.5;
+  final int keep = oneLineOverflow
+      ? 1
+      : (maxLines == null ? lines.length : lines.length.clamp(0, maxLines));
+  if (keep <= 0) {
+    return const <BrokenLine>[];
+  }
+  final bool cut =
+      overflow == TextOverflow.ellipsis &&
+      (lines.length > keep || oneLineOverflow || lines[keep - 1].width > maxWidth + 0.5);
+  final List<BrokenLine> kept = lines.length <= keep
+      ? List<BrokenLine>.of(lines)
+      : lines.sublist(0, keep);
+  if (cut) {
+    kept[keep - 1] = _ellipsizeLine(context, kept[keep - 1], maxWidth, style);
+  }
+  return kept;
+}
+
+BrokenLine _ellipsizeLine(
+  Context context,
+  BrokenLine line,
+  double maxWidth,
+  TextStyle? style,
+) {
+  final PwResolvedStyle resolved = PwResolvedStyle(context, style);
+  final SfntFont? face = context.faceFor(bold: resolved.bold);
+  final bool hasEllipsis = face != null && face.glyphIdFor(0x2026) != 0;
+  final String mark = hasEllipsis ? '\u2026' : '...';
+  context.useText(mark);
+  final double markW = pwMeasureText(context, mark, style);
+  final double budget = (maxWidth - markW).clamp(0, double.infinity);
+  final bool rtl = context.textDirection == TextDirection.rtl;
+  final List<ShapedGlyph> kept = List<ShapedGlyph>.of(line.glyphs);
+  double width = 0;
+  for (final ShapedGlyph glyph in kept) {
+    width += glyph.advance;
+  }
+  while (kept.isNotEmpty && width > budget) {
+    final ShapedGlyph gone = rtl ? kept.removeAt(0) : kept.removeLast();
+    width -= gone.advance;
+  }
+  final int level = rtl ? 1 : 0;
+  final List<ShapedGlyph> marks = <ShapedGlyph>[];
+  if (hasEllipsis) {
+    marks.add(
+      ShapedGlyph(
+        codePoint: 0x2026,
+        glyphId: face.glyphIdFor(0x2026),
+        advance: markW,
+        logicalIndex: 0,
+        level: level,
+      ),
+    );
+  } else {
+    final double dot = markW / 3;
+    for (int i = 0; i < 3; i++) {
+      marks.add(
+        ShapedGlyph(
+          codePoint: 0x2E,
+          glyphId: face?.glyphIdFor(0x2E) ?? 0x2E,
+          advance: dot,
+          logicalIndex: i,
+          level: level,
+        ),
+      );
+    }
+  }
+  return BrokenLine(
+    glyphs: rtl
+        ? <ShapedGlyph>[...marks, ...kept]
+        : <ShapedGlyph>[...kept, ...marks],
+    width: width + markW,
+    logicalStart: line.logicalStart,
+    logicalEnd: line.logicalEnd,
+    justificationRatio: 0,
+  );
+}
+
 void _paintGlyph(
   Context context,
   PdfCanvas canvas,

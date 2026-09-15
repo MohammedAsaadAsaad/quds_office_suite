@@ -399,15 +399,15 @@ class Stack extends Widget {
   final List<Widget> children;
 
   /// alignment API.
-  final Alignment alignment;
+  final AlignmentGeometry alignment;
 
   /// fit API.
   final StackFit fit;
 
   @override
   PwBox layout(Context context, BoxConstraints constraints) {
-    final List<(PwBox, PwOffset, Positioned?)> laid =
-        <(PwBox, PwOffset, Positioned?)>[];
+    final List<(PwBox, PwOffset, Positioned?, double?, double?)> laid =
+        <(PwBox, PwOffset, Positioned?, double?, double?)>[];
     var w = 0.0;
     var h = 0.0;
     final PwSize stackSizeHint = constraints.constrain(
@@ -418,16 +418,25 @@ class Stack extends Widget {
     );
     for (final Widget child in children) {
       final Positioned? pos = child is Positioned ? child : null;
+      final ({double? left, double? right}) pin = pos == null
+          ? (left: null, right: null)
+          : pos.horizontal(context.textDirection);
       final Widget inner = pos?.child ?? child;
       BoxConstraints childCs = constraints.loosen();
       if (pos != null) {
         double? tw = pos.width;
         double? th = pos.height;
-        if (tw == null && pos.left != null && pos.right != null) {
-          tw = (stackSizeHint.width - pos.left! - pos.right!).clamp(0, double.infinity);
+        if (tw == null && pin.left != null && pin.right != null) {
+          tw = (stackSizeHint.width - pin.left! - pin.right!).clamp(
+            0,
+            double.infinity,
+          );
         }
         if (th == null && pos.top != null && pos.bottom != null) {
-          th = (stackSizeHint.height - pos.top! - pos.bottom!).clamp(0, double.infinity);
+          th = (stackSizeHint.height - pos.top! - pos.bottom!).clamp(
+            0,
+            double.infinity,
+          );
         }
         if (tw != null || th != null) {
           childCs = BoxConstraints.tightFor(width: tw, height: th);
@@ -440,7 +449,7 @@ class Stack extends Widget {
       if (box.size.height > h) {
         h = box.size.height;
       }
-      laid.add((box, PwOffset.zero, pos));
+      laid.add((box, PwOffset.zero, pos, pin.left, pin.right));
     }
     if (fit == StackFit.expand && constraints.hasBoundedWidth) {
       w = constraints.maxWidth;
@@ -449,12 +458,13 @@ class Stack extends Widget {
       h = constraints.maxHeight;
     }
     // Grow stack to fit positioned right/bottom pins.
-    for (final (PwBox box, PwOffset _, Positioned? pos) in laid) {
+    for (final (PwBox box, PwOffset _, Positioned? pos, double? left, double? right)
+        in laid) {
       if (pos == null) {
         continue;
       }
-      if (pos.left != null) {
-        final double need = pos.left! + box.size.width + (pos.right ?? 0);
+      if (left != null) {
+        final double need = left + box.size.width + (right ?? 0);
         if (need > w) {
           w = need;
         }
@@ -468,17 +478,23 @@ class Stack extends Widget {
     }
     final PwSize size = constraints.constrain(PwSize(w, h));
     final List<(PwBox, PwOffset)> placed = <(PwBox, PwOffset)>[];
-    for (final (PwBox box, PwOffset _, Positioned? pos) in laid) {
+    for (final (PwBox box, PwOffset _, Positioned? pos, double? left, double? right)
+        in laid) {
       if (pos != null) {
-        final double dx = pos.left ??
-            (pos.right != null ? size.width - box.size.width - pos.right! : 0.0);
-        final double dy = pos.top ??
+        final double dx =
+            left ??
+            (right != null ? size.width - box.size.width - right : 0.0);
+        final double dy =
+            pos.top ??
             (pos.bottom != null
                 ? size.height - box.size.height - pos.bottom!
                 : 0.0);
         placed.add((box, PwOffset(dx, dy)));
       } else {
-        placed.add((box, alignment.alongOffset(size, box.size)));
+        placed.add((
+          box,
+          alignment.resolve(context.textDirection).alongOffset(size, box.size),
+        ));
       }
     }
     return GroupBox(size, placed);
@@ -499,7 +515,22 @@ class Positioned extends Widget {
     this.width,
     this.height,
     required this.child,
-  });
+  }) : start = null,
+       end = null,
+       directional = false;
+
+  /// Pin with [start]/[end], resolved from [Context.textDirection].
+  const Positioned.directional({
+    this.start,
+    this.top,
+    this.end,
+    this.bottom,
+    this.width,
+    this.height,
+    required this.child,
+  }) : left = null,
+       right = null,
+       directional = true;
 
   /// fill API.
   const Positioned.fill({required this.child})
@@ -508,7 +539,10 @@ class Positioned extends Widget {
       right = 0,
       bottom = 0,
       width = null,
-      height = null;
+      height = null,
+      start = null,
+      end = null,
+      directional = false;
 
   /// left API.
   final double? left;
@@ -528,8 +562,26 @@ class Positioned extends Widget {
   /// height API.
   final double? height;
 
+  /// start API. Leading edge when [directional] is true.
+  final double? start;
+
+  /// end API. Trailing edge when [directional] is true.
+  final double? end;
+
+  /// True when [start]/[end] replace [left]/[right].
+  final bool directional;
+
   /// child API.
   final Widget child;
+
+  /// Physical left/right for [direction].
+  ({double? left, double? right}) horizontal(TextDirection direction) {
+    if (!directional) {
+      return (left: left, right: right);
+    }
+    final bool rtl = direction == TextDirection.rtl;
+    return (left: rtl ? end : start, right: rtl ? start : end);
+  }
 
   @override
   PwBox layout(Context context, BoxConstraints constraints) {

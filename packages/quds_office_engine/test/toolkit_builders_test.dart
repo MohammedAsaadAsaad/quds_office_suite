@@ -102,6 +102,16 @@ void main() {
     expect(custom.palette.primary, '112233');
     expect(light.colorAt(0), light.palette.primary);
     expect(light.page.widthPoints, greaterThan(0));
+    expect(OfficeColors.red, 'FF0000');
+    expect(OfficeColors.parse('red'), OfficeColors.red);
+    expect(OfficeColors.parse('antique-gold'), OfficeColors.antiqueGold);
+    expect(OfficeColors.parse('#2b579a'), '2B579A');
+    const OfficePalette named = OfficePalette(
+      primary: OfficeColors.wordBlue,
+      accent: OfficeColors.antiqueGold,
+    );
+    expect(named.primary, '2B579A');
+    expect(named.accent, 'C9A227');
   });
 
   test('theme colors appear in Word, PPTX, and XLSX packages', () {

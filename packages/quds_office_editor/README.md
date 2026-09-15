@@ -14,9 +14,10 @@ document is a custom `RenderBox`. Not `TextField`. Not `ListView`. Not
 
 This is the interaction half of
 [Quds Office Suite](https://github.com/MohammedAsaadAsaad/quds_office_suite).
-Documents, formulas, pagination, `PdfFile`, `PdfToolbox`, and `pdf_widgets`
-live in [`quds_office_engine`](https://pub.dev/packages/quds_office_engine)
-and are re-exported from this package.
+Documents, formulas, pagination, `PdfFile`, `PdfToolbox`, `pdf_widgets`, and
+`pdf_templates` live in
+[`quds_office_engine`](https://pub.dev/packages/quds_office_engine)
+and are re-exported where appropriate from this package.
 
 You draw the ribbon, the file menu, and the window chrome. This package paints
 the document.
@@ -101,7 +102,7 @@ Locale changes chrome labels, not pagination.
 
 ```yaml
 dependencies:
-  quds_office_editor: ^0.4.0
+  quds_office_editor: ^0.5.0
 ```
 
 ```bash
@@ -109,7 +110,7 @@ flutter pub add quds_office_editor
 ```
 
 Requires Flutter **3.44+** and Dart **3.12+**. The engine comes along as
-`quds_office_engine: ^0.4.0`.
+`quds_office_engine: ^0.5.0`.
 
 ### Host fonts
 
@@ -425,12 +426,13 @@ cd packages/quds_office_editor/example
 flutter run -d linux   # or macos, windows, chrome
 ```
 
-The studio includes a bilingual chrome, a PDF gallery (Office export,
-`pdf_widgets` samples, face samples), and a PDF tools lab that calls
-`PdfToolbox` — merge, split, extract with several range groups, organize,
-rotate by quarter-turns, and appearance overlays. Reopen a gallery sample
-after changing it; a file already open in the viewer is the bytes you loaded,
-not a live link to the gallery builder.
+The studio includes a bilingual chrome and a PDF gallery that **opens on
+report templates** first — 100+ samples, category chips, each sample two
+pages (English then Arabic). It also covers `pdf_widgets` twins, Office
+export, face samples, and a PDF tools lab (`PdfToolbox` merge, split,
+extract, organize, rotate, overlays). Reopen a gallery sample after changing
+it; a file already open in the viewer is the bytes you loaded, not a live
+link to the gallery builder.
 
 See [example/README.md](example/README.md) for a guided tour.
 

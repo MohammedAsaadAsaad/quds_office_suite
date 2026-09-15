@@ -4,6 +4,9 @@ library;
 /// How text is aligned.
 enum TextAlign { left, right, start, end, center, justify }
 
+/// How [Text] treats a line that does not fit [Text.maxLines].
+enum TextOverflow { clip, ellipsis, visible }
+
 /// Reading direction.
 enum TextDirection { ltr, rtl }
 
@@ -305,8 +308,17 @@ class PdfPageFormat {
 /// Alias used in some samples.
 typedef PageFormat = PdfPageFormat;
 
+/// Physical or start/end insets. Resolve with [resolve] before painting.
+abstract class EdgeInsetsGeometry {
+  /// EdgeInsetsGeometry API.
+  const EdgeInsetsGeometry();
+
+  /// Physical insets for [direction].
+  EdgeInsets resolve(TextDirection direction);
+}
+
 /// Insets around a child.
-class EdgeInsets {
+class EdgeInsets extends EdgeInsetsGeometry {
   /// EdgeInsets API.
   const EdgeInsets.fromLTRB(this.left, this.top, this.right, this.bottom);
 
@@ -352,10 +364,71 @@ class EdgeInsets {
 
   /// vertical API.
   double get vertical => top + bottom;
+
+  @override
+  EdgeInsets resolve(TextDirection direction) => this;
+}
+
+/// Insets that flip with [TextDirection]. [start] is left in LTR, right in RTL.
+class EdgeInsetsDirectional extends EdgeInsetsGeometry {
+  /// EdgeInsetsDirectional API.
+  const EdgeInsetsDirectional.fromSTEB(
+    this.start,
+    this.top,
+    this.end,
+    this.bottom,
+  );
+
+  /// all API.
+  const EdgeInsetsDirectional.all(double value)
+    : start = value,
+      top = value,
+      end = value,
+      bottom = value;
+
+  /// only API.
+  const EdgeInsetsDirectional.only({
+    this.start = 0,
+    this.top = 0,
+    this.end = 0,
+    this.bottom = 0,
+  });
+
+  /// zero API.
+  static const EdgeInsetsDirectional zero = EdgeInsetsDirectional.all(0);
+
+  /// start API.
+  final double start;
+
+  /// top API.
+  final double top;
+
+  /// end API.
+  final double end;
+
+  /// bottom API.
+  final double bottom;
+
+  @override
+  EdgeInsets resolve(TextDirection direction) {
+    if (direction == TextDirection.rtl) {
+      return EdgeInsets.fromLTRB(end, top, start, bottom);
+    }
+    return EdgeInsets.fromLTRB(start, top, end, bottom);
+  }
+}
+
+/// Physical or start/end alignment. Resolve before [Alignment.alongOffset].
+abstract class AlignmentGeometry {
+  /// AlignmentGeometry API.
+  const AlignmentGeometry();
+
+  /// Physical alignment for [direction].
+  Alignment resolve(TextDirection direction);
 }
 
 /// Flutter alignment: x/y in `-1..1` (top-left is `-1,-1`).
-class Alignment {
+class Alignment extends AlignmentGeometry {
   /// Alignment API.
   const Alignment(this.x, this.y);
 
@@ -397,6 +470,54 @@ class Alignment {
     final double dx = (parent.width - child.width) * ((x + 1) / 2);
     final double dy = (parent.height - child.height) * ((y + 1) / 2);
     return PwOffset(dx, dy);
+  }
+
+  @override
+  Alignment resolve(TextDirection direction) => this;
+}
+
+/// Alignment that flips with [TextDirection]. [start] is `-1` at the start edge.
+class AlignmentDirectional extends AlignmentGeometry {
+  /// AlignmentDirectional API.
+  const AlignmentDirectional(this.start, this.y);
+
+  /// start API. `-1` is the start edge, `1` the end edge.
+  final double start;
+
+  /// y API.
+  final double y;
+
+  /// topStart API.
+  static const AlignmentDirectional topStart = AlignmentDirectional(-1, -1);
+
+  /// topCenter API.
+  static const AlignmentDirectional topCenter = AlignmentDirectional(0, -1);
+
+  /// topEnd API.
+  static const AlignmentDirectional topEnd = AlignmentDirectional(1, -1);
+
+  /// centerStart API.
+  static const AlignmentDirectional centerStart = AlignmentDirectional(-1, 0);
+
+  /// center API.
+  static const AlignmentDirectional center = AlignmentDirectional(0, 0);
+
+  /// centerEnd API.
+  static const AlignmentDirectional centerEnd = AlignmentDirectional(1, 0);
+
+  /// bottomStart API.
+  static const AlignmentDirectional bottomStart = AlignmentDirectional(-1, 1);
+
+  /// bottomCenter API.
+  static const AlignmentDirectional bottomCenter = AlignmentDirectional(0, 1);
+
+  /// bottomEnd API.
+  static const AlignmentDirectional bottomEnd = AlignmentDirectional(1, 1);
+
+  @override
+  Alignment resolve(TextDirection direction) {
+    final double x = direction == TextDirection.rtl ? -start : start;
+    return Alignment(x, y);
   }
 }
 
