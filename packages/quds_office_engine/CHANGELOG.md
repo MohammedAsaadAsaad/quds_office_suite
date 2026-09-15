@@ -2,6 +2,10 @@
 
 All notable changes to `quds_office_engine` are documented here.
 
+## 0.5.2
+
+- Do not mid-cut Arabic chart axis labels (keeps joining forms intact).
+
 ## 0.5.1
 
 - Soft-wrapped `Text` keeps the full max width so RTL `start` / `justify`

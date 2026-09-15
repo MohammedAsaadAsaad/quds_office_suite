@@ -179,11 +179,17 @@ String _chartValue(double value) {
   return value.toStringAsFixed(1);
 }
 
-/// Keep axis labels inside their slot so Arabic names do not collide.
+/// Keep axis labels inside their slot so Latin names do not collide.
 String _chartAxisLabel(String label, double slotWidth) {
   final String trimmed = label.trim();
-  if (trimmed.isEmpty || slotWidth >= 72) {
+  if (trimmed.isEmpty || slotWidth >= 90) {
     return trimmed;
+  }
+  // Cutting Arabic mid-word breaks joining; leave the full string.
+  for (final int unit in trimmed.codeUnits) {
+    if (unit >= 0x0600 && unit <= 0x06FF) {
+      return trimmed;
+    }
   }
   if (slotWidth >= 48) {
     return trimmed.length <= 14 ? trimmed : '${trimmed.substring(0, 13)}…';
