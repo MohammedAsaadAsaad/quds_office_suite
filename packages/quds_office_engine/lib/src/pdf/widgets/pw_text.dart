@@ -131,16 +131,12 @@ class Text extends Widget {
       softWrap: true,
     );
     final double lh = PwResolvedStyle(ctx, style).lineHeight(ctx);
-    var usedW = 0.0;
-    for (final BrokenLine line in lines) {
-      if (line.width > usedW) {
-        usedW = line.width;
-      }
-    }
     final int rows = lines.isEmpty ? 1 : lines.length;
+    // Soft-wrapped text must keep the full max width so start/end/center/
+    // justify can pin glyphs to the correct edge (RTL headers and bullets).
     return _TextBox(
       PwSize(
-        constraints.constrainWidth(usedW < 1 ? maxW : usedW),
+        constraints.constrainWidth(maxW),
         constraints.constrainHeight(lh * rows),
       ),
       lines,

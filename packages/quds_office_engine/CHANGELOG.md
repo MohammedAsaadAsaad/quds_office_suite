@@ -2,6 +2,14 @@
 
 All notable changes to `quds_office_engine` are documented here.
 
+## 0.5.1
+
+- Soft-wrapped `Text` keeps the full max width so RTL `start` / `justify`
+  paint on the start edge (headers, bullets, paragraphs).
+- `TextAlign.justify` origins follow direction instead of always left.
+- `Bullet` uses `TextAlign.start`. Chart titles follow direction; long axis
+  labels are shortened to fit their slot.
+
 ## 0.5.0
 
 **Report templates that look different, not only read different.**

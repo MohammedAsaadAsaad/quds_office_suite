@@ -403,7 +403,8 @@ TextAlign _resolvedAlign(TextAlign align, bool rtl) {
   return switch (align) {
     TextAlign.start => rtl ? TextAlign.right : TextAlign.left,
     TextAlign.end => rtl ? TextAlign.left : TextAlign.right,
-    TextAlign.justify => TextAlign.left,
+    // Justify still packs the line; the origin edge must follow direction.
+    TextAlign.justify => rtl ? TextAlign.right : TextAlign.left,
     _ => align,
   };
 }

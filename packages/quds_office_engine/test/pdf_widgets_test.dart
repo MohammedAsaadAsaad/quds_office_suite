@@ -127,7 +127,7 @@ void main() {
             height: 30,
             padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
             alignment: pw.AlignmentDirectional.topStart,
-            child: const pw.Text('x'),
+            child: const pw.Text('x', softWrap: false),
           );
           final pw.ProxyBox box =
               cell.layout(context, const pw.BoxConstraints()) as pw.ProxyBox;
@@ -146,7 +146,7 @@ void main() {
             height: 30,
             padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
             alignment: pw.AlignmentDirectional.topStart,
-            child: const pw.Text('x'),
+            child: const pw.Text('x', softWrap: false),
           );
           final pw.ProxyBox box =
               cell.layout(context, const pw.BoxConstraints()) as pw.ProxyBox;

@@ -179,6 +179,21 @@ String _chartValue(double value) {
   return value.toStringAsFixed(1);
 }
 
+/// Keep axis labels inside their slot so Arabic names do not collide.
+String _chartAxisLabel(String label, double slotWidth) {
+  final String trimmed = label.trim();
+  if (trimmed.isEmpty || slotWidth >= 72) {
+    return trimmed;
+  }
+  if (slotWidth >= 48) {
+    return trimmed.length <= 14 ? trimmed : '${trimmed.substring(0, 13)}…';
+  }
+  if (slotWidth >= 32) {
+    return trimmed.length <= 10 ? trimmed : '${trimmed.substring(0, 9)}…';
+  }
+  return trimmed.length <= 6 ? trimmed : '${trimmed.substring(0, 5)}…';
+}
+
 class _ChartBox extends PwBox {
   _ChartBox(
     super.size,
@@ -212,6 +227,7 @@ class _ChartBox extends PwBox {
     canvas.roundedRect(offset.dx, offset.dy, size.width, size.height, 4);
     canvas.stroke();
     if (title.isNotEmpty) {
+      final bool rtl = context.textDirection == TextDirection.rtl;
       pwPaintParagraph(
         context,
         title,
@@ -222,7 +238,7 @@ class _ChartBox extends PwBox {
           fontWeight: FontWeight.bold,
           color: '37474F',
         ),
-        TextAlign.left,
+        rtl ? TextAlign.right : TextAlign.left,
       );
     }
     if (points.isEmpty) {
@@ -334,10 +350,10 @@ class _ChartBox extends PwBox {
       }
       pwPaintParagraph(
         context,
-        pts[i].label,
+        _chartAxisLabel(pts[i].label, slot),
         PwOffset(x + i * slot, y + h - 12),
         slot,
-        const TextStyle(fontSize: 7, color: '546E7A'),
+        const TextStyle(fontSize: 6.5, color: '546E7A'),
         TextAlign.center,
       );
     }
@@ -385,12 +401,13 @@ class _ChartBox extends PwBox {
           TextAlign.center,
         );
       }
+      final double labelW = pts.length <= 1 ? w : w / (pts.length - 1);
       pwPaintParagraph(
         context,
-        pts[i].label,
-        PwOffset(px - 16, y + h - 12),
-        32,
-        const TextStyle(fontSize: 7, color: '546E7A'),
+        _chartAxisLabel(pts[i].label, labelW),
+        PwOffset(px - labelW / 2, y + h - 12),
+        labelW,
+        const TextStyle(fontSize: 6.5, color: '546E7A'),
         TextAlign.center,
       );
     }
@@ -702,9 +719,11 @@ class Bullet extends Widget {
         children: <Widget>[
           SizedBox(
             width: 14,
-            child: Text(bullet, style: style),
+            child: Text(bullet, style: style, textAlign: TextAlign.center),
           ),
-          Expanded(child: Text(text, style: style)),
+          Expanded(
+            child: Text(text, style: style, textAlign: TextAlign.start),
+          ),
         ],
       ),
     ).layout(context, constraints);
