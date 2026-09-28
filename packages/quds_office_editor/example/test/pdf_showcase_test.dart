@@ -13,12 +13,25 @@ void main() {
     expect(
       StudioPdfGallery.showcaseSamples.map((StudioPdfSample s) => s.id),
       <String>[
+        'showcase-ayat-wa-ashar',
         'showcase-harbour-close',
         'showcase-layl-al-qamar',
         'showcase-two-shores',
         'showcase-cairo-night',
       ],
     );
+
+    final PdfFile diwan = PdfFile.open(
+      StudioPdfGallery.all
+          .firstWhere((StudioPdfSample s) => s.id == 'showcase-ayat-wa-ashar')
+          .build(),
+    );
+    expect(diwan.pageCount, greaterThan(3));
+    expect(String.fromCharCodes(diwan.originalBytes), contains('/Tajawal'));
+    final String diwanText = PdfExtract.documentText(diwan);
+    expect(_hasArabic(diwanText), isTrue);
+    expect(diwanText, contains('قِفَا'));
+    expect(diwanText.contains('\u064F'), isTrue, reason: 'damma in tashkeel');
 
     final PdfFile harbour = PdfFile.open(
       StudioPdfGallery.all

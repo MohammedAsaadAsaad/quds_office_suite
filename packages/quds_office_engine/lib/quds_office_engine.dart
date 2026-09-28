@@ -22,6 +22,7 @@ export 'src/extract/office_text_extractor.dart';
 export 'src/fonts/font_metrics.dart';
 export 'src/fonts/font_subsetter.dart';
 export 'src/fonts/glyph_outlines.dart';
+export 'src/fonts/gpos_mark_to_base.dart';
 export 'src/fonts/office_font_set.dart';
 export 'src/fonts/office_typeface.dart';
 export 'src/fonts/sfnt_parser.dart';

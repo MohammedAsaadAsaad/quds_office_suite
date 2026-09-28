@@ -38,12 +38,94 @@ class PdfInterpreter {
         store.asDict(pageDict['Resources']) ?? PdfCosDict();
     final Uint8List content = _pageContent(pageDict);
     _run(content, resources, frame, 0);
+    _paintAnnotAppearances(pageDict, frame, 0);
     return PdfDisplayList(
       page: page,
       ops: frame.ops,
       runs: frame.runs,
       hotspots: hotspots,
     );
+  }
+
+  void _paintAnnotAppearances(
+    PdfCosDict pageDict,
+    _Frame frame,
+    int depth,
+  ) {
+    final PdfCosArray? arr = store.asArray(pageDict['Annots']);
+    if (arr == null) {
+      return;
+    }
+    for (final PdfCos item in arr.items) {
+      final PdfCosDict? dict = store.asDict(item);
+      if (dict == null) {
+        continue;
+      }
+      final PdfCosStream? form = _annotAppearance(dict);
+      if (form == null) {
+        continue;
+      }
+      final ({double llx, double lly, double urx, double ury})? rect =
+          pdfCosRect(dict['Rect']);
+      if (rect == null) {
+        continue;
+      }
+      frame.save();
+      frame.ops.add(const PdfSaveGState());
+      frame.ctm.multiply(1, 0, 0, 1, rect.llx, rect.lly);
+      final ({double llx, double lly, double urx, double ury})? box =
+          pdfCosRect(form.dict['BBox']);
+      if (box != null) {
+        final double bw = (box.urx - box.llx).abs();
+        final double bh = (box.ury - box.lly).abs();
+        final double rw = (rect.urx - rect.llx).abs();
+        final double rh = (rect.ury - rect.lly).abs();
+        if (bw > 0.5 && bh > 0.5) {
+          frame.ctm.multiply(rw / bw, 0, 0, rh / bh, 0, 0);
+        }
+        if (box.llx.abs() > 0.01 || box.lly.abs() > 0.01) {
+          frame.ctm.multiply(1, 0, 0, 1, -box.llx, -box.lly);
+        }
+      }
+      final PdfCosArray? matrix = store.asArray(form.dict['Matrix']);
+      if (matrix != null && matrix.items.length >= 6) {
+        frame.ctm.multiply(
+          pdfCosNumber(matrix.items[0]) ?? 1,
+          pdfCosNumber(matrix.items[1]) ?? 0,
+          pdfCosNumber(matrix.items[2]) ?? 0,
+          pdfCosNumber(matrix.items[3]) ?? 1,
+          pdfCosNumber(matrix.items[4]) ?? 0,
+          pdfCosNumber(matrix.items[5]) ?? 0,
+        );
+      }
+      final PdfCosDict inner = store.asDict(form.dict['Resources']) ?? PdfCosDict();
+      final Uint8List? bytes = store.streamBytes(form);
+      if (bytes != null) {
+        _run(bytes, inner, frame, depth + 1);
+      }
+      frame.ops.add(const PdfRestoreGState());
+      frame.restore();
+    }
+  }
+
+  PdfCosStream? _annotAppearance(PdfCosDict dict) {
+    final PdfCosDict? ap = store.asDict(dict['AP']);
+    if (ap == null) {
+      return null;
+    }
+    final PdfCos? n = store.deref(ap['N']);
+    if (n is PdfCosStream) {
+      return n;
+    }
+    if (n is PdfCosDict) {
+      final String state = pdfCosName(dict['AS']) ?? 'Off';
+      final PdfCos? chosen = store.deref(n[state]) ??
+          (n.values.isEmpty ? null : store.deref(n.values.values.first));
+      if (chosen is PdfCosStream) {
+        return chosen;
+      }
+    }
+    return null;
   }
 
   Uint8List _pageContent(PdfCosDict pageDict) {

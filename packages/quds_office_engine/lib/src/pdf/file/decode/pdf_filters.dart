@@ -5,6 +5,7 @@ import '../../pdf_stream.dart';
 import '../cos/pdf_cos.dart';
 import '../cos/pdf_open_error.dart';
 import 'pdf_ccitt.dart';
+import 'pdf_jbig2.dart';
 
 /// ISO 32000-1 §7.4 stream filters used by [PdfFile].
 abstract final class PdfFilters {
@@ -65,6 +66,7 @@ abstract final class PdfFilters {
       case 'CCF':
         return PdfCcitt.decode(data, parm);
       case 'JBIG2Decode':
+        return PdfJbig2.decode(data, parm);
       case 'JPXDecode':
         throw PdfFilterUnsupported(name);
       default:

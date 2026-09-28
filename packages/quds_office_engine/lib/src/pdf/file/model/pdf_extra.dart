@@ -73,13 +73,19 @@ enum PdfSignatureStatus {
   /// No `/Sig` fields.
   none,
 
-  /// `/ByteRange` covers the file except `/Contents`; PKCS#7 / CMS is not checked.
+  /// `/ByteRange` covers the file except `/Contents`, but CMS was not compared.
   unverified,
+
+  /// CMS `messageDigest` matches the ByteRange payload (no RSA / trust list).
+  valid,
+
+  /// CMS parsed, but the digest does not match the ByteRange payload.
+  invalid,
 
   /// `/ByteRange` missing or does not cover the file (excluding `/Contents`).
   broken,
 
-  /// Filter / SubFilter is not a Standard CMS name we inspect.
+  /// Filter / SubFilter / digest algorithm is not a CMS name we inspect.
   unsupported,
 }
 

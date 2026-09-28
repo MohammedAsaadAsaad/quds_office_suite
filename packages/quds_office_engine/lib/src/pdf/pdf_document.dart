@@ -8,6 +8,7 @@ import '../opc/zip/crc32.dart';
 import '../sheet/model/sml_workbook.dart';
 import '../slide/model/pml_presentation.dart';
 import '../word/model/wml_document.dart';
+import 'file/io/pdf_appearance.dart';
 import 'office_pdf_export.dart';
 import 'pdf_font.dart';
 import 'pdf_save_options.dart';
@@ -30,6 +31,65 @@ class PdfEmbeddedFace {
 
   /// PDF resource name such as `F1` or `F3`.
   final String resourceName;
+}
+
+/// Interactive AcroForm field written by `pdf_widgets` when `acroForm: true`.
+class PdfAcroField {
+  /// PdfAcroField API.
+  const PdfAcroField({
+    required this.name,
+    required this.type,
+    required this.x,
+    required this.y,
+    required this.width,
+    required this.height,
+    required this.pageIndex,
+    this.value = '',
+    this.options = const <String>[],
+    this.checked = false,
+    this.exportOn = 'Yes',
+    this.multiline = false,
+    this.radio = false,
+  });
+
+  /// Fully qualified field name.
+  final String name;
+
+  /// `Tx`, `Btn`, or `Ch`.
+  final String type;
+
+  /// Top-left X in page space (same as [PdfLinkAnnot]).
+  final double x;
+
+  /// Top-left Y in page space.
+  final double y;
+
+  /// width API.
+  final double width;
+
+  /// height API.
+  final double height;
+
+  /// Zero-based page index.
+  final int pageIndex;
+
+  /// value API.
+  final String value;
+
+  /// Combo / list options.
+  final List<String> options;
+
+  /// Checkbox / radio on.
+  final bool checked;
+
+  /// Export value when [checked] is true.
+  final String exportOn;
+
+  /// multiline API.
+  final bool multiline;
+
+  /// Radio button (circle) vs checkbox.
+  final bool radio;
 }
 
 /// Native PDF 1.7 compiler.
@@ -288,6 +348,67 @@ class PdfDocument {
       }
     }
 
+    final SfntFont? apFont =
+        font ?? (embed.isNotEmpty ? embed.first.source : null);
+    final List<List<int>> pageFieldIds = <List<int>>[
+      for (final _ in pages) <int>[],
+    ];
+    final List<int> allFieldIds = <int>[];
+    var needAppearances = false;
+    for (int i = 0; i < pages.length; i++) {
+      final PdfPage page = pages[i];
+      for (final PdfAcroField field in page.acroFields) {
+        if (field.name.isEmpty) {
+          continue;
+        }
+        final PdfAppearanceBundle ap = field.type == 'Btn'
+            ? PdfAppearance.button(
+                startId: nextId,
+                width: field.width,
+                height: field.height,
+                on: field.checked,
+                radio: field.radio,
+              )
+            : PdfAppearance.text(
+                startId: nextId,
+                width: field.width,
+                height: field.height,
+                text: field.value,
+                colorArgb: 0xFFFFFFFF,
+                font: apFont,
+                rtl: _acroRtl(field.value),
+              );
+        nextId = ap.nextId;
+        for (final PdfAppearanceObj obj in ap.objects) {
+          objects.add(_PdfObj.encoded(obj.id, obj.body));
+        }
+        if (ap.needAppearances) {
+          needAppearances = true;
+        }
+        final int widgetId = alloc();
+        pageFieldIds[i].add(widgetId);
+        allFieldIds.add(widgetId);
+        objects.add(
+          _PdfObj(
+            widgetId,
+            _acroWidgetDict(field, page, pageIds[i], ap.formId),
+          ),
+        );
+      }
+    }
+    int? acroFormId;
+    if (allFieldIds.isNotEmpty) {
+      acroFormId = alloc();
+      final String kids = allFieldIds.map((int id) => '$id 0 R').join(' ');
+      objects.add(
+        _PdfObj(
+          acroFormId,
+          '<</Fields [$kids]/NeedAppearances ${needAppearances ? 'true' : 'false'}'
+          '/DA (/Helv 11 Tf 0 g)>>',
+        ),
+      );
+    }
+
     for (int i = 0; i < pages.length; i++) {
       final PdfPage page = pages[i];
       final StringBuffer fonts = StringBuffer('/F2 $helveticaId 0 R');
@@ -299,9 +420,13 @@ class PdfDocument {
         xos.write('/${page.images[j].name} ${pageImageIds[i][j]} 0 R');
       }
       final String xoRes = xos.isEmpty ? '' : '/XObject <<$xos>>';
-      final String annots = pageAnnotIds[i].isEmpty
+      final List<int> annotIds = <int>[
+        ...pageAnnotIds[i],
+        ...pageFieldIds[i],
+      ];
+      final String annots = annotIds.isEmpty
           ? ''
-          : '/Annots [${pageAnnotIds[i].map((int id) => '$id 0 R').join(' ')}]';
+          : '/Annots [${annotIds.map((int id) => '$id 0 R').join(' ')}]';
       objects.add(
         _PdfObj(
           pageIds[i],
@@ -421,6 +546,9 @@ class PdfDocument {
     if (options.pdfA) {
       catalog.write('/Lang ${_pdfString('en-US')}');
     }
+    if (acroFormId != null) {
+      catalog.write('/AcroForm $acroFormId 0 R');
+    }
     catalog.write('>>');
     objects.add(_PdfObj(catalogId, catalog.toString()));
 
@@ -499,6 +627,65 @@ class PdfDocument {
       action = '';
     }
     return '<</Type /Annot/Subtype /Link/Rect [$rect]/Border [0 0 0]/H /I$action>>';
+  }
+
+  static bool _acroRtl(String text) {
+    for (final int cp in text.runes) {
+      if ((cp >= 0x0590 && cp <= 0x08FF) ||
+          (cp >= 0xFB1D && cp <= 0xFDFF) ||
+          (cp >= 0xFE70 && cp <= 0xFEFF)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  String _acroWidgetDict(
+    PdfAcroField field,
+    PdfPage page,
+    int pageId,
+    int apId,
+  ) {
+    final double llx = field.x;
+    final double lly = page.height - (field.y + field.height);
+    final double urx = field.x + field.width;
+    final double ury = page.height - field.y;
+    final String rect = '${_n(llx)} ${_n(lly)} ${_n(urx)} ${_n(ury)}';
+    final StringBuffer buf = StringBuffer(
+      '<</Type /Annot/Subtype /Widget/FT /${field.type}'
+      '/T ${_pdfString(field.name)}/Rect [$rect]/P $pageId 0 R/F 4'
+      '/AP <</N $apId 0 R>>',
+    );
+    if (field.type == 'Btn') {
+      final String on = _sanitizeName(field.exportOn);
+      buf.write(field.checked ? '/V /$on/AS /$on' : '/V /Off/AS /Off');
+      if (field.radio) {
+        buf.write('/Ff 32768');
+      } else {
+        buf.write('/Ff 0');
+      }
+    } else if (field.type == 'Ch') {
+      buf.write('/V ${_pdfString(field.value)}');
+      if (field.options.isNotEmpty) {
+        buf.write('/Opt [');
+        for (final String opt in field.options) {
+          buf.write(_pdfString(opt));
+        }
+        buf.write(']');
+      }
+    } else {
+      buf.write('/V ${_pdfString(field.value)}');
+      if (field.multiline) {
+        buf.write('/Ff 4096');
+      }
+    }
+    buf.write('>>');
+    return buf.toString();
+  }
+
+  static String _sanitizeName(String name) {
+    final String cleaned = name.replaceAll(RegExp(r'[^A-Za-z0-9]'), '');
+    return cleaned.isEmpty ? 'Yes' : cleaned;
   }
 
   static String _pdfString(String value) {
@@ -641,6 +828,7 @@ class PdfPage {
     required this.content,
     this.images = const <PdfEmbeddedImage>[],
     this.links = const <PdfLinkAnnot>[],
+    this.acroFields = const <PdfAcroField>[],
   });
 
   /// width API.
@@ -657,6 +845,9 @@ class PdfPage {
 
   /// links API.
   final List<PdfLinkAnnot> links;
+
+  /// Real AcroForm widgets on this page (optional).
+  final List<PdfAcroField> acroFields;
 }
 
 class _PdfObj {
@@ -664,7 +855,15 @@ class _PdfObj {
   _PdfObj(this.id, this.dict)
     : stream = null,
       extra = '',
-      applyFlateFilter = true;
+      applyFlateFilter = true,
+      encoded = null;
+
+  /// Already-encoded object body (dict or stream, no `obj` wrapper).
+  _PdfObj.encoded(this.id, Uint8List this.encoded)
+    : dict = '',
+      stream = null,
+      extra = '',
+      applyFlateFilter = false;
 
   /// stream API.
   _PdfObj.stream(
@@ -676,13 +875,15 @@ class _PdfObj {
        stream = filter
            ? PdfFlate.compress(data)
            : (data is Uint8List ? data : Uint8List.fromList(data)),
-       applyFlateFilter = filter;
+       applyFlateFilter = filter,
+       encoded = null;
 
   /// rawStream API.
   _PdfObj.rawStream(this.id, List<int> data, {this.extra = ''})
     : dict = '',
       stream = data is Uint8List ? data : Uint8List.fromList(data),
-      applyFlateFilter = false;
+      applyFlateFilter = false,
+      encoded = null;
 
   /// id API.
   final int id;
@@ -699,8 +900,18 @@ class _PdfObj {
   /// When false, omit `/Filter /FlateDecode` (e.g. XMP metadata).
   final bool applyFlateFilter;
 
+  /// Prebuilt object body.
+  final Uint8List? encoded;
+
   /// serialize API.
   Uint8List serialize() {
+    if (encoded != null) {
+      final BytesBuilder b = BytesBuilder(copy: false);
+      b.add(utf8.encode('$id 0 obj\n'));
+      b.add(encoded!);
+      b.add(utf8.encode('\nendobj\n'));
+      return b.takeBytes();
+    }
     if (stream == null) {
       return utf8.encode('$id 0 obj\n$dict\nendobj\n');
     }

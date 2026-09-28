@@ -129,8 +129,8 @@ void main() async {
 Aliases such as Helvetica, Arial, Calibri, Times New Roman, and Courier New
 resolve to those faces. When a PDF embeds its own `/FontFile2`, that face
 wins for glyph shape and advances. Raw CFF is wrapped as OTTO for the host
-loader. The engine does not rasterize CFF outlines itself. JBIG2 and JPEG2000
-images stay unsupported placeholders.
+loader. The engine does not rasterize CFF outlines itself. JPEG2000 stays
+unsupported. JBIG2 MMR generic regions decode; other JBIG2 stays a placeholder.
 
 ---
 
@@ -438,8 +438,8 @@ Also out of scope, on purpose:
 
 - Editing PDF body text as if it were Word
 - OCR, and recovering Office layout from a PDF
-- CMS signature verification and certified PDF/A
-- Rasterizing CFF, JBIG2, or JPEG2000 inside the engine
+- CMS signature digest match (no RSA / system roots) and certified PDF/A
+- Rasterizing CFF or JPEG2000 inside the engine; JBIG2 beyond MMR generic regions
 
 ---
 
