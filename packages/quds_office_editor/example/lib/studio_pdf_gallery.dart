@@ -494,6 +494,21 @@ abstract final class StudioPdfGallery {
   /// Distinct bilingual documents for the gallery's first tab.
   static final List<StudioPdfSample> showcaseSamples = <StudioPdfSample>[
     StudioPdfSample(
+      id: 'showcase-ayat-wa-ashar',
+      kind: StudioPdfSampleKind.showcase,
+      titleEn: 'Verses and poems',
+      titleAr: 'آيات وأشعار',
+      blurbEn:
+          'Vocalised Quranic verses and classical qasidas in Tajawal, as a short diwan.',
+      blurbAr:
+          'آيات قرآنية وأشعار جاهلية وعباسية وأندلسية مشكولة بخط تجوال، مرتبة كديوان.',
+      fileName: 'showcase_ayat_wa_ashar.pdf',
+      build: ({SfntFont? font, OfficeFontSet? fonts}) => buildAyatWaAsharPdf(
+        font: StudioPdfFaces.tajawal(),
+        fontBold: StudioPdfFaces.tajawalBold(),
+      ),
+    ),
+    StudioPdfSample(
       id: 'showcase-harbour-close',
       kind: StudioPdfSampleKind.showcase,
       titleEn: 'Harbour close',

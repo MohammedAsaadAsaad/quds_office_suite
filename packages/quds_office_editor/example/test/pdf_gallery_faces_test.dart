@@ -71,6 +71,7 @@ void main() {
       'widgets-board-packet',
       'widgets-recovery-brief',
       'widgets-arabic-contents',
+      'showcase-ayat-wa-ashar',
     ]) {
       final StudioPdfSample sample = StudioPdfGallery.all.firstWhere(
         (StudioPdfSample item) => item.id == id,
