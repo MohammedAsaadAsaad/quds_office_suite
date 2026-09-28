@@ -5,8 +5,9 @@ import '../../bidi/arabic_shaping.dart';
 import '../../bidi/line_breaker.dart';
 import '../../bidi/uax9_bidi.dart';
 import '../../fonts/font_metrics.dart';
-import '../../fonts/sfnt_parser.dart';
 import '../../fonts/font_subsetter.dart';
+import '../../fonts/gpos_mark_to_base.dart';
+import '../../fonts/sfnt_parser.dart';
 import '../../pdf/file/text/pdf_std14.dart';
 import '../../pdf/pdf_canvas.dart';
 import 'pw_core.dart';
@@ -118,6 +119,9 @@ List<BrokenLine> pwWrapText(
       return _stdAdvance(cp, resolved.fontSize) + track;
     },
     glyphIdOf: (int cp) => face?.glyphIdFor(cp) ?? cp,
+    markAttachOf: face == null
+        ? null
+        : GposMarkToBase.fnFor(face, resolved.fontSize),
     baseLevel: context.textDirection == TextDirection.rtl ? 1 : 0,
     justify: align == TextAlign.justify,
   );
@@ -164,7 +168,7 @@ void pwPaintLine(
       canvas,
       glyph.codePoint,
       x + glyph.paintDx,
-      baseline,
+      baseline - glyph.paintDy,
       resolved,
     );
     x += glyph.advance + extra;

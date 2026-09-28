@@ -5,6 +5,7 @@ import '../bidi/arabic_shaping.dart';
 import '../bidi/line_breaker.dart';
 import '../fonts/font_metrics.dart';
 import '../fonts/font_subsetter.dart';
+import '../fonts/gpos_mark_to_base.dart';
 import '../fonts/office_font_set.dart';
 import '../fonts/sfnt_parser.dart';
 import '../opc/opc_archive.dart';
@@ -1752,6 +1753,11 @@ abstract final class OfficePdfExport {
           maxWidth: maxWidth,
           widthOf: (int cp) => sink.pack.widthOf(cp, size),
           glyphIdOf: sink.pack.glyphIdOf,
+          markAttachOf: GposMarkToBase.fnFor(
+            layoutFont,
+            size,
+            faceFor: sink.pack.fontFor,
+          ),
         );
         for (final BrokenLine line in lines) {
           if (line.glyphs.isEmpty) {
@@ -1770,7 +1776,7 @@ abstract final class OfficePdfExport {
               LaidOutGlyph(
                 glyph: g,
                 x: cx + g.paintDx,
-                y: baseline,
+                y: baseline - g.paintDy,
                 color: color,
                 fontSize: size,
                 bold: false,
@@ -2065,6 +2071,11 @@ class _PageSink {
         maxWidth: maxWidth ?? 1e9,
         widthOf: (int cp) => pack.widthOf(cp, size),
         glyphIdOf: pack.glyphIdOf,
+        markAttachOf: GposMarkToBase.fnFor(
+          layoutFont,
+          size,
+          faceFor: pack.fontFor,
+        ),
       );
       var cy = y;
       for (int i = 0; i < lines.length; i++) {
@@ -2086,7 +2097,7 @@ class _PageSink {
             oldGid: g.glyphId,
             codePoint: g.codePoint,
             x: cx + g.paintDx,
-            y: cy,
+            y: cy - g.paintDy,
             size: size,
             color: color,
           );

@@ -61,6 +61,7 @@ class Context {
     Set<int>? usedCodePoints,
     List<PdfEmbeddedImage>? images,
     List<PdfLinkAnnot>? links,
+    List<PdfAcroField>? acroFields,
     List<PwHeading>? headings,
     List<PwHeading>? frozenHeadings,
     Map<String, PwHeading>? anchors,
@@ -68,6 +69,7 @@ class Context {
   }) : usedCodePoints = usedCodePoints ?? <int>{},
        images = images ?? <PdfEmbeddedImage>[],
        links = links ?? <PdfLinkAnnot>[],
+       acroFields = acroFields ?? <PdfAcroField>[],
        headings = headings ?? <PwHeading>[],
        frozenHeadings = frozenHeadings ?? <PwHeading>[],
        anchors = anchors ?? <String, PwHeading>{};
@@ -107,6 +109,9 @@ class Context {
 
   /// links API.
   final List<PdfLinkAnnot> links;
+
+  /// AcroForm fields registered during paint.
+  final List<PdfAcroField> acroFields;
 
   /// headings API.
   final List<PwHeading> headings;
@@ -162,6 +167,7 @@ class Context {
       usedCodePoints: usedCodePoints,
       images: images,
       links: links,
+      acroFields: acroFields,
       headings: headings,
       frozenHeadings: frozenHeadings,
       anchors: anchors,
@@ -209,6 +215,14 @@ class Context {
       anchors[title] = heading;
       return;
     }
+  }
+
+  /// Registers an AcroForm field for this page.
+  void registerAcroField(PdfAcroField field) {
+    if (measuring || field.name.isEmpty) {
+      return;
+    }
+    acroFields.add(field);
   }
 
   /// registerAnchor API.
@@ -1146,6 +1160,10 @@ class _PageSink {
         content: canvas.toStream(),
         images: List<PdfEmbeddedImage>.from(ctx.images),
         links: List<PdfLinkAnnot>.from(ctx.links),
+        acroFields: <PdfAcroField>[
+          for (final PdfAcroField field in ctx.acroFields)
+            if (field.pageIndex == pages.length) field,
+        ],
       ),
     );
     ctx.canvas = null;

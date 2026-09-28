@@ -86,8 +86,8 @@ Required syntax (engine open must succeed when present):
 | `/DCTDecode` | P6.2 | JPEG image XObject |
 | `/CCITTFaxDecode` | P6.2 | Group 3 1-D and Group 4 (landed). Mixed G3 2-D (`K>0`) is 1-D best-effort |
 | `/LZWDecode` | P6.3 | |
-| `/JBIG2Decode` | P6.5 | Typed `PdfFilterUnsupported` (stays; no decoder) |
-| `/JPXDecode` | P6.5 | Same |
+| `/JBIG2Decode` | P6.5 | MMR generic regions (size-capped); other JBIG2 typed-unsupported |
+| `/JPXDecode` | P6.5 | Typed-unsupported placeholder |
 | `/Crypt` | P6.1 | After the security handler decrypts the stream |
 
 Unsupported filters must yield `PdfFilterUnsupported` on that stream, not a
@@ -198,7 +198,7 @@ preserve unknown annotation keys.
 | `/Tx` (text, multiline, password, comb) | P6.4 | Custom IME on the PDF canvas — not `TextField` |
 | `/Btn` (checkbox, radio, push) | P6.4 | |
 | `/Ch` (combo, list) | P6.4 | Host chrome may draw the dropdown **outside** the page; the value is written to the field |
-| `/Sig` | P6.6 | **Display** existing appearance; **verify** if we add a crypto helper; **create** signatures is a later opt-in |
+| `/Sig` | P6.6 | **Display** existing appearance; CMS `messageDigest` vs ByteRange (`valid`/`invalid`); RSA/ECDSA and create-signature stay out |
 | Calculate / validate / format JS | Never | Do not run JS. Optional host callback for “field changed” |
 | XFA (`/XFA`) | Out | Deprecated; `PdfAcroForm.hasXfa` only — extract nothing |
 | FDF / XFDF import-export | P6.5 | |

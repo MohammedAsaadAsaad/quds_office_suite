@@ -42,6 +42,7 @@ class ShapedGlyph {
     required this.level,
     this.isSpace = false,
     this.paintDx = 0,
+    this.paintDy = 0,
   });
 
   /// codePoint API.
@@ -64,7 +65,14 @@ class ShapedGlyph {
 
   /// Added to the pen X before painting. Combining marks sit on their base.
   final double paintDx;
+
+  /// Added to the baseline before painting (font space, positive is up).
+  final double paintDy;
 }
+
+/// Offset applied after the base advance so a combining mark sits on it.
+typedef MarkAttachFn =
+    ({double dx, double dy}) Function(ShapedGlyph base, ShapedGlyph mark);
 
 /// Width provider used by the breaker (typically [FontMetrics.characterWidth]).
 typedef GlyphWidthFn = double Function(int codePoint);
@@ -87,6 +95,7 @@ abstract final class LineBreaker {
     /// When false, do not stretch spaces to the line edge (pdf_widgets
     /// non-justify aligns). Word layout keeps the default [true].
     bool justify = true,
+    MarkAttachFn? markAttachOf,
   }) {
     if (text.isEmpty) {
       return <BrokenLine>[
@@ -132,6 +141,7 @@ abstract final class LineBreaker {
             spaceStretch: spaceStretch,
             spaceShrink: spaceShrink,
             justify: justify,
+            markAttachOf: markAttachOf,
           ),
         );
       } else if (hard || (atEnd && lines.isEmpty)) {
@@ -163,6 +173,7 @@ abstract final class LineBreaker {
     required double spaceStretch,
     required double spaceShrink,
     required bool justify,
+    MarkAttachFn? markAttachOf,
   }) {
     final List<int> breaks = _knuthPlass(
       logical,
@@ -177,7 +188,10 @@ abstract final class LineBreaker {
       while (to > from && _isSoftTrailingSpace(logical[to - 1])) {
         to--;
       }
-      final List<ShapedGlyph> slice = _reorderLine(logical.sublist(from, to));
+      final List<ShapedGlyph> slice = _reorderLine(
+        logical.sublist(from, to),
+        markAttachOf,
+      );
       double width = 0;
       var spaces = 0;
       for (final ShapedGlyph g in slice) {
@@ -218,13 +232,16 @@ abstract final class LineBreaker {
     return lines;
   }
 
-  static List<ShapedGlyph> _reorderLine(List<ShapedGlyph> logicalSlice) {
+  static List<ShapedGlyph> _reorderLine(
+    List<ShapedGlyph> logicalSlice,
+    MarkAttachFn? markAttachOf,
+  ) {
     if (logicalSlice.isEmpty) {
       return logicalSlice;
     }
     final List<List<ShapedGlyph>> clusters = _graphemeClusters(logicalSlice);
     if (clusters.length < 2) {
-      return _attachMarksToBases(logicalSlice);
+      return _attachMarksToBases(logicalSlice, markAttachOf);
     }
     final List<int> levels = <int>[
       for (final List<ShapedGlyph> cluster in clusters) cluster.first.level,
@@ -232,7 +249,7 @@ abstract final class LineBreaker {
     final List<int> order = Uax9Bidi.visualOrder(levels);
     return _attachMarksToBases(<ShapedGlyph>[
       for (final int i in order) ...clusters[i],
-    ]);
+    ], markAttachOf);
   }
 
   /// UAX #9 L2 at grapheme-cluster granularity: tashkeel stays on its letter.
@@ -249,7 +266,10 @@ abstract final class LineBreaker {
   }
 
   /// Paint marks at the center of the preceding base (zero-width overlay).
-  static List<ShapedGlyph> _attachMarksToBases(List<ShapedGlyph> visual) {
+  static List<ShapedGlyph> _attachMarksToBases(
+    List<ShapedGlyph> visual,
+    MarkAttachFn? markAttachOf,
+  ) {
     final List<ShapedGlyph> out = <ShapedGlyph>[];
     var i = 0;
     while (i < visual.length) {
@@ -265,9 +285,11 @@ abstract final class LineBreaker {
       }
       out.add(glyph);
       if (j > i + 1) {
-        final double dx = -glyph.advance / 2;
         for (int k = i + 1; k < j; k++) {
           final ShapedGlyph mark = visual[k];
+          final ({double dx, double dy}) attach = markAttachOf == null
+              ? (dx: -glyph.advance / 2, dy: 0)
+              : markAttachOf(glyph, mark);
           out.add(
             ShapedGlyph(
               codePoint: mark.codePoint,
@@ -275,7 +297,8 @@ abstract final class LineBreaker {
               advance: 0,
               logicalIndex: mark.logicalIndex,
               level: mark.level,
-              paintDx: dx,
+              paintDx: attach.dx,
+              paintDy: attach.dy,
             ),
           );
         }

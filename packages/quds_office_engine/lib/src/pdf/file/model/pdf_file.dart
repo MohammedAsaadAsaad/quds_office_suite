@@ -1,15 +1,16 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import '../../../fonts/sfnt_parser.dart';
 import '../cos/pdf_cos.dart';
 import '../cos/pdf_cos_reader.dart';
 import '../cos/pdf_open_error.dart';
 import '../cos/pdf_store.dart';
 import '../cos/pdf_xref.dart';
 import '../crypto/pdf_security.dart';
+import '../decode/pdf_cms.dart';
 import '../interp/pdf_display_list.dart';
 import '../interp/pdf_interpreter.dart';
-import '../io/pdf_page_io.dart';
 import '../tools/pdf_page_graft.dart';
 import 'pdf_annot.dart';
 import 'pdf_extra.dart';
@@ -39,49 +40,52 @@ class PdfFile {
   }) : _pages = pages;
 
   /// Original file bytes (for incremental save).
-  final Uint8List originalBytes;
+  Uint8List originalBytes;
 
   /// Header version, e.g. `1.7`.
-  final String version;
+  String version;
 
   /// store API.
-  final PdfCosStore store;
+  PdfCosStore store;
 
   /// info API.
   PdfDocInfo info;
 
   /// outline API.
-  final PdfOutlineNode? outline;
+  PdfOutlineNode? outline;
 
   /// form API.
-  final PdfAcroForm form;
+  PdfAcroForm form;
 
   /// permissions API.
-  final PdfSecurity? permissions;
+  PdfSecurity? permissions;
 
   /// encrypted API.
-  final bool encrypted;
+  bool encrypted;
 
   /// Catalog object number (`trailer /Root`).
-  final int catalogObjectId;
+  int catalogObjectId;
 
   /// `/Pages` tree object number.
-  final int pagesObjectId;
+  int pagesObjectId;
 
   /// Trailer `/Info` object number when present.
   int? infoObjectId;
 
   /// Optional content groups.
-  final List<PdfLayer> layers;
+  List<PdfLayer> layers;
 
   /// Embedded files (not loaded until listed).
-  final List<PdfEmbeddedFile> embeddedFiles;
+  List<PdfEmbeddedFile> embeddedFiles;
 
   /// Tagged structure when `/StructTreeRoot` is present (PDF/UA read).
-  final PdfStructNode? structTree;
+  PdfStructNode? structTree;
 
   /// Catalog `/ViewerPreferences`.
-  final PdfViewerPrefs viewerPrefs;
+  PdfViewerPrefs viewerPrefs;
+
+  /// Face used when generating FreeText / Tx `/AP` streams.
+  SfntFont? appearanceFont;
 
   /// Page-tree mutations need a `/Kids` rewrite.
   var treeDirty = false;
@@ -369,28 +373,48 @@ class PdfFile {
     infoDirty = true;
   }
 
-  /// appendPages API.
+  /// appendPages API. Grafts both files so fonts and images survive.
   void appendPages(PdfFile other) {
-    for (int i = 0; i < other.pageCount; i++) {
-      final PdfExtractedPage snap = PdfPageIo.snapshot(other, i);
-      final PdfPageInfo page = PdfPageInfo(
-        index: _pages.length,
-        mediaBox: PdfBox(llx: 0, lly: 0, urx: snap.width, ury: snap.height),
-        cropBox: PdfBox(llx: 0, lly: 0, urx: snap.width, ury: snap.height),
-        rotate: snap.rotate,
-      );
-      _pages.add(
-        PdfPageRec(
-          info: page,
-          dict: PdfCosDict(),
-          annots: <PdfAnnot>[],
-          dirty: true,
-          pendingContent: snap.content,
-        ),
-      );
+    if (other.pageCount == 0) {
+      return;
     }
-    treeDirty = true;
-    _reindex();
+    final Uint8List bytes = PdfPageGraft.write(<PdfGraftSlot>[
+      for (int i = 0; i < pageCount; i++) PdfGraftSlot.page(this, i),
+      for (int i = 0; i < other.pageCount; i++) PdfGraftSlot.page(other, i),
+    ]);
+    _adopt(PdfFile.open(bytes));
+  }
+
+  /// mergeFrom API. Same graft as [appendPages].
+  void mergeFrom(PdfFile other) => appendPages(other);
+
+  void _adopt(PdfFile src) {
+    final SfntFont? keepFont = appearanceFont;
+    originalBytes = src.originalBytes;
+    version = src.version;
+    store = src.store;
+    info = src.info;
+    outline = src.outline;
+    form = src.form;
+    permissions = src.permissions;
+    encrypted = src.encrypted;
+    catalogObjectId = src.catalogObjectId;
+    pagesObjectId = src.pagesObjectId;
+    infoObjectId = src.infoObjectId;
+    layers = src.layers;
+    embeddedFiles = src.embeddedFiles;
+    structTree = src.structTree;
+    viewerPrefs = src.viewerPrefs;
+    appearanceFont = keepFont ?? src.appearanceFont;
+    _pages
+      ..clear()
+      ..addAll(src._pages);
+    treeDirty = false;
+    infoDirty = false;
+    redactions
+      ..clear()
+      ..addAll(src.redactions);
+    _nextAnnotId = src._nextAnnotId;
   }
 
   /// extractPages API. Copies page resources; indices may repeat a page.
@@ -446,7 +470,7 @@ class PdfFile {
     }
   }
 
-  /// signatures API — ByteRange coverage only; CMS / PKCS#7 is never verified.
+  /// signatures API — ByteRange coverage plus CMS `messageDigest` when present.
   List<PdfSignatureInfo> get signatures {
     final List<PdfSignatureInfo> out = <PdfSignatureInfo>[];
     for (final PdfFormField field in form.fields) {
@@ -493,7 +517,14 @@ class PdfFile {
     if (c + d != len) {
       return PdfSignatureStatus.broken;
     }
-    return PdfSignatureStatus.unverified;
+    final PdfCos? contents = value['Contents'];
+    final Uint8List cms = contents is PdfCosString
+        ? contents.bytes
+        : Uint8List(0);
+    final Uint8List signed = Uint8List(b + d);
+    signed.setAll(0, originalBytes.sublist(a, a + b));
+    signed.setAll(b, originalBytes.sublist(c, c + d));
+    return PdfCms.verify(contents: cms, signedBytes: signed);
   }
 
   static int _byteRangeCovered(PdfCosDict? value) {

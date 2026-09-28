@@ -7,6 +7,7 @@ library;
 import 'dart:math' as math;
 
 import '../../pdf/pdf_canvas.dart';
+import '../../pdf/pdf_document.dart';
 import 'pw_box.dart';
 import 'pw_core.dart';
 import 'pw_layout.dart';
@@ -797,13 +798,16 @@ class CustomMultiChildLayout extends Widget {
   }
 }
 
-/// Drawn radio mark. Not an AcroForm field.
+/// Drawn radio mark. Not an AcroForm field unless [acroForm] is set.
 class Radio extends Widget {
   /// Radio API.
   const Radio({
     this.value = false,
     this.size = 12,
     this.activeColor = '1B5E20',
+    this.name = '',
+    this.exportValue = 'Yes',
+    this.acroForm = false,
   });
 
   /// value API.
@@ -815,20 +819,55 @@ class Radio extends Widget {
   /// activeColor API.
   final String activeColor;
 
+  /// AcroForm field name.
+  final String name;
+
+  /// Export value when selected.
+  final String exportValue;
+
+  /// When true, [Document.save] writes a real `/Btn` radio.
+  final bool acroForm;
+
   @override
   PwBox layout(Context context, BoxConstraints constraints) {
-    return _RadioBox(PwSize(size, size), value, activeColor);
+    return _RadioBox(PwSize(size, size), value, activeColor, name, exportValue, acroForm);
   }
 }
 
 class _RadioBox extends PwBox {
-  _RadioBox(super.size, this.value, this.activeColor);
+  _RadioBox(
+    super.size,
+    this.value,
+    this.activeColor,
+    this.name,
+    this.exportValue,
+    this.acroForm,
+  );
 
   final bool value;
   final String activeColor;
+  final String name;
+  final String exportValue;
+  final bool acroForm;
 
   @override
   void paint(Context context, PwOffset offset) {
+    if (acroForm) {
+      context.registerAcroField(
+        PdfAcroField(
+          name: name,
+          type: 'Btn',
+          x: offset.dx,
+          y: offset.dy,
+          width: size.width,
+          height: size.height,
+          pageIndex: context.pageNumber - 1,
+          checked: value,
+          exportOn: exportValue,
+          radio: true,
+        ),
+      );
+    }
     final PdfCanvas? canvas = context.canvas;
     if (canvas == null) {
       return;

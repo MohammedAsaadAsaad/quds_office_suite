@@ -2,6 +2,29 @@
 
 All notable changes to `quds_office_engine` are documented here.
 
+## 0.6.0
+
+Five fidelity waves: OpenType marks, appearances, page graft, AcroForm write,
+and a first slice of “files people send”.
+
+- GPOS LookupType 4 (MarkToBase, including type-9 extensions). Combining
+  marks use font anchors for `paintDx` / `paintDy`; the previous
+  “center of advance” placement is the fallback.
+- FreeText `/AP` (then Tx on fill) is a Form XObject through `LineBreaker`
+  + Arabic shaping + a glyf Identity-H subset. Helvetica is not used for
+  non-Latin text. `/NeedAppearances` stays if generation cannot embed a face.
+- `PdfFile.appendPages` / `mergeFrom` rebuild via `PdfPageGraft`, so fonts
+  and images survive. `PdfToolbox` remains the batch assembler.
+- `pdf_widgets` `TextField` / `Checkbox` / `Radio` still draw marks. Pass
+  `acroForm: true` (or use `ChoiceField`) to emit real `/Tx` `/Btn` `/Ch`
+  fields on the writer `PdfDocument`.
+- `/JBIG2Decode` decodes MMR generic regions (scanner dual-tone) with the
+  same size cap as other filters. Arithmetic coding, symbol dictionaries,
+  and JPX stay typed-unsupported placeholders.
+- Signature fields: ByteRange coverage plus CMS `SignedData` `messageDigest`
+  match (`valid` / `invalid`). Unknown digest algorithms are `unsupported`.
+  Creating signatures and trusting a system root list are still out.
+
 ## 0.5.3
 
 - High-value `pdf_widgets`: `PageNumber`, `HeaderFooter`, `SignatureLine`,

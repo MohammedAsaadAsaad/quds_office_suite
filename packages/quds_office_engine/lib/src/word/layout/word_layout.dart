@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import '../../bidi/line_breaker.dart';
 import '../../fonts/font_metrics.dart';
+import '../../fonts/gpos_mark_to_base.dart';
 import '../../fonts/office_font_set.dart';
 import '../../fonts/office_typeface.dart';
 import '../../fonts/sfnt_parser.dart';
@@ -38,9 +39,11 @@ class LaidOutGlyph {
     List<int>? commentIds,
     double? advance,
     double? paintDx,
+    double? paintDy,
   }) : commentIds = commentIds ?? const <int>[],
        advance = advance ?? glyph.advance,
-       paintDx = paintDx ?? glyph.paintDx;
+       paintDx = paintDx ?? glyph.paintDx,
+       paintDy = paintDy ?? glyph.paintDy;
 
   /// glyph API.
   final ShapedGlyph glyph;
@@ -89,6 +92,9 @@ class LaidOutGlyph {
 
   /// Horizontal shift so tashkeel paints on its base letter.
   final double paintDx;
+
+  /// Upward shift (font space) so tashkeel uses the GPOS mark anchor.
+  final double paintDy;
 }
 
 /// Class LaidOutLine.
@@ -1046,6 +1052,13 @@ class WordLayoutEngine {
         final SfntFont? face = fonts?.faceFor(cp) ?? font;
         return face?.glyphIdFor(cp) ?? cp;
       },
+      markAttachOf: font == null
+          ? null
+          : GposMarkToBase.fnFor(
+              font!,
+              fontSize,
+              faceFor: (int cp) => fonts?.faceFor(cp) ?? font,
+            ),
       baseLevel: paragraph.properties.bidiBaseLevel,
     );
     var cursorY = y + paragraph.properties.spacingBefore;
@@ -1106,7 +1119,8 @@ class WordLayoutEngine {
             y:
                 cursorY +
                 (metrics?.ascender ?? baseSize * 0.8) +
-                props.vertAlign.baselineShift(baseSize),
+                props.vertAlign.baselineShift(baseSize) -
+                g.paintDy * scale,
             color: props.color,
             fontSize: size,
             bold: props.bold,
@@ -1120,6 +1134,7 @@ class WordLayoutEngine {
             commentIds: WordComment.idsAt(paragraph, g.logicalIndex),
             advance: g.advance * scale,
             paintDx: g.paintDx * scale,
+            paintDy: g.paintDy * scale,
           ),
         );
         gx += g.advance * scale;

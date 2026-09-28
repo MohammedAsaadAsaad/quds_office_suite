@@ -2,6 +2,7 @@
 library;
 
 import '../../pdf/pdf_canvas.dart';
+import '../../pdf/pdf_document.dart';
 import 'pw_core.dart';
 import 'pw_text.dart';
 import 'pw_types.dart';
@@ -711,7 +712,7 @@ class _PlaceholderBox extends PwBox {
   }
 }
 
-/// Checkbox mark (drawn; not an AcroForm field).
+/// Checkbox mark (drawn; not an AcroForm field unless [acroForm] is set).
 class Checkbox extends Widget {
   /// Checkbox API.
   const Checkbox({
@@ -719,6 +720,7 @@ class Checkbox extends Widget {
     this.name = '',
     this.tristate = false,
     this.size = 12,
+    this.acroForm = false,
   });
 
   /// value API.
@@ -733,19 +735,38 @@ class Checkbox extends Widget {
   /// size API.
   final double size;
 
+  /// When true, [Document.save] writes a real `/Btn` field.
+  final bool acroForm;
+
   @override
   PwBox layout(Context context, BoxConstraints constraints) {
-    return _CheckboxBox(PwSize(size, size), value);
+    return _CheckboxBox(PwSize(size, size), value, name, acroForm);
   }
 }
 
 class _CheckboxBox extends PwBox {
-  _CheckboxBox(super.size, this.value);
+  _CheckboxBox(super.size, this.value, this.name, this.acroForm);
 
   final bool value;
+  final String name;
+  final bool acroForm;
 
   @override
   void paint(Context context, PwOffset offset) {
+    if (acroForm) {
+      context.registerAcroField(
+        PdfAcroField(
+          name: name,
+          type: 'Btn',
+          x: offset.dx,
+          y: offset.dy,
+          width: size.width,
+          height: size.height,
+          pageIndex: context.pageNumber - 1,
+          checked: value,
+        ),
+      );
+    }
     final PdfCanvas? canvas = context.canvas;
     if (canvas == null) {
       return;
@@ -766,7 +787,7 @@ class _CheckboxBox extends PwBox {
   }
 }
 
-/// Underlined value (form-like, not an AcroForm field).
+/// Underlined value (form-like, not an AcroForm field unless [acroForm]).
 class TextField extends Widget {
   /// TextField API.
   const TextField({
@@ -774,6 +795,7 @@ class TextField extends Widget {
     this.value = '',
     this.maxLength,
     this.width = 160,
+    this.acroForm = false,
   });
 
   /// name API.
@@ -788,15 +810,145 @@ class TextField extends Widget {
   /// width API.
   final double width;
 
+  /// When true, [Document.save] writes a real `/Tx` field.
+  final bool acroForm;
+
   @override
   PwBox layout(Context context, BoxConstraints constraints) {
-    return Container(
+    return _TextFieldBox(
+      Container(
+        width: width,
+        padding: const EdgeInsets.only(bottom: 2),
+        decoration: const BoxDecoration(
+          border: Border(bottom: BorderSide(color: '78909C', width: 0.8)),
+        ),
+        child: Text(value.isEmpty ? name : value),
+      ).layout(context, constraints),
+      name: name,
+      value: value,
+      acroForm: acroForm,
       width: width,
-      padding: const EdgeInsets.only(bottom: 2),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: '78909C', width: 0.8)),
-      ),
-      child: Text(value.isEmpty ? name : value),
-    ).layout(context, constraints);
+    );
+  }
+}
+
+class _TextFieldBox extends PwBox {
+  _TextFieldBox(
+    PwBox inner, {
+    required this.name,
+    required this.value,
+    required this.acroForm,
+    required this.width,
+  }) : _inner = inner,
+       super(inner.size);
+
+  final PwBox _inner;
+  final String name;
+  final String value;
+  final bool acroForm;
+  final double width;
+
+  @override
+  void paint(Context context, PwOffset offset) {
+    if (acroForm) {
+      context.registerAcroField(
+        PdfAcroField(
+          name: name,
+          type: 'Tx',
+          x: offset.dx,
+          y: offset.dy,
+          width: width < 1 ? size.width : width,
+          height: size.height < 12 ? 16 : size.height,
+          pageIndex: context.pageNumber - 1,
+          value: value,
+        ),
+      );
+    }
+    _inner.paint(context, offset);
+  }
+}
+
+/// Combo box. Drawn label, real `/Ch` field when [acroForm] is set.
+class ChoiceField extends Widget {
+  /// ChoiceField API.
+  const ChoiceField({
+    required this.name,
+    this.value = '',
+    this.options = const <String>[],
+    this.width = 160,
+    this.acroForm = true,
+  });
+
+  /// name API.
+  final String name;
+
+  /// value API.
+  final String value;
+
+  /// options API.
+  final List<String> options;
+
+  /// width API.
+  final double width;
+
+  /// acroForm API.
+  final bool acroForm;
+
+  @override
+  PwBox layout(Context context, BoxConstraints constraints) {
+    return _ChoiceBox(
+      Container(
+        width: width,
+        padding: const EdgeInsets.only(bottom: 2),
+        decoration: const BoxDecoration(
+          border: Border(bottom: BorderSide(color: '78909C', width: 0.8)),
+        ),
+        child: Text(value.isEmpty ? name : value),
+      ).layout(context, constraints),
+      name: name,
+      value: value,
+      options: options,
+      acroForm: acroForm,
+      width: width,
+    );
+  }
+}
+
+class _ChoiceBox extends PwBox {
+  _ChoiceBox(
+    PwBox inner, {
+    required this.name,
+    required this.value,
+    required this.options,
+    required this.acroForm,
+    required this.width,
+  }) : _inner = inner,
+       super(inner.size);
+
+  final PwBox _inner;
+  final String name;
+  final String value;
+  final List<String> options;
+  final bool acroForm;
+  final double width;
+
+  @override
+  void paint(Context context, PwOffset offset) {
+    if (acroForm) {
+      context.registerAcroField(
+        PdfAcroField(
+          name: name,
+          type: 'Ch',
+          x: offset.dx,
+          y: offset.dy,
+          width: width < 1 ? size.width : width,
+          height: size.height < 12 ? 16 : size.height,
+          pageIndex: context.pageNumber - 1,
+          value: value,
+          options: options,
+        ),
+      );
+    }
+    _inner.paint(context, offset);
   }
 }

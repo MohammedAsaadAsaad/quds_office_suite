@@ -35,7 +35,8 @@ Phase 6 landed: `PdfFile`, `QudsPdfViewer`, `QudsPdfEditor`, incremental
 save, AcroForm fill, XFDF, page surgery, CCITT, Standard-14 / WinAnsi,
 CFF→OTTO host wrap, ActualText, ViewerPreferences, layer toggle, Type 2/3
 `sh`, struct reading order, signature ByteRange status. Remaining limits
-(in-engine CFF raster, JBIG2/JPX, CMS verify, certified PDF/A) are in
+(in-engine CFF raster, remaining JBIG2 arithmetic/symbol regions, JPX,
+full CMS/PAdES trust, certified PDF/A) are in
 [STANDARDS.md](STANDARDS.md). Contract: [PDF.md](PDF.md).
 
 Widget composer follow-ups that landed after 0.3.1:

@@ -597,9 +597,10 @@ content, and text with ToUnicode, WinAnsi, MacRoman, PDFDoc, and ActualText.
 Annotations and appearance streams, AcroForm fill, XFDF, viewer preferences,
 and page insert / delete / rotate live on `PdfFile`. `/XFA` is flagged, not
 extracted. `/StructTreeRoot` is exposed; `PdfExtract.readingOrder` walks
-Alt and ActualText. Signature fields report ByteRange coverage
-(`unverified` / `broken` / `unsupported`). PKCS#7 and CMS bytes are **not**
-verified, and this package does not create signatures.
+Alt and ActualText. Signature fields report ByteRange coverage and, when
+CMS `SignedData` is present, a `messageDigest` match (`valid` / `invalid` /
+`unverified` / `broken` / `unsupported`). RSA/ECDSA and a system trust list
+are **not** applied, and this package does not create signatures.
 
 Isolate open: `OfficeIsolateOpen.pdf`. Print: `OfficePrint.pdfFile`.
 
@@ -608,9 +609,8 @@ Isolate open: `OfficeIsolateOpen.pdf`. Print: `OfficePrint.pdfFile`.
 ## PDF toolbox
 
 `PdfToolbox` writes a **new** PDF 1.7 and grafts each page dictionary, its
-content streams, and inherited Resources. Fonts and images survive. Do not use
-incremental `appendPages` / `mergeFrom` for real assembly — those snapshots
-can drop Resources.
+content streams, and inherited Resources. Fonts and images survive.
+`PdfFile.appendPages` / `mergeFrom` use the same graft.
 
 ```dart
 import 'package:quds_office_engine/pdf_file.dart';
@@ -742,9 +742,10 @@ These are not hidden TODOs. They are the contract.
 | Full Excel LAMBDA, Power Pivot, Power Query | Formula subset, simple SUM pivot, CSV helper |
 | PDF body reflow (edit text like Word) | Annotations, form fill, page assembly |
 | OCR, image recompress, PDF-to-Office layout recovery | Text extract from the content stream only |
-| Creating signatures, verifying CMS / PAdES | ByteRange coverage status |
+| Creating signatures, full CMS/PAdES trust | ByteRange + `messageDigest` match (`valid`/`invalid`) |
 | Certified PDF/A or PDF/UA | Optional XMP extras; detection, not certification |
-| In-engine CFF / Type 1 raster, JBIG2, JPEG2000 | OTTO wrap for a host loader; those filters stay unsupported |
+| In-engine CFF / Type 1 raster, JPEG2000 | OTTO wrap for a host loader; JPX stays unsupported |
+| JBIG2 arithmetic / symbol / text regions | MMR generic regions decode; other JBIG2 stays placeholder |
 | True content-stream redaction | Overlay plus extract filter |
 | Arabic `PdfToolbox.stamp` | Helvetica overlay; use `pw.Watermark` for a shaped string |
 | N-up booklet, grayscale, image extract | Not in `PdfToolbox` |

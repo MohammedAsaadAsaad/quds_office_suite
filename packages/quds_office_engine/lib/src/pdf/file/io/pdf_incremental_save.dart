@@ -7,6 +7,7 @@ import '../model/pdf_annot.dart';
 import '../model/pdf_file.dart';
 import '../model/pdf_form.dart';
 import '../model/pdf_page_info.dart';
+import 'pdf_appearance.dart';
 
 /// Appends annotation / form / page-tree updates (ISO 32000-1 §7.5.6).
 abstract final class PdfIncrementalSave {
@@ -46,12 +47,32 @@ abstract final class PdfIncrementalSave {
           annotIds.add(annot.objectId!);
           continue;
         }
-        final int apId = next++;
-        writeBytes(apId, _apStream(annot));
+        final int apStart = next;
+        final PdfAppearanceBundle ap = annot.subtype == 'FreeText'
+            ? PdfAppearance.text(
+                startId: apStart,
+                width: annot.rect.width,
+                height: annot.rect.height,
+                text: annot.contents,
+                colorArgb: annot.color,
+                font: file.appearanceFont,
+                rtl: _looksRtl(annot.contents),
+              )
+            : PdfAppearance.text(
+                startId: apStart,
+                width: annot.rect.width,
+                height: annot.rect.height,
+                text: '',
+                colorArgb: annot.color,
+              );
+        next = ap.nextId;
+        for (final PdfAppearanceObj obj in ap.objects) {
+          writeBytes(obj.id, obj.body);
+        }
         final int id = next++;
         annot.objectId = id;
         annotIds.add(id);
-        writeObj(id, _annotDict(annot, apId, rec.info.cropBox));
+        writeObj(id, _annotDict(annot, ap.formId, rec.info.cropBox));
       }
 
       final bool newPage = rec.objectId == null;
@@ -105,10 +126,56 @@ abstract final class PdfIncrementalSave {
       if (field.objectId == null || field.readOnly) {
         continue;
       }
-      writeObj(
-        field.objectId!,
-        '<</T ${_lit(field.name)}/V ${_lit(field.value)}/FT /${field.type}>>',
+      final PdfCosDict? existing = file.store.asDict(
+        PdfCosRef(field.objectId!),
       );
+      int? apId;
+      if (field.type == 'Tx' &&
+          file.appearanceFont != null &&
+          existing != null) {
+        final ({double llx, double lly, double urx, double ury})? r =
+            pdfCosRect(existing['Rect']);
+        final double w = r == null ? 160 : (r.urx - r.llx).abs();
+        final double h = r == null ? 18 : (r.ury - r.lly).abs();
+        final PdfAppearanceBundle ap = PdfAppearance.text(
+          startId: next,
+          width: w,
+          height: h,
+          text: field.value,
+          colorArgb: 0xFFFFFFFF,
+          font: file.appearanceFont,
+          rtl: _looksRtl(field.value),
+        );
+        next = ap.nextId;
+        for (final PdfAppearanceObj obj in ap.objects) {
+          writeBytes(obj.id, obj.body);
+        }
+        apId = ap.formId;
+      }
+      if (existing != null) {
+        final StringBuffer dict = StringBuffer('<<');
+        existing.values.forEach((String key, PdfCos value) {
+          if (key == 'T' || key == 'V' || key == 'FT' || key == 'AP') {
+            return;
+          }
+          dict.write('/$key ${utf8.decode(PdfCosWrite.encode(value))}');
+        });
+        dict.write(
+          '/T ${_pdfText(field.name)}/V ${_pdfText(field.value)}'
+          '/FT /${field.type}',
+        );
+        if (apId != null) {
+          dict.write('/AP <</N $apId 0 R>>');
+        }
+        dict.write('>>');
+        writeObj(field.objectId!, dict.toString());
+      } else {
+        writeObj(
+          field.objectId!,
+          '<</T ${_pdfText(field.name)}/V ${_pdfText(field.value)}'
+          '/FT /${field.type}>>',
+        );
+      }
     }
 
     if (file.treeDirty && file.pagesObjectId > 0) {
@@ -192,7 +259,7 @@ abstract final class PdfIncrementalSave {
       '/C [${_rgb(annot.color)}]',
     );
     if (annot.contents.isNotEmpty) {
-      buf.write('/Contents ${_lit(annot.contents)}');
+      buf.write('/Contents ${_pdfText(annot.contents)}');
     }
     if (annot.uri != null) {
       buf.write('/A <</S /URI/URI ${_lit(annot.uri!)}>>');
@@ -224,30 +291,45 @@ abstract final class PdfIncrementalSave {
     return buf.toString();
   }
 
-  static Uint8List _apStream(PdfAnnot annot) {
-    final String ops = '${_pdfColor(annot.color)} 0 0 ${annot.rect.width} ${annot.rect.height} re f\n';
-    final Uint8List raw = utf8.encode(ops);
-    return PdfCosWrite.encode(
-      PdfCosStream(
-        PdfCosDict(<String, PdfCos>{
-          'Type': const PdfCosName('XObject'),
-          'Subtype': const PdfCosName('Form'),
-          'BBox': PdfCosArray(<PdfCos>[
-            const PdfCosReal(0),
-            const PdfCosReal(0),
-            PdfCosReal(annot.rect.width),
-            PdfCosReal(annot.rect.height),
-          ]),
-          'Resources': PdfCosDict(),
-          'Length': PdfCosInt(raw.length),
-        }),
-        raw,
-      ),
-    );
+  static bool _looksRtl(String text) {
+    for (final int cp in text.runes) {
+      if ((cp >= 0x0590 && cp <= 0x08FF) ||
+          (cp >= 0xFB1D && cp <= 0xFDFF) ||
+          (cp >= 0xFE70 && cp <= 0xFEFF)) {
+        return true;
+      }
+    }
+    return false;
   }
 
-  static String _pdfColor(int argb) {
-    return '${_rgb(argb)} rg';
+  static Uint8List _unicodeBytes(String text) {
+    final BytesBuilder out = BytesBuilder();
+    out.addByte(0xFE);
+    out.addByte(0xFF);
+    for (final int unit in text.codeUnits) {
+      out.addByte((unit >> 8) & 0xFF);
+      out.addByte(unit & 0xFF);
+    }
+    return out.takeBytes();
+  }
+
+  static String _pdfText(String text) {
+    var ascii = true;
+    for (final int unit in text.codeUnits) {
+      if (unit > 127) {
+        ascii = false;
+        break;
+      }
+    }
+    if (ascii) {
+      return _lit(text);
+    }
+    final StringBuffer hex = StringBuffer('<');
+    for (final int b in _unicodeBytes(text)) {
+      hex.write(b.toRadixString(16).padLeft(2, '0'));
+    }
+    hex.write('>');
+    return hex.toString();
   }
 
   static String _rgb(int argb) {

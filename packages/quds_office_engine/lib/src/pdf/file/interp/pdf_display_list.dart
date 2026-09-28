@@ -160,7 +160,7 @@ final class PdfDrawImage extends PdfPaintOp {
   /// jpeg API.
   final bool jpeg;
 
-  /// Undecoded filter (JBIG2 / JPX).
+  /// Undecoded filter (JPX, arithmetic JBIG2, or another typed-unsupported codec).
   final bool placeholder;
 
   /// Source pixel width from the XObject (`/Width`).
