@@ -41,6 +41,7 @@ class ShapedGlyph {
     required this.logicalIndex,
     required this.level,
     this.isSpace = false,
+    this.paintDx = 0,
   });
 
   /// codePoint API.
@@ -60,6 +61,9 @@ class ShapedGlyph {
 
   /// isSpace API.
   final bool isSpace;
+
+  /// Added to the pen X before painting. Combining marks sit on their base.
+  final double paintDx;
 }
 
 /// Width provider used by the breaker (typically [FontMetrics.characterWidth]).
@@ -215,15 +219,83 @@ abstract final class LineBreaker {
   }
 
   static List<ShapedGlyph> _reorderLine(List<ShapedGlyph> logicalSlice) {
-    if (logicalSlice.length < 2) {
+    if (logicalSlice.isEmpty) {
       return logicalSlice;
     }
+    final List<List<ShapedGlyph>> clusters = _graphemeClusters(logicalSlice);
+    if (clusters.length < 2) {
+      return _attachMarksToBases(logicalSlice);
+    }
     final List<int> levels = <int>[
-      for (final ShapedGlyph g in logicalSlice) g.level,
+      for (final List<ShapedGlyph> cluster in clusters) cluster.first.level,
     ];
     final List<int> order = Uax9Bidi.visualOrder(levels);
-    return <ShapedGlyph>[for (final int i in order) logicalSlice[i]];
+    return _attachMarksToBases(<ShapedGlyph>[
+      for (final int i in order) ...clusters[i],
+    ]);
   }
+
+  /// UAX #9 L2 at grapheme-cluster granularity: tashkeel stays on its letter.
+  static List<List<ShapedGlyph>> _graphemeClusters(List<ShapedGlyph> glyphs) {
+    final List<List<ShapedGlyph>> clusters = <List<ShapedGlyph>>[];
+    for (final ShapedGlyph glyph in glyphs) {
+      if (clusters.isNotEmpty && isCombiningMark(glyph.codePoint)) {
+        clusters.last.add(glyph);
+      } else {
+        clusters.add(<ShapedGlyph>[glyph]);
+      }
+    }
+    return clusters;
+  }
+
+  /// Paint marks at the center of the preceding base (zero-width overlay).
+  static List<ShapedGlyph> _attachMarksToBases(List<ShapedGlyph> visual) {
+    final List<ShapedGlyph> out = <ShapedGlyph>[];
+    var i = 0;
+    while (i < visual.length) {
+      final ShapedGlyph glyph = visual[i];
+      if (isCombiningMark(glyph.codePoint)) {
+        out.add(glyph);
+        i++;
+        continue;
+      }
+      var j = i + 1;
+      while (j < visual.length && isCombiningMark(visual[j].codePoint)) {
+        j++;
+      }
+      out.add(glyph);
+      if (j > i + 1) {
+        final double dx = -glyph.advance / 2;
+        for (int k = i + 1; k < j; k++) {
+          final ShapedGlyph mark = visual[k];
+          out.add(
+            ShapedGlyph(
+              codePoint: mark.codePoint,
+              glyphId: mark.glyphId,
+              advance: 0,
+              logicalIndex: mark.logicalIndex,
+              level: mark.level,
+              paintDx: dx,
+            ),
+          );
+        }
+      }
+      i = j;
+    }
+    return out;
+  }
+
+  /// Arabic / Syriac combining marks (tashkeel) that must stay on the base.
+  static bool isCombiningMark(int cp) =>
+      (cp >= 0x0610 && cp <= 0x061A) ||
+      (cp >= 0x064B && cp <= 0x065F) ||
+      cp == 0x0670 ||
+      (cp >= 0x06D6 && cp <= 0x06DC) ||
+      (cp >= 0x06DF && cp <= 0x06E4) ||
+      (cp >= 0x06E7 && cp <= 0x06E8) ||
+      (cp >= 0x06EA && cp <= 0x06ED) ||
+      (cp >= 0x08D3 && cp <= 0x08E1) ||
+      (cp >= 0x08E3 && cp <= 0x0902);
 
   static List<ShapedGlyph> _logicalGlyphs(
     String text,
@@ -246,7 +318,10 @@ abstract final class LineBreaker {
     ) {
       final int cp = cps[logicalCpIndex];
       final int logicalIndex = offsets[logicalCpIndex];
-      if (_isTashkeel(cp)) {
+      if (Uax9Bidi.isInvisibleFormat(cp)) {
+        continue;
+      }
+      if (isCombiningMark(cp)) {
         logical.add(
           ShapedGlyph(
             codePoint: cp,
@@ -277,7 +352,7 @@ abstract final class LineBreaker {
     return logical.map((ShapedGlyph g) {
       final ShapedChar? s = byLogical[g.logicalIndex];
       if (s == null) {
-        return g;
+        return _l4Mirror(g, widthOf, glyphIdOf);
       }
       // Prefer the joining presentation form. Fonts that only encode the
       // nominal letter (GSUB shaping, no FE7x cmap) still get a non-zero
@@ -304,15 +379,43 @@ abstract final class LineBreaker {
         final double space = widthOf(0x0020);
         advance = space > 0 ? space : 1;
       }
-      return ShapedGlyph(
-        codePoint: cp,
-        glyphId: gid,
-        advance: advance,
-        logicalIndex: g.logicalIndex,
-        level: g.level,
-        isSpace: g.isSpace,
+      return _l4Mirror(
+        ShapedGlyph(
+          codePoint: cp,
+          glyphId: gid,
+          advance: advance,
+          logicalIndex: g.logicalIndex,
+          level: g.level,
+          isSpace: g.isSpace,
+        ),
+        widthOf,
+        glyphIdOf,
       );
     }).toList();
+  }
+
+  /// UAX #9 L4 after shaping: flip mirrored pairs on odd embedding levels.
+  static ShapedGlyph _l4Mirror(
+    ShapedGlyph g,
+    GlyphWidthFn widthOf,
+    GlyphIdFn glyphIdOf,
+  ) {
+    if (!g.level.isOdd || g.codePoint == 0) {
+      return g;
+    }
+    final int mirrored = Uax9Bidi.mirrored(g.codePoint);
+    if (mirrored == g.codePoint) {
+      return g;
+    }
+    return ShapedGlyph(
+      codePoint: mirrored,
+      glyphId: glyphIdOf(mirrored),
+      advance: widthOf(mirrored),
+      logicalIndex: g.logicalIndex,
+      level: g.level,
+      isSpace: g.isSpace,
+      paintDx: g.paintDx,
+    );
   }
 
   static List<int> _knuthPlass(
@@ -418,7 +521,7 @@ abstract final class LineBreaker {
       return false;
     }
     // Do not break inside a grapheme (tashkeel already zero-width).
-    if (_isTashkeel(next)) {
+    if (isCombiningMark(next)) {
       return false;
     }
     return false;
@@ -429,9 +532,6 @@ abstract final class LineBreaker {
 
   static bool _isSoftTrailingSpace(ShapedGlyph glyph) =>
       glyph.isSpace && glyph.codePoint != 0x09;
-
-  static bool _isTashkeel(int cp) =>
-      (cp >= 0x064B && cp <= 0x065F) || cp == 0x0670;
 
   /// cp API.
   static int _identityGlyph(int cp) => cp;

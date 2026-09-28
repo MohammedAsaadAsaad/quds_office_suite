@@ -1769,7 +1769,7 @@ abstract final class OfficePdfExport {
             sink.drawGlyph(
               LaidOutGlyph(
                 glyph: g,
-                x: cx,
+                x: cx + g.paintDx,
                 y: baseline,
                 color: color,
                 fontSize: size,
@@ -2085,7 +2085,7 @@ class _PageSink {
           _emit(
             oldGid: g.glyphId,
             codePoint: g.codePoint,
-            x: cx,
+            x: cx + g.paintDx,
             y: cy,
             size: size,
             color: color,

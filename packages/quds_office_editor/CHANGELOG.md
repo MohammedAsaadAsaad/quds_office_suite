@@ -2,6 +2,20 @@
 
 All notable changes to `quds_office_editor` are documented here.
 
+## 0.5.1
+
+**PDF viewer options and events.**
+
+- `PdfViewerOptions` on `QudsPdfViewer` / `QudsPdfEditor`: fit policy, zoom
+  clamps, swipe enable/axis, page fling/snap, night invert, background,
+  scrollbar, password, `preventLinkNavigation`.
+- Callbacks: `onViewCreated`, `onLoadComplete`, `onPageChanged`, `onRender`,
+  `onError`, `onPageError`, `onLinkHandle`, `onDraw`.
+- Horizontal page stack, night-mode raster invert (viewer), and snap/fling on
+  the canvas.
+- Depends on `quds_office_engine` **0.5.3** (Arabic tashkeel on the correct
+  letter, BiDi format marks skipped, new `pdf_widgets`).
+
 ## 0.5.0
 
 **Studio gallery ships the report template library.**

@@ -2,6 +2,18 @@
 
 All notable changes to `quds_office_engine` are documented here.
 
+## 0.5.3
+
+- High-value `pdf_widgets`: `PageNumber`, `HeaderFooter`, `SignatureLine`,
+  `KeepTogether`, `Badge`, `Callout`, `Steps`, `DataGrid`, `Barcode` (Code128),
+  `QrCode`, and `SvgImage` (path subset).
+- Bilingual widget catalog via `pdf_widgets_samples.dart` /
+  `example/pdf_widgets_catalog.dart`.
+- Skip invisible BiDi marks (`LRE`/`PDF`/`LRM`/…) so `intl` dates do not
+  paint as `.notdef` boxes.
+- Reorder Arabic by grapheme cluster so tashkeel (ضمة on `أُنشئت`) stays
+  on its letter after PDF export.
+
 ## 0.5.2
 
 - Do not mid-cut Arabic chart axis labels (keeps joining forms intact).

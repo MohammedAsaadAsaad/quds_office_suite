@@ -37,8 +37,10 @@ class LaidOutGlyph {
     this.hyperlink,
     List<int>? commentIds,
     double? advance,
+    double? paintDx,
   }) : commentIds = commentIds ?? const <int>[],
-       advance = advance ?? glyph.advance;
+       advance = advance ?? glyph.advance,
+       paintDx = paintDx ?? glyph.paintDx;
 
   /// glyph API.
   final ShapedGlyph glyph;
@@ -84,6 +86,9 @@ class LaidOutGlyph {
 
   /// advance API.
   double advance;
+
+  /// Horizontal shift so tashkeel paints on its base letter.
+  final double paintDx;
 }
 
 /// Class LaidOutLine.
@@ -228,7 +233,7 @@ class LaidOutLine {
     var x = this.x;
     for (int i = 0; i < glyphs.length; i++) {
       final LaidOutGlyph glyph = glyphs[i];
-      glyph.x = x;
+      glyph.x = x + glyph.paintDx;
       if (stretch.contains(i)) {
         glyph.advance += extra;
       }
@@ -1097,7 +1102,7 @@ class WordLayoutEngine {
         glyphs.add(
           LaidOutGlyph(
             glyph: g,
-            x: gx,
+            x: gx + g.paintDx * scale,
             y:
                 cursorY +
                 (metrics?.ascender ?? baseSize * 0.8) +
@@ -1114,6 +1119,7 @@ class WordLayoutEngine {
             hyperlink: WordLink.at(paragraph, g.logicalIndex),
             commentIds: WordComment.idsAt(paragraph, g.logicalIndex),
             advance: g.advance * scale,
+            paintDx: g.paintDx * scale,
           ),
         );
         gx += g.advance * scale;

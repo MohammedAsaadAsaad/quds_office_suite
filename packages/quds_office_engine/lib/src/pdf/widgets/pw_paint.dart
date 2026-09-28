@@ -3,6 +3,7 @@ library;
 
 import '../../bidi/arabic_shaping.dart';
 import '../../bidi/line_breaker.dart';
+import '../../bidi/uax9_bidi.dart';
 import '../../fonts/font_metrics.dart';
 import '../../fonts/sfnt_parser.dart';
 import '../../fonts/font_subsetter.dart';
@@ -41,7 +42,7 @@ class PwResolvedStyle {
       return FontMetrics(font: face, fontSizePoints: fontSize).lineHeight *
           factor;
     }
-    return fontSize * factor;
+    return fontSize * 1.2 * factor;
   }
 
   /// baseline API.
@@ -50,7 +51,8 @@ class PwResolvedStyle {
     if (face != null) {
       return FontMetrics(font: face, fontSizePoints: fontSize).ascender;
     }
-    return fontSize * 0.8;
+    // Std14 fallback: keep the full em above the baseline.
+    return fontSize;
   }
 }
 
@@ -151,10 +153,20 @@ void pwPaintLine(
     if (glyph.codePoint == 0 && glyph.advance == 0) {
       continue;
     }
+    if (Uax9Bidi.isInvisibleFormat(glyph.codePoint)) {
+      continue;
+    }
     final double extra = glyph.isSpace && line.justificationRatio != 0
         ? line.justificationRatio * 3
         : 0;
-    _paintGlyph(context, canvas, glyph.codePoint, x, baseline, resolved);
+    _paintGlyph(
+      context,
+      canvas,
+      glyph.codePoint,
+      x + glyph.paintDx,
+      baseline,
+      resolved,
+    );
     x += glyph.advance + extra;
   }
   final TextDecoration? deco = resolved.merged.decoration;
@@ -359,6 +371,9 @@ void _paintGlyph(
   double baseline,
   PwResolvedStyle style,
 ) {
+  if (Uax9Bidi.isInvisibleFormat(codePoint)) {
+    return;
+  }
   final face = context.faceFor(bold: style.bold);
   if (face != null) {
     final ({FontSubset? subset, String fontName}) embed = context.embedFor(
@@ -449,7 +464,7 @@ int _drawableCodePoint(SfntFont face, int codePoint) {
 }
 
 double _stdAdvance(int codePoint, double fontSize) {
-  if (codePoint < 32) {
+  if (codePoint < 32 || Uax9Bidi.isInvisibleFormat(codePoint)) {
     return 0;
   }
   final int code = codePoint <= 255 ? codePoint : 32;
@@ -506,6 +521,25 @@ void pwPaintDecoration(
   }
   final Border? border = decoration.border;
   if (border == null) {
+    return;
+  }
+  final double strokeW = border.top.width;
+  if (strokeW <= 0) {
+    return;
+  }
+  canvas.setStrokeColor(border.top.color);
+  canvas.setLineWidth(strokeW);
+  // Follow the fill radius so KPI / card frames are not sharp rectangles
+  // around a rounded background.
+  if (decoration.borderRadius > 0.2) {
+    canvas.roundedRect(
+      offset.dx,
+      offset.dy,
+      size.width,
+      size.height,
+      decoration.borderRadius,
+    );
+    canvas.stroke();
     return;
   }
   void side(BorderSide s, double x1, double y1, double x2, double y2) {

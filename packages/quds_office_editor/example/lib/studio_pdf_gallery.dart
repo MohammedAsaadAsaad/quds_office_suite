@@ -2,11 +2,13 @@ import 'dart:typed_data';
 
 import 'package:quds_office_engine/pdf_templates.dart' as tpl;
 import 'package:quds_office_engine/pdf_widgets.dart' as pw;
+import 'package:quds_office_engine/pdf_widgets_samples.dart';
 import 'package:quds_office_engine/quds_office_engine.dart';
 
 import 'sample_library.dart';
 import 'studio_files.dart';
 import 'studio_pdf_face_samples.dart';
+import 'studio_pdf_faces.dart';
 import 'studio_pdf_flutter_samples.dart';
 import 'studio_pdf_rich_samples.dart';
 import 'studio_pdf_showcase.dart';
@@ -275,6 +277,21 @@ abstract final class StudioPdfGallery {
 
   /// pdf_widgets constraint-layout samples.
   static final List<StudioPdfSample> widgetSamples = <StudioPdfSample>[
+    StudioPdfSample(
+      id: 'widgets-catalog',
+      kind: StudioPdfSampleKind.pdfWidgets,
+      titleEn: 'Widget catalog (EN · AR)',
+      titleAr: 'كتالوج الودجات (ع · إن)',
+      blurbEn:
+          'Bilingual walkthrough: chrome, callouts, steps, grids, barcode, QR, SVG.',
+      blurbAr:
+          'جولة ثنائية اللغة: إطار الصفحة والتنبيهات والخطوات والجداول والرموز.',
+      fileName: 'widgets_catalog_bilingual.pdf',
+      build: ({SfntFont? font, OfficeFontSet? fonts}) => buildWidgetsCatalog(
+        font: StudioPdfFaces.tajawal(),
+        fontBold: StudioPdfFaces.tajawalBold(),
+      ),
+    ),
     StudioPdfSample(
       id: 'widgets-invoice',
       kind: StudioPdfSampleKind.pdfWidgets,

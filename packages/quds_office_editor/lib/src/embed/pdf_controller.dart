@@ -13,6 +13,7 @@ import '../editor_pdf/pdf_text_selection.dart';
 import 'office_clipboard.dart';
 import 'office_theme.dart';
 import 'office_uri.dart';
+import 'pdf_viewer_options.dart';
 
 /// View / select controller for an opened PDF.
 class PdfViewerController extends ChangeNotifier {
@@ -55,6 +56,15 @@ class PdfViewerController extends ChangeNotifier {
   /// When null, the platform opener is used.
   void Function(String uri)? onOpenUri;
 
+  /// Optional load-failure sink (set by [QudsPdfViewer.onError]).
+  void Function(Object error)? onError;
+
+  /// Active viewer options. Updated by [QudsPdfViewer].
+  PdfViewerOptions options = const PdfViewerOptions();
+
+  /// Whether pages are stacked horizontally.
+  bool get swipeHorizontal => options.swipeHorizontal;
+
   static const Duration _zoomAnimDuration = Duration(milliseconds: 200);
   var _zoomAnimating = false;
   var _zoomFrom = 1.0;
@@ -72,40 +82,96 @@ class PdfViewerController extends ChangeNotifier {
   /// pageCount API.
   int get pageCount => _file?.pageCount ?? _lists.length;
 
+  /// Apply [next] options: zoom clamps and optional default page.
+  void applyOptions(PdfViewerOptions next, {bool jumpToDefaultPage = false}) {
+    options = next;
+    viewport.applyZoomLimits(min: next.minZoom, max: next.maxZoom);
+    if (jumpToDefaultPage && pageCount > 0) {
+      goToPage(next.defaultPage);
+    }
+    notifyListeners();
+  }
+
+  /// Fit the current page using [policy] against the live viewport extent.
+  void applyFitPolicy(PdfFitPolicy policy) {
+    final Size extent = viewport.extent;
+    final double w = extent.width > 0 ? extent.width : 720;
+    final double h = extent.height > 0 ? extent.height : 900;
+    switch (policy) {
+      case PdfFitPolicy.width:
+        fitWidth(w);
+      case PdfFitPolicy.page:
+        fitPage(w, h);
+      case PdfFitPolicy.height:
+        fitHeight(h);
+      case PdfFitPolicy.none:
+        break;
+    }
+  }
+
   /// loadBytesAsync API.
+  ///
+  /// On failure the error is rethrown after [onLoadError] and [onError] run.
   Future<void> loadBytesAsync(
     Uint8List bytes, {
     String? password,
     void Function(OfficeOpenProgress progress)? onProgress,
+    void Function(Object error)? onLoadError,
   }) async {
-    final PdfOpenPayload payload = await OfficeIsolateOpen.pdf(
-      bytes,
-      password: password,
-      onProgress: onProgress,
-    );
-    _file = payload.file;
-    _lists = payload.lists;
-    selection = null;
-    _clearFind();
-    pageIndex = 0;
-    viewport.origin = Offset.zero;
-    notifyListeners();
+    try {
+      final PdfOpenPayload payload = await OfficeIsolateOpen.pdf(
+        bytes,
+        password: password ?? options.password,
+        onProgress: onProgress,
+      );
+      _file = payload.file;
+      _lists = payload.lists;
+      selection = null;
+      _clearFind();
+      pageIndex = options.defaultPage.clamp(0, mathMax(0, pageCount - 1));
+      viewport.origin = Offset.zero;
+      goToPage(pageIndex);
+      notifyListeners();
+    } catch (error) {
+      onLoadError?.call(error);
+      onError?.call(error);
+      rethrow;
+    }
   }
 
   /// goToPage API.
   ///
-  /// [destY] is a top-left page offset. The page top stays visible when it is
-  /// omitted or already near the top.
-  void goToPage(int index, {double? destY}) {
+  /// [destY] / [destX] are top-left page offsets. The page start stays visible
+  /// when they are omitted or already near the start edge.
+  void goToPage(int index, {double? destY, double? destX}) {
     pageIndex = index.clamp(0, mathMax(0, pageCount - 1));
-    var top = PdfPageLayout.stackTop(_lists, pageIndex, viewport.scale);
-    if (destY != null && destY > 12) {
-      top += destY * PdfPageLayout.viewScale(viewport.scale) - 36;
+    if (swipeHorizontal) {
+      var left = PdfPageLayout.stackStart(_lists, pageIndex, viewport.scale);
+      if (destX != null && destX > 12) {
+        left += destX * PdfPageLayout.viewScale(viewport.scale) - 36;
+      }
+      var top = viewport.origin.dy;
+      if (destY != null && destY > 12) {
+        top = destY * PdfPageLayout.viewScale(viewport.scale) - 36;
+        if (top < 0) {
+          top = 0;
+        }
+      }
+      viewport.origin = Offset(left < 0 ? 0 : left, top);
+    } else {
+      var top = PdfPageLayout.stackTop(_lists, pageIndex, viewport.scale);
+      if (destY != null && destY > 12) {
+        top += destY * PdfPageLayout.viewScale(viewport.scale) - 36;
+      }
+      viewport.origin = Offset(viewport.origin.dx, top < 0 ? 0 : top);
     }
-    viewport.origin = Offset(viewport.origin.dx, top < 0 ? 0 : top);
     if (viewport.extent.width > 0 && viewport.extent.height > 0) {
       viewport.clampTo(
-        content: PdfPageLayout.contentSize(_lists, viewport.scale),
+        content: PdfPageLayout.contentSize(
+          _lists,
+          viewport.scale,
+          horizontal: swipeHorizontal,
+        ),
         view: viewport.extent,
       );
     }
@@ -117,10 +183,26 @@ class PdfViewerController extends ChangeNotifier {
     if (_lists.isEmpty) {
       return;
     }
-    final double y =
-        viewport.origin.dy +
-        (viewport.extent.height > 0 ? viewport.extent.height * 0.35 : 0);
-    pageIndex = PdfPageLayout.pageAtY(_lists, y, viewport.scale);
+    if (swipeHorizontal) {
+      final double x =
+          viewport.origin.dx +
+          (viewport.extent.width > 0 ? viewport.extent.width * 0.35 : 0);
+      pageIndex = PdfPageLayout.pageAtX(_lists, x, viewport.scale);
+    } else {
+      final double y =
+          viewport.origin.dy +
+          (viewport.extent.height > 0 ? viewport.extent.height * 0.35 : 0);
+      pageIndex = PdfPageLayout.pageAtY(_lists, y, viewport.scale);
+    }
+  }
+
+  /// Snap the viewport origin to the nearest page start edge.
+  void snapToNearestPage() {
+    if (_lists.isEmpty || !options.pageSnap) {
+      return;
+    }
+    adoptVisiblePage();
+    goToPage(pageIndex);
   }
 
   /// Canvas pan / wheel / pinch finished — keep chrome in sync.
@@ -136,10 +218,7 @@ class PdfViewerController extends ChangeNotifier {
   void setScale(double scale, {Offset? focal, bool animate = true}) {
     final Offset focus = focal ?? _viewCenter();
     final double old = viewport.scale;
-    final double clamped = scale.clamp(
-      VirtualViewport.minScale,
-      VirtualViewport.maxScale,
-    );
+    final double clamped = scale.clamp(viewport.clampMin, viewport.clampMax);
     final double pending = _zoomAnimating ? _zoomTo : old;
     if ((clamped - pending).abs() < 1e-9) {
       return;
@@ -177,7 +256,11 @@ class PdfViewerController extends ChangeNotifier {
       return;
     }
     viewport.clampTo(
-      content: PdfPageLayout.contentSize(_lists, viewport.scale),
+      content: PdfPageLayout.contentSize(
+        _lists,
+        viewport.scale,
+        horizontal: swipeHorizontal,
+      ),
       view: extent,
     );
   }
@@ -195,6 +278,7 @@ class PdfViewerController extends ChangeNotifier {
       focal: focus,
       oldScale: from,
       nextScale: viewport.scale,
+      horizontal: swipeHorizontal,
     );
     _clampViewport();
     notifyListeners();
@@ -243,6 +327,7 @@ class PdfViewerController extends ChangeNotifier {
       focal: _zoomFocal,
       oldScale: _zoomFrom,
       nextScale: next,
+      horizontal: swipeHorizontal,
     );
     _clampViewport();
     notifyListeners();
@@ -258,6 +343,7 @@ class PdfViewerController extends ChangeNotifier {
       focal: _zoomFocal,
       oldScale: _zoomFrom,
       nextScale: viewport.scale,
+      horizontal: swipeHorizontal,
     );
     _clampViewport();
     notifyListeners();
@@ -436,6 +522,9 @@ class PdfViewerController extends ChangeNotifier {
     if (uri == null || !launchableUri(uri)) {
       return;
     }
+    if (options.preventLinkNavigation) {
+      return;
+    }
     final void Function(String uri)? host = onOpenUri;
     if (host != null) {
       host(uri);
@@ -494,9 +583,27 @@ class PdfViewerController extends ChangeNotifier {
       return;
     }
     final PdfPageInfo page = file.pageAt(pageIndex);
-    final double sx = viewportWidth / page.width;
-    final double sy = viewportHeight / page.height;
+    final double sx =
+        (viewportWidth - PdfPageLayout.gutter * 2 - PdfPageLayout.scrollBar) /
+        page.width;
+    final double sy =
+        (viewportHeight - PdfPageLayout.gap * 2) / page.height;
     setScale((sx < sy ? sx : sy) / PdfPageLayout.pointsToPixels);
+  }
+
+  /// Scale so the page height fills [viewportHeight].
+  void fitHeight(double viewportHeight) {
+    final PdfFile? file = _file;
+    if (file == null || file.pageCount == 0 || viewportHeight <= 0) {
+      return;
+    }
+    final double usable = viewportHeight - PdfPageLayout.gap * 2;
+    if (usable <= 0) {
+      return;
+    }
+    setScale(
+      usable / file.pageAt(pageIndex).height / PdfPageLayout.pointsToPixels,
+    );
   }
 
   /// isDirty API.

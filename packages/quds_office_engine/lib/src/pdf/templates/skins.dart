@@ -201,6 +201,7 @@ Widget _meta(TemplateTheme theme, String label, String value) {
     child: Text(
       '$label  $value',
       textAlign: TextAlign.end,
+      softWrap: false,
       style: TextStyle(fontSize: 8, color: theme.muted),
     ),
   );
@@ -212,7 +213,16 @@ Widget _moneyLine(String color, String label, String value, {bool strong = false
     child: Row(
       children: <Widget>[
         Expanded(child: _ink(label, size: strong ? 11 : 8, bold: strong, color: color)),
-        _ink(value, size: strong ? 13 : 9, bold: true, color: color),
+        SizedBox(width: 8),
+        Text(
+          value,
+          softWrap: false,
+          style: TextStyle(
+            fontSize: strong ? 13 : 9,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+        ),
       ],
     ),
   );

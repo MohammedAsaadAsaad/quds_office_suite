@@ -16,6 +16,8 @@ class SfntFont {
     required this.descender,
     required this.lineGap,
     required this.capHeight,
+    required this.winAscent,
+    required this.winDescent,
     required this.xMin,
     required this.yMin,
     required this.xMax,
@@ -56,6 +58,12 @@ class SfntFont {
 
   /// capHeight API.
   final int capHeight;
+
+  /// OS/2 `usWinAscent` (positive). Prefer for line boxes that must not clip.
+  final int winAscent;
+
+  /// OS/2 `usWinDescent` (positive extent below the baseline).
+  final int winDescent;
 
   /// xMin API.
   final int xMin;
@@ -139,13 +147,24 @@ class SfntFont {
     final int numGlyphs = maxp.u16be();
 
     int capHeight = ascender;
+    var winAscent = ascender < 0 ? -ascender : ascender;
+    var winDescent = descender < 0 ? -descender : descender;
     final SfntTableRecord? os2rec = tables['OS/2'];
-    if (os2rec != null && os2rec.length >= 90) {
+    if (os2rec != null && os2rec.length >= 78) {
       final ByteCursor os2 = table('OS/2');
       os2.skip(68);
       final int typoAscender = os2.i16be();
       if (typoAscender != 0) {
         capHeight = typoAscender;
+      }
+      os2.seek(74);
+      final int usWinAscent = os2.u16be();
+      final int usWinDescent = os2.u16be();
+      if (usWinAscent > 0) {
+        winAscent = usWinAscent;
+      }
+      if (usWinDescent > 0) {
+        winDescent = usWinDescent;
       }
       if (os2rec.length >= 90) {
         os2.seek(88);
@@ -205,6 +224,8 @@ class SfntFont {
       descender: descender,
       lineGap: lineGap,
       capHeight: capHeight,
+      winAscent: winAscent,
+      winDescent: winDescent,
       xMin: xMin,
       yMin: yMin,
       xMax: xMax,

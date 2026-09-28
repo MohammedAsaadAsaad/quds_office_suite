@@ -14,6 +14,104 @@ import '../example/pdf_widgets_report.dart' as report;
 void main() {
   final SfntFont? font = _tryFont();
 
+  test('Row softWrap Text keeps intrinsic width so Expanded gets space', () {
+    final pw.Document doc = pw.Document(font: font);
+    late double labelW;
+    late double amountW;
+    late double titleW;
+    doc.addPage(
+      pw.Page(
+        pageFormat: pw.PdfPageFormat.a4,
+        build: (pw.Context context) {
+          final pw.Widget money = pw.Row(
+            children: <pw.Widget>[
+              pw.Expanded(
+                child: pw.Text(
+                  'Subtotal',
+                  style: const pw.TextStyle(fontSize: 8),
+                ),
+              ),
+              pw.Text(
+                '1,076',
+                softWrap: false,
+                style: const pw.TextStyle(
+                  fontSize: 9,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+            ],
+          );
+          final pw.PwBox moneyBox = money.layout(
+            context,
+            const pw.BoxConstraints(maxWidth: 200, maxHeight: 40),
+          );
+          // Probe children via a second layout with known structure.
+          final pw.Text label = pw.Text(
+            'Subtotal',
+            style: const pw.TextStyle(fontSize: 8),
+          );
+          final pw.Text amount = pw.Text(
+            '1,076',
+            softWrap: false,
+            style: const pw.TextStyle(
+              fontSize: 9,
+              fontWeight: pw.FontWeight.bold,
+            ),
+          );
+          amountW = amount
+              .layout(
+                context,
+                const pw.BoxConstraints(maxWidth: 200, maxHeight: 40),
+              )
+              .size
+              .width;
+          labelW = label
+              .layout(
+                context,
+                pw.BoxConstraints(
+                  minWidth: 200 - amountW,
+                  maxWidth: 200 - amountW,
+                  maxHeight: 40,
+                ),
+              )
+              .size
+              .width;
+          final pw.Widget header = pw.Row(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: <pw.Widget>[
+              pw.Expanded(
+                child: pw.Text(
+                  'Sales order',
+                  style: const pw.TextStyle(
+                    fontSize: 20,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
+              ),
+              pw.Text(
+                'Order SO-88',
+                softWrap: false,
+                textAlign: pw.TextAlign.end,
+                style: const pw.TextStyle(fontSize: 8),
+              ),
+            ],
+          );
+          final pw.PwBox headerBox = header.layout(
+            context,
+            const pw.BoxConstraints(maxWidth: 400, maxHeight: 80),
+          );
+          titleW = headerBox.size.width;
+          expect(moneyBox.size.width, closeTo(200, 0.5));
+          return pw.Column(children: <pw.Widget>[header, money]);
+        },
+      ),
+    );
+    doc.save();
+    expect(amountW, lessThan(80));
+    expect(labelW, greaterThan(40));
+    expect(titleW, closeTo(400, 0.5));
+  });
+
   test('Document.save emits a readable multi-page PDF', () {
     final pw.Document doc = pw.Document(title: 'Widget test', font: font);
     doc.addPage(
@@ -271,6 +369,56 @@ void main() {
     expect(letters.last.x, greaterThan(500));
   });
 
+  test('RTL tashkeel paints on the base letter not a neighbour', () {
+    final File cairo = File(
+      '../quds_office_editor/example/fonts/Cairo-Regular.ttf',
+    );
+    final File naskh = File(
+      '../quds_office_editor/fonts/NotoNaskhArabic-Regular.ttf',
+    );
+    final File faceFile = cairo.existsSync() ? cairo : naskh;
+    expect(faceFile.existsSync(), isTrue, reason: faceFile.path);
+    final SfntFont face = SfntFont.parse(faceFile.readAsBytesSync());
+    const String word = 'أُنشئت';
+    final pw.Document doc = pw.Document(font: face);
+    doc.addPage(
+      pw.Page(
+        pageFormat: pw.PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(40),
+        textDirection: pw.TextDirection.rtl,
+        build: (pw.Context context) => pw.Paragraph(
+          text: word,
+          textAlign: pw.TextAlign.start,
+        ),
+      ),
+    );
+    final PdfDisplayList list = PdfFile.open(doc.save()).displayList(0);
+    final List<PdfDrawText> glyphs = <PdfDrawText>[
+      for (final PdfPaintOp op in list.ops)
+        if (op is PdfDrawText && op.text.isNotEmpty) op,
+    ];
+    PdfDrawText? damma;
+    PdfDrawText? alef;
+    PdfDrawText? sheen;
+    for (final PdfDrawText g in glyphs) {
+      final int cp = g.text.runes.first;
+      if (cp == 0x064F) {
+        damma = g;
+      } else if (cp == 0x0623 || cp == 0xFE83 || cp == 0xFE84 || cp == 0xFE87) {
+        alef = g;
+      } else if (cp == 0x0634 || cp == 0xFEB7 || cp == 0xFEB8) {
+        sheen = g;
+      }
+    }
+    expect(damma, isNotNull);
+    expect(alef, isNotNull);
+    expect(sheen, isNotNull);
+    final double toAlef = (damma!.x - alef!.x).abs();
+    final double toSheen = (damma.x - sheen!.x).abs();
+    expect(toAlef, lessThan(toSheen));
+    expect(toAlef, lessThan(6));
+  });
+
   test('RTL MultiPage short line starts on the right', () {
     final File cairo = File(
       '../quds_office_editor/example/fonts/Cairo-Regular.ttf',
@@ -480,11 +628,11 @@ void main() {
     final PdfFile file = PdfFile.open(doc.save());
     expect(file.pageCount, greaterThan(1));
     final String page1 = PdfExtract.pageText(file, 0);
-    final String page2 = PdfExtract.pageText(file, 1);
+    final String last = PdfExtract.pageText(file, file.pageCount - 1);
     expect(page1.contains('Item'), isTrue);
     expect(page1.contains('Row 1'), isTrue);
-    expect(page2.contains('Item'), isTrue);
-    expect(page2.contains('Row 12'), isTrue);
+    expect(PdfExtract.pageText(file, 1).contains('Item'), isTrue);
+    expect(last.contains('Row 12'), isTrue);
     expect(page1.contains('Row 12'), isFalse);
   });
 

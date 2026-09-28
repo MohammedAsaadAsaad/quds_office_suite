@@ -232,6 +232,23 @@ class PdfCanvas {
     closePath();
   }
 
+  /// Bar / column with rounded top corners only (square baseline).
+  void roundedTopRect(double x, double y, double w, double h, double radius) {
+    final double r = radius.clamp(0, w < h ? w / 2 : h / 2);
+    if (r <= 0.2 || h <= r * 2) {
+      rect(x, y, w, h);
+      return;
+    }
+    final double k = 0.5522847498 * r;
+    moveTo(x, y + h);
+    lineTo(x, y + r);
+    curveTo(x, y + r - k, x + r - k, y, x + r, y);
+    lineTo(x + w - r, y);
+    curveTo(x + w - r + k, y, x + w, y + r - k, x + w, y + r);
+    lineTo(x + w, y + h);
+    closePath();
+  }
+
   /// ellipse API.
   void ellipse(double x, double y, double w, double h) {
     final double cx = x + w / 2;

@@ -9,6 +9,9 @@ class PdfSampleGalleryDialog extends StatefulWidget {
     super.key,
     required this.arabic,
     required this.accent,
+    this.initialKind,
+    this.initialGroup,
+    this.initialSampleId,
   });
 
   /// Arabic chrome.
@@ -16,6 +19,15 @@ class PdfSampleGalleryDialog extends StatefulWidget {
 
   /// Accent from the studio theme.
   final Color accent;
+
+  /// Restore last category tab when reopening.
+  final StudioPdfSampleKind? initialKind;
+
+  /// Restore last template sub-group when [initialKind] is templates.
+  final String? initialGroup;
+
+  /// Highlight / scroll to the last opened sample.
+  final String? initialSampleId;
 
   /// Report templates first so they are the landing list, not a hidden tab.
   static const List<StudioPdfSampleKind> categories = <StudioPdfSampleKind>[
@@ -31,12 +43,42 @@ class PdfSampleGalleryDialog extends StatefulWidget {
 }
 
 class _PdfSampleGalleryDialogState extends State<PdfSampleGalleryDialog> {
-  StudioPdfSampleKind _kind = StudioPdfSampleKind.templates;
-  String _group = StudioPdfGallery.templateGroups.first;
+  late StudioPdfSampleKind _kind;
+  late String _group;
+  final GlobalKey _selectedKey = GlobalKey();
 
   bool get arabic => widget.arabic;
 
   Color get accent => widget.accent;
+
+  String? get _selectedId => widget.initialSampleId;
+
+  @override
+  void initState() {
+    super.initState();
+    final StudioPdfSampleKind? kind = widget.initialKind;
+    _kind = kind != null && PdfSampleGalleryDialog.categories.contains(kind)
+        ? kind
+        : StudioPdfSampleKind.templates;
+    final String? group = widget.initialGroup;
+    _group = group != null && StudioPdfGallery.templateGroups.contains(group)
+        ? group
+        : StudioPdfGallery.templateGroups.first;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToSelected());
+  }
+
+  void _scrollToSelected() {
+    final BuildContext? target = _selectedKey.currentContext;
+    if (target == null) {
+      return;
+    }
+    Scrollable.ensureVisible(
+      target,
+      alignment: 0.15,
+      duration: const Duration(milliseconds: 280),
+      curve: Curves.easeOutCubic,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -116,8 +158,8 @@ class _PdfSampleGalleryDialogState extends State<PdfSampleGalleryDialog> {
                 const SizedBox(height: 3),
                 Text(
                   arabic
-                      ? 'قوالب التقارير أولاً. كل مثال صفحة إنجليزية ثم عربية.'
-                      : 'Report templates first. Each sample is English, then Arabic.',
+                      ? 'F1 يفتح المعرض على آخر تبويب وعينة. قوالب التقارير أولاً.'
+                      : 'F1 restores the last tab and sample. Templates first.',
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: 0.85),
                     fontSize: 12,
@@ -163,7 +205,10 @@ class _PdfSampleGalleryDialogState extends State<PdfSampleGalleryDialog> {
       borderRadius: BorderRadius.circular(10),
       child: InkWell(
         borderRadius: BorderRadius.circular(10),
-        onTap: () => setState(() => _kind = kind),
+        onTap: () => setState(() {
+          _kind = kind;
+          WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToSelected());
+        }),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 9),
           child: Row(
@@ -217,10 +262,12 @@ class _PdfSampleGalleryDialogState extends State<PdfSampleGalleryDialog> {
         const SizedBox(height: 12),
         for (final StudioPdfSample sample in samples)
           Padding(
+            key: sample.id == _selectedId ? _selectedKey : null,
             padding: const EdgeInsets.only(bottom: 8),
             child: _card(
               sample: sample,
               onSurface: onSurface,
+              selected: sample.id == _selectedId,
               onTap: () => Navigator.of(context).pop(sample),
             ),
           ),
@@ -247,10 +294,15 @@ class _PdfSampleGalleryDialogState extends State<PdfSampleGalleryDialog> {
                     selectedColor: accent.withValues(alpha: 0.18),
                     labelStyle: TextStyle(
                       fontSize: 12,
-                      fontWeight: group == _group ? FontWeight.w700 : FontWeight.w500,
+                      fontWeight:
+                          group == _group ? FontWeight.w700 : FontWeight.w500,
                       color: group == _group ? accent : onSurface,
                     ),
-                    onSelected: (_) => setState(() => _group = group),
+                    onSelected: (_) => setState(() {
+                      _group = group;
+                      WidgetsBinding.instance
+                          .addPostFrameCallback((_) => _scrollToSelected());
+                    }),
                   ),
                 ),
             ],
@@ -264,11 +316,14 @@ class _PdfSampleGalleryDialogState extends State<PdfSampleGalleryDialog> {
   Widget _card({
     required StudioPdfSample sample,
     required Color onSurface,
+    required bool selected,
     required VoidCallback onTap,
   }) {
     final StudioPdfSampleKind kind = _kind;
     return Material(
-      color: accent.withValues(alpha: 0.04),
+      color: selected
+          ? accent.withValues(alpha: 0.16)
+          : accent.withValues(alpha: 0.04),
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
@@ -277,7 +332,12 @@ class _PdfSampleGalleryDialogState extends State<PdfSampleGalleryDialog> {
           padding: const EdgeInsets.fromLTRB(12, 12, 14, 12),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: accent.withValues(alpha: 0.12)),
+            border: Border.all(
+              color: selected
+                  ? accent
+                  : accent.withValues(alpha: 0.12),
+              width: selected ? 1.6 : 1,
+            ),
           ),
           child: Row(
             children: <Widget>[
@@ -285,7 +345,7 @@ class _PdfSampleGalleryDialogState extends State<PdfSampleGalleryDialog> {
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color: accent.withValues(alpha: 0.12),
+                  color: accent.withValues(alpha: selected ? 0.22 : 0.12),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(_icon(kind), color: accent, size: 20),
@@ -295,13 +355,38 @@ class _PdfSampleGalleryDialogState extends State<PdfSampleGalleryDialog> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    Text(
-                      sample.title(arabic),
-                      style: TextStyle(
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.w700,
-                        color: onSurface,
-                      ),
+                    Row(
+                      children: <Widget>[
+                        Expanded(
+                          child: Text(
+                            sample.title(arabic),
+                            style: TextStyle(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w700,
+                              color: onSurface,
+                            ),
+                          ),
+                        ),
+                        if (selected)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 7,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: accent,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              arabic ? 'مفتوح' : 'Open',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
                     const SizedBox(height: 3),
                     Text(

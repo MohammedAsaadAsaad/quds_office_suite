@@ -25,6 +25,29 @@ void main() {
       expect(Uax9Bidi.classify(0x0661), BidiClass.an);
       expect(Uax9Bidi.classify(0x064B), BidiClass.nsm);
     });
+    test('mirrors parentheses on RTL odd levels (L4)', () {
+      expect(Uax9Bidi.mirrored(0x0028), 0x0029);
+      expect(Uax9Bidi.mirrored(0x0029), 0x0028);
+      expect(Uax9Bidi.mirrored(0x0627), 0x0627);
+
+      final List<BrokenLine> lines = LineBreaker.breakLines(
+        text: 'الإيراد (شيكل)',
+        maxWidth: 400,
+        widthOf: (int cp) => cp == 0 ? 0 : 8,
+        justify: false,
+        baseLevel: 1,
+      );
+      final List<int> cps = <int>[
+        for (final ShapedGlyph g in lines.single.glyphs)
+          if (g.advance > 0) g.codePoint,
+      ];
+      // After L2+L4, visual LTR order paints `(` then شيكل then `)`.
+      expect(cps, contains(0x0028));
+      expect(cps, contains(0x0029));
+      final int openAt = cps.indexOf(0x0028);
+      final int closeAt = cps.indexOf(0x0029);
+      expect(openAt, lessThan(closeAt));
+    });
   });
 
   group('Arabic shaping', () {
@@ -98,6 +121,30 @@ void main() {
       }
     });
 
+    test('keeps damma on alef after RTL visual reorder', () {
+      final List<BrokenLine> lines = LineBreaker.breakLines(
+        text: 'أُنشئت',
+        maxWidth: 1000,
+        widthOf: (int cp) => cp == 0 ? 0 : 8,
+        justify: false,
+        baseLevel: 1,
+      );
+      final List<int> cps = <int>[
+        for (final ShapedGlyph g in lines.single.glyphs) g.codePoint,
+      ];
+      final int dammaAt = cps.indexOf(0x064F);
+      expect(dammaAt, greaterThan(0));
+      // Per-glyph L2 reverse used to yield [ت, ئ, ش, ن, ُ, أ] so the mark
+      // attached to noon/sheen. Clusters keep base then tashkeel: […, أ, ُ].
+      expect(
+        cps[dammaAt - 1],
+        anyOf(0x0623, 0xFE83, 0xFE84, 0xFE87, 0xFE88),
+      );
+      expect(cps[dammaAt], isNot(anyOf(0x0634, 0xFEB7, 0xFEB8)));
+      expect(lines.single.glyphs[dammaAt].advance, 0);
+      expect(lines.single.glyphs[dammaAt].paintDx, isNot(0));
+    });
+
     test('reorders Arabic to visual order and applies join forms', () {
       final List<BrokenLine> lines = LineBreaker.breakLines(
         text: 'مرحبا',
@@ -130,6 +177,24 @@ void main() {
         lines.skip(1).any((BrokenLine line) => line.logicalStart == 0),
         isFalse,
       );
+    });
+
+    test('drops DateFormat LRE/PDF marks so they do not become boxes', () {
+      const String text = 'أُنشئت \u202A12:46 27/09/2026\u202C · 3';
+      final List<BrokenLine> lines = LineBreaker.breakLines(
+        text: text,
+        maxWidth: 2000,
+        widthOf: (int cp) => Uax9Bidi.isInvisibleFormat(cp) ? 99 : 8,
+        glyphIdOf: (int cp) => Uax9Bidi.isInvisibleFormat(cp) ? 0 : cp,
+        justify: false,
+        baseLevel: 1,
+      );
+      final List<int> cps = <int>[
+        for (final ShapedGlyph g in lines.single.glyphs) g.codePoint,
+      ];
+      expect(cps, isNot(contains(0x202A)));
+      expect(cps, isNot(contains(0x202C)));
+      expect(cps, contains(0x0031)); // '1' from the time
     });
 
     test('maps visual X back to a logical index', () {

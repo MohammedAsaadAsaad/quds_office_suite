@@ -144,7 +144,7 @@ along the diagonal — Arabic cannot be cut glyph by glyph and still join.
 
 ```yaml
 dependencies:
-  quds_office_engine: ^0.5.0
+  quds_office_engine: ^0.5.3
 ```
 
 ```bash
@@ -492,7 +492,9 @@ final Uint8List pdf = doc.save();
 
 Implemented boxes include `Row`, `Column`, `Expanded`, `Wrap`, `Stack`,
 `Positioned`, `GridView`, `Table` (cells fill the row), `Image`, `Chart`,
-`UrlLink`, `Header`, `Footer`, `Paragraph`, a two-pass `TableOfContent`, and
+`UrlLink`, `Header`, `Footer`, `HeaderFooter`, `PageNumber`, `Paragraph`,
+`Badge`, `Callout`, `Steps`, `DataGrid`, `Barcode`, `QrCode`, `SvgImage`,
+`SignatureLine`, `KeepTogether`, a two-pass `TableOfContent`, and
 `Watermark`.
 
 A watermark is **one rotated string**. The content stream carries visual-order
@@ -782,6 +784,7 @@ lib/
 | [`example/pdf_widgets_invoice.dart`](example/pdf_widgets_invoice.dart) | Invoice (Row, Table, UrlLink) |
 | [`example/pdf_widgets_report.dart`](example/pdf_widgets_report.dart) | Quarterly report (TOC, charts, landscape) |
 | [`example/pdf_widgets_proposal.dart`](example/pdf_widgets_proposal.dart) | Proposal (cover band, GridView) |
+| [`example/pdf_widgets_catalog.dart`](example/pdf_widgets_catalog.dart) | Bilingual catalog of every public widget |
 | [`example/rich_export_gallery.dart`](example/rich_export_gallery.dart) | Word, Excel, PowerPoint galleries + PDF |
 | [`example/word_gallery.dart`](example/word_gallery.dart) | Word-only |
 | [`example/sheet_gallery.dart`](example/sheet_gallery.dart) | Excel-only |

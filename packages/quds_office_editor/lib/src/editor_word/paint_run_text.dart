@@ -198,7 +198,7 @@ abstract final class PaintRunText {
       final String text = runText(paragraph, run);
       if (text.isEmpty || run.every(_isTab)) {
         for (final LaidOutGlyph glyph in run) {
-          glyph.x = x;
+          glyph.x = x + glyph.paintDx;
           x += glyph.advance;
         }
         start = end;
@@ -403,7 +403,7 @@ abstract final class PaintRunText {
       final double share = i == run.length - 1
           ? originX + width - x
           : width * (glyph.glyph.advance / weight);
-      glyph.x = x;
+      glyph.x = x + glyph.paintDx;
       glyph.advance = share.clamp(0, width);
       x += glyph.advance;
     }

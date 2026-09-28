@@ -1,3 +1,4 @@
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:quds_office_engine/pdf_file.dart';
@@ -6,6 +7,7 @@ import '../editor_pdf/render_pdf_canvas.dart';
 import 'office_context_menu.dart';
 import 'office_theme.dart';
 import 'pdf_controller.dart';
+import 'pdf_viewer_options.dart';
 
 /// Display-only PDF surface (`viewing` / `selecting`).
 class QudsPdfViewer extends StatefulWidget {
@@ -14,9 +16,18 @@ class QudsPdfViewer extends StatefulWidget {
     super.key,
     required this.controller,
     this.config,
+    this.options = const PdfViewerOptions(),
     this.toolbarBuilder,
     this.statusBarBuilder,
+    this.onViewCreated,
+    this.onLoadComplete,
+    this.onPageChanged,
+    this.onRender,
+    this.onError,
+    this.onPageError,
     this.onFollowLink,
+    this.onLinkHandle,
+    this.onDraw,
   });
 
   /// controller API.
@@ -24,6 +35,9 @@ class QudsPdfViewer extends StatefulWidget {
 
   /// config API.
   final OfficeSurfaceConfig? config;
+
+  /// Tunable viewer behaviour (zoom clamps, swipe, night mode, …).
+  final PdfViewerOptions options;
 
   /// toolbarBuilder API.
   final Widget Function(BuildContext context, PdfViewerController controller)?
@@ -33,8 +47,32 @@ class QudsPdfViewer extends StatefulWidget {
   final Widget Function(BuildContext context, PdfViewerController controller)?
   statusBarBuilder;
 
-  /// onFollowLink API.
+  /// Fired once when the surface mounts.
+  final PdfViewCreatedCallback? onViewCreated;
+
+  /// Fired when [controller] already has pages (or after the first frame).
+  final PdfLoadCompleteCallback? onLoadComplete;
+
+  /// Fired when the visible page index changes.
+  final PdfPageChangedCallback? onPageChanged;
+
+  /// Fired when a page raster finishes.
+  final PdfRenderCallback? onRender;
+
+  /// Fired when opening / loading fails (host-driven loads).
+  final PdfErrorCallback? onError;
+
+  /// Fired when a single page raster fails.
+  final PdfPageErrorCallback? onPageError;
+
+  /// onFollowLink API (also receives prevented URI navigations).
   final void Function(PdfLinkAction action)? onFollowLink;
+
+  /// Alias for link activations; prefer this when using [options.preventLinkNavigation].
+  final PdfLinkHandleCallback? onLinkHandle;
+
+  /// Optional host overlay after a page is painted.
+  final PdfDrawCallback? onDraw;
 
   @override
   State<QudsPdfViewer> createState() => _QudsPdfViewerState();
@@ -42,6 +80,10 @@ class QudsPdfViewer extends StatefulWidget {
 
 class _QudsPdfViewerState extends State<QudsPdfViewer> {
   OverlayEntry? _contextMenu;
+  var _lastPage = -1;
+  var _appliedInitialFit = false;
+  var _notifiedCreated = false;
+  var _notifiedLoad = false;
 
   @override
   void initState() {
@@ -50,6 +92,45 @@ class _QudsPdfViewerState extends State<QudsPdfViewer> {
     if (widget.config != null) {
       widget.controller.config = widget.config!;
     }
+    widget.controller.applyOptions(widget.options, jumpToDefaultPage: true);
+    widget.controller.onError = widget.onError;
+    _lastPage = widget.controller.pageIndex;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      if (!_notifiedCreated) {
+        _notifiedCreated = true;
+        widget.onViewCreated?.call(widget.controller);
+      }
+      _maybeLoadComplete();
+      _applyInitialFit();
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant QudsPdfViewer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller.removeListener(_tick);
+      widget.controller.addListener(_tick);
+      _appliedInitialFit = false;
+      _notifiedLoad = false;
+      _lastPage = widget.controller.pageIndex;
+    }
+    if (oldWidget.config != widget.config && widget.config != null) {
+      widget.controller.config = widget.config!;
+    }
+    if (oldWidget.options != widget.options) {
+      widget.controller.applyOptions(widget.options);
+      _appliedInitialFit = false;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _applyInitialFit();
+        }
+      });
+    }
+    widget.controller.onError = widget.onError;
   }
 
   @override
@@ -57,6 +138,44 @@ class _QudsPdfViewerState extends State<QudsPdfViewer> {
     OfficeContextMenu.dismiss(_contextMenu);
     widget.controller.removeListener(_tick);
     super.dispose();
+  }
+
+  void _maybeLoadComplete() {
+    if (_notifiedLoad) {
+      return;
+    }
+    final int count = widget.controller.pageCount;
+    if (count <= 0) {
+      return;
+    }
+    _notifiedLoad = true;
+    widget.onLoadComplete?.call(count);
+  }
+
+  void _applyInitialFit() {
+    if (_appliedInitialFit) {
+      return;
+    }
+    final Size extent = widget.controller.viewport.extent;
+    if (extent.width <= 0 || extent.height <= 0) {
+      SchedulerBinding.instance.scheduleFrameCallback((_) {
+        if (mounted) {
+          _applyInitialFit();
+        }
+      });
+      return;
+    }
+    _appliedInitialFit = true;
+    widget.controller.applyFitPolicy(widget.options.fitPolicy);
+  }
+
+  void _emitPageChanged() {
+    final int page = widget.controller.pageIndex;
+    if (page == _lastPage) {
+      return;
+    }
+    _lastPage = page;
+    widget.onPageChanged?.call(page, widget.controller.pageCount);
   }
 
   void _showContext(PdfContextHit hit) {
@@ -85,8 +204,7 @@ class _QudsPdfViewerState extends State<QudsPdfViewer> {
       case 'followLink':
         final PdfLinkAction? link = hit.link;
         if (link != null) {
-          c.followLink(link);
-          widget.onFollowLink?.call(link);
+          _handleLink(link);
         }
       case 'zoomIn':
         c.zoomBy(1.1);
@@ -117,6 +235,12 @@ class _QudsPdfViewerState extends State<QudsPdfViewer> {
       case 'redo':
         _runEdit(id, hit);
     }
+  }
+
+  void _handleLink(PdfLinkAction action) {
+    widget.controller.followLink(action);
+    widget.onLinkHandle?.call(action);
+    widget.onFollowLink?.call(action);
   }
 
   void _runEdit(String id, PdfContextHit hit) {
@@ -152,6 +276,8 @@ class _QudsPdfViewerState extends State<QudsPdfViewer> {
   }
 
   void _tick() {
+    _maybeLoadComplete();
+    _emitPageChanged();
     if (mounted) {
       setState(() {});
     }
@@ -160,6 +286,7 @@ class _QudsPdfViewerState extends State<QudsPdfViewer> {
   @override
   Widget build(BuildContext context) {
     final PdfViewerController c = widget.controller;
+    final PdfViewerOptions opts = widget.options;
     return Column(
       children: <Widget>[
         if (widget.toolbarBuilder != null) widget.toolbarBuilder!(context, c),
@@ -242,16 +369,25 @@ class _QudsPdfViewerState extends State<QudsPdfViewer> {
                 if (c.file != null)
                   for (int i = 0; i < c.pageCount; i++) c.file!.annotsOn(i),
               ],
+              editing: c is PdfEditorController,
+              enableSwipe: opts.enableSwipe,
+              swipeHorizontal: opts.swipeHorizontal,
+              pageFling: opts.pageFling,
+              pageSnap: opts.pageSnap,
+              showScrollIndicators: opts.showScrollIndicators,
+              nightMode: opts.nightMode,
+              backgroundColor: opts.backgroundColor,
               onChanged: c.viewportChanged,
               onZoomBy: (double factor, Offset focal, {bool animate = true}) {
                 c.zoomBy(factor, focal: focal, animate: animate);
               },
-              onFollowLink: (PdfLinkAction action) {
-                c.followLink(action);
-                widget.onFollowLink?.call(action);
-              },
+              onFollowLink: _handleLink,
               onSelectText: c.setSelection,
               onContextMenu: _showContext,
+              onRender: widget.onRender,
+              onPageError: widget.onPageError,
+              onDraw: widget.onDraw,
+              onGestureSettled: c.snapToNearestPage,
             ),
           ),
         ),
@@ -269,9 +405,18 @@ class QudsPdfEditor extends StatelessWidget {
     super.key,
     required this.controller,
     this.config,
+    this.options = const PdfViewerOptions(),
     this.toolbarBuilder,
     this.statusBarBuilder,
+    this.onViewCreated,
+    this.onLoadComplete,
+    this.onPageChanged,
+    this.onRender,
+    this.onError,
+    this.onPageError,
     this.onFollowLink,
+    this.onLinkHandle,
+    this.onDraw,
   });
 
   /// controller API.
@@ -279,6 +424,9 @@ class QudsPdfEditor extends StatelessWidget {
 
   /// config API.
   final OfficeSurfaceConfig? config;
+
+  /// Forwarded viewer options (night invert is skipped while editing).
+  final PdfViewerOptions options;
 
   /// toolbarBuilder API.
   final Widget Function(BuildContext context, PdfEditorController controller)?
@@ -288,14 +436,39 @@ class QudsPdfEditor extends StatelessWidget {
   final Widget Function(BuildContext context, PdfEditorController controller)?
   statusBarBuilder;
 
+  /// Fired once when the surface mounts.
+  final PdfViewCreatedCallback? onViewCreated;
+
+  /// Fired when pages are ready.
+  final PdfLoadCompleteCallback? onLoadComplete;
+
+  /// Fired when the visible page index changes.
+  final PdfPageChangedCallback? onPageChanged;
+
+  /// Fired when a page raster finishes.
+  final PdfRenderCallback? onRender;
+
+  /// Fired when opening / loading fails.
+  final PdfErrorCallback? onError;
+
+  /// Fired when a single page raster fails.
+  final PdfPageErrorCallback? onPageError;
+
   /// onFollowLink API.
   final void Function(PdfLinkAction action)? onFollowLink;
+
+  /// Link activations (including when navigation is prevented).
+  final PdfLinkHandleCallback? onLinkHandle;
+
+  /// Optional host overlay after a page is painted.
+  final PdfDrawCallback? onDraw;
 
   @override
   Widget build(BuildContext context) {
     return QudsPdfViewer(
       controller: controller,
       config: config ?? controller.config,
+      options: options,
       toolbarBuilder: toolbarBuilder == null
           ? null
           : (BuildContext ctx, PdfViewerController _) =>
@@ -304,7 +477,15 @@ class QudsPdfEditor extends StatelessWidget {
           ? null
           : (BuildContext ctx, PdfViewerController _) =>
                 statusBarBuilder!(ctx, controller),
+      onViewCreated: onViewCreated,
+      onLoadComplete: onLoadComplete,
+      onPageChanged: onPageChanged,
+      onRender: onRender,
+      onError: onError,
+      onPageError: onPageError,
       onFollowLink: onFollowLink,
+      onLinkHandle: onLinkHandle,
+      onDraw: onDraw,
     );
   }
 }

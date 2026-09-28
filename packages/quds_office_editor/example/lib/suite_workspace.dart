@@ -96,6 +96,18 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
   String _slideName = 'Studio deck.pptx';
   String? _pdfPath;
   String _pdfName = 'Studio.pdf';
+  late final StudioPdfViewerEvents _pdfEvents;
+  var _pdfNightMode = false;
+  var _pdfSwipeHorizontal = false;
+  var _pdfPageSnap = true;
+  var _pdfPageFling = true;
+  var _pdfEnableSwipe = true;
+  var _pdfShowScroll = true;
+  var _pdfPreventLinks = false;
+  PdfFitPolicy _pdfFitPolicy = PdfFitPolicy.width;
+  StudioPdfSampleKind _galleryKind = StudioPdfSampleKind.templates;
+  String _galleryGroup = StudioPdfGallery.templateGroups.first;
+  String? _gallerySampleId;
 
   OfficeSurfaceConfig? _cachedConfig;
   Object? _configKey;
@@ -112,6 +124,18 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
   @override
   void initState() {
     super.initState();
+    _pdfEvents = StudioPdfViewerEvents(
+      onChanged: () {
+        if (!mounted) {
+          return;
+        }
+        scheduleMicrotask(() {
+          if (mounted) {
+            setState(() {});
+          }
+        });
+      },
+    );
     _word = WordEditorController(document: SampleLibrary.wordBriefing());
     _word.onFollowExternalLink = _openExternalLink;
     _sheet = SheetEditorController(workbook: SampleLibrary.excelBudget());
@@ -319,6 +343,7 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
         const SingleActivator(LogicalKeyboardKey.f3): _findNext,
         const SingleActivator(LogicalKeyboardKey.f3, shift: true):
             _findPrevious,
+        const SingleActivator(LogicalKeyboardKey.f1): _openPdfSampleGallery,
         const SingleActivator(LogicalKeyboardKey.f7): _showSpelling,
         const SingleActivator(LogicalKeyboardKey.keyB, control: true):
             _toggleBold,
@@ -1063,7 +1088,7 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
         children: <Widget>[
           _cmd(
             Icons.auto_awesome,
-            _arabic ? 'معرض PDF' : 'PDF gallery',
+            _arabic ? 'معرض PDF (F1)' : 'PDF gallery (F1)',
             _opening || _isSaving ? null : _openPdfSampleGallery,
           ),
           _cmd(
@@ -1077,10 +1102,19 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
   }
 
   Future<void> _openPdfSampleGallery() async {
+    if (_opening || _isSaving) {
+      return;
+    }
     final StudioPdfSample? sample = await showDialog<StudioPdfSample>(
       context: context,
       builder: (BuildContext context) {
-        return PdfSampleGalleryDialog(arabic: _arabic, accent: _accent);
+        return PdfSampleGalleryDialog(
+          arabic: _arabic,
+          accent: _accent,
+          initialKind: _galleryKind,
+          initialGroup: _galleryGroup,
+          initialSampleId: _gallerySampleId,
+        );
       },
     );
     if (sample == null || !mounted) {
@@ -1166,6 +1200,11 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
         _pdfName = sample.fileName;
         _pdfThumbSyncedPage = -1;
         _openProgress = 1;
+        _galleryKind = sample.kind;
+        if (sample.group.isNotEmpty) {
+          _galleryGroup = sample.group;
+        }
+        _gallerySampleId = sample.id;
       });
     } catch (error, stack) {
       debugPrint('PDF sample failed: $error\n$stack');
@@ -1193,6 +1232,25 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
     }
   }
 
+  PdfViewerOptions get _pdfViewerOptions => studioPdfViewerOptions(
+    nightMode: _pdfNightMode,
+    swipeHorizontal: _pdfSwipeHorizontal,
+    pageSnap: _pdfPageSnap,
+    pageFling: _pdfPageFling,
+    enableSwipe: _pdfEnableSwipe,
+    showScrollIndicators: _pdfShowScroll,
+    preventLinkNavigation: _pdfPreventLinks,
+    fitPolicy: _pdfFitPolicy,
+    backgroundColor: _pdfNightMode ? const Color(0xFF121212) : null,
+  );
+
+  void _togglePdfOption(void Function() mutate, {String? toast}) {
+    setState(mutate);
+    if (toast != null) {
+      _toast(toast);
+    }
+  }
+
   List<StudioRibbonGroup> _pdfView() {
     return <StudioRibbonGroup>[
       StudioRibbonGroup(
@@ -1204,10 +1262,94 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
           _cmd(Icons.zoom_out, _arabic ? 'تصغير' : 'Zoom out', () {
             _pdf.zoomBy(1 / 1.1);
           }),
-          _cmd(Icons.fit_screen_outlined, _arabic ? 'ملاءمة' : 'Fit width', () {
-            _pdf.fitVisibleWidth();
-          }),
+          _cmd(Icons.fit_screen_outlined, _arabic ? 'عرض' : 'Fit width', () {
+            _togglePdfOption(() {
+              _pdfFitPolicy = PdfFitPolicy.width;
+              _pdf.fitVisibleWidth();
+            });
+          }, selected: _pdfFitPolicy == PdfFitPolicy.width),
+          _cmd(Icons.aspect_ratio, _arabic ? 'صفحة' : 'Fit page', () {
+            _togglePdfOption(() {
+              _pdfFitPolicy = PdfFitPolicy.page;
+              final Size e = _pdf.viewport.extent;
+              _pdf.fitPage(
+                e.width > 0 ? e.width : 720,
+                e.height > 0 ? e.height : 900,
+              );
+            });
+          }, selected: _pdfFitPolicy == PdfFitPolicy.page),
+          _cmd(Icons.height, _arabic ? 'ارتفاع' : 'Fit height', () {
+            _togglePdfOption(() {
+              _pdfFitPolicy = PdfFitPolicy.height;
+              final double h = _pdf.viewport.extent.height;
+              _pdf.fitHeight(h > 0 ? h : 900);
+            });
+          }, selected: _pdfFitPolicy == PdfFitPolicy.height),
           _cmd(Icons.search, _arabic ? 'بحث' : 'Find', _openFind),
+        ],
+      ),
+      StudioRibbonGroup(
+        title: _arabic ? 'خيارات العارض' : 'Viewer options',
+        children: <Widget>[
+          _cmd(
+            Icons.dark_mode_outlined,
+            _arabic ? 'ليلي' : 'Night',
+            () => _togglePdfOption(
+              () => _pdfNightMode = !_pdfNightMode,
+              toast: _pdfNightMode
+                  ? (_arabic ? 'الوضع الليلي مغلق' : 'Night mode off')
+                  : (_arabic ? 'الوضع الليلي مفعّل' : 'Night mode on'),
+            ),
+            selected: _pdfNightMode,
+          ),
+          _cmd(
+            Icons.swap_horiz,
+            _arabic ? 'أفقي' : 'Horizontal',
+            () => _togglePdfOption(
+              () => _pdfSwipeHorizontal = !_pdfSwipeHorizontal,
+              toast: _pdfSwipeHorizontal
+                  ? (_arabic ? 'تمرير عمودي' : 'Vertical swipe')
+                  : (_arabic ? 'تمرير أفقي' : 'Horizontal swipe'),
+            ),
+            selected: _pdfSwipeHorizontal,
+          ),
+          _cmd(
+            Icons.align_vertical_top,
+            _arabic ? 'محاذاة' : 'Page snap',
+            () => _togglePdfOption(() => _pdfPageSnap = !_pdfPageSnap),
+            selected: _pdfPageSnap,
+          ),
+          _cmd(
+            Icons.speed,
+            _arabic ? 'زخم' : 'Fling',
+            () => _togglePdfOption(() => _pdfPageFling = !_pdfPageFling),
+            selected: _pdfPageFling,
+          ),
+          _cmd(
+            Icons.pan_tool_alt,
+            _arabic ? 'سحب' : 'Swipe',
+            () => _togglePdfOption(() => _pdfEnableSwipe = !_pdfEnableSwipe),
+            selected: _pdfEnableSwipe,
+          ),
+          _cmd(
+            Icons.linear_scale,
+            _arabic ? 'شريط' : 'Scrollbar',
+            () => _togglePdfOption(() => _pdfShowScroll = !_pdfShowScroll),
+            selected: _pdfShowScroll,
+          ),
+          _cmd(
+            Icons.link_off,
+            _arabic ? 'منع رابط' : 'Block links',
+            () => _togglePdfOption(
+              () => _pdfPreventLinks = !_pdfPreventLinks,
+              toast: _pdfPreventLinks
+                  ? (_arabic ? 'فتح الروابط مسموح' : 'Link open allowed')
+                  : (_arabic
+                        ? 'الروابط تُبلَّغ فقط دون فتح'
+                        : 'Links reported only'),
+            ),
+            selected: _pdfPreventLinks,
+          ),
         ],
       ),
     ];
@@ -4057,12 +4199,25 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
         return;
       }
       if (picked.name.toLowerCase().endsWith('.pdf')) {
-        final Uint8List pdfBytes = await StudioFiles.ensureBytes(picked);
+        _switchApp(SuiteApp.pdf);
+        if (picked.path != null && picked.path!.isNotEmpty) {
+          await loadPdfFromFilePath(
+            _pdf,
+            picked.path!,
+            onError: (Object error) {
+              _toast(_arabic ? 'فشل فتح PDF: $error' : 'PDF open failed: $error');
+            },
+          );
+        } else {
+          final Uint8List pdfBytes = await StudioFiles.ensureBytes(picked);
+          if (!mounted) {
+            return;
+          }
+          await _pdf.loadBytesAsync(pdfBytes);
+        }
         if (!mounted) {
           return;
         }
-        _switchApp(SuiteApp.pdf);
-        await _pdf.loadBytesAsync(pdfBytes);
         _pdfPath = picked.path;
         _pdfName = _nameFromPicked(picked);
         return;
@@ -6611,6 +6766,21 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
               SuiteApp.pdf => StudioPdfSurface(
                 controller: _pdf,
                 config: _config,
+                options: _pdfViewerOptions,
+                events: _pdfEvents,
+                onFollowLink: (PdfLinkAction action) {
+                  final String target = action.uri ??
+                      (action.pageIndex != null
+                          ? '${_arabic ? 'صفحة' : 'page'} ${action.pageIndex! + 1}'
+                          : '?');
+                  if (_pdfPreventLinks && action.uri != null) {
+                    _toast(
+                      _arabic
+                          ? 'رابط بدون فتح: $target'
+                          : 'Link blocked: $target',
+                    );
+                  }
+                },
               ),
             },
             if (_findOpen && _app == SuiteApp.pdf)
@@ -8633,6 +8803,10 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
             '${_slides.isDirty ? ' · •' : ''}',
       SuiteApp.pdf =>
         '${_arabic ? 'صفحة' : 'Page'} ${_pdf.pageIndex + 1}/${_pdf.pageCount}'
+            '${_pdfNightMode ? (_arabic ? ' · ليلي' : ' · night') : ''}'
+            '${_pdfSwipeHorizontal ? (_arabic ? ' · أفقي' : ' · horizontal') : ''}'
+            '${_pdfPageSnap ? (_arabic ? ' · محاذاة' : ' · snap') : ''}'
+            '${_pdfEvents.last.isEmpty ? '' : ' · ${_pdfEvents.last}'}'
             '${_pdf.isDirty ? ' · •' : ''}',
     };
     return Material(

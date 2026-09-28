@@ -94,6 +94,22 @@ abstract final class Uax9Bidi {
   /// classify API.
   static BidiClass classify(int codePoint) => _classify(codePoint);
 
+  /// Directional marks and embeds that must not paint (no .notdef boxes).
+  ///
+  /// `intl` DateFormat / BidiFormatter wrap LTR dates with LRE/PDF or LRI/PDI.
+  static bool isInvisibleFormat(int codePoint) {
+    return codePoint == 0x061C ||
+        codePoint == 0x200B ||
+        codePoint == 0x200C ||
+        codePoint == 0x200D ||
+        codePoint == 0x200E ||
+        codePoint == 0x200F ||
+        (codePoint >= 0x202A && codePoint <= 0x202E) ||
+        (codePoint >= 0x2060 && codePoint <= 0x2064) ||
+        (codePoint >= 0x2066 && codePoint <= 0x206F) ||
+        codePoint == 0xFEFF;
+  }
+
   /// reorder API.
   static BidiParagraph reorder(String text, {int? baseLevel}) {
     if (text.isEmpty) {
@@ -424,6 +440,29 @@ abstract final class Uax9Bidi {
       }
     }
   }
+
+  /// UAX #9 L4: mirrored glyph for [codePoint] when resolved level is odd.
+  ///
+  /// Parentheses and similar pairs must flip after RTL reordering; otherwise
+  /// Arabic like `الإيراد (شيكل)` paints as `الإيراد )شيكل(`.
+  static int mirrored(int codePoint) => _mirrors[codePoint] ?? codePoint;
+
+  static const Map<int, int> _mirrors = <int, int>{
+    0x0028: 0x0029, // ( )
+    0x0029: 0x0028,
+    0x003C: 0x003E, // < >
+    0x003E: 0x003C,
+    0x005B: 0x005D, // [ ]
+    0x005D: 0x005B,
+    0x007B: 0x007D, // { }
+    0x007D: 0x007B,
+    0x00AB: 0x00BB, // « »
+    0x00BB: 0x00AB,
+    0x2039: 0x203A, // ‹ ›
+    0x203A: 0x2039,
+    0x2264: 0x2265, // ≤ ≥
+    0x2265: 0x2264,
+  };
 
   /// UAX #9 L2: visual-to-logical indices for one line's resolved levels.
   static List<int> visualOrder(List<int> levels) {

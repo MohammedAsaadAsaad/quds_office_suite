@@ -228,10 +228,6 @@ class _ChartBox extends PwBox {
     canvas.setFillColor('FAFBFC');
     canvas.roundedRect(offset.dx, offset.dy, size.width, size.height, 4);
     canvas.fill();
-    canvas.setStrokeColor('CFD8DC');
-    canvas.setLineWidth(0.5);
-    canvas.roundedRect(offset.dx, offset.dy, size.width, size.height, 4);
-    canvas.stroke();
     if (title.isNotEmpty) {
       final bool rtl = context.textDirection == TextDirection.rtl;
       pwPaintParagraph(
@@ -343,7 +339,11 @@ class _ChartBox extends PwBox {
       final double bh = (pts[i].value / maxV) * (h - 16);
       final double bx = x + i * slot + (slot - barW) / 2;
       final double by = y + h - 14 - bh;
-      canvas.fillRect(bx, by, barW, bh, pts[i].color);
+      final double topRadius = (barW * 0.22).clamp(2.0, 6.0);
+      canvas.endText();
+      canvas.setFillColor(pts[i].color);
+      canvas.roundedTopRect(bx, by, barW, bh, topRadius);
+      canvas.fill();
       if (showValues) {
         pwPaintParagraph(
           context,

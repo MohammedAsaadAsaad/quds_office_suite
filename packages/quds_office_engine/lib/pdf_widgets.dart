@@ -21,12 +21,17 @@
 library;
 
 export 'src/builders/office_markup.dart' show ChartPoint;
+export 'src/pdf/widgets/pw_barcode.dart';
 export 'src/pdf/widgets/pw_box.dart';
+export 'src/pdf/widgets/pw_chrome.dart';
+export 'src/pdf/widgets/pw_content.dart';
 export 'src/pdf/widgets/pw_core.dart';
 export 'src/pdf/widgets/pw_flutter.dart';
 export 'src/pdf/widgets/pw_layout.dart';
 export 'src/pdf/widgets/pw_media.dart';
+export 'src/pdf/widgets/pw_qr.dart';
 export 'src/pdf/widgets/pw_style.dart';
+export 'src/pdf/widgets/pw_svg.dart';
 export 'src/pdf/widgets/pw_table.dart';
 export 'src/pdf/widgets/pw_text.dart';
 export 'src/pdf/widgets/pw_types.dart';

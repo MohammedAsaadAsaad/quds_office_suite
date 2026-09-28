@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'sfnt_parser.dart';
 
 /// Horizontal metrics resolved in typographic points (1 pt = 1/72 inch).
@@ -14,11 +16,20 @@ class FontMetrics {
   /// emSquare API.
   double get emSquare => fontSizePoints;
 
-  /// ascender API.
-  double get ascender => font.unitsToPoints(font.ascender, fontSizePoints);
+  /// Distance from baseline to the top of the line box.
+  ///
+  /// Uses the larger of `hhea` ascender and OS/2 `usWinAscent` so Latin
+  /// capitals and accents stay inside the box (and page content clips).
+  double get ascender => font.unitsToPoints(
+    math.max(font.ascender, font.winAscent),
+    fontSizePoints,
+  );
 
-  /// descender API.
-  double get descender => font.unitsToPoints(font.descender, fontSizePoints);
+  /// Distance from baseline to the bottom of the line box (usually negative).
+  double get descender => font.unitsToPoints(
+    math.min(font.descender, -font.winDescent),
+    fontSizePoints,
+  );
 
   /// lineGap API.
   double get lineGap => font.unitsToPoints(font.lineGap, fontSizePoints);

@@ -9,6 +9,8 @@ class VirtualViewport {
     this.origin = Offset.zero,
     this.extent = Size.zero,
     this.scale = 1,
+    this.clampMin = minScale,
+    this.clampMax = maxScale,
   });
 
   /// overscan API.
@@ -23,15 +25,28 @@ class VirtualViewport {
   /// scale API.
   double scale;
 
-  /// minScale API.
+  /// Per-viewport lower zoom bound.
+  double clampMin;
+
+  /// Per-viewport upper zoom bound.
+  double clampMax;
+
+  /// Default lower zoom bound (also the initial [clampMin]).
   static const double minScale = 0.25;
 
-  /// maxScale API.
+  /// Default upper zoom bound (also the initial [clampMax]).
   static const double maxScale = 4;
 
   /// setScale API.
   void setScale(double value) {
-    scale = value.clamp(minScale, maxScale);
+    scale = value.clamp(clampMin, clampMax);
+  }
+
+  /// Apply host zoom limits from viewer options.
+  void applyZoomLimits({required double min, required double max}) {
+    clampMin = min;
+    clampMax = max < min ? min : max;
+    scale = scale.clamp(clampMin, clampMax);
   }
 
   /// visible API.

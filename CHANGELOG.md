@@ -7,6 +7,14 @@ This repository is a Dart workspace. Each published package keeps its own change
 
 ## Unreleased
 
+## 0.5.3 / 0.5.1
+
+- Engine **0.5.3**: `pdf_widgets` chrome (page numbers, barcodes, QR, SVG
+  subset), bilingual catalog, skip BiDi format marks, keep Arabic tashkeel
+  on its letter in PDF.
+- Editor **0.5.1**: `PdfViewerOptions` and viewer/editor callbacks (fit,
+  swipe, snap/fling, night invert).
+
 ## 0.5.0
 
 - Engine: `pdf_templates` with 100+ skins (`SheetSkin`), Flutter twins,

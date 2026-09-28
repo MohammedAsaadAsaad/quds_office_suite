@@ -102,7 +102,7 @@ Locale changes chrome labels, not pagination.
 
 ```yaml
 dependencies:
-  quds_office_editor: ^0.5.0
+  quds_office_editor: ^0.5.1
 ```
 
 ```bash
@@ -110,7 +110,7 @@ flutter pub add quds_office_editor
 ```
 
 Requires Flutter **3.44+** and Dart **3.12+**. The engine comes along as
-`quds_office_engine: ^0.5.0`.
+`quds_office_engine: ^0.5.3`.
 
 ### Host fonts
 
@@ -283,13 +283,40 @@ page insert, delete, and rotate, XFDF, and incremental save.
 
 ```dart
 final viewer = PdfViewerController.fromBytes(pdfBytes);
-QudsPdfViewer(controller: viewer);
+QudsPdfViewer(
+  controller: viewer,
+  options: const PdfViewerOptions(
+    defaultPage: 0,
+    fitPolicy: PdfFitPolicy.width,
+    minZoom: 0.25,
+    maxZoom: 4,
+    enableSwipe: true,
+    swipeHorizontal: false,
+    pageFling: true,
+    pageSnap: false,
+    preventLinkNavigation: false,
+    nightMode: false,
+  ),
+  onViewCreated: (c) {},
+  onLoadComplete: (count) {},
+  onPageChanged: (page, total) {},
+  onRender: (page) {},
+  onPageError: (page, error) {},
+  onLinkHandle: (action) {},
+);
 
 final editor = PdfEditorController.fromBytes(pdfBytes);
 editor.highlightSelection();
 editor.rotateCurrentPage(90); // clockwise /Rotate, not a box swap
 final Uint8List saved = editor.saveBytes();
 ```
+
+Pass `PdfViewerOptions` for fit policy, zoom clamps, swipe axis, page snap /
+fling, night invert (viewer paint only), scrollbar visibility, and
+`preventLinkNavigation` (delivers the link to `onLinkHandle` / `onFollowLink`
+without opening the URI). `onError` is forwarded onto the controller so
+`loadBytesAsync` failures surface there. `gestureRecognizers` from
+WebView-style APIs are not needed — the canvas owns gestures.
 
 The page is `RenderPdfCanvas`. Host chrome (File, View, Annotate, Form) stays
 outside the widget. Body-text reflow is out of scope.

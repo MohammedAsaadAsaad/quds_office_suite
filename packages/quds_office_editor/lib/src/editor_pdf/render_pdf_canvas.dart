@@ -5,6 +5,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:quds_office_engine/pdf_file.dart';
@@ -34,12 +35,23 @@ class PdfCanvasView extends LeafRenderObjectWidget {
     this.findIndex = -1,
     this.annots = const <List<PdfAnnot>>[],
     this.editing = false,
+    this.enableSwipe = true,
+    this.swipeHorizontal = false,
+    this.pageFling = true,
+    this.pageSnap = false,
+    this.showScrollIndicators = true,
+    this.nightMode = false,
+    this.backgroundColor,
     this.onChanged,
     this.onZoomBy,
     this.onFollowLink,
     this.onSelectText,
     this.onAnnotTap,
     this.onContextMenu,
+    this.onRender,
+    this.onPageError,
+    this.onDraw,
+    this.onGestureSettled,
   });
 
   /// lists API.
@@ -69,6 +81,27 @@ class PdfCanvasView extends LeafRenderObjectWidget {
   /// editing API.
   final bool editing;
 
+  /// When false, pan and wheel scroll are ignored (Ctrl+zoom still works).
+  final bool enableSwipe;
+
+  /// Stack pages left-to-right.
+  final bool swipeHorizontal;
+
+  /// Keep scroll momentum after pointer-up.
+  final bool pageFling;
+
+  /// Align to nearest page when a gesture settles.
+  final bool pageSnap;
+
+  /// Show the overlay scrollbar.
+  final bool showScrollIndicators;
+
+  /// Invert page rasters for dark reading.
+  final bool nightMode;
+
+  /// Canvas chrome behind the paper.
+  final Color? backgroundColor;
+
   /// onChanged API.
   final VoidCallback? onChanged;
 
@@ -88,6 +121,18 @@ class PdfCanvasView extends LeafRenderObjectWidget {
   /// Right-click on a page or the canvas gutter.
   final void Function(PdfContextHit hit)? onContextMenu;
 
+  /// Fired when a page raster finishes.
+  final void Function(int page)? onRender;
+
+  /// Fired when a page raster fails.
+  final void Function(int page, Object error)? onPageError;
+
+  /// Optional host overlay after a page is painted.
+  final void Function(Canvas canvas, Size size, int page)? onDraw;
+
+  /// Fired after pan/fling settles (for page snap).
+  final VoidCallback? onGestureSettled;
+
   @override
   RenderObject createRenderObject(BuildContext context) {
     return RenderPdfCanvas(
@@ -100,12 +145,23 @@ class PdfCanvasView extends LeafRenderObjectWidget {
       findIndex: findIndex,
       annots: annots,
       editing: editing,
+      enableSwipe: enableSwipe,
+      swipeHorizontal: swipeHorizontal,
+      pageFling: pageFling,
+      pageSnap: pageSnap,
+      showScrollIndicators: showScrollIndicators,
+      nightMode: nightMode,
+      backgroundColor: backgroundColor,
       onChanged: onChanged,
       onZoomBy: onZoomBy,
       onFollowLink: onFollowLink,
       onSelectText: onSelectText,
       onAnnotTap: onAnnotTap,
       onContextMenu: onContextMenu,
+      onRender: onRender,
+      onPageError: onPageError,
+      onDraw: onDraw,
+      onGestureSettled: onGestureSettled,
     );
   }
 
@@ -121,12 +177,23 @@ class PdfCanvasView extends LeafRenderObjectWidget {
       ..findIndex = findIndex
       ..annots = annots
       ..editing = editing
+      ..enableSwipe = enableSwipe
+      ..swipeHorizontal = swipeHorizontal
+      ..pageFling = pageFling
+      ..pageSnap = pageSnap
+      ..showScrollIndicators = showScrollIndicators
+      ..nightMode = nightMode
+      ..backgroundColor = backgroundColor
       ..onChanged = onChanged
       ..onZoomBy = onZoomBy
       ..onFollowLink = onFollowLink
       ..onSelectText = onSelectText
       ..onAnnotTap = onAnnotTap
-      ..onContextMenu = onContextMenu;
+      ..onContextMenu = onContextMenu
+      ..onRender = onRender
+      ..onPageError = onPageError
+      ..onDraw = onDraw
+      ..onGestureSettled = onGestureSettled;
     renderObject.markNeedsPaint();
   }
 }
@@ -144,12 +211,23 @@ class RenderPdfCanvas extends RenderBox implements MouseTrackerAnnotation {
     this.findIndex = -1,
     this.annots = const <List<PdfAnnot>>[],
     this.editing = false,
+    this.enableSwipe = true,
+    this.swipeHorizontal = false,
+    this.pageFling = true,
+    this.pageSnap = false,
+    this.showScrollIndicators = true,
+    this.nightMode = false,
+    this.backgroundColor,
     this.onChanged,
     this.onZoomBy,
     this.onFollowLink,
     this.onSelectText,
     this.onAnnotTap,
     this.onContextMenu,
+    this.onRender,
+    this.onPageError,
+    this.onDraw,
+    this.onGestureSettled,
   }) : _lists = lists,
        _viewport = viewport,
        _scale = scale,
@@ -187,6 +265,27 @@ class RenderPdfCanvas extends RenderBox implements MouseTrackerAnnotation {
   /// editing API.
   bool editing;
 
+  /// When false, pan and wheel scroll are ignored (Ctrl+zoom still works).
+  bool enableSwipe;
+
+  /// Stack pages left-to-right.
+  bool swipeHorizontal;
+
+  /// Keep scroll momentum after pointer-up.
+  bool pageFling;
+
+  /// Align to nearest page when a gesture settles.
+  bool pageSnap;
+
+  /// Show the overlay scrollbar.
+  bool showScrollIndicators;
+
+  /// Invert page rasters for dark reading.
+  bool nightMode;
+
+  /// Canvas chrome behind the paper.
+  Color? backgroundColor;
+
   /// onChanged API.
   VoidCallback? onChanged;
 
@@ -205,6 +304,18 @@ class RenderPdfCanvas extends RenderBox implements MouseTrackerAnnotation {
 
   /// onContextMenu API.
   void Function(PdfContextHit hit)? onContextMenu;
+
+  /// Fired when a page raster finishes.
+  void Function(int page)? onRender;
+
+  /// Fired when a page raster fails.
+  void Function(int page, Object error)? onPageError;
+
+  /// Optional host overlay after a page is painted.
+  void Function(Canvas canvas, Size size, int page)? onDraw;
+
+  /// Fired after pan/fling settles (for page snap).
+  VoidCallback? onGestureSettled;
 
   final Map<int, ui.Image> _images = <int, ui.Image>{};
   final Set<int> _decoding = <int>{};
@@ -228,19 +339,41 @@ class RenderPdfCanvas extends RenderBox implements MouseTrackerAnnotation {
   /// Destination page shown in the desktop hover card, or null.
   int? _previewPage;
   var _panZoomScale = 1.0;
+  Offset _flingVelocity = Offset.zero;
+  var _flinging = false;
 
   double get _viewScale => PdfPageLayout.viewScale(_viewport.scale);
 
-  Size get _contentSize => PdfPageLayout.contentSize(_lists, _viewport.scale);
+  Size get _contentSize => PdfPageLayout.contentSize(
+    _lists,
+    _viewport.scale,
+    horizontal: swipeHorizontal,
+  );
 
   double get _maxScrollY => math.max(0, _contentSize.height - size.height);
 
-  Rect get _vTrack => Rect.fromLTWH(
-    size.width - PdfPageLayout.scrollBar,
-    0,
-    PdfPageLayout.scrollBar,
-    size.height,
-  );
+  double get _maxScrollX => math.max(0, _contentSize.width - size.width);
+
+  bool get _scrollBarVisible =>
+      showScrollIndicators &&
+      (swipeHorizontal ? _maxScrollX > 0 : _maxScrollY > 0);
+
+  Rect get _vTrack {
+    if (swipeHorizontal) {
+      return Rect.fromLTWH(
+        0,
+        size.height - PdfPageLayout.scrollBar,
+        size.width,
+        PdfPageLayout.scrollBar,
+      );
+    }
+    return Rect.fromLTWH(
+      size.width - PdfPageLayout.scrollBar,
+      0,
+      PdfPageLayout.scrollBar,
+      size.height,
+    );
+  }
 
   /// lists API.
   set lists(List<PdfDisplayList> value) {
@@ -328,7 +461,7 @@ class RenderPdfCanvas extends RenderBox implements MouseTrackerAnnotation {
     if (local == null) {
       return SystemMouseCursors.basic;
     }
-    if (_vTrack.contains(local) && _maxScrollY > 0) {
+    if (_scrollBarVisible && _vTrack.contains(local)) {
       return SystemMouseCursors.grab;
     }
     if (_selecting) {
@@ -357,6 +490,7 @@ class RenderPdfCanvas extends RenderBox implements MouseTrackerAnnotation {
   void detach() {
     _zoomSettle?.cancel();
     _zoomSettle = null;
+    _flinging = false;
     _pan?.dispose();
     _pan = null;
     super.detach();
@@ -375,15 +509,51 @@ class RenderPdfCanvas extends RenderBox implements MouseTrackerAnnotation {
   }
 
   double _pageLeft(PdfDisplayList list) {
+    if (swipeHorizontal) {
+      return 0;
+    }
     final double pageW = list.page.width * _viewScale;
-    final double viewW = math.max(0, size.width - PdfPageLayout.scrollBar);
+    final double viewW = math.max(
+      0,
+      size.width - (showScrollIndicators ? PdfPageLayout.scrollBar : 0),
+    );
     if (viewW > pageW + PdfPageLayout.gutter * 2) {
       return (viewW - pageW) / 2;
     }
     return PdfPageLayout.gutter;
   }
 
+  double _pageTop(PdfDisplayList list) {
+    if (!swipeHorizontal) {
+      return 0;
+    }
+    final double pageH = list.page.height * _viewScale;
+    final double viewH = math.max(
+      0,
+      size.height - (showScrollIndicators ? PdfPageLayout.scrollBar : 0),
+    );
+    if (viewH > pageH + PdfPageLayout.gap * 2) {
+      return (viewH - pageH) / 2;
+    }
+    return PdfPageLayout.gap;
+  }
+
   Rect get _vThumb {
+    if (swipeHorizontal) {
+      final double maxX = _maxScrollX;
+      final double trackW = _vTrack.width;
+      final double thumbW =
+          (_contentSize.width <= 0
+                  ? 22.0
+                  : trackW *
+                        (size.width /
+                            math.max(size.width, _contentSize.width)))
+              .clamp(22.0, trackW);
+      final double x = maxX <= 0
+          ? 0
+          : (trackW - thumbW) * (_viewport.origin.dx / maxX);
+      return Rect.fromLTWH(x, _vTrack.top + 2, thumbW, _vTrack.height - 4);
+    }
     final double maxY = _maxScrollY;
     final double trackH = _vTrack.height;
     final double thumbH =
@@ -402,6 +572,7 @@ class RenderPdfCanvas extends RenderBox implements MouseTrackerAnnotation {
   void _ensureRecognizers() {
     _pan ??= PanGestureRecognizer(debugOwner: this)
       ..onUpdate = (DragUpdateDetails details) {
+        _stopFling();
         if (_scrollDrag) {
           _dragScroll(details.delta);
           return;
@@ -410,8 +581,11 @@ class RenderPdfCanvas extends RenderBox implements MouseTrackerAnnotation {
           _extendSelection(details.localPosition);
           return;
         }
+        if (!enableSwipe) {
+          return;
+        }
         _viewport.pan(-details.delta);
-        _finishScroll();
+        _finishScroll(settle: false);
       }
       ..onEnd = (DragEndDetails details) {
         if (_selecting) {
@@ -420,8 +594,55 @@ class RenderPdfCanvas extends RenderBox implements MouseTrackerAnnotation {
         _scrollDrag = false;
         _scrollPageTip = null;
         markNeedsPaint();
-        onChanged?.call();
+        if (!enableSwipe) {
+          onChanged?.call();
+          return;
+        }
+        final Offset velocity = details.velocity.pixelsPerSecond;
+        if (pageFling && velocity.distance > 80) {
+          _startFling(-velocity);
+        } else {
+          _settleGesture();
+        }
       };
+  }
+
+  void _startFling(Offset velocity) {
+    _flingVelocity = velocity;
+    if (_flinging) {
+      return;
+    }
+    _flinging = true;
+    SchedulerBinding.instance.scheduleFrameCallback(_onFlingFrame);
+    SchedulerBinding.instance.ensureVisualUpdate();
+  }
+
+  void _stopFling() {
+    _flinging = false;
+    _flingVelocity = Offset.zero;
+  }
+
+  void _onFlingFrame(Duration _) {
+    if (!_flinging || !attached) {
+      return;
+    }
+    final Offset step = _flingVelocity * (1 / 60);
+    _viewport.pan(step);
+    _flingVelocity *= 0.92;
+    _finishScroll(settle: false);
+    if (_flingVelocity.distance < 24) {
+      _stopFling();
+      _settleGesture();
+      return;
+    }
+    SchedulerBinding.instance.scheduleFrameCallback(_onFlingFrame);
+  }
+
+  void _settleGesture() {
+    _finishScroll(settle: true);
+    if (pageSnap) {
+      onGestureSettled?.call();
+    }
   }
 
   void _zoomBy(double factor, Offset local) {
@@ -441,6 +662,7 @@ class RenderPdfCanvas extends RenderBox implements MouseTrackerAnnotation {
       focal: _viewport.origin + local,
       oldScale: old,
       nextScale: next,
+      horizontal: swipeHorizontal,
     );
     _noteZoomInteraction();
   }
@@ -501,24 +723,32 @@ class RenderPdfCanvas extends RenderBox implements MouseTrackerAnnotation {
     }
     final double dpr = _devicePixelRatio;
     () async {
-      final ui.Image? image = await _rasterPage(list, targetScale, dpr);
-      if (!attached || epoch != _tileEpoch || _previewZoom) {
-        image?.dispose();
+      try {
+        final ui.Image? image = await _rasterPage(list, targetScale, dpr);
+        if (!attached || epoch != _tileEpoch || _previewZoom) {
+          image?.dispose();
+          _rasterizing.remove(pageIndex);
+          return;
+        }
+        if ((_viewScale - targetScale).abs() / math.max(targetScale, 1e-6) >
+            0.05) {
+          image?.dispose();
+          _rasterizing.remove(pageIndex);
+          return;
+        }
+        final _PageTile next = _tiles.putIfAbsent(pageIndex, _PageTile.new);
+        next.image?.dispose();
+        next.image = image;
+        next.scale = targetScale;
         _rasterizing.remove(pageIndex);
-        return;
-      }
-      if ((_viewScale - targetScale).abs() / math.max(targetScale, 1e-6) >
-          0.05) {
-        image?.dispose();
+        markNeedsPaint();
+        if (image != null) {
+          onRender?.call(pageIndex);
+        }
+      } catch (error) {
         _rasterizing.remove(pageIndex);
-        return;
+        onPageError?.call(pageIndex, error);
       }
-      final _PageTile next = _tiles.putIfAbsent(pageIndex, _PageTile.new);
-      next.image?.dispose();
-      next.image = image;
-      next.scale = targetScale;
-      _rasterizing.remove(pageIndex);
-      markNeedsPaint();
     }();
   }
 
@@ -575,41 +805,77 @@ class RenderPdfCanvas extends RenderBox implements MouseTrackerAnnotation {
     }
   }
 
-  void _finishScroll() {
+  void _finishScroll({bool settle = true}) {
     _viewport.clampTo(content: _contentSize, view: size);
-    _scrollPageTip = PdfPageLayout.pageAtY(
-      _lists,
-      _viewport.origin.dy + size.height * 0.35,
-      _viewport.scale,
-    );
+    if (swipeHorizontal) {
+      _scrollPageTip = PdfPageLayout.pageAtX(
+        _lists,
+        _viewport.origin.dx + size.width * 0.35,
+        _viewport.scale,
+      );
+    } else {
+      _scrollPageTip = PdfPageLayout.pageAtY(
+        _lists,
+        _viewport.origin.dy + size.height * 0.35,
+        _viewport.scale,
+      );
+    }
     markNeedsPaint();
-    onChanged?.call();
+    if (settle) {
+      onChanged?.call();
+    }
   }
 
   void _dragScroll(Offset delta) {
-    final double maxY = _maxScrollY;
-    if (maxY <= 0 || _vTrack.height <= 0) {
+    if (!_scrollBarVisible) {
       return;
     }
-    _viewport.origin = Offset(
-      _viewport.origin.dx,
-      _viewport.origin.dy + delta.dy * (maxY / _vTrack.height),
-    );
+    if (swipeHorizontal) {
+      final double maxX = _maxScrollX;
+      if (maxX <= 0 || _vTrack.width <= 0) {
+        return;
+      }
+      _viewport.origin = Offset(
+        _viewport.origin.dx + delta.dx * (maxX / _vTrack.width),
+        _viewport.origin.dy,
+      );
+    } else {
+      final double maxY = _maxScrollY;
+      if (maxY <= 0 || _vTrack.height <= 0) {
+        return;
+      }
+      _viewport.origin = Offset(
+        _viewport.origin.dx,
+        _viewport.origin.dy + delta.dy * (maxY / _vTrack.height),
+      );
+    }
     _finishScroll();
   }
 
   void _jumpScroll(Offset local) {
-    final double maxY = _maxScrollY;
-    if (maxY <= 0 || _vTrack.height <= 0) {
+    if (!_scrollBarVisible) {
       return;
     }
-    final double t = (local.dy / _vTrack.height).clamp(0, 1);
-    _viewport.origin = Offset(_viewport.origin.dx, maxY * t);
+    if (swipeHorizontal) {
+      final double maxX = _maxScrollX;
+      if (maxX <= 0 || _vTrack.width <= 0) {
+        return;
+      }
+      final double t = (local.dx / _vTrack.width).clamp(0, 1);
+      _viewport.origin = Offset(maxX * t, _viewport.origin.dy);
+    } else {
+      final double maxY = _maxScrollY;
+      if (maxY <= 0 || _vTrack.height <= 0) {
+        return;
+      }
+      final double t = (local.dy / _vTrack.height).clamp(0, 1);
+      _viewport.origin = Offset(_viewport.origin.dx, maxY * t);
+    }
     _finishScroll();
   }
 
   void _paintScrollBar(Canvas canvas, Offset offset) {
-    if (_maxScrollY <= 0) {
+    if (!_scrollBarVisible) {
       return;
     }
     final Rect track = _vTrack.shift(offset);
@@ -636,11 +902,21 @@ class RenderPdfCanvas extends RenderBox implements MouseTrackerAnnotation {
     )..layout();
     final double tipW = painter.width + 16;
     final double tipH = painter.height + 10;
-    final double tipX = (track.left - tipW - 8).clamp(8, size.width - tipW - 8);
-    final double tipY = (_vThumb.shift(offset).center.dy - tipH / 2).clamp(
-      8,
-      size.height - tipH - 8,
-    );
+    final double tipX;
+    final double tipY;
+    if (swipeHorizontal) {
+      tipX = (_vThumb.shift(offset).center.dx - tipW / 2).clamp(
+        8,
+        size.width - tipW - 8,
+      );
+      tipY = (track.top - tipH - 8).clamp(8, size.height - tipH - 8);
+    } else {
+      tipX = (track.left - tipW - 8).clamp(8, size.width - tipW - 8);
+      tipY = (_vThumb.shift(offset).center.dy - tipH / 2).clamp(
+        8,
+        size.height - tipH - 8,
+      );
+    }
     canvas.drawRRect(
       RRect.fromRectAndRadius(
         Rect.fromLTWH(offset.dx + tipX, offset.dy + tipY, tipW, tipH),
@@ -654,10 +930,12 @@ class RenderPdfCanvas extends RenderBox implements MouseTrackerAnnotation {
   @override
   void paint(PaintingContext context, Offset offset) {
     final Canvas canvas = context.canvas;
-    canvas.drawRect(
-      offset & size,
-      Paint()..color = _config.theme.canvasBackground,
-    );
+    final Color chrome =
+        backgroundColor ??
+        (nightMode
+            ? const Color(0xFF121212)
+            : _config.theme.canvasBackground);
+    canvas.drawRect(offset & size, Paint()..color = chrome);
     canvas.save();
     canvas.clipRect(offset & size);
     canvas.translate(
@@ -670,16 +948,17 @@ class RenderPdfCanvas extends RenderBox implements MouseTrackerAnnotation {
       size.width,
       size.height,
     ).inflate(96);
-    var top = PdfPageLayout.gap;
     final double scale = _viewScale;
+    var cursor = swipeHorizontal ? PdfPageLayout.gutter : PdfPageLayout.gap;
     for (int i = 0; i < _lists.length; i++) {
       final PdfDisplayList list = _lists[i];
-      final double left = _pageLeft(list);
       final double w = list.page.width * scale;
       final double h = list.page.height * scale;
+      final double left = swipeHorizontal ? cursor : _pageLeft(list);
+      final double top = swipeHorizontal ? _pageTop(list) : cursor;
       final Rect paper = Rect.fromLTWH(left, top, w, h);
       if (!view.overlaps(paper)) {
-        top += h + PdfPageLayout.gap;
+        cursor += (swipeHorizontal ? w : h) + PdfPageLayout.gap;
         continue;
       }
       _warmImages(list);
@@ -690,7 +969,13 @@ class RenderPdfCanvas extends RenderBox implements MouseTrackerAnnotation {
         8,
         false,
       );
-      canvas.drawRect(paper, Paint()..color = _config.theme.pageBackground);
+      canvas.drawRect(
+        paper,
+        Paint()
+          ..color = nightMode
+              ? const Color(0xFF1E1E1E)
+              : _config.theme.pageBackground,
+      );
       canvas.drawRect(
         paper,
         Paint()
@@ -705,19 +990,43 @@ class RenderPdfCanvas extends RenderBox implements MouseTrackerAnnotation {
       final ui.Image? cached = tile?.image;
       final bool scaleMatch = tile != null && _tileMatchesScale(tile, scale);
       if (cached != null) {
-        // Blit last raster (stretch while zooming); rebuild after settle.
+        if (nightMode && !editing) {
+          canvas.saveLayer(
+            Rect.fromLTWH(0, 0, list.page.width, list.page.height),
+            Paint()
+              ..colorFilter = const ColorFilter.matrix(<double>[
+                -1, 0, 0, 0, 255, //
+                0, -1, 0, 0, 255, //
+                0, 0, -1, 0, 255, //
+                0, 0, 0, 1, 0,
+              ]),
+          );
+        }
         paintImage(
           canvas: canvas,
           rect: Rect.fromLTWH(0, 0, list.page.width, list.page.height),
           image: cached,
-          // Default BoxFit.scaleDown refuses to upscale small zoom-out
-          // tiles, so content shrinks twice inside the paper frame.
           fit: BoxFit.fill,
           filterQuality: _previewZoom
               ? FilterQuality.medium
               : FilterQuality.high,
         );
+        if (nightMode && !editing) {
+          canvas.restore();
+        }
       } else {
+        if (nightMode && !editing) {
+          canvas.saveLayer(
+            Rect.fromLTWH(0, 0, list.page.width, list.page.height),
+            Paint()
+              ..colorFilter = const ColorFilter.matrix(<double>[
+                -1, 0, 0, 0, 255, //
+                0, -1, 0, 0, 255, //
+                0, 0, -1, 0, 255, //
+                0, 0, 0, 1, 0,
+              ]),
+          );
+        }
         canvas.save();
         applyPdfPageRotation(canvas, list.page);
         PaintPdfDisplayList.paint(
@@ -727,6 +1036,9 @@ class RenderPdfCanvas extends RenderBox implements MouseTrackerAnnotation {
               _images[identityHashCode(bytes)],
         );
         canvas.restore();
+        if (nightMode && !editing) {
+          canvas.restore();
+        }
       }
       if (!_previewZoom && !scaleMatch) {
         _scheduleRaster(i, scale);
@@ -761,17 +1073,22 @@ class RenderPdfCanvas extends RenderBox implements MouseTrackerAnnotation {
           if (!_paintAnnotFill(annot.subtype)) {
             continue;
           }
-          final double h = annot.rect.height;
-          final double top = h < 0 ? annot.rect.y + h : annot.rect.y;
+          final double ah = annot.rect.height;
+          final double at = ah < 0 ? annot.rect.y + ah : annot.rect.y;
           canvas.drawRect(
-            Rect.fromLTWH(annot.rect.x, top, annot.rect.width.abs(), h.abs()),
+            Rect.fromLTWH(annot.rect.x, at, annot.rect.width.abs(), ah.abs()),
             Paint()..color = Color(annot.color).withValues(alpha: 0.28),
           );
         }
       }
       canvas.restore();
+      onDraw?.call(
+        canvas,
+        Size(list.page.width, list.page.height),
+        i,
+      );
       canvas.restore();
-      top += h + PdfPageLayout.gap;
+      cursor += (swipeHorizontal ? w : h) + PdfPageLayout.gap;
     }
     canvas.restore();
     _paintScrollBar(canvas, offset);
@@ -794,10 +1111,14 @@ class RenderPdfCanvas extends RenderBox implements MouseTrackerAnnotation {
             } else {
               _zoomBy(factor, signal.localPosition);
             }
-          } else {
+          } else if (enableSwipe) {
             Offset delta = signal.scrollDelta;
             if (HardwareKeyboard.instance.isShiftPressed &&
                 delta.dx.abs() < delta.dy.abs()) {
+              delta = Offset(delta.dy, 0);
+            } else if (swipeHorizontal &&
+                delta.dx.abs() < delta.dy.abs() &&
+                !HardwareKeyboard.instance.isShiftPressed) {
               delta = Offset(delta.dy, 0);
             }
             _viewport.pan(delta);
@@ -809,6 +1130,7 @@ class RenderPdfCanvas extends RenderBox implements MouseTrackerAnnotation {
     }
     if (event is PointerPanZoomStartEvent) {
       _panZoomScale = 1;
+      _stopFling();
       return;
     }
     if (event is PointerPanZoomUpdateEvent) {
@@ -825,7 +1147,7 @@ class RenderPdfCanvas extends RenderBox implements MouseTrackerAnnotation {
           _zoomBy(factor, event.localPosition);
         }
         _panZoomScale = event.scale == 0 ? _panZoomScale : event.scale;
-      } else {
+      } else if (enableSwipe) {
         _viewport.pan(-event.localPanDelta);
       }
       _finishScroll();
@@ -842,8 +1164,9 @@ class RenderPdfCanvas extends RenderBox implements MouseTrackerAnnotation {
       return;
     }
     if (event is PointerDownEvent) {
+      _stopFling();
       _ensureRecognizers();
-      if (_vTrack.contains(event.localPosition) && _maxScrollY > 0) {
+      if (_scrollBarVisible && _vTrack.contains(event.localPosition)) {
         _scrollDrag = true;
         if (!_vThumb.contains(event.localPosition)) {
           _jumpScroll(event.localPosition);
@@ -890,7 +1213,9 @@ class RenderPdfCanvas extends RenderBox implements MouseTrackerAnnotation {
         }
       }
       _clearLive();
-      _pan?.addPointer(event);
+      if (enableSwipe) {
+        _pan?.addPointer(event);
+      }
     }
   }
 
@@ -990,8 +1315,30 @@ class RenderPdfCanvas extends RenderBox implements MouseTrackerAnnotation {
 
   /// Page under [window] even when the pointer is in the side gutter.
   _PageHit? _pageBand(Offset window) {
-    var top = PdfPageLayout.gap;
     final double scale = _viewScale;
+    if (swipeHorizontal) {
+      var left = PdfPageLayout.gutter;
+      final double contentX = window.dx + _viewport.origin.dx;
+      for (int i = 0; i < _lists.length; i++) {
+        final PdfDisplayList list = _lists[i];
+        final double w = list.page.width * scale;
+        if (contentX <= left + w || i == _lists.length - 1) {
+          final double top = _pageTop(list);
+          final ({double x, double y}) content = PdfPageView.fromView(
+            list.page,
+            ((contentX - left) / scale).clamp(0, list.page.width),
+            ((window.dy + _viewport.origin.dy - top) / scale).clamp(
+              0,
+              list.page.height,
+            ),
+          );
+          return _PageHit(i, content.x, content.y);
+        }
+        left += w + PdfPageLayout.gap;
+      }
+      return null;
+    }
+    var top = PdfPageLayout.gap;
     final double contentY = window.dy + _viewport.origin.dy;
     for (int i = 0; i < _lists.length; i++) {
       final PdfDisplayList list = _lists[i];
@@ -1010,8 +1357,30 @@ class RenderPdfCanvas extends RenderBox implements MouseTrackerAnnotation {
   }
 
   _PageHit? _pageHit(Offset window) {
-    var top = PdfPageLayout.gap;
     final double scale = _viewScale;
+    if (swipeHorizontal) {
+      var left = PdfPageLayout.gutter;
+      for (int i = 0; i < _lists.length; i++) {
+        final PdfDisplayList list = _lists[i];
+        final double top = _pageTop(list);
+        final double x = (window.dx + _viewport.origin.dx - left) / scale;
+        final double y = (window.dy + _viewport.origin.dy - top) / scale;
+        if (x >= -8 &&
+            x <= list.page.width + 8 &&
+            y >= 0 &&
+            y <= list.page.height) {
+          final ({double x, double y}) content = PdfPageView.fromView(
+            list.page,
+            x,
+            y,
+          );
+          return _PageHit(i, content.x, content.y);
+        }
+        left += list.page.width * scale + PdfPageLayout.gap;
+      }
+      return null;
+    }
+    var top = PdfPageLayout.gap;
     for (int i = 0; i < _lists.length; i++) {
       final PdfDisplayList list = _lists[i];
       final double left = _pageLeft(list);
@@ -1153,8 +1522,29 @@ class RenderPdfCanvas extends RenderBox implements MouseTrackerAnnotation {
     if (_lists.isEmpty) {
       return null;
     }
-    var top = PdfPageLayout.gap;
     final double scale = _viewScale;
+    if (swipeHorizontal) {
+      var left = PdfPageLayout.gutter;
+      final double contentX = window.dx + _viewport.origin.dx;
+      if (contentX < left) {
+        return _PageHit(0, 0, 0);
+      }
+      for (int i = 0; i < _lists.length; i++) {
+        final PdfDisplayList list = _lists[i];
+        final double top = _pageTop(list);
+        final double w = list.page.width * scale;
+        if (contentX <= left + w || i == _lists.length - 1) {
+          return _PageHit(
+            i,
+            (contentX - left) / scale,
+            (window.dy + _viewport.origin.dy - top) / scale,
+          );
+        }
+        left += w + PdfPageLayout.gap;
+      }
+      return _PageHit(_lists.length - 1, _lists.last.page.width, 0);
+    }
+    var top = PdfPageLayout.gap;
     final double contentY = window.dy + _viewport.origin.dy;
     if (contentY < top) {
       return _PageHit(0, 0, 0);

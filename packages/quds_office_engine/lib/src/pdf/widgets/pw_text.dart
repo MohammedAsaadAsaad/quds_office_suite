@@ -132,16 +132,36 @@ class Text extends Widget {
     );
     final double lh = PwResolvedStyle(ctx, style).lineHeight(ctx);
     final int rows = lines.isEmpty ? 1 : lines.length;
-    // Soft-wrapped text must keep the full max width so start/end/center/
-    // justify can pin glyphs to the correct edge (RTL headers and bullets).
+    // Content width (longest line), not the wrap budget. Claiming maxW under
+    // loose Row constraints made non-flex children (invoice meta / money
+    // amounts) steal the main axis so Expanded titles wrapped to one glyph
+    // and labels overlapped values.
+    var contentW = 0.0;
+    for (final BrokenLine line in lines) {
+      if (line.width > contentW) {
+        contentW = line.width;
+      }
+    }
+    final TextAlign resolvedAlign = pwResolvedTextAlign(
+      align,
+      ctx.textDirection == TextDirection.rtl,
+    );
+    final bool tightWidth = constraints.minWidth >= constraints.maxWidth;
+    // Center / justify need the full line box. start / end / left / right keep
+    // intrinsic width under loose constraints so Row meta / money amounts do
+    // not steal the main axis (Expanded still forces a tight width).
+    final bool fillWidth =
+        tightWidth ||
+        resolvedAlign == TextAlign.center ||
+        resolvedAlign == TextAlign.justify;
+    final double boxW = fillWidth
+        ? constraints.constrainWidth(maxW)
+        : constraints.constrainWidth(contentW);
     return _TextBox(
-      PwSize(
-        constraints.constrainWidth(maxW),
-        constraints.constrainHeight(lh * rows),
-      ),
+      PwSize(boxW, constraints.constrainHeight(lh * rows)),
       lines,
       style,
-      pwResolvedTextAlign(align, ctx.textDirection == TextDirection.rtl),
+      resolvedAlign,
       ctx.textDirection,
       PwResolvedStyle(ctx, style).baseline(ctx),
     );

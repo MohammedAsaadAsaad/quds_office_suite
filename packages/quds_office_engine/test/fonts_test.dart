@@ -21,6 +21,15 @@ void main() {
 
     final FontMetrics metrics = FontMetrics(font: font, fontSizePoints: 12);
     expect(metrics.ascender, greaterThan(0));
+    expect(
+      metrics.ascender,
+      greaterThanOrEqualTo(font.unitsToPoints(font.winAscent, 12)),
+    );
+    expect(
+      metrics.descender,
+      lessThanOrEqualTo(font.unitsToPoints(-font.winDescent, 12)),
+    );
+    expect(metrics.lineHeight, greaterThan(metrics.ascender));
     expect(metrics.characterWidth(0x41), greaterThan(2));
     expect(
       metrics.measureText('AAA'),

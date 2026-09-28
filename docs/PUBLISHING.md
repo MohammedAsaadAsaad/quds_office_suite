@@ -43,7 +43,7 @@ flutter pub publish --dry-run
 Fix every warning you can: missing LICENSE, short description, undocumented
 public API, leftover `publish_to: none`, path dependencies.
 
-The editor depends on `quds_office_engine: ^0.5.0`. Inside the workspace,
+The editor depends on `quds_office_engine: ^0.5.3`. Inside the workspace,
 Dart resolves the local package. On pub.dev, the version must already exist
 **before** you publish the editor.
 
@@ -101,4 +101,4 @@ Follow [semver](https://semver.org):
 - **Major** — breaking API.
 
 When the engine breaks its API, bump the editor constraint in the same PR
-(`quds_office_engine: ^0.5.0`) and publish engine first.
+(`quds_office_engine: ^0.5.3`) and publish engine first.
