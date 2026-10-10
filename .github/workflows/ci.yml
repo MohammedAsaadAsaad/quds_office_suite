@@ -5,6 +5,8 @@ on:
     branches: [main]
   pull_request:
 
+# The pub workspace contains Flutter packages, so every job resolves it with
+# the Flutter SDK (which bundles Dart). The engine itself stays pure Dart.
 jobs:
   engine:
     name: quds_office_engine
@@ -14,12 +16,12 @@ jobs:
         working-directory: packages/quds_office_engine
     steps:
       - uses: actions/checkout@v4
-      - uses: dart-lang/setup-dart@v1
+      - uses: subosito/flutter-action@v2
         with:
-          sdk: 3.12.0
+          channel: stable
       - name: Resolve workspace
         working-directory: .
-        run: dart pub get
+        run: flutter pub get
       - run: dart analyze --fatal-infos
       - run: dart test
 
@@ -36,6 +38,23 @@ jobs:
           channel: stable
       - name: Resolve workspace
         working-directory: .
-        run: dart pub get
+        run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+
+  report_studio:
+    name: quds_report_studio
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/quds_report_studio
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: Resolve workspace
+        working-directory: .
+        run: flutter pub get
       - run: flutter analyze
       - run: flutter test
