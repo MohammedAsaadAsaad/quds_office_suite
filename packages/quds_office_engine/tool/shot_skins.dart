@@ -8,10 +8,18 @@ void main() {
   out.createSync(recursive: true);
   final Map<String, Uint8List> files = <String, Uint8List>{
     'invoice': InvoiceTemplate(
-      seller: const TemplateParty(name: 'North Dock', lines: <String>['Port Road']),
+      seller: const TemplateParty(
+        name: 'North Dock',
+        lines: <String>['Port Road'],
+      ),
       buyer: const TemplateParty(name: 'Harbour Supply'),
       lines: const <TradeLine>[
-        TradeLine(description: 'Oak desk', quantity: '2', unit: 'ea', amount: '240'),
+        TradeLine(
+          description: 'Oak desk',
+          quantity: '2',
+          unit: 'ea',
+          amount: '240',
+        ),
         TradeLine(description: 'Lamp', quantity: '4', unit: 'ea', amount: '80'),
       ],
       totals: const MoneyTotals(subtotal: '320', tax: '32', total: '352'),
@@ -23,7 +31,12 @@ void main() {
       seller: const TemplateParty(name: 'North Dock'),
       buyer: const TemplateParty(name: 'Harbour Supply'),
       lines: const <TradeLine>[
-        TradeLine(description: 'Fit-out', quantity: '1', unit: 'job', amount: '1800'),
+        TradeLine(
+          description: 'Fit-out',
+          quantity: '1',
+          unit: 'job',
+          amount: '1800',
+        ),
       ],
       totals: const MoneyTotals(subtotal: '1800', total: '1800'),
       number: 'Q-4',
@@ -53,10 +66,15 @@ void main() {
       shipDate: '15 Sep 2026',
     ).save(),
     'letter': LetterTemplate(
-      sender: const TemplateParty(name: 'Amina Haddad', lines: <String>['People desk']),
+      sender: const TemplateParty(
+        name: 'Amina Haddad',
+        lines: <String>['People desk'],
+      ),
       recipient: const TemplateParty(name: 'Lina Khoury'),
       subject: 'Offer of employment',
-      paragraphs: const <String>['We are pleased to offer you the role of designer.'],
+      paragraphs: const <String>[
+        'We are pleased to offer you the role of designer.',
+      ],
       date: '14 Sep 2026',
     ).save(),
     'certificate': CertificateTemplate(

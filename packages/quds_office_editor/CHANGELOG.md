@@ -2,6 +2,45 @@
 
 All notable changes to `quds_office_editor` are documented here.
 
+## 0.6.0
+
+**Report designer (`QudsReportDesigner`).** Depends on `quds_office_engine` **0.6.0**.
+
+- `ReportDesignerController`:
+  - Select, move, resize, and nudge; snap to grid and guides.
+  - Align, distribute, and same size; z-order; clipboard and duplicate.
+  - Add and remove bands; undo and redo.
+  - Typed property inspector rows; inline text editing.
+  - Inferred mock data.
+- RenderBox surfaces (no text fields, no scroll widgets):
+  - `ReportDesignerCanvas`: bands, rulers, handles, marquee, tool creation, and cross-band drag.
+  - `ReportInspector`.
+  - `ReportToolbar` with vector icons.
+  - `ReportPreviewSurface`: a paginated live preview painted from the engine's glyph outlines.
+- Context menus; Design/Preview toggle (F5).
+- Export to PDF, XLSX, or DOCX through `onExport`.
+- Chart tool: creates a data-bound bar chart; the inspector edits type, data, aggregation, sort, top N, series, static points, and styling. The canvas draws the chart with the engine renderer and sample values.
+- Templates button: loads one of `ReportTemplates.all` with its sample data, or a blank report (`ReportDesignerController.loadTemplate`).
+- Autocomplete while editing text on the canvas or inspector values: a painted popup under the caret. ↑/↓ choose, Enter/Tab insert, Esc closes, Ctrl+Space opens it anywhere. Functions insert `NAME()` with the caret inside.
+- Template variables: a Variables toolbar menu inserts `{{Variables.x}}` at the caret or as a new text box. With nothing selected, the inspector adds, renames, retypes, formats, and removes variables. Values are checked against the type, and renaming a variable rewrites its references.
+- The on-canvas text editor paints on the element's fill and switches to black or white text when the element's color would be unreadable (WCAG 4.5:1).
+- `ReportLayoutPainter.paintPrimitives` paints any primitive list, including chart paths.
+- `ReportBundledFonts` loads the package's Liberation and Noto Naskh Arabic faces into a `ReportFontRegistry`.
+- Inspector redesign (still one RenderBox):
+  - Collapsible sections, a title badge with the element kind and band, and diagnostics with severity icons.
+  - Controls picked from property metadata: switches for booleans, segmented icon or text choices, dropdowns, ±steppers (↑/↓ while editing, Shift for ×10), preset combos (font sizes, families, format samples), paired X/Y and Width/Height fields, and a B/I/U glyph row.
+  - A painted color popover: no color, the template palette, Office theme tints and shades, and standard colors.
+  - `ReportProperty` gains `hint`, `presets`, `step`, `min`, `pair`, and `glyph`. `ReportDesignerController.stepProperty` / `steppedValue` snap to the unit's step and clamp to the minimum.
+- Standalone desktop app [`apps/quds_report_studio`](https://github.com/MohammedAsaadAsaad/quds_office_suite/tree/main/apps/quds_report_studio) replaces the old example entry point. It has frameless window chrome (move, resize, maximize), New/Open/Save/Save as, recent files, and an unsaved-changes guard.
+
+**Fixes.**
+
+- Chart visuals reserve a strip for the bottom legend, so it no longer overlaps the category labels.
+- `PdfViewerController` zoom animation starts on its first frame. Calling `fitPage` / `setScale` from a tap no longer trips the scheduler assertion.
+- `RenderWordCanvas.windowForPagePoint` maps a page point back to widget coordinates (the inverse of hit-testing), so hosts and tests can target page content past the rulers.
+- Analyzer clean-up across the package and example (initializing formals, unnecessary casts, `onReorderItem`).
+- The example studio theme uses Liberation Sans with Noto Naskh Arabic / Tajawal as fallbacks, so Latin chrome text no longer depends on host fonts.
+
 ## 0.5.1
 
 **PDF viewer options and events.**

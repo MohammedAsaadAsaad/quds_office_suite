@@ -1026,7 +1026,7 @@ class ListTile extends Widget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: <Widget>[
-          if (lead != null) lead,
+          ?lead,
           if (lead != null) const SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -1034,12 +1034,12 @@ class ListTile extends Widget {
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
                 title,
-                if (sub != null) sub,
+                ?sub,
               ],
             ),
           ),
           if (trail != null) const SizedBox(width: 10),
-          if (trail != null) trail,
+          ?trail,
         ],
       ),
     ).layout(context, constraints);

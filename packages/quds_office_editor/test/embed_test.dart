@@ -145,9 +145,15 @@ void main() {
     controller.previewRulerEdit(
       const WordRulerEdit(indent: WmlIndent(firstLine: 36)),
     );
-    expect(controller.document.paragraphs.first.properties.indent.firstLine, 36);
+    expect(
+      controller.document.paragraphs.first.properties.indent.firstLine,
+      36,
+    );
     controller.commitRulerEdit();
-    expect(controller.document.paragraphs.first.properties.indent.firstLine, 36);
+    expect(
+      controller.document.paragraphs.first.properties.indent.firstLine,
+      36,
+    );
     controller.undo();
     expect(controller.document.paragraphs.first.properties.indent.firstLine, 0);
   });
@@ -161,16 +167,14 @@ void main() {
       ..collapseSelection();
     controller.insertText('\t');
     expect(controller.document.paragraphs.first.text, 'A\tB');
-    final List<LaidOutGlyph> glyphs = controller.laidOut.pages.first.lines.first
-        .glyphs;
+    final List<LaidOutGlyph> glyphs =
+        controller.laidOut.pages.first.lines.first.glyphs;
     expect(glyphs, hasLength(3));
     expect(glyphs[1].glyph.codePoint, 0x09);
     expect(glyphs[1].advance, closeTo(kDefaultTabWidth, 0.01));
   });
 
-  testWidgets('word editor tab key inserts a tab', (
-    WidgetTester tester,
-  ) async {
+  testWidgets('word editor tab key inserts a tab', (WidgetTester tester) async {
     final WordEditorController controller = WordEditorController(
       document: WmlDocument.empty(text: 'Hi'),
     );
@@ -220,39 +224,40 @@ void main() {
     expect(controller.document.paragraphs.first.text, 'H');
   });
 
-  testWidgets('tapping the canvas reattaches IME after another client steals it', (
-    WidgetTester tester,
-  ) async {
-    final WordEditorController controller = WordEditorController(
-      document: WmlDocument.empty(text: 'Hi'),
-    );
-    await tester.pumpWidget(
-      Directionality(
-        textDirection: TextDirection.ltr,
-        child: SizedBox(
-          width: 800,
-          height: 600,
-          child: QudsWordEditor(controller: controller),
+  testWidgets(
+    'tapping the canvas reattaches IME after another client steals it',
+    (WidgetTester tester) async {
+      final WordEditorController controller = WordEditorController(
+        document: WmlDocument.empty(text: 'Hi'),
+      );
+      await tester.pumpWidget(
+        Directionality(
+          textDirection: TextDirection.ltr,
+          child: SizedBox(
+            width: 800,
+            height: 600,
+            child: QudsWordEditor(controller: controller),
+          ),
         ),
-      ),
-    );
-    await tester.tap(find.byType(WordCanvas));
-    await tester.pump();
-    expect(controller.input.isAttached, isTrue);
+      );
+      await tester.tap(find.byType(WordCanvas));
+      await tester.pump();
+      expect(controller.input.isAttached, isTrue);
 
-    final OfficeInputBridge thief = OfficeInputBridge(onValue: (_) {});
-    thief.attach();
-    expect(controller.input.isAttached, isFalse);
-    expect(controller.attachInput, returnsNormally);
-    expect(controller.input.isAttached, isTrue);
+      final OfficeInputBridge thief = OfficeInputBridge(onValue: (_) {});
+      thief.attach();
+      expect(controller.input.isAttached, isFalse);
+      expect(controller.attachInput, returnsNormally);
+      expect(controller.input.isAttached, isTrue);
 
-    await tester.tap(find.byType(WordCanvas));
-    await tester.pump();
-    expect(controller.input.isAttached, isTrue);
-    controller.applyImeText('Hi!');
-    expect(controller.document.paragraphs.first.text, 'Hi!');
-    thief.detach();
-  });
+      await tester.tap(find.byType(WordCanvas));
+      await tester.pump();
+      expect(controller.input.isAttached, isTrue);
+      controller.applyImeText('Hi!');
+      expect(controller.document.paragraphs.first.text, 'Hi!');
+      thief.detach();
+    },
+  );
 
   testWidgets('word editor ctrl+z undoes and ctrl+y redoes', (
     WidgetTester tester,
@@ -1659,13 +1664,22 @@ void main() {
     expect(controller.selectedTableBand, isNull);
     expect(WordTable.columnCount(table), 1);
     expect(table.rows.first.cells.single.blocks.first, isA<WmlParagraph>());
-    expect((table.rows.first.cells.single.blocks.first as WmlParagraph).text, 'B1');
-    expect((table.rows.last.cells.single.blocks.first as WmlParagraph).text, 'B2');
+    expect(
+      (table.rows.first.cells.single.blocks.first as WmlParagraph).text,
+      'B1',
+    );
+    expect(
+      (table.rows.last.cells.single.blocks.first as WmlParagraph).text,
+      'B2',
+    );
 
     controller.selectTableBand(table, column: false, from: 0, to: 0);
     controller.deleteSelectionOr(backward: true);
     expect(table.rows.length, 1);
-    expect((table.rows.single.cells.single.blocks.first as WmlParagraph).text, 'B2');
+    expect(
+      (table.rows.single.cells.single.blocks.first as WmlParagraph).text,
+      'B2',
+    );
   });
 
   test('insertSectionBreak and header edit target the active section', () {
@@ -1724,7 +1738,10 @@ void main() {
     controller.beginHeaderFooterEdit(0, footer: false);
     expect(controller.isEditingHeader, isTrue);
     expect(controller.headerFooterParagraphs, isNotEmpty);
-    expect(controller.documentLaidOut.pages.first.headerBand.height, greaterThan(20));
+    expect(
+      controller.documentLaidOut.pages.first.headerBand.height,
+      greaterThan(20),
+    );
     controller.insertText('Title');
     expect(controller.document.sections.first.header.first.text, 'Title');
     controller.endHeaderFooterEdit();
@@ -1959,7 +1976,10 @@ void main() {
     controller.selectShape(null);
     controller.selectShape(a);
     expect(controller.selectedShapes.length, 2);
-    expect(controller.selectedShapes.any((PmlShape s) => identical(s, b)), isTrue);
+    expect(
+      controller.selectedShapes.any((PmlShape s) => identical(s, b)),
+      isTrue,
+    );
     controller.nudgeSelected(0, 127000);
     expect(a.transform.y, 127000);
     expect(b.transform.y, 127000);
@@ -2485,15 +2505,24 @@ void main() {
       ),
     );
     expect(
-      OfficeContextMenu.slideSorter(controller: slides, index: 0)
-          .map((OfficeContextAction a) => a.id),
-      containsAll(<String>['copySlide', 'pasteSlide', 'duplicateSlide', 'hideSlide']),
+      OfficeContextMenu.slideSorter(
+        controller: slides,
+        index: 0,
+      ).map((OfficeContextAction a) => a.id),
+      containsAll(<String>[
+        'copySlide',
+        'pasteSlide',
+        'duplicateSlide',
+        'hideSlide',
+      ]),
     );
     slides.setSlideHidden(0, true);
     expect(slides.presentation.slides.first.hidden, isTrue);
     expect(
-      OfficeContextMenu.slideSorter(controller: slides, index: 0)
-          .map((OfficeContextAction a) => a.id),
+      OfficeContextMenu.slideSorter(
+        controller: slides,
+        index: 0,
+      ).map((OfficeContextAction a) => a.id),
       contains('showSlide'),
     );
     slides.undo();
@@ -2540,7 +2569,12 @@ void main() {
     );
     expect(word.find(const OfficeFindOptions(query: 'Quds')), hasLength(1));
     expect(word.findSession.current?.preview, contains('Quds'));
-    expect(word.replaceAll(const OfficeFindOptions(query: 'Quds', replaceWith: 'قدس')), 1);
+    expect(
+      word.replaceAll(
+        const OfficeFindOptions(query: 'Quds', replaceWith: 'قدس'),
+      ),
+      1,
+    );
     expect(word.document.paragraphs.first.text, contains('قدس'));
     expect(word.documentStats.words, greaterThan(0));
     word.applyStyle('Title');
@@ -2557,7 +2591,10 @@ void main() {
     word.setWatermark('DRAFT');
     expect(word.document.watermark, 'DRAFT');
     word.insertTable(rows: 2, columns: 2);
-    expect(word.document.sections.first.blocks.whereType<WmlTable>(), isNotEmpty);
+    expect(
+      word.document.sections.first.blocks.whereType<WmlTable>(),
+      isNotEmpty,
+    );
     word.insertTableOfFigures(label: 'Figure');
     expect(word.document.sections.first.blocks.whereType<WmlToc>(), isNotEmpty);
     expect(word.exportPdf().take(5).toList(), <int>[37, 80, 68, 70, 45]);
@@ -2576,10 +2613,7 @@ void main() {
 
     final SlideEditorController slides = SlideEditorController();
     slides.slide.shapes.add(PmlShape(id: 2, name: 'T', text: 'Hello deck'));
-    expect(
-      slides.find(const OfficeFindOptions(query: 'deck')),
-      isNotEmpty,
-    );
+    expect(slides.find(const OfficeFindOptions(query: 'deck')), isNotEmpty);
     slides.addSlideSection('Intro');
     expect(slides.presentation.sections.single.name, 'Intro');
   });
@@ -2637,11 +2671,7 @@ void main() {
       ),
     );
     expect(sheet.sheet.validations, hasLength(1));
-    sheet.insertPivot(
-      source: sheet.selection.range,
-      rowField: 0,
-      dataField: 1,
-    );
+    sheet.insertPivot(source: sheet.selection.range, rowField: 0, dataField: 1);
     expect(sheet.sheet.pivots, hasLength(1));
 
     final SlideEditorController slides = SlideEditorController();
@@ -2718,7 +2748,11 @@ void main() {
     slides.slide.shapes.add(PmlShape(id: 2, name: 'Clip', text: ''));
     var played = false;
     slides.onPlayMedia = (_) => played = true;
-    slides.setShapeMedia(slides.slide.shapes.first, name: 'a.mp4', bytes: <int>[1]);
+    slides.setShapeMedia(
+      slides.slide.shapes.first,
+      name: 'a.mp4',
+      bytes: <int>[1],
+    );
     expect(slides.slide.shapes.first.hasMedia, isTrue);
     slides.playShapeMedia(slides.slide.shapes.first);
     expect(played, isTrue);

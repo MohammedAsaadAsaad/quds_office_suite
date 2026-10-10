@@ -25,7 +25,7 @@ class PdfFile {
     required this.version,
     required this.store,
     required this.info,
-    required List<PdfPageRec> pages,
+    required this._pages,
     required this.outline,
     required this.form,
     required this.permissions,
@@ -37,7 +37,7 @@ class PdfFile {
     required this.embeddedFiles,
     this.structTree,
     this.viewerPrefs = const PdfViewerPrefs(),
-  }) : _pages = pages;
+  });
 
   /// Original file bytes (for incremental save).
   Uint8List originalBytes;

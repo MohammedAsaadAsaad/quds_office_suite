@@ -71,7 +71,7 @@ class PdfViewerController extends ChangeNotifier {
   var _zoomTo = 1.0;
   Offset _zoomOrigin0 = Offset.zero;
   Offset _zoomFocal = Offset.zero;
-  Duration _zoomStart = Duration.zero;
+  Duration? _zoomStart;
 
   /// file API.
   PdfFile? get file => _file;
@@ -297,7 +297,7 @@ class PdfViewerController extends ChangeNotifier {
     _zoomTo = to;
     _zoomOrigin0 = origin0;
     _zoomFocal = focal;
-    _zoomStart = SchedulerBinding.instance.currentFrameTimeStamp;
+    _zoomStart = null;
     if (_zoomAnimating) {
       return;
     }
@@ -310,7 +310,8 @@ class PdfViewerController extends ChangeNotifier {
     if (!_zoomAnimating) {
       return;
     }
-    final int elapsedMs = (timestamp - _zoomStart).inMilliseconds.clamp(
+    final Duration start = _zoomStart ??= timestamp;
+    final int elapsedMs = (timestamp - start).inMilliseconds.clamp(
       0,
       1 << 30,
     );
@@ -586,8 +587,7 @@ class PdfViewerController extends ChangeNotifier {
     final double sx =
         (viewportWidth - PdfPageLayout.gutter * 2 - PdfPageLayout.scrollBar) /
         page.width;
-    final double sy =
-        (viewportHeight - PdfPageLayout.gap * 2) / page.height;
+    final double sy = (viewportHeight - PdfPageLayout.gap * 2) / page.height;
     setScale((sx < sy ? sx : sy) / PdfPageLayout.pointsToPixels);
   }
 

@@ -1,6 +1,4 @@
-import 'office_uri_stub.dart'
-    if (dart.library.io) 'office_uri_io.dart'
-    as impl;
+import 'office_uri_stub.dart' if (dart.library.io) 'office_uri_io.dart' as impl;
 
 /// True for schemes the viewer is willing to hand to the OS.
 bool launchableUri(String uri) {

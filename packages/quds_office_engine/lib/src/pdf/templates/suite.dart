@@ -22,7 +22,7 @@ const SheetLabels purchaseOrderTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Item',
         'Qty',
         'Unit',
@@ -43,7 +43,7 @@ const SheetLabels salesOrderTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Item',
         'Qty',
         'Amount',
@@ -63,7 +63,7 @@ const SheetLabels creditNoteTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Reason',
         'Qty',
         'Credit',
@@ -83,7 +83,7 @@ const SheetLabels debitNoteTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Reason',
         'Qty',
         'Charge',
@@ -103,7 +103,7 @@ const SheetLabels proformaTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Item',
         'Qty',
         'Amount',
@@ -123,7 +123,7 @@ const SheetLabels serviceEstimateTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Task',
         'Hours',
         'Amount',
@@ -143,7 +143,7 @@ const SheetLabels commissionNoteTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Deal',
         'Base',
         'Rate',
@@ -164,7 +164,7 @@ const SheetLabels billOfLadingTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Marks',
         'Qty',
         'Weight',
@@ -185,7 +185,7 @@ const SheetLabels freightQuoteTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Leg',
         'Weight',
         'Amount',
@@ -205,7 +205,7 @@ const SheetLabels feeReceiptTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Fee',
         'Detail',
         'Amount',
@@ -225,7 +225,7 @@ const SheetLabels rentReceiptTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Charge',
         'Period',
         'Amount',
@@ -245,7 +245,7 @@ const SheetLabels donationReceiptTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Gift',
         'Detail',
         'Amount',
@@ -265,7 +265,7 @@ const SheetLabels paymentVoucherTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Purpose',
         'Ref',
         'Amount',
@@ -285,7 +285,7 @@ const SheetLabels receiptVoucherTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Purpose',
         'Ref',
         'Amount',
@@ -305,7 +305,7 @@ const SheetLabels packingListTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Item',
         'Ordered',
         'Packed',
@@ -325,7 +325,7 @@ const SheetLabels priceListTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'SKU',
         'Item',
         'Unit',
@@ -346,7 +346,7 @@ const SheetLabels goodsReceivedTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Item',
         'Ordered',
         'Received',
@@ -366,7 +366,7 @@ const SheetLabels returnAuthorizationTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Item',
         'Qty',
         'Reason',
@@ -386,7 +386,7 @@ const SheetLabels consignmentNoteTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Item',
         'Qty',
         'Condition',
@@ -406,7 +406,7 @@ const SheetLabels goodsIssueTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Item',
         'Qty',
         'Bin',
@@ -426,7 +426,7 @@ const SheetLabels inventoryCountTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Item',
         'Book',
         'Counted',
@@ -446,7 +446,7 @@ const SheetLabels assetRegisterTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Tag',
         'Asset',
         'Holder',
@@ -466,7 +466,7 @@ const SheetLabels visitorLogTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Name',
         'In',
         'Host',
@@ -486,7 +486,7 @@ const SheetLabels shiftRosterTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Name',
         'Watch',
         'Role',
@@ -506,7 +506,7 @@ const SheetLabels serviceTicketTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Task',
         'Owner',
         'Status',
@@ -526,7 +526,7 @@ const SheetLabels pickListTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Bin',
         'Item',
         'Qty',
@@ -546,7 +546,7 @@ const SheetLabels deliveryManifestTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Stop',
         'Place',
         'Crates',
@@ -566,7 +566,7 @@ const SheetLabels waybillTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Item',
         'Qty',
         'Marks',
@@ -586,7 +586,7 @@ const SheetLabels warehouseTransferTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Item',
         'Qty',
         'From bin',
@@ -606,7 +606,7 @@ const SheetLabels loadSheetTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Order',
         'Item',
         'Qty',
@@ -626,7 +626,7 @@ const SheetLabels shippingNoticeTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Item',
         'Qty',
         'Marks',
@@ -646,7 +646,7 @@ const SheetLabels attendanceSheetTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Name',
         'In',
         'Mark',
@@ -666,7 +666,7 @@ const SheetLabels classRegisterTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Name',
         'Mark',
         'Note',
@@ -686,7 +686,7 @@ const SheetLabels transcriptTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Subject',
         'Mark',
         'Grade',
@@ -706,7 +706,7 @@ const SheetLabels reportCardTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Subject',
         'Mark',
         'Comment',
@@ -726,7 +726,7 @@ const SheetLabels propertyListingTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Unit',
         'Rent',
         'Status',
@@ -746,7 +746,7 @@ const SheetLabels beneficiaryListTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Name',
         'Share',
         'Mark',
@@ -766,7 +766,7 @@ const SheetLabels fieldDistributionTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Household',
         'Item',
         'Qty',
@@ -786,7 +786,7 @@ const SheetLabels workshopRegisterTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Name',
         'Role',
         'Mark',
@@ -806,7 +806,7 @@ const SheetLabels volunteerHoursTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Name',
         'Hours',
         'Task',
@@ -826,7 +826,7 @@ const SheetLabels timesheetTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Day',
         'Hours',
         'Project',
@@ -846,7 +846,7 @@ const SheetLabels milestoneTrackerTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Milestone',
         'Due',
         'Status',
@@ -866,7 +866,7 @@ const SheetLabels riskRegisterTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Risk',
         'Owner',
         'Rating',
@@ -886,7 +886,7 @@ const SheetLabels issueLogTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Issue',
         'Owner',
         'Status',
@@ -906,7 +906,7 @@ const SheetLabels comparisonTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Point',
         'Crate',
         'Chest',
@@ -926,7 +926,7 @@ const SheetLabels leaderboardTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Rank',
         'Name',
         'Score',
@@ -946,7 +946,7 @@ const SheetLabels exceptionReportTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Case',
         'Expected',
         'Actual',
@@ -966,7 +966,7 @@ const SheetLabels profitAndLossTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Line',
         'Kind',
         'Amount',
@@ -986,7 +986,7 @@ const SheetLabels balanceSnapshotTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Line',
         'Side',
         'Amount',
@@ -1006,7 +1006,7 @@ const SheetLabels cashFlowTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Line',
         'Way',
         'Amount',
@@ -1026,7 +1026,7 @@ const SheetLabels budgetActualTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Line',
         'Plan',
         'Actual',
@@ -1047,7 +1047,7 @@ const SheetLabels agedReceivablesTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Account',
         'Current',
         '30 days',
@@ -1068,7 +1068,7 @@ const SheetLabels agedPayablesTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Supplier',
         'Current',
         '30 days',
@@ -1089,7 +1089,7 @@ const SheetLabels journalTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Account',
         'Detail',
         'Debit',
@@ -1110,7 +1110,7 @@ const SheetLabels pettyCashTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Date',
         'Detail',
         'Out',
@@ -1131,7 +1131,7 @@ const SheetLabels loanScheduleTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Due',
         'Principal',
         'Charge',
@@ -1152,7 +1152,7 @@ const SheetLabels bankReconciliationTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Item',
         'Book',
         'Bank',
@@ -1172,7 +1172,7 @@ const SheetLabels taxSummaryTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Bucket',
         'Base',
         'Tax',
@@ -1192,7 +1192,7 @@ const SheetLabels payrollSummaryTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Band',
         'Headcount',
         'Net',
@@ -1212,7 +1212,7 @@ const SheetLabels tenantStatementTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Date',
         'Detail',
         'Charge',
@@ -1233,7 +1233,7 @@ const SheetLabels offerLetterTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Item',
         'Detail',
         'Amount',
@@ -1253,7 +1253,7 @@ const SheetLabels appointmentLetterTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Item',
         'Detail',
         'Amount',
@@ -1273,7 +1273,7 @@ const SheetLabels experienceLetterTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Item',
         'Detail',
         'Amount',
@@ -1293,7 +1293,7 @@ const SheetLabels warningNoticeTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Item',
         'Detail',
         'Amount',
@@ -1313,7 +1313,7 @@ const SheetLabels recommendationLetterTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Item',
         'Detail',
         'Amount',
@@ -1333,7 +1333,7 @@ const SheetLabels leaveRequestTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Item',
         'Detail',
         'Amount',
@@ -1353,7 +1353,7 @@ const SheetLabels welcomeNoteTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Item',
         'Detail',
         'Amount',
@@ -1373,7 +1373,7 @@ const SheetLabels relievingLetterTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Item',
         'Detail',
         'Amount',
@@ -1393,7 +1393,7 @@ const SheetLabels referenceLetterTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Item',
         'Detail',
         'Amount',
@@ -1413,7 +1413,7 @@ const SheetLabels admissionLetterTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Item',
         'Detail',
         'Amount',
@@ -1433,7 +1433,7 @@ const SheetLabels announcementTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Item',
         'Detail',
         'Amount',
@@ -1453,7 +1453,7 @@ const SheetLabels meetingNoticeTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Item',
         'Detail',
         'Amount',
@@ -1473,7 +1473,7 @@ const SheetLabels decisionNoteTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Item',
         'Detail',
         'Amount',
@@ -1493,7 +1493,7 @@ const SheetLabels internshipCertificateTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Item',
         'Detail',
         'Amount',
@@ -1513,7 +1513,7 @@ const SheetLabels pressReleaseTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Item',
         'Detail',
         'Amount',
@@ -1533,7 +1533,7 @@ const SheetLabels projectStatusTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Item',
         'Detail',
         'Amount',
@@ -1553,7 +1553,7 @@ const SheetLabels policyNoteTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Item',
         'Detail',
         'Amount',
@@ -1573,7 +1573,7 @@ const SheetLabels executiveSummaryTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Item',
         'Detail',
         'Amount',
@@ -1593,7 +1593,7 @@ const SheetLabels afterActionTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Item',
         'Detail',
         'Amount',
@@ -1613,7 +1613,7 @@ const SheetLabels newsletterTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Item',
         'Detail',
         'Amount',
@@ -1633,7 +1633,7 @@ const SheetLabels proposalTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Item',
         'Detail',
         'Amount',
@@ -1653,7 +1653,7 @@ const SheetLabels safetyBriefingTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Item',
         'Detail',
         'Amount',
@@ -1673,7 +1673,7 @@ const SheetLabels incidentReportTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Item',
         'Detail',
         'Amount',
@@ -1693,7 +1693,7 @@ const SheetLabels handoverNoteTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Item',
         'Detail',
         'Amount',
@@ -1713,7 +1713,7 @@ const SheetLabels changeRequestTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Item',
         'Detail',
         'Amount',
@@ -1733,7 +1733,7 @@ const SheetLabels syllabusTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Item',
         'Detail',
         'Amount',
@@ -1753,7 +1753,7 @@ const SheetLabels assignmentBriefTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Item',
         'Detail',
         'Amount',
@@ -1773,7 +1773,7 @@ const SheetLabels progressReportTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Item',
         'Detail',
         'Amount',
@@ -1793,7 +1793,7 @@ const SheetLabels leaseSummaryTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Item',
         'Detail',
         'Amount',
@@ -1813,7 +1813,7 @@ const SheetLabels grantReportTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Item',
         'Detail',
         'Amount',
@@ -1833,7 +1833,7 @@ const SheetLabels programBriefTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Item',
         'Detail',
         'Amount',
@@ -1853,7 +1853,7 @@ const SheetLabels workPermitTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Item',
         'Mark',
         'Note',
@@ -1873,7 +1873,7 @@ const SheetLabels auditFindingsTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Item',
         'Mark',
         'Note',
@@ -1893,7 +1893,7 @@ const SheetLabels moveInChecklistTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Item',
         'Mark',
         'Note',
@@ -1913,7 +1913,7 @@ const SheetLabels maintenanceRequestTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Item',
         'Mark',
         'Note',
@@ -1933,7 +1933,7 @@ const SheetLabels scorecardTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Item',
         'Detail',
         'Amount',
@@ -1953,7 +1953,7 @@ const SheetLabels surveyResultsTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Item',
         'Detail',
         'Amount',
@@ -1973,7 +1973,7 @@ const SheetLabels capacityReportTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Item',
         'Detail',
         'Amount',
@@ -1993,7 +1993,7 @@ const SheetLabels impactSheetTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Item',
         'Detail',
         'Amount',
@@ -2013,7 +2013,7 @@ const SheetLabels dailySiteReportTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Item',
         'Detail',
         'Amount',
@@ -2033,7 +2033,7 @@ const SheetLabels employeeProfileTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Item',
         'Detail',
         'Amount',
@@ -2053,7 +2053,7 @@ const SheetLabels maintenanceLogTemplateLabels = SheetLabels(
       tax: 'Tax',
       total: 'Total',
       presentedTo: 'Presented to',
-      columns: const <String>[
+      columns: <String>[
         'Item',
         'Detail',
         'Amount',
@@ -20094,11 +20094,11 @@ abstract final class TemplateSuite {
         subject: arabic ? '' : '',
         recipient: arabic ? '' : '',
         rows: arabic ? const <SheetRow>[
-            SheetRow(const <String>['حقيبة ميدانية', '12', '48', '576']),
-            SheetRow(const <String>['صندوق تبريد', '4', '90', '360']),
+            SheetRow(<String>['حقيبة ميدانية', '12', '48', '576']),
+            SheetRow(<String>['صندوق تبريد', '4', '90', '360']),
           ] : const <SheetRow>[
-            SheetRow(const <String>['Field kit', '12', '48', '576']),
-            SheetRow(const <String>['Cold box', '4', '90', '360']),
+            SheetRow(<String>['Field kit', '12', '48', '576']),
+            SheetRow(<String>['Cold box', '4', '90', '360']),
           ],
         paragraphs: arabic ? const <String>[] : const <String>[],
         sections: arabic ? const <TemplateSection>[] : const <TemplateSection>[],
@@ -20170,11 +20170,11 @@ abstract final class TemplateSuite {
         subject: arabic ? '' : '',
         recipient: arabic ? '' : '',
         rows: arabic ? const <SheetRow>[
-            SheetRow(const <String>['صابون عيادة', '40', '200']),
-            SheetRow(const <String>['لفّة شاش', '20', '160']),
+            SheetRow(<String>['صابون عيادة', '40', '200']),
+            SheetRow(<String>['لفّة شاش', '20', '160']),
           ] : const <SheetRow>[
-            SheetRow(const <String>['Clinic soap', '40', '200']),
-            SheetRow(const <String>['Gauze roll', '20', '160']),
+            SheetRow(<String>['Clinic soap', '40', '200']),
+            SheetRow(<String>['Gauze roll', '20', '160']),
           ],
         paragraphs: arabic ? const <String>[] : const <String>[],
         sections: arabic ? const <TemplateSection>[] : const <TemplateSection>[],
@@ -20246,11 +20246,11 @@ abstract final class TemplateSuite {
         subject: arabic ? '' : '',
         recipient: arabic ? '' : '',
         rows: arabic ? const <SheetRow>[
-            SheetRow(const <String>['نقص في الشحنة', '2', '96']),
-            SheetRow(const <String>['غطاء تالف', '1', '40']),
+            SheetRow(<String>['نقص في الشحنة', '2', '96']),
+            SheetRow(<String>['غطاء تالف', '1', '40']),
           ] : const <SheetRow>[
-            SheetRow(const <String>['Short shipment', '2', '96']),
-            SheetRow(const <String>['Damaged lid', '1', '40']),
+            SheetRow(<String>['Short shipment', '2', '96']),
+            SheetRow(<String>['Damaged lid', '1', '40']),
           ],
         paragraphs: arabic ? const <String>[] : const <String>[],
         sections: arabic ? const <TemplateSection>[] : const <TemplateSection>[],
@@ -20322,11 +20322,11 @@ abstract final class TemplateSuite {
         subject: arabic ? '' : '',
         recipient: arabic ? '' : '',
         rows: arabic ? const <SheetRow>[
-            SheetRow(const <String>['مناولة مستعجلة', '1', '75']),
-            SheetRow(const <String>['بوابة ليلية', '1', '40']),
+            SheetRow(<String>['مناولة مستعجلة', '1', '75']),
+            SheetRow(<String>['بوابة ليلية', '1', '40']),
           ] : const <SheetRow>[
-            SheetRow(const <String>['Rush handling', '1', '75']),
-            SheetRow(const <String>['Night gate', '1', '40']),
+            SheetRow(<String>['Rush handling', '1', '75']),
+            SheetRow(<String>['Night gate', '1', '40']),
           ],
         paragraphs: arabic ? const <String>[] : const <String>[],
         sections: arabic ? const <TemplateSection>[] : const <TemplateSection>[],
@@ -20398,11 +20398,11 @@ abstract final class TemplateSuite {
         subject: arabic ? '' : '',
         recipient: arabic ? '' : '',
         rows: arabic ? const <SheetRow>[
-            SheetRow(const <String>['هيكل خيمة', '6', '720']),
-            SheetRow(const <String>['عازل أرض', '6', '180']),
+            SheetRow(<String>['هيكل خيمة', '6', '720']),
+            SheetRow(<String>['عازل أرض', '6', '180']),
           ] : const <SheetRow>[
-            SheetRow(const <String>['Tent frame', '6', '720']),
-            SheetRow(const <String>['Ground sheet', '6', '180']),
+            SheetRow(<String>['Tent frame', '6', '720']),
+            SheetRow(<String>['Ground sheet', '6', '180']),
           ],
         paragraphs: arabic ? const <String>[] : const <String>[],
         sections: arabic ? const <TemplateSection>[] : const <TemplateSection>[],
@@ -20474,11 +20474,11 @@ abstract final class TemplateSuite {
         subject: arabic ? '' : '',
         recipient: arabic ? '' : '',
         rows: arabic ? const <SheetRow>[
-            SheetRow(const <String>['محرّك البوابة', '3', '240']),
-            SheetRow(const <String>['حسّاس', '1', '90']),
+            SheetRow(<String>['محرّك البوابة', '3', '240']),
+            SheetRow(<String>['حسّاس', '1', '90']),
           ] : const <SheetRow>[
-            SheetRow(const <String>['Gate motor', '3', '240']),
-            SheetRow(const <String>['Sensor', '1', '90']),
+            SheetRow(<String>['Gate motor', '3', '240']),
+            SheetRow(<String>['Sensor', '1', '90']),
           ],
         paragraphs: arabic ? const <String>[] : const <String>[],
         sections: arabic ? const <TemplateSection>[] : const <TemplateSection>[],
@@ -20552,11 +20552,11 @@ abstract final class TemplateSuite {
         subject: arabic ? '' : '',
         recipient: arabic ? '' : '',
         rows: arabic ? const <SheetRow>[
-            SheetRow(const <String>['حقائب العيادة', '1,076', '5%', '54']),
-            SheetRow(const <String>['إصلاح البوابة', '380', '8%', '30']),
+            SheetRow(<String>['حقائب العيادة', '1,076', '5%', '54']),
+            SheetRow(<String>['إصلاح البوابة', '380', '8%', '30']),
           ] : const <SheetRow>[
-            SheetRow(const <String>['Clinic kits', '1,076', '5%', '54']),
-            SheetRow(const <String>['Gate repair', '380', '8%', '30']),
+            SheetRow(<String>['Clinic kits', '1,076', '5%', '54']),
+            SheetRow(<String>['Gate repair', '380', '8%', '30']),
           ],
         paragraphs: arabic ? const <String>[] : const <String>[],
         sections: arabic ? const <TemplateSection>[] : const <TemplateSection>[],
@@ -20630,11 +20630,11 @@ abstract final class TemplateSuite {
         subject: arabic ? '' : '',
         recipient: arabic ? '' : '',
         rows: arabic ? const <SheetRow>[
-            SheetRow(const <String>['ND-12', '12', '180 كغ', 'حقائب ميدانية']),
-            SheetRow(const <String>['ND-4', '4', '60 كغ', 'صناديق تبريد']),
+            SheetRow(<String>['ND-12', '12', '180 كغ', 'حقائب ميدانية']),
+            SheetRow(<String>['ND-4', '4', '60 كغ', 'صناديق تبريد']),
           ] : const <SheetRow>[
-            SheetRow(const <String>['ND-12', '12', '180 kg', 'Field kits']),
-            SheetRow(const <String>['ND-4', '4', '60 kg', 'Cold boxes']),
+            SheetRow(<String>['ND-12', '12', '180 kg', 'Field kits']),
+            SheetRow(<String>['ND-4', '4', '60 kg', 'Cold boxes']),
           ],
         paragraphs: arabic ? const <String>[] : const <String>[],
         sections: arabic ? const <TemplateSection>[] : const <TemplateSection>[],
@@ -20706,11 +20706,11 @@ abstract final class TemplateSuite {
         subject: arabic ? '' : '',
         recipient: arabic ? '' : '',
         rows: arabic ? const <SheetRow>[
-            SheetRow(const <String>['بري', '240 كغ', '180']),
-            SheetRow(const <String>['مناولة', '1', '40']),
+            SheetRow(<String>['بري', '240 كغ', '180']),
+            SheetRow(<String>['مناولة', '1', '40']),
           ] : const <SheetRow>[
-            SheetRow(const <String>['Road', '240 kg', '180']),
-            SheetRow(const <String>['Handling', '1', '40']),
+            SheetRow(<String>['Road', '240 kg', '180']),
+            SheetRow(<String>['Handling', '1', '40']),
           ],
         paragraphs: arabic ? const <String>[] : const <String>[],
         sections: arabic ? const <TemplateSection>[] : const <TemplateSection>[],
@@ -20782,11 +20782,11 @@ abstract final class TemplateSuite {
         subject: arabic ? '' : '',
         recipient: arabic ? '' : '',
         rows: arabic ? const <SheetRow>[
-            SheetRow(const <String>['قسط', 'الخريف', '800']),
-            SheetRow(const <String>['مختبر', 'علوم', '60']),
+            SheetRow(<String>['قسط', 'الخريف', '800']),
+            SheetRow(<String>['مختبر', 'علوم', '60']),
           ] : const <SheetRow>[
-            SheetRow(const <String>['Tuition', 'Autumn', '800']),
-            SheetRow(const <String>['Lab', 'Science', '60']),
+            SheetRow(<String>['Tuition', 'Autumn', '800']),
+            SheetRow(<String>['Lab', 'Science', '60']),
           ],
         paragraphs: arabic ? const <String>[] : const <String>[],
         sections: arabic ? const <TemplateSection>[] : const <TemplateSection>[],
@@ -20858,11 +20858,11 @@ abstract final class TemplateSuite {
         subject: arabic ? '' : '',
         recipient: arabic ? '' : '',
         rows: arabic ? const <SheetRow>[
-            SheetRow(const <String>['إيجار', 'أيلول', '650']),
-            SheetRow(const <String>['ماء', 'أيلول', '18']),
+            SheetRow(<String>['إيجار', 'أيلول', '650']),
+            SheetRow(<String>['ماء', 'أيلول', '18']),
           ] : const <SheetRow>[
-            SheetRow(const <String>['Rent', 'September', '650']),
-            SheetRow(const <String>['Water', 'September', '18']),
+            SheetRow(<String>['Rent', 'September', '650']),
+            SheetRow(<String>['Water', 'September', '18']),
           ],
         paragraphs: arabic ? const <String>[] : const <String>[],
         sections: arabic ? const <TemplateSection>[] : const <TemplateSection>[],
@@ -20934,11 +20934,11 @@ abstract final class TemplateSuite {
         subject: arabic ? '' : '',
         recipient: arabic ? '' : '',
         rows: arabic ? const <SheetRow>[
-            SheetRow(const <String>['نقد', 'حقائب', '500']),
-            SheetRow(const <String>['عين', 'بطانيات', '200']),
+            SheetRow(<String>['نقد', 'حقائب', '500']),
+            SheetRow(<String>['عين', 'بطانيات', '200']),
           ] : const <SheetRow>[
-            SheetRow(const <String>['Cash', 'Kits', '500']),
-            SheetRow(const <String>['Goods', 'Blankets', '200']),
+            SheetRow(<String>['Cash', 'Kits', '500']),
+            SheetRow(<String>['Goods', 'Blankets', '200']),
           ],
         paragraphs: arabic ? const <String>[] : const <String>[],
         sections: arabic ? const <TemplateSection>[] : const <TemplateSection>[],
@@ -21010,11 +21010,11 @@ abstract final class TemplateSuite {
         subject: arabic ? '' : '',
         recipient: arabic ? '' : '',
         rows: arabic ? const <SheetRow>[
-            SheetRow(const <String>['إصلاح البوابة', 'WO-6', '380']),
-            SheetRow(const <String>['وردية ليل', 'RS-2', '90']),
+            SheetRow(<String>['إصلاح البوابة', 'WO-6', '380']),
+            SheetRow(<String>['وردية ليل', 'RS-2', '90']),
           ] : const <SheetRow>[
-            SheetRow(const <String>['Gate repair', 'WO-6', '380']),
-            SheetRow(const <String>['Night shift', 'RS-2', '90']),
+            SheetRow(<String>['Gate repair', 'WO-6', '380']),
+            SheetRow(<String>['Night shift', 'RS-2', '90']),
           ],
         paragraphs: arabic ? const <String>[] : const <String>[],
         sections: arabic ? const <TemplateSection>[] : const <TemplateSection>[],
@@ -21086,11 +21086,11 @@ abstract final class TemplateSuite {
         subject: arabic ? '' : '',
         recipient: arabic ? '' : '',
         rows: arabic ? const <SheetRow>[
-            SheetRow(const <String>['عربون الحقائب', 'SO-88', '200']),
-            SheetRow(const <String>['إيجار', 'RR-9', '668']),
+            SheetRow(<String>['عربون الحقائب', 'SO-88', '200']),
+            SheetRow(<String>['إيجار', 'RR-9', '668']),
           ] : const <SheetRow>[
-            SheetRow(const <String>['Kit deposit', 'SO-88', '200']),
-            SheetRow(const <String>['Rent', 'RR-9', '668']),
+            SheetRow(<String>['Kit deposit', 'SO-88', '200']),
+            SheetRow(<String>['Rent', 'RR-9', '668']),
           ],
         paragraphs: arabic ? const <String>[] : const <String>[],
         sections: arabic ? const <TemplateSection>[] : const <TemplateSection>[],
@@ -21162,11 +21162,11 @@ abstract final class TemplateSuite {
         subject: arabic ? '' : '',
         recipient: arabic ? '' : '',
         rows: arabic ? const <SheetRow>[
-            SheetRow(const <String>['حقيبة ميدانية', '12', '12']),
-            SheetRow(const <String>['صندوق تبريد', '4', '4']),
+            SheetRow(<String>['حقيبة ميدانية', '12', '12']),
+            SheetRow(<String>['صندوق تبريد', '4', '4']),
           ] : const <SheetRow>[
-            SheetRow(const <String>['Field kit', '12', '12']),
-            SheetRow(const <String>['Cold box', '4', '4']),
+            SheetRow(<String>['Field kit', '12', '12']),
+            SheetRow(<String>['Cold box', '4', '4']),
           ],
         paragraphs: arabic ? const <String>[] : const <String>[],
         sections: arabic ? const <TemplateSection>[] : const <TemplateSection>[],
@@ -21240,11 +21240,11 @@ abstract final class TemplateSuite {
         subject: arabic ? '' : '',
         recipient: arabic ? '' : '',
         rows: arabic ? const <SheetRow>[
-            SheetRow(const <String>['FK-1', 'حقيبة ميدانية', 'قطعة', '48']),
-            SheetRow(const <String>['CB-2', 'صندوق تبريد', 'قطعة', '90']),
+            SheetRow(<String>['FK-1', 'حقيبة ميدانية', 'قطعة', '48']),
+            SheetRow(<String>['CB-2', 'صندوق تبريد', 'قطعة', '90']),
           ] : const <SheetRow>[
-            SheetRow(const <String>['FK-1', 'Field kit', 'each', '48']),
-            SheetRow(const <String>['CB-2', 'Cold box', 'each', '90']),
+            SheetRow(<String>['FK-1', 'Field kit', 'each', '48']),
+            SheetRow(<String>['CB-2', 'Cold box', 'each', '90']),
           ],
         paragraphs: arabic ? const <String>[] : const <String>[],
         sections: arabic ? const <TemplateSection>[] : const <TemplateSection>[],
@@ -21316,11 +21316,11 @@ abstract final class TemplateSuite {
         subject: arabic ? '' : '',
         recipient: arabic ? '' : '',
         rows: arabic ? const <SheetRow>[
-            SheetRow(const <String>['حقيبة ميدانية', '12', '12']),
-            SheetRow(const <String>['صندوق تبريد', '4', '3']),
+            SheetRow(<String>['حقيبة ميدانية', '12', '12']),
+            SheetRow(<String>['صندوق تبريد', '4', '3']),
           ] : const <SheetRow>[
-            SheetRow(const <String>['Field kit', '12', '12']),
-            SheetRow(const <String>['Cold box', '4', '3']),
+            SheetRow(<String>['Field kit', '12', '12']),
+            SheetRow(<String>['Cold box', '4', '3']),
           ],
         paragraphs: arabic ? const <String>[] : const <String>[],
         sections: arabic ? const <TemplateSection>[] : const <TemplateSection>[],
@@ -21392,11 +21392,11 @@ abstract final class TemplateSuite {
         subject: arabic ? '' : '',
         recipient: arabic ? '' : '',
         rows: arabic ? const <SheetRow>[
-            SheetRow(const <String>['صندوق تبريد', '1', 'غطاء مشقوق']),
-            SheetRow(const <String>['لفّة شاش', '2', 'عرض خاطئ']),
+            SheetRow(<String>['صندوق تبريد', '1', 'غطاء مشقوق']),
+            SheetRow(<String>['لفّة شاش', '2', 'عرض خاطئ']),
           ] : const <SheetRow>[
-            SheetRow(const <String>['Cold box', '1', 'Lid cracked']),
-            SheetRow(const <String>['Gauze roll', '2', 'Wrong width']),
+            SheetRow(<String>['Cold box', '1', 'Lid cracked']),
+            SheetRow(<String>['Gauze roll', '2', 'Wrong width']),
           ],
         paragraphs: arabic ? const <String>[] : const <String>[],
         sections: arabic ? const <TemplateSection>[] : const <TemplateSection>[],
@@ -21468,11 +21468,11 @@ abstract final class TemplateSuite {
         subject: arabic ? '' : '',
         recipient: arabic ? '' : '',
         rows: arabic ? const <SheetRow>[
-            SheetRow(const <String>['هيكل خيمة', '2', 'جيد']),
-            SheetRow(const <String>['مصباح', '6', 'جيد']),
+            SheetRow(<String>['هيكل خيمة', '2', 'جيد']),
+            SheetRow(<String>['مصباح', '6', 'جيد']),
           ] : const <SheetRow>[
-            SheetRow(const <String>['Tent frame', '2', 'Good']),
-            SheetRow(const <String>['Lamp', '6', 'Good']),
+            SheetRow(<String>['Tent frame', '2', 'Good']),
+            SheetRow(<String>['Lamp', '6', 'Good']),
           ],
         paragraphs: arabic ? const <String>[] : const <String>[],
         sections: arabic ? const <TemplateSection>[] : const <TemplateSection>[],
@@ -21544,11 +21544,11 @@ abstract final class TemplateSuite {
         subject: arabic ? '' : '',
         recipient: arabic ? '' : '',
         rows: arabic ? const <SheetRow>[
-            SheetRow(const <String>['قفازات', '10', 'A2']),
-            SheetRow(const <String>['كمامات', '20', 'A2']),
+            SheetRow(<String>['قفازات', '10', 'A2']),
+            SheetRow(<String>['كمامات', '20', 'A2']),
           ] : const <SheetRow>[
-            SheetRow(const <String>['Gloves', '10', 'A2']),
-            SheetRow(const <String>['Masks', '20', 'A2']),
+            SheetRow(<String>['Gloves', '10', 'A2']),
+            SheetRow(<String>['Masks', '20', 'A2']),
           ],
         paragraphs: arabic ? const <String>[] : const <String>[],
         sections: arabic ? const <TemplateSection>[] : const <TemplateSection>[],
@@ -21620,11 +21620,11 @@ abstract final class TemplateSuite {
         subject: arabic ? '' : '',
         recipient: arabic ? '' : '',
         rows: arabic ? const <SheetRow>[
-            SheetRow(const <String>['حقيبة ميدانية', '40', '39']),
-            SheetRow(const <String>['صندوق تبريد', '8', '8']),
+            SheetRow(<String>['حقيبة ميدانية', '40', '39']),
+            SheetRow(<String>['صندوق تبريد', '8', '8']),
           ] : const <SheetRow>[
-            SheetRow(const <String>['Field kit', '40', '39']),
-            SheetRow(const <String>['Cold box', '8', '8']),
+            SheetRow(<String>['Field kit', '40', '39']),
+            SheetRow(<String>['Cold box', '8', '8']),
           ],
         paragraphs: arabic ? const <String>[] : const <String>[],
         sections: arabic ? const <TemplateSection>[] : const <TemplateSection>[],
@@ -21696,11 +21696,11 @@ abstract final class TemplateSuite {
         subject: arabic ? '' : '',
         recipient: arabic ? '' : '',
         rows: arabic ? const <SheetRow>[
-            SheetRow(const <String>['GT-2', 'محرّك البوابة', 'الورشة']),
-            SheetRow(const <String>['LT-9', 'صندوق تبريد', 'العيادة']),
+            SheetRow(<String>['GT-2', 'محرّك البوابة', 'الورشة']),
+            SheetRow(<String>['LT-9', 'صندوق تبريد', 'العيادة']),
           ] : const <SheetRow>[
-            SheetRow(const <String>['GT-2', 'Gate motor', 'Workshop']),
-            SheetRow(const <String>['LT-9', 'Cold box', 'Clinic']),
+            SheetRow(<String>['GT-2', 'Gate motor', 'Workshop']),
+            SheetRow(<String>['LT-9', 'Cold box', 'Clinic']),
           ],
         paragraphs: arabic ? const <String>[] : const <String>[],
         sections: arabic ? const <TemplateSection>[] : const <TemplateSection>[],
@@ -21772,11 +21772,11 @@ abstract final class TemplateSuite {
         subject: arabic ? '' : '',
         recipient: arabic ? '' : '',
         rows: arabic ? const <SheetRow>[
-            SheetRow(const <String>['لينا حداد', '09:10', 'العيادة']),
-            SheetRow(const <String>['سامي ناصر', '11:40', 'الورشة']),
+            SheetRow(<String>['لينا حداد', '09:10', 'العيادة']),
+            SheetRow(<String>['سامي ناصر', '11:40', 'الورشة']),
           ] : const <SheetRow>[
-            SheetRow(const <String>['Lina Haddad', '09:10', 'Clinic']),
-            SheetRow(const <String>['Sami Nasser', '11:40', 'Workshop']),
+            SheetRow(<String>['Lina Haddad', '09:10', 'Clinic']),
+            SheetRow(<String>['Sami Nasser', '11:40', 'Workshop']),
           ],
         paragraphs: arabic ? const <String>[] : const <String>[],
         sections: arabic ? const <TemplateSection>[] : const <TemplateSection>[],
@@ -21848,11 +21848,11 @@ abstract final class TemplateSuite {
         subject: arabic ? '' : '',
         recipient: arabic ? '' : '',
         rows: arabic ? const <SheetRow>[
-            SheetRow(const <String>['لينا حداد', 'فجر', 'عيادة']),
-            SheetRow(const <String>['سامي ناصر', 'ليل', 'بوابة']),
+            SheetRow(<String>['لينا حداد', 'فجر', 'عيادة']),
+            SheetRow(<String>['سامي ناصر', 'ليل', 'بوابة']),
           ] : const <SheetRow>[
-            SheetRow(const <String>['Lina Haddad', 'Dawn', 'Clinic']),
-            SheetRow(const <String>['Sami Nasser', 'Night', 'Gate']),
+            SheetRow(<String>['Lina Haddad', 'Dawn', 'Clinic']),
+            SheetRow(<String>['Sami Nasser', 'Night', 'Gate']),
           ],
         paragraphs: arabic ? const <String>[] : const <String>[],
         sections: arabic ? const <TemplateSection>[] : const <TemplateSection>[],
@@ -21924,11 +21924,11 @@ abstract final class TemplateSuite {
         subject: arabic ? '' : '',
         recipient: arabic ? '' : '',
         rows: arabic ? const <SheetRow>[
-            SheetRow(const <String>['إنارة شرقية', 'الورشة', 'مفتوح']),
-            SheetRow(const <String>['سلسلة تبريد', 'العيادة', 'تم']),
+            SheetRow(<String>['إنارة شرقية', 'الورشة', 'مفتوح']),
+            SheetRow(<String>['سلسلة تبريد', 'العيادة', 'تم']),
           ] : const <SheetRow>[
-            SheetRow(const <String>['East light', 'Workshop', 'Open']),
-            SheetRow(const <String>['Cold chain', 'Clinic', 'Done']),
+            SheetRow(<String>['East light', 'Workshop', 'Open']),
+            SheetRow(<String>['Cold chain', 'Clinic', 'Done']),
           ],
         paragraphs: arabic ? const <String>[] : const <String>[],
         sections: arabic ? const <TemplateSection>[] : const <TemplateSection>[],
@@ -22000,11 +22000,11 @@ abstract final class TemplateSuite {
         subject: arabic ? '' : '',
         recipient: arabic ? '' : '',
         rows: arabic ? const <SheetRow>[
-            SheetRow(const <String>['A2', 'قفازات', '10']),
-            SheetRow(const <String>['B1', 'حقيبة ميدانية', '12']),
+            SheetRow(<String>['A2', 'قفازات', '10']),
+            SheetRow(<String>['B1', 'حقيبة ميدانية', '12']),
           ] : const <SheetRow>[
-            SheetRow(const <String>['A2', 'Gloves', '10']),
-            SheetRow(const <String>['B1', 'Field kit', '12']),
+            SheetRow(<String>['A2', 'Gloves', '10']),
+            SheetRow(<String>['B1', 'Field kit', '12']),
           ],
         paragraphs: arabic ? const <String>[] : const <String>[],
         sections: arabic ? const <TemplateSection>[] : const <TemplateSection>[],
@@ -22076,11 +22076,11 @@ abstract final class TemplateSuite {
         subject: arabic ? '' : '',
         recipient: arabic ? '' : '',
         rows: arabic ? const <SheetRow>[
-            SheetRow(const <String>['1', 'عيادة النهر', '3']),
-            SheetRow(const <String>['2', 'بوابة المدرسة', '1']),
+            SheetRow(<String>['1', 'عيادة النهر', '3']),
+            SheetRow(<String>['2', 'بوابة المدرسة', '1']),
           ] : const <SheetRow>[
-            SheetRow(const <String>['1', 'River Clinic', '3']),
-            SheetRow(const <String>['2', 'School gate', '1']),
+            SheetRow(<String>['1', 'River Clinic', '3']),
+            SheetRow(<String>['2', 'School gate', '1']),
           ],
         paragraphs: arabic ? const <String>[] : const <String>[],
         sections: arabic ? const <TemplateSection>[] : const <TemplateSection>[],
@@ -22152,11 +22152,11 @@ abstract final class TemplateSuite {
         subject: arabic ? '' : '',
         recipient: arabic ? '' : '',
         rows: arabic ? const <SheetRow>[
-            SheetRow(const <String>['حقيبة ميدانية', '12', 'ND-12']),
-            SheetRow(const <String>['صندوق تبريد', '4', 'ND-4']),
+            SheetRow(<String>['حقيبة ميدانية', '12', 'ND-12']),
+            SheetRow(<String>['صندوق تبريد', '4', 'ND-4']),
           ] : const <SheetRow>[
-            SheetRow(const <String>['Field kit', '12', 'ND-12']),
-            SheetRow(const <String>['Cold box', '4', 'ND-4']),
+            SheetRow(<String>['Field kit', '12', 'ND-12']),
+            SheetRow(<String>['Cold box', '4', 'ND-4']),
           ],
         paragraphs: arabic ? const <String>[] : const <String>[],
         sections: arabic ? const <TemplateSection>[] : const <TemplateSection>[],
@@ -22228,11 +22228,11 @@ abstract final class TemplateSuite {
         subject: arabic ? '' : '',
         recipient: arabic ? '' : '',
         rows: arabic ? const <SheetRow>[
-            SheetRow(const <String>['قفازات', '10', 'A2']),
-            SheetRow(const <String>['كمامات', '20', 'A2']),
+            SheetRow(<String>['قفازات', '10', 'A2']),
+            SheetRow(<String>['كمامات', '20', 'A2']),
           ] : const <SheetRow>[
-            SheetRow(const <String>['Gloves', '10', 'A2']),
-            SheetRow(const <String>['Masks', '20', 'A2']),
+            SheetRow(<String>['Gloves', '10', 'A2']),
+            SheetRow(<String>['Masks', '20', 'A2']),
           ],
         paragraphs: arabic ? const <String>[] : const <String>[],
         sections: arabic ? const <TemplateSection>[] : const <TemplateSection>[],
@@ -22304,11 +22304,11 @@ abstract final class TemplateSuite {
         subject: arabic ? '' : '',
         recipient: arabic ? '' : '',
         rows: arabic ? const <SheetRow>[
-            SheetRow(const <String>['1', 'صندوق تبريد', '4']),
-            SheetRow(const <String>['2', 'حقيبة ميدانية', '12']),
+            SheetRow(<String>['1', 'صندوق تبريد', '4']),
+            SheetRow(<String>['2', 'حقيبة ميدانية', '12']),
           ] : const <SheetRow>[
-            SheetRow(const <String>['1', 'Cold box', '4']),
-            SheetRow(const <String>['2', 'Field kit', '12']),
+            SheetRow(<String>['1', 'Cold box', '4']),
+            SheetRow(<String>['2', 'Field kit', '12']),
           ],
         paragraphs: arabic ? const <String>[] : const <String>[],
         sections: arabic ? const <TemplateSection>[] : const <TemplateSection>[],
@@ -22380,11 +22380,11 @@ abstract final class TemplateSuite {
         subject: arabic ? '' : '',
         recipient: arabic ? '' : '',
         rows: arabic ? const <SheetRow>[
-            SheetRow(const <String>['حقيبة ميدانية', '12', 'ND-12']),
-            SheetRow(const <String>['لفّة شاش', '20', 'GZ-20']),
+            SheetRow(<String>['حقيبة ميدانية', '12', 'ND-12']),
+            SheetRow(<String>['لفّة شاش', '20', 'GZ-20']),
           ] : const <SheetRow>[
-            SheetRow(const <String>['Field kit', '12', 'ND-12']),
-            SheetRow(const <String>['Gauze roll', '20', 'GZ-20']),
+            SheetRow(<String>['Field kit', '12', 'ND-12']),
+            SheetRow(<String>['Gauze roll', '20', 'GZ-20']),
           ],
         paragraphs: arabic ? const <String>[] : const <String>[],
         sections: arabic ? const <TemplateSection>[] : const <TemplateSection>[],
@@ -22456,11 +22456,11 @@ abstract final class TemplateSuite {
         subject: arabic ? '' : '',
         recipient: arabic ? '' : '',
         rows: arabic ? const <SheetRow>[
-            SheetRow(const <String>['لينا حداد', '05:50', 'حاضر']),
-            SheetRow(const <String>['سامي ناصر', '—', 'إجازة']),
+            SheetRow(<String>['لينا حداد', '05:50', 'حاضر']),
+            SheetRow(<String>['سامي ناصر', '—', 'إجازة']),
           ] : const <SheetRow>[
-            SheetRow(const <String>['Lina Haddad', '05:50', 'Present']),
-            SheetRow(const <String>['Sami Nasser', '—', 'Leave']),
+            SheetRow(<String>['Lina Haddad', '05:50', 'Present']),
+            SheetRow(<String>['Sami Nasser', '—', 'Leave']),
           ],
         paragraphs: arabic ? const <String>[] : const <String>[],
         sections: arabic ? const <TemplateSection>[] : const <TemplateSection>[],
@@ -22532,11 +22532,11 @@ abstract final class TemplateSuite {
         subject: arabic ? '' : '',
         recipient: arabic ? '' : '',
         rows: arabic ? const <SheetRow>[
-            SheetRow(const <String>['لينا حداد', 'حاضر', '']),
-            SheetRow(const <String>['عمر ناصر', 'متأخر', 'البوابة']),
+            SheetRow(<String>['لينا حداد', 'حاضر', '']),
+            SheetRow(<String>['عمر ناصر', 'متأخر', 'البوابة']),
           ] : const <SheetRow>[
-            SheetRow(const <String>['Lina Haddad', 'Present', '']),
-            SheetRow(const <String>['Omar Nasser', 'Late', 'Gate']),
+            SheetRow(<String>['Lina Haddad', 'Present', '']),
+            SheetRow(<String>['Omar Nasser', 'Late', 'Gate']),
           ],
         paragraphs: arabic ? const <String>[] : const <String>[],
         sections: arabic ? const <TemplateSection>[] : const <TemplateSection>[],
@@ -22608,11 +22608,11 @@ abstract final class TemplateSuite {
         subject: arabic ? '' : '',
         recipient: arabic ? '' : '',
         rows: arabic ? const <SheetRow>[
-            SheetRow(const <String>['العربية', '88', 'أ']),
-            SheetRow(const <String>['العلوم', '76', 'ب']),
+            SheetRow(<String>['العربية', '88', 'أ']),
+            SheetRow(<String>['العلوم', '76', 'ب']),
           ] : const <SheetRow>[
-            SheetRow(const <String>['Arabic', '88', 'A']),
-            SheetRow(const <String>['Science', '76', 'B']),
+            SheetRow(<String>['Arabic', '88', 'A']),
+            SheetRow(<String>['Science', '76', 'B']),
           ],
         paragraphs: arabic ? const <String>[] : const <String>[],
         sections: arabic ? const <TemplateSection>[] : const <TemplateSection>[],
@@ -22684,11 +22684,11 @@ abstract final class TemplateSuite {
         subject: arabic ? '' : '',
         recipient: arabic ? '' : '',
         rows: arabic ? const <SheetRow>[
-            SheetRow(const <String>['العربية', '88', 'واضح']),
-            SheetRow(const <String>['العلوم', '76', 'ثابت']),
+            SheetRow(<String>['العربية', '88', 'واضح']),
+            SheetRow(<String>['العلوم', '76', 'ثابت']),
           ] : const <SheetRow>[
-            SheetRow(const <String>['Arabic', '88', 'Clear']),
-            SheetRow(const <String>['Science', '76', 'Steady']),
+            SheetRow(<String>['Arabic', '88', 'Clear']),
+            SheetRow(<String>['Science', '76', 'Steady']),
           ],
         paragraphs: arabic ? const <String>[] : const <String>[],
         sections: arabic ? const <TemplateSection>[] : const <TemplateSection>[],
@@ -22760,11 +22760,11 @@ abstract final class TemplateSuite {
         subject: arabic ? '' : '',
         recipient: arabic ? '' : '',
         rows: arabic ? const <SheetRow>[
-            SheetRow(const <String>['4B', '650', 'مؤجّرة']),
-            SheetRow(const <String>['4C', '640', 'شاغرة']),
+            SheetRow(<String>['4B', '650', 'مؤجّرة']),
+            SheetRow(<String>['4C', '640', 'شاغرة']),
           ] : const <SheetRow>[
-            SheetRow(const <String>['4B', '650', 'Let']),
-            SheetRow(const <String>['4C', '640', 'Open']),
+            SheetRow(<String>['4B', '650', 'Let']),
+            SheetRow(<String>['4C', '640', 'Open']),
           ],
         paragraphs: arabic ? const <String>[] : const <String>[],
         sections: arabic ? const <TemplateSection>[] : const <TemplateSection>[],
@@ -22836,11 +22836,11 @@ abstract final class TemplateSuite {
         subject: arabic ? '' : '',
         recipient: arabic ? '' : '',
         rows: arabic ? const <SheetRow>[
-            SheetRow(const <String>['عائلة حداد', 'حقيبة', 'مستحق']),
-            SheetRow(const <String>['ناصر', 'حقيبة', 'صُرف']),
+            SheetRow(<String>['عائلة حداد', 'حقيبة', 'مستحق']),
+            SheetRow(<String>['ناصر', 'حقيبة', 'صُرف']),
           ] : const <SheetRow>[
-            SheetRow(const <String>['Haddad family', '1 kit', 'Due']),
-            SheetRow(const <String>['Nasser', '1 kit', 'Given']),
+            SheetRow(<String>['Haddad family', '1 kit', 'Due']),
+            SheetRow(<String>['Nasser', '1 kit', 'Given']),
           ],
         paragraphs: arabic ? const <String>[] : const <String>[],
         sections: arabic ? const <TemplateSection>[] : const <TemplateSection>[],
@@ -22912,11 +22912,11 @@ abstract final class TemplateSuite {
         subject: arabic ? '' : '',
         recipient: arabic ? '' : '',
         rows: arabic ? const <SheetRow>[
-            SheetRow(const <String>['حداد', 'حقيبة', '1']),
-            SheetRow(const <String>['ناصر', 'بطانية', '2']),
+            SheetRow(<String>['حداد', 'حقيبة', '1']),
+            SheetRow(<String>['ناصر', 'بطانية', '2']),
           ] : const <SheetRow>[
-            SheetRow(const <String>['Haddad', 'Kit', '1']),
-            SheetRow(const <String>['Nasser', 'Blanket', '2']),
+            SheetRow(<String>['Haddad', 'Kit', '1']),
+            SheetRow(<String>['Nasser', 'Blanket', '2']),
           ],
         paragraphs: arabic ? const <String>[] : const <String>[],
         sections: arabic ? const <TemplateSection>[] : const <TemplateSection>[],
@@ -22988,11 +22988,11 @@ abstract final class TemplateSuite {
         subject: arabic ? '' : '',
         recipient: arabic ? '' : '',
         rows: arabic ? const <SheetRow>[
-            SheetRow(const <String>['لينا حداد', 'تمريض', 'حاضر']),
-            SheetRow(const <String>['سامي ناصر', 'بوابة', 'حاضر']),
+            SheetRow(<String>['لينا حداد', 'تمريض', 'حاضر']),
+            SheetRow(<String>['سامي ناصر', 'بوابة', 'حاضر']),
           ] : const <SheetRow>[
-            SheetRow(const <String>['Lina Haddad', 'Nurse', 'Present']),
-            SheetRow(const <String>['Sami Nasser', 'Gate', 'Present']),
+            SheetRow(<String>['Lina Haddad', 'Nurse', 'Present']),
+            SheetRow(<String>['Sami Nasser', 'Gate', 'Present']),
           ],
         paragraphs: arabic ? const <String>[] : const <String>[],
         sections: arabic ? const <TemplateSection>[] : const <TemplateSection>[],
@@ -23064,11 +23064,11 @@ abstract final class TemplateSuite {
         subject: arabic ? '' : '',
         recipient: arabic ? '' : '',
         rows: arabic ? const <SheetRow>[
-            SheetRow(const <String>['لينا حداد', '12', 'عيادة']),
-            SheetRow(const <String>['عمر ناصر', '6', 'بوابة']),
+            SheetRow(<String>['لينا حداد', '12', 'عيادة']),
+            SheetRow(<String>['عمر ناصر', '6', 'بوابة']),
           ] : const <SheetRow>[
-            SheetRow(const <String>['Lina Haddad', '12', 'Clinic']),
-            SheetRow(const <String>['Omar Nasser', '6', 'Gate']),
+            SheetRow(<String>['Lina Haddad', '12', 'Clinic']),
+            SheetRow(<String>['Omar Nasser', '6', 'Gate']),
           ],
         paragraphs: arabic ? const <String>[] : const <String>[],
         sections: arabic ? const <TemplateSection>[] : const <TemplateSection>[],
@@ -23140,11 +23140,11 @@ abstract final class TemplateSuite {
         subject: arabic ? '' : '',
         recipient: arabic ? '' : '',
         rows: arabic ? const <SheetRow>[
-            SheetRow(const <String>['الإثنين', '8', 'البوابة']),
-            SheetRow(const <String>['الثلاثاء', '7', 'العيادة']),
+            SheetRow(<String>['الإثنين', '8', 'البوابة']),
+            SheetRow(<String>['الثلاثاء', '7', 'العيادة']),
           ] : const <SheetRow>[
-            SheetRow(const <String>['Mon', '8', 'Gate']),
-            SheetRow(const <String>['Tue', '7', 'Clinic']),
+            SheetRow(<String>['Mon', '8', 'Gate']),
+            SheetRow(<String>['Tue', '7', 'Clinic']),
           ],
         paragraphs: arabic ? const <String>[] : const <String>[],
         sections: arabic ? const <TemplateSection>[] : const <TemplateSection>[],
@@ -23216,11 +23216,11 @@ abstract final class TemplateSuite {
         subject: arabic ? '' : '',
         recipient: arabic ? '' : '',
         rows: arabic ? const <SheetRow>[
-            SheetRow(const <String>['الكهرباء', '12 أيلول', 'تم']),
-            SheetRow(const <String>['غرفة التبريد', '20 أيلول', 'مفتوح']),
+            SheetRow(<String>['الكهرباء', '12 أيلول', 'تم']),
+            SheetRow(<String>['غرفة التبريد', '20 أيلول', 'مفتوح']),
           ] : const <SheetRow>[
-            SheetRow(const <String>['Power', '12 Sep', 'Done']),
-            SheetRow(const <String>['Cold room', '20 Sep', 'Open']),
+            SheetRow(<String>['Power', '12 Sep', 'Done']),
+            SheetRow(<String>['Cold room', '20 Sep', 'Open']),
           ],
         paragraphs: arabic ? const <String>[] : const <String>[],
         sections: arabic ? const <TemplateSection>[] : const <TemplateSection>[],
@@ -23292,11 +23292,11 @@ abstract final class TemplateSuite {
         subject: arabic ? '' : '',
         recipient: arabic ? '' : '',
         rows: arabic ? const <SheetRow>[
-            SheetRow(const <String>['انقطاع كهرباء', 'الورشة', 'عالٍ']),
-            SheetRow(const <String>['تأخّر الحقائب', 'الرصيف', 'متوسط']),
+            SheetRow(<String>['انقطاع كهرباء', 'الورشة', 'عالٍ']),
+            SheetRow(<String>['تأخّر الحقائب', 'الرصيف', 'متوسط']),
           ] : const <SheetRow>[
-            SheetRow(const <String>['Power cut', 'Workshop', 'High']),
-            SheetRow(const <String>['Late kits', 'Dock', 'Medium']),
+            SheetRow(<String>['Power cut', 'Workshop', 'High']),
+            SheetRow(<String>['Late kits', 'Dock', 'Medium']),
           ],
         paragraphs: arabic ? const <String>[] : const <String>[],
         sections: arabic ? const <TemplateSection>[] : const <TemplateSection>[],
@@ -23368,11 +23368,11 @@ abstract final class TemplateSuite {
         subject: arabic ? '' : '',
         recipient: arabic ? '' : '',
         rows: arabic ? const <SheetRow>[
-            SheetRow(const <String>['إنارة شرقية', 'الورشة', 'مفتوح']),
-            SheetRow(const <String>['صندوق ناقص', 'الرصيف', 'متابعة']),
+            SheetRow(<String>['إنارة شرقية', 'الورشة', 'مفتوح']),
+            SheetRow(<String>['صندوق ناقص', 'الرصيف', 'متابعة']),
           ] : const <SheetRow>[
-            SheetRow(const <String>['East light', 'Workshop', 'Open']),
-            SheetRow(const <String>['Short crate', 'Dock', 'Watching']),
+            SheetRow(<String>['East light', 'Workshop', 'Open']),
+            SheetRow(<String>['Short crate', 'Dock', 'Watching']),
           ],
         paragraphs: arabic ? const <String>[] : const <String>[],
         sections: arabic ? const <TemplateSection>[] : const <TemplateSection>[],
@@ -23444,11 +23444,11 @@ abstract final class TemplateSuite {
         subject: arabic ? '' : '',
         recipient: arabic ? '' : '',
         rows: arabic ? const <SheetRow>[
-            SheetRow(const <String>['السعر', '90', '140']),
-            SheetRow(const <String>['الطاقة', 'بلا', 'كهرباء']),
+            SheetRow(<String>['السعر', '90', '140']),
+            SheetRow(<String>['الطاقة', 'بلا', 'كهرباء']),
           ] : const <SheetRow>[
-            SheetRow(const <String>['Price', '90', '140']),
-            SheetRow(const <String>['Power', 'None', 'Mains']),
+            SheetRow(<String>['Price', '90', '140']),
+            SheetRow(<String>['Power', 'None', 'Mains']),
           ],
         paragraphs: arabic ? const <String>[] : const <String>[],
         sections: arabic ? const <TemplateSection>[] : const <TemplateSection>[],
@@ -23520,11 +23520,11 @@ abstract final class TemplateSuite {
         subject: arabic ? '' : '',
         recipient: arabic ? '' : '',
         rows: arabic ? const <SheetRow>[
-            SheetRow(const <String>['1', 'لينا حداد', '98']),
-            SheetRow(const <String>['2', 'سامي ناصر', '91']),
+            SheetRow(<String>['1', 'لينا حداد', '98']),
+            SheetRow(<String>['2', 'سامي ناصر', '91']),
           ] : const <SheetRow>[
-            SheetRow(const <String>['1', 'Lina Haddad', '98']),
-            SheetRow(const <String>['2', 'Sami Nasser', '91']),
+            SheetRow(<String>['1', 'Lina Haddad', '98']),
+            SheetRow(<String>['2', 'Sami Nasser', '91']),
           ],
         paragraphs: arabic ? const <String>[] : const <String>[],
         sections: arabic ? const <TemplateSection>[] : const <TemplateSection>[],
@@ -23596,11 +23596,11 @@ abstract final class TemplateSuite {
         subject: arabic ? '' : '',
         recipient: arabic ? '' : '',
         rows: arabic ? const <SheetRow>[
-            SheetRow(const <String>['SO-88', '20 أيلول', 'متأخر']),
-            SheetRow(const <String>['GRN-6', '4 صناديق', '3 صناديق']),
+            SheetRow(<String>['SO-88', '20 أيلول', 'متأخر']),
+            SheetRow(<String>['GRN-6', '4 صناديق', '3 صناديق']),
           ] : const <SheetRow>[
-            SheetRow(const <String>['SO-88', '20 Sep', 'Late']),
-            SheetRow(const <String>['GRN-6', '4 boxes', '3 boxes']),
+            SheetRow(<String>['SO-88', '20 Sep', 'Late']),
+            SheetRow(<String>['GRN-6', '4 boxes', '3 boxes']),
           ],
         paragraphs: arabic ? const <String>[] : const <String>[],
         sections: arabic ? const <TemplateSection>[] : const <TemplateSection>[],
@@ -23672,11 +23672,11 @@ abstract final class TemplateSuite {
         subject: arabic ? '' : '',
         recipient: arabic ? '' : '',
         rows: arabic ? const <SheetRow>[
-            SheetRow(const <String>['بيع الحقائب', 'إيراد', '1,076']),
-            SheetRow(const <String>['أجور', 'تكلفة', '640']),
+            SheetRow(<String>['بيع الحقائب', 'إيراد', '1,076']),
+            SheetRow(<String>['أجور', 'تكلفة', '640']),
           ] : const <SheetRow>[
-            SheetRow(const <String>['Kit sales', 'Income', '1,076']),
-            SheetRow(const <String>['Wages', 'Cost', '640']),
+            SheetRow(<String>['Kit sales', 'Income', '1,076']),
+            SheetRow(<String>['Wages', 'Cost', '640']),
           ],
         paragraphs: arabic ? const <String>[] : const <String>[],
         sections: arabic ? const <TemplateSection>[] : const <TemplateSection>[],
@@ -23748,11 +23748,11 @@ abstract final class TemplateSuite {
         subject: arabic ? '' : '',
         recipient: arabic ? '' : '',
         rows: arabic ? const <SheetRow>[
-            SheetRow(const <String>['نقد', 'أصل', '2,400']),
-            SheetRow(const <String>['دائنون', 'خصم', '470']),
+            SheetRow(<String>['نقد', 'أصل', '2,400']),
+            SheetRow(<String>['دائنون', 'خصم', '470']),
           ] : const <SheetRow>[
-            SheetRow(const <String>['Cash', 'Asset', '2,400']),
-            SheetRow(const <String>['Payables', 'Liability', '470']),
+            SheetRow(<String>['Cash', 'Asset', '2,400']),
+            SheetRow(<String>['Payables', 'Liability', '470']),
           ],
         paragraphs: arabic ? const <String>[] : const <String>[],
         sections: arabic ? const <TemplateSection>[] : const <TemplateSection>[],
@@ -23824,11 +23824,11 @@ abstract final class TemplateSuite {
         subject: arabic ? '' : '',
         recipient: arabic ? '' : '',
         rows: arabic ? const <SheetRow>[
-            SheetRow(const <String>['مقبوضات الحقائب', 'داخل', '868']),
-            SheetRow(const <String>['سند PV-31', 'خارج', '470']),
+            SheetRow(<String>['مقبوضات الحقائب', 'داخل', '868']),
+            SheetRow(<String>['سند PV-31', 'خارج', '470']),
           ] : const <SheetRow>[
-            SheetRow(const <String>['Kit receipts', 'In', '868']),
-            SheetRow(const <String>['Voucher PV-31', 'Out', '470']),
+            SheetRow(<String>['Kit receipts', 'In', '868']),
+            SheetRow(<String>['Voucher PV-31', 'Out', '470']),
           ],
         paragraphs: arabic ? const <String>[] : const <String>[],
         sections: arabic ? const <TemplateSection>[] : const <TemplateSection>[],
@@ -23902,11 +23902,11 @@ abstract final class TemplateSuite {
         subject: arabic ? '' : '',
         recipient: arabic ? '' : '',
         rows: arabic ? const <SheetRow>[
-            SheetRow(const <String>['الحقائب', '1,000', '1,076', '+76']),
-            SheetRow(const <String>['الأجور', '700', '640', '-60']),
+            SheetRow(<String>['الحقائب', '1,000', '1,076', '+76']),
+            SheetRow(<String>['الأجور', '700', '640', '-60']),
           ] : const <SheetRow>[
-            SheetRow(const <String>['Kits', '1,000', '1,076', '+76']),
-            SheetRow(const <String>['Wages', '700', '640', '-60']),
+            SheetRow(<String>['Kits', '1,000', '1,076', '+76']),
+            SheetRow(<String>['Wages', '700', '640', '-60']),
           ],
         paragraphs: arabic ? const <String>[] : const <String>[],
         sections: arabic ? const <TemplateSection>[] : const <TemplateSection>[],
@@ -23980,11 +23980,11 @@ abstract final class TemplateSuite {
         subject: arabic ? '' : '',
         recipient: arabic ? '' : '',
         rows: arabic ? const <SheetRow>[
-            SheetRow(const <String>['عيادة النهر', '200', '0', '0']),
-            SheetRow(const <String>['المدرسة', '0', '60', '0']),
+            SheetRow(<String>['عيادة النهر', '200', '0', '0']),
+            SheetRow(<String>['المدرسة', '0', '60', '0']),
           ] : const <SheetRow>[
-            SheetRow(const <String>['River Clinic', '200', '0', '0']),
-            SheetRow(const <String>['School', '0', '60', '0']),
+            SheetRow(<String>['River Clinic', '200', '0', '0']),
+            SheetRow(<String>['School', '0', '60', '0']),
           ],
         paragraphs: arabic ? const <String>[] : const <String>[],
         sections: arabic ? const <TemplateSection>[] : const <TemplateSection>[],
@@ -24058,11 +24058,11 @@ abstract final class TemplateSuite {
         subject: arabic ? '' : '',
         recipient: arabic ? '' : '',
         rows: arabic ? const <SheetRow>[
-            SheetRow(const <String>['توريدات الميناء', '360', '0', '0']),
-            SheetRow(const <String>['شحن الساحل', '180', '0', '0']),
+            SheetRow(<String>['توريدات الميناء', '360', '0', '0']),
+            SheetRow(<String>['شحن الساحل', '180', '0', '0']),
           ] : const <SheetRow>[
-            SheetRow(const <String>['Harbour Supply', '360', '0', '0']),
-            SheetRow(const <String>['Coast Freight', '180', '0', '0']),
+            SheetRow(<String>['Harbour Supply', '360', '0', '0']),
+            SheetRow(<String>['Coast Freight', '180', '0', '0']),
           ],
         paragraphs: arabic ? const <String>[] : const <String>[],
         sections: arabic ? const <TemplateSection>[] : const <TemplateSection>[],
@@ -24136,11 +24136,11 @@ abstract final class TemplateSuite {
         subject: arabic ? '' : '',
         recipient: arabic ? '' : '',
         rows: arabic ? const <SheetRow>[
-            SheetRow(const <String>['نقد', 'عربون الحقائب', '200', '']),
-            SheetRow(const <String>['مبيعات', 'عربون الحقائب', '', '200']),
+            SheetRow(<String>['نقد', 'عربون الحقائب', '200', '']),
+            SheetRow(<String>['مبيعات', 'عربون الحقائب', '', '200']),
           ] : const <SheetRow>[
-            SheetRow(const <String>['Cash', 'Kit deposit', '200', '']),
-            SheetRow(const <String>['Sales', 'Kit deposit', '', '200']),
+            SheetRow(<String>['Cash', 'Kit deposit', '200', '']),
+            SheetRow(<String>['Sales', 'Kit deposit', '', '200']),
           ],
         paragraphs: arabic ? const <String>[] : const <String>[],
         sections: arabic ? const <TemplateSection>[] : const <TemplateSection>[],
@@ -24214,11 +24214,11 @@ abstract final class TemplateSuite {
         subject: arabic ? '' : '',
         recipient: arabic ? '' : '',
         rows: arabic ? const <SheetRow>[
-            SheetRow(const <String>['12 أيلول', 'لمبات', '18', '82']),
-            SheetRow(const <String>['13 أيلول', 'شريط', '6', '76']),
+            SheetRow(<String>['12 أيلول', 'لمبات', '18', '82']),
+            SheetRow(<String>['13 أيلول', 'شريط', '6', '76']),
           ] : const <SheetRow>[
-            SheetRow(const <String>['12 Sep', 'Bulbs', '18', '82']),
-            SheetRow(const <String>['13 Sep', 'Tape', '6', '76']),
+            SheetRow(<String>['12 Sep', 'Bulbs', '18', '82']),
+            SheetRow(<String>['13 Sep', 'Tape', '6', '76']),
           ],
         paragraphs: arabic ? const <String>[] : const <String>[],
         sections: arabic ? const <TemplateSection>[] : const <TemplateSection>[],
@@ -24292,11 +24292,11 @@ abstract final class TemplateSuite {
         subject: arabic ? '' : '',
         recipient: arabic ? '' : '',
         rows: arabic ? const <SheetRow>[
-            SheetRow(const <String>['أيلول', '200', '20', '800']),
-            SheetRow(const <String>['تشرين الأول', '200', '18', '600']),
+            SheetRow(<String>['أيلول', '200', '20', '800']),
+            SheetRow(<String>['تشرين الأول', '200', '18', '600']),
           ] : const <SheetRow>[
-            SheetRow(const <String>['Sep', '200', '20', '800']),
-            SheetRow(const <String>['Oct', '200', '18', '600']),
+            SheetRow(<String>['Sep', '200', '20', '800']),
+            SheetRow(<String>['Oct', '200', '18', '600']),
           ],
         paragraphs: arabic ? const <String>[] : const <String>[],
         sections: arabic ? const <TemplateSection>[] : const <TemplateSection>[],
@@ -24368,11 +24368,11 @@ abstract final class TemplateSuite {
         subject: arabic ? '' : '',
         recipient: arabic ? '' : '',
         rows: arabic ? const <SheetRow>[
-            SheetRow(const <String>['افتتاحي', '1,200', '1,200']),
-            SheetRow(const <String>['سند لم يُصرف', '470', '0']),
+            SheetRow(<String>['افتتاحي', '1,200', '1,200']),
+            SheetRow(<String>['سند لم يُصرف', '470', '0']),
           ] : const <SheetRow>[
-            SheetRow(const <String>['Opening', '1,200', '1,200']),
-            SheetRow(const <String>['PV-31 not cleared', '470', '0']),
+            SheetRow(<String>['Opening', '1,200', '1,200']),
+            SheetRow(<String>['PV-31 not cleared', '470', '0']),
           ],
         paragraphs: arabic ? const <String>[] : const <String>[],
         sections: arabic ? const <TemplateSection>[] : const <TemplateSection>[],
@@ -24444,11 +24444,11 @@ abstract final class TemplateSuite {
         subject: arabic ? '' : '',
         recipient: arabic ? '' : '',
         rows: arabic ? const <SheetRow>[
-            SheetRow(const <String>['الحقائب', '936', '140']),
-            SheetRow(const <String>['الخدمات', '330', '50']),
+            SheetRow(<String>['الحقائب', '936', '140']),
+            SheetRow(<String>['الخدمات', '330', '50']),
           ] : const <SheetRow>[
-            SheetRow(const <String>['Kits', '936', '140']),
-            SheetRow(const <String>['Services', '330', '50']),
+            SheetRow(<String>['Kits', '936', '140']),
+            SheetRow(<String>['Services', '330', '50']),
           ],
         paragraphs: arabic ? const <String>[] : const <String>[],
         sections: arabic ? const <TemplateSection>[] : const <TemplateSection>[],
@@ -24520,11 +24520,11 @@ abstract final class TemplateSuite {
         subject: arabic ? '' : '',
         recipient: arabic ? '' : '',
         rows: arabic ? const <SheetRow>[
-            SheetRow(const <String>['العيادة', '4', '3,200']),
-            SheetRow(const <String>['البوابة', '2', '1,400']),
+            SheetRow(<String>['العيادة', '4', '3,200']),
+            SheetRow(<String>['البوابة', '2', '1,400']),
           ] : const <SheetRow>[
-            SheetRow(const <String>['Clinic', '4', '3,200']),
-            SheetRow(const <String>['Gate', '2', '1,400']),
+            SheetRow(<String>['Clinic', '4', '3,200']),
+            SheetRow(<String>['Gate', '2', '1,400']),
           ],
         paragraphs: arabic ? const <String>[] : const <String>[],
         sections: arabic ? const <TemplateSection>[] : const <TemplateSection>[],
@@ -24598,11 +24598,11 @@ abstract final class TemplateSuite {
         subject: arabic ? '' : '',
         recipient: arabic ? '' : '',
         rows: arabic ? const <SheetRow>[
-            SheetRow(const <String>['01 أيلول', 'إيجار', '650', '650']),
-            SheetRow(const <String>['01 أيلول', 'ماء', '18', '18']),
+            SheetRow(<String>['01 أيلول', 'إيجار', '650', '650']),
+            SheetRow(<String>['01 أيلول', 'ماء', '18', '18']),
           ] : const <SheetRow>[
-            SheetRow(const <String>['01 Sep', 'Rent', '650', '650']),
-            SheetRow(const <String>['01 Sep', 'Water', '18', '18']),
+            SheetRow(<String>['01 Sep', 'Rent', '650', '650']),
+            SheetRow(<String>['01 Sep', 'Water', '18', '18']),
           ],
         paragraphs: arabic ? const <String>[] : const <String>[],
         sections: arabic ? const <TemplateSection>[] : const <TemplateSection>[],
@@ -27002,11 +27002,11 @@ abstract final class TemplateSuite {
         subject: arabic ? '' : '',
         recipient: arabic ? '' : '',
         rows: arabic ? const <SheetRow>[
-            SheetRow(const <String>['الكهرباء معزولة', 'نجاح', '']),
-            SheetRow(const <String>['مراقب حاضر', 'مفتوح', 'نحتاج واحداً']),
+            SheetRow(<String>['الكهرباء معزولة', 'نجاح', '']),
+            SheetRow(<String>['مراقب حاضر', 'مفتوح', 'نحتاج واحداً']),
           ] : const <SheetRow>[
-            SheetRow(const <String>['Power isolated', 'Pass', '']),
-            SheetRow(const <String>['Spotter present', 'Open', 'Need one']),
+            SheetRow(<String>['Power isolated', 'Pass', '']),
+            SheetRow(<String>['Spotter present', 'Open', 'Need one']),
           ],
         paragraphs: arabic ? const <String>[] : const <String>[],
         sections: arabic ? const <TemplateSection>[] : const <TemplateSection>[],
@@ -27078,11 +27078,11 @@ abstract final class TemplateSuite {
         subject: arabic ? '' : '',
         recipient: arabic ? '' : '',
         rows: arabic ? const <SheetRow>[
-            SheetRow(const <String>['لوح المفاتيح', 'فشل', 'GT-2 ناقص']),
-            SheetRow(const <String>['سلسلة التبريد', 'نجاح', '']),
+            SheetRow(<String>['لوح المفاتيح', 'فشل', 'GT-2 ناقص']),
+            SheetRow(<String>['سلسلة التبريد', 'نجاح', '']),
           ] : const <SheetRow>[
-            SheetRow(const <String>['Key board', 'Fail', 'GT-2 missing']),
-            SheetRow(const <String>['Cold chain', 'Pass', '']),
+            SheetRow(<String>['Key board', 'Fail', 'GT-2 missing']),
+            SheetRow(<String>['Cold chain', 'Pass', '']),
           ],
         paragraphs: arabic ? const <String>[] : const <String>[],
         sections: arabic ? const <TemplateSection>[] : const <TemplateSection>[],
@@ -27154,11 +27154,11 @@ abstract final class TemplateSuite {
         subject: arabic ? '' : '',
         recipient: arabic ? '' : '',
         rows: arabic ? const <SheetRow>[
-            SheetRow(const <String>['المفاتيح', 'تم', 'طقم']),
-            SheetRow(const <String>['الإنارة', 'مفتوح', 'الغرفة الشرقية']),
+            SheetRow(<String>['المفاتيح', 'تم', 'طقم']),
+            SheetRow(<String>['الإنارة', 'مفتوح', 'الغرفة الشرقية']),
           ] : const <SheetRow>[
-            SheetRow(const <String>['Keys', 'Done', 'One set']),
-            SheetRow(const <String>['Lights', 'Open', 'East room']),
+            SheetRow(<String>['Keys', 'Done', 'One set']),
+            SheetRow(<String>['Lights', 'Open', 'East room']),
           ],
         paragraphs: arabic ? const <String>[] : const <String>[],
         sections: arabic ? const <TemplateSection>[] : const <TemplateSection>[],
@@ -27230,11 +27230,11 @@ abstract final class TemplateSuite {
         subject: arabic ? '' : '',
         recipient: arabic ? '' : '',
         rows: arabic ? const <SheetRow>[
-            SheetRow(const <String>['إنارة شرقية', 'مفتوح', 'لا مصباح']),
-            SheetRow(const <String>['حنفيّة', 'تم', 'جلدة']),
+            SheetRow(<String>['إنارة شرقية', 'مفتوح', 'لا مصباح']),
+            SheetRow(<String>['حنفيّة', 'تم', 'جلدة']),
           ] : const <SheetRow>[
-            SheetRow(const <String>['East light', 'Open', 'No lamp']),
-            SheetRow(const <String>['Tap', 'Done', 'Washer']),
+            SheetRow(<String>['East light', 'Open', 'No lamp']),
+            SheetRow(<String>['Tap', 'Done', 'Washer']),
           ],
         paragraphs: arabic ? const <String>[] : const <String>[],
         sections: arabic ? const <TemplateSection>[] : const <TemplateSection>[],

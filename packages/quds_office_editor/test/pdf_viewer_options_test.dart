@@ -1,5 +1,4 @@
 import 'dart:typed_data';
-import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -21,9 +20,7 @@ void main() {
     final PdfViewerController controller = PdfViewerController.fromBytes(
       _twoPagePdf(),
     );
-    controller.applyOptions(
-      const PdfViewerOptions(minZoom: 0.5, maxZoom: 2.0),
-    );
+    controller.applyOptions(const PdfViewerOptions(minZoom: 0.5, maxZoom: 2.0));
     controller.viewport.extent = const Size(400, 600);
     controller.setScale(0.1, animate: false);
     expect(controller.viewport.scale, 0.5);
@@ -41,17 +38,13 @@ void main() {
     controller.applyOptions(
       const PdfViewerOptions(preventLinkNavigation: true),
     );
-    controller.followLink(
-      const PdfLinkAction(uri: 'https://example.com/doc'),
-    );
+    controller.followLink(const PdfLinkAction(uri: 'https://example.com/doc'));
     expect(opened, 0);
 
     controller.applyOptions(
       const PdfViewerOptions(preventLinkNavigation: false),
     );
-    controller.followLink(
-      const PdfLinkAction(uri: 'https://example.com/doc'),
-    );
+    controller.followLink(const PdfLinkAction(uri: 'https://example.com/doc'));
     expect(opened, 1);
     controller.dispose();
   });
@@ -60,9 +53,7 @@ void main() {
     final PdfViewerController controller = PdfViewerController.fromBytes(
       _twoPagePdf(),
     );
-    controller.applyOptions(
-      const PdfViewerOptions(swipeHorizontal: true),
-    );
+    controller.applyOptions(const PdfViewerOptions(swipeHorizontal: true));
     controller.viewport.extent = const Size(400, 600);
     final Size content = PdfPageLayout.contentSize(
       controller.lists,

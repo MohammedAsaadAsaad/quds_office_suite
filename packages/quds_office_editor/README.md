@@ -6,26 +6,307 @@
   <a href="https://github.com/MohammedAsaadAsaad/quds_office_suite/blob/main/LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-0B1F3A"/></a>
   <img alt="Flutter RenderBox" src="https://img.shields.io/badge/Flutter-RenderBox-02569B?logo=flutter&logoColor=white"/>
   <img alt="Flutter" src="https://img.shields.io/badge/Flutter-3.44%2B-02569B?logo=flutter&logoColor=white"/>
+  <img alt="RTL" src="https://img.shields.io/badge/LTR%20·%20RTL%20·%20BiDi-supported-C9A227"/>
 </p>
 
-**Embeddable Word, Excel, PowerPoint, and PDF surfaces for Flutter.** Each
-document is a custom `RenderBox`. Not `TextField`. Not `ListView`. Not
-`InteractiveViewer`.
+**Embeddable Word, Excel, PowerPoint, PDF, and band-report designer surfaces
+for Flutter.** Every document surface is a custom `RenderBox`. Not
+`TextField`. Not `ListView`. Not `InteractiveViewer`.
 
 This is the interaction half of
 [Quds Office Suite](https://github.com/MohammedAsaadAsaad/quds_office_suite).
-Documents, formulas, pagination, `PdfFile`, `PdfToolbox`, `pdf_widgets`, and
-`pdf_templates` live in
-[`quds_office_engine`](https://pub.dev/packages/quds_office_engine)
-and are re-exported where appropriate from this package.
+Documents, formulas, pagination, `PdfFile`, `pdf_widgets`, and the `.qrep`
+report engine live in the pure-Dart
+[`quds_office_engine`](https://pub.dev/packages/quds_office_engine). You draw
+the ribbon, the file menu, and the window chrome. This package paints the
+document.
 
-You draw the ribbon, the file menu, and the window chrome. This package paints
-the document.
+![Report designer with the inspector](example/screenshots/report_designer.png)
 
-![Word editor](example/screenshots/word.png)
-![Excel editor](example/screenshots/excel.png)
-![PowerPoint editor](example/screenshots/powerpoint.png)
-![PDF viewer](example/screenshots/pdf.png)
+<table>
+  <tr>
+    <td width="50%"><img src="example/screenshots/word.png" alt="Word"/><br/><b>Word</b>: paginated canvas, BiDi caret, outline</td>
+    <td width="50%"><img src="example/screenshots/excel.png" alt="Excel"/><br/><b>Excel</b>: virtualized grid, formulas, charts</td>
+  </tr>
+  <tr>
+    <td><img src="example/screenshots/powerpoint.png" alt="PowerPoint"/><br/><b>PowerPoint</b>: stage, animations, slideshow</td>
+    <td><img src="example/screenshots/pdf.png" alt="PDF"/><br/><b>PDF</b>: viewer and editor with thumbnails</td>
+  </tr>
+  <tr>
+    <td><img src="example/screenshots/report_preview.png" alt="Report preview"/><br/><b>Report preview</b>: paginated, engine-painted</td>
+    <td><img src="example/screenshots/report_designer_rtl.png" alt="RTL report"/><br/><b>RTL reports</b>: Arabic invoice, mirrored layout</td>
+  </tr>
+</table>
+
+## Contents
+
+- [Install](#install)
+- [The surfaces at a glance](#the-surfaces-at-a-glance)
+- [Report designer](#report-designer)
+  - [Embed it](#embed-it) · [The canvas](#the-canvas) · [The inspector](#the-inspector) · [Autocomplete](#expressions-and-autocomplete) · [Templates and variables](#templates-and-variables) · [Preview and export](#preview-and-export) · [Keyboard](#keyboard) · [Quds Report Studio](#quds-report-studio-app)
+- [Why a custom RenderBox](#why-a-custom-renderbox)
+- [Languages and writing directions](#languages-and-writing-directions)
+- [Host fonts](#host-fonts)
+- [Word](#word) · [Excel](#excel) · [PowerPoint](#powerpoint) · [PDF viewer and editor](#pdf-viewer-and-editor)
+- [Theming, modes, and chrome](#theming-modes-and-chrome)
+- [Load, save, progress](#load-save-progress)
+- [What this package refuses to be](#what-this-package-refuses-to-be)
+- [Studio example](#studio-example) · [Architecture](#architecture)
+
+---
+
+## Install
+
+```yaml
+dependencies:
+  quds_office_editor: ^0.6.0
+```
+
+```bash
+flutter pub add quds_office_editor
+```
+
+Requires Flutter **3.44+** and Dart **3.12+**. The engine comes along as
+`quds_office_engine: ^0.6.0`. Everything is exported from one library:
+
+```dart
+import 'package:quds_office_editor/quds_office_editor.dart';
+```
+
+Register the bundled fonts once, before the first frame:
+
+```dart
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await OfficeHostFonts.ensureRegistered();
+  runApp(const MyApp());
+}
+```
+
+## The surfaces at a glance
+
+| Widget | Controller | What it paints |
+| --- | --- | --- |
+| `QudsWordEditor` | `WordEditorController` | Paginated pages, caret, tables, comments, headers and footers, OMML, pictures |
+| `QudsSheetEditor` | `SheetEditorController` | Virtualized grid, formula bar, freeze panes, fill handle, charts |
+| `QudsSlideEditor` | `SlideEditorController` | Slide stage, transform handles, snap guides, animations, slideshow |
+| `QudsPdfViewer` | `PdfViewerController` | Read-only PDF pages, zoom, find, copy, links, rotation |
+| `QudsPdfEditor` | `PdfEditorController` | The same canvas plus markup, form fill, page ops, incremental save |
+| `QudsReportDesigner` | `ReportDesignerController` | Band-report canvas, toolbar, inspector, live preview, autocomplete |
+
+```text
+┌─ your Scaffold / desktop frame ──────────────────────────┐
+│  toolbarBuilder  (optional — your ribbon)                │
+│  ┌─────────────────────────────────────────────────────┐ │
+│  │  QudsWordEditor / QudsSheetEditor / QudsSlideEditor │ │
+│  │  QudsPdfViewer / QudsPdfEditor / QudsReportDesigner │ │
+│  │  RenderBox  ·  IME  ·  selection  ·  undo           │ │
+│  └─────────────────────────────────────────────────────┘ │
+│  statusBarBuilder (optional)                             │
+└──────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Report designer
+
+A visual designer for `.qrep` **band reports**: invoices, statements,
+dashboards, vouchers. It works like Crystal Reports or FastReport, but it is
+pure Flutter `RenderBox` with no platform views. The templates, expressions,
+pagination, and exporters come from the engine's
+[`quds_reports.dart`](https://pub.dev/documentation/quds_office_engine/latest/quds_reports/).
+
+![Report designer: chart selected, inspector showing chart data](example/screenshots/report_designer.png)
+
+### Embed it
+
+```dart
+import 'dart:io';
+import 'dart:typed_data';
+
+import 'package:flutter/material.dart';
+import 'package:quds_office_editor/quds_office_editor.dart';
+
+class ReportHost extends StatefulWidget {
+  const ReportHost({super.key});
+
+  @override
+  State<ReportHost> createState() => _ReportHostState();
+}
+
+class _ReportHostState extends State<ReportHost> {
+  final ReportDesignerController controller = ReportDesignerController()
+    ..loadTemplate(ReportTemplates.byId('sales_invoice_ar')!);
+
+  @override
+  void dispose() {
+    controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return QudsReportDesigner(
+      controller: controller,
+      inspectorWidth: 320,
+      // Toolbar "Export" → PDF / XLSX / DOCX bytes, ready to save.
+      onExport: (ReportExportFormat format, Uint8List bytes) {
+        File('report.${format.name}').writeAsBytesSync(bytes);
+      },
+    );
+  }
+}
+```
+
+Open and save templates as plain XML:
+
+```dart
+final ReportDesignerController c =
+    ReportDesignerController.fromXml(File('invoice.qrep').readAsStringSync());
+File('invoice.qrep').writeAsStringSync(c.toXml());
+
+c.loadXml(otherXml);                  // replace the open template
+c.mockData = <String, Object?>{...};  // your own preview data (or inferred)
+final Uint8List pdf = await c.export(ReportExportFormat.pdf);
+```
+
+`QudsReportDesigner` parameters:
+
+| Parameter | Default | Purpose |
+| --- | --- | --- |
+| `controller` | required | Template, selection, undo, preview data |
+| `theme` | `OfficeTheme.light` | Chrome tokens |
+| `inspectorWidth` | `300` | Width of the property inspector |
+| `onExport` | `null` | Receives exported bytes; hides Export when null |
+| `templates` | `ReportTemplates.all` | Entries in the Templates menu |
+| `loadBundledFonts` | `true` | Loads Liberation + Noto Naskh Arabic into the preview/export registry |
+| `focusNode` / `autofocus` | internal / `true` | Keyboard focus |
+
+### The canvas
+
+![Arabic RTL invoice in the designer](example/screenshots/report_designer_rtl.png)
+
+- **Bands**: report header, page header, group header/footer, detail (bound
+  to a data set), page footer, report summary. Add, remove, and resize bands.
+  Each band is labeled with its kind and data source.
+- **Tools**: text, image, table, barcode, QR code, line, rectangle, ellipse,
+  and chart. Click to place or drag to size, then edit.
+- **Direct manipulation**: select, marquee, move across bands, resize with
+  eight handles, and nudge with the arrow keys. Snapping uses the grid and
+  smart guides.
+- **Arrange**: align left/center/right/top/middle/bottom, distribute, same
+  width/height, bring forward and send back, copy/cut/paste, and duplicate.
+- **Rulers** in the template's unit (mm, cm, in, pt, px) and zoom (fit width,
+  in, out).
+- **RTL**: Arabic templates mirror X in the designer (`X (RTL)`), shape text,
+  and keep the authored coordinates in the file.
+- **Inline editing** on the canvas, with a caret, selection, and IME. The
+  editor switches to black or white text when the element's own color would
+  be unreadable on its fill (WCAG 4.5:1).
+
+### The inspector
+
+The inspector is designed so most edits need **no typing**. Each property
+carries metadata (`ReportProperty.hint`, `presets`, `step`, `min`, `pair`,
+`glyph`), and the inspector picks the right control from it:
+
+<table>
+  <tr>
+    <td width="33%"><img src="example/screenshots/report_inspector_text.png" alt="Text inspector"/></td>
+    <td width="33%"><img src="example/screenshots/report_inspector_palette.png" alt="Color palette"/></td>
+    <td width="33%"><img src="example/screenshots/report_inspector_chart.png" alt="Chart inspector"/></td>
+  </tr>
+  <tr>
+    <td>Text element: paired X/Y and W/H steppers, align icons, switches, B/I/U</td>
+    <td>Color popover: template palette, Office theme tints, standard colors</td>
+    <td>Chart: type, legend/labels/grid switches, data binding, aggregation, sort</td>
+  </tr>
+</table>
+
+| Property kind | Control |
+| --- | --- |
+| Booleans (`canGrow`, `wordWrap`, `legend`, …) | Switch |
+| Small enums (align, vertical align, direction, unit, orientation, line style) | Segmented control with painted icons or short labels |
+| Larger enums (page size, chart type, aggregate, barcode kind) | Dropdown |
+| Lengths and numbers | Field with ▲/▼ steppers; the step follows the unit (1 mm, 0.1 cm, 0.05 in); ↑/↓ while typing, Shift for ×10 |
+| Font size, family, number/date format | Combo with presets (format presets show live samples, e.g. `n2 → 1,234.50`) |
+| Colors | Swatch + painted palette popover (No color, template palette, 60 theme tints/shades, 10 standard colors) |
+| X/Y, Width/Height | Paired fields on one row |
+| Bold / Italic / Underline | Toggle glyph row |
+
+Sections (Layout, Text, Font, Box, Chart, Data, Style, Report, Variables,
+Page, Palette, Diagnostics) collapse independently. The title badge shows the
+element kind and its band. Diagnostics list template problems with severity
+icons.
+
+![Report settings, variables, page, and palette](example/screenshots/report_inspector_report.png)
+
+### Expressions and autocomplete
+
+Text and expression properties use `{{ … }}` placeholders:
+`{{Data.customer.name}}`, `{{item.qty * item.price | n2}}`,
+`{{SUM(item.total) | currency:LYD}}`, `{{TAFQEET(Data.total, 'LYD')}}`.
+While you type, a painted popup suggests data fields (inferred from the
+preview data), functions with signatures, `System.*`, `Group.*`,
+`Variables.*`, format specs after `|`, and currency codes.
+
+![Autocomplete inside {{ }}](example/screenshots/report_autocomplete.png)
+
+↑/↓ choose, Enter/Tab insert, Esc closes, Ctrl+Space opens it anywhere.
+Functions insert `NAME()` with the caret inside.
+
+### Templates and variables
+
+![Templates menu](example/screenshots/report_templates.png)
+
+- **Templates**: the toolbar menu loads any `ReportTemplates.all` entry with
+  its sample data: Arabic VAT invoice, English commercial invoice, sales
+  dashboard, account statement, inventory status, receipt voucher. A blank
+  report is also available. Pass your own list in `templates:`.
+- **Variables**: typed template variables (`text`, `number`, `boolean`,
+  `date`, `list`, `expression`) are added and edited in the inspector when
+  nothing is selected. The Variables menu inserts `{{Variables.x}}` at the
+  caret or as a new text box. Renaming a variable rewrites its references.
+  Values are validated against the type.
+
+### Preview and export
+
+![Live preview](example/screenshots/report_preview.png)
+
+F5 (or **Preview**) swaps the canvas for `ReportPreviewSurface`: real
+pagination from the engine, painted from glyph outlines, with page
+navigation. **Export** produces PDF (vector charts, embedded subset fonts),
+XLSX (typed cells, native Excel charts), or DOCX (native Word charts and
+tables) through `onExport` or `controller.export(format)`.
+
+### Keyboard
+
+| Keys | Action |
+| --- | --- |
+| Arrows | Nudge by the grid size (1 mm when snapping is off) |
+| Shift+Arrows | Fine nudge (0.1 mm) |
+| Tab / Shift+Tab | Select the next / previous element |
+| Ctrl+Z / Ctrl+Shift+Z or Ctrl+Y | Undo / redo |
+| Ctrl+C / X / V / D / A | Copy / cut / paste / duplicate / select all |
+| Delete, Backspace | Remove selection |
+| F2, Enter, or double-click | Edit text in place |
+| Esc | Cancel edit, close popup, leave a tool, or clear selection |
+| F5 | Toggle design / preview (Esc also leaves preview) |
+| Ctrl+= / Ctrl+- / Ctrl+0 | Zoom in / out / fit width |
+| Ctrl+Space | Open autocomplete |
+| ↑/↓ in a numeric field | Step the value (Shift for ×10) |
+
+### Quds Report Studio app
+
+The repository includes a standalone desktop app built on this widget:
+[`apps/quds_report_studio`](https://github.com/MohammedAsaadAsaad/quds_office_suite/tree/main/apps/quds_report_studio).
+It has frameless window chrome (move, resize, maximize), New/Open/Save/Save as, recent
+files, an unsaved-changes guard, and a status bar with live diagnostics.
+
+```bash
+cd apps/quds_report_studio
+flutter run -d linux   # or windows, macos
+```
 
 ---
 
@@ -98,21 +379,7 @@ Locale changes chrome labels, not pagination.
 
 ---
 
-## Install
-
-```yaml
-dependencies:
-  quds_office_editor: ^0.5.1
-```
-
-```bash
-flutter pub add quds_office_editor
-```
-
-Requires Flutter **3.44+** and Dart **3.12+**. The engine comes along as
-`quds_office_engine: ^0.5.3`.
-
-### Host fonts
+## Host fonts
 
 The package ships Liberation Sans, Serif, and Mono (Standard 14 / Arial /
 Times / Courier substitutes) and Noto Naskh Arabic. Register them once before
@@ -135,6 +402,8 @@ unsupported. JBIG2 MMR generic regions decode; other JBIG2 stays a placeholder.
 ---
 
 ## Word
+
+![Word editor: paginated canvas, outline, comments pane](example/screenshots/word.png)
 
 ```dart
 import 'dart:typed_data';
@@ -215,6 +484,8 @@ section and its continuous siblings, not a single laid-out page.
 
 ## Excel
 
+![Excel editor: virtualized grid, formula bar, chart, sheet tabs](example/screenshots/excel.png)
+
 ```dart
 final controller = SheetEditorController.fromBytes(xlsxBytes);
 
@@ -242,6 +513,8 @@ final Uint8List xlsx = controller.saveBytes();
 ---
 
 ## PowerPoint
+
+![PowerPoint editor: stage, animation pane, slide sorter](example/screenshots/powerpoint.png)
 
 ```dart
 final controller = SlideEditorController.fromBytes(pptxBytes);
@@ -274,6 +547,8 @@ frame. It is not a jump to the previous slide’s final state.
 ---
 
 ## PDF viewer and editor
+
+![PDF viewer: fit page, thumbnails, view options](example/screenshots/pdf.png)
 
 `QudsPdfViewer` is display-only (`viewing` / `selecting`): zoom, find, copy,
 outline jump, follow URI and internal destinations. It has no `saveBytes`.
@@ -445,7 +720,7 @@ Also out of scope, on purpose:
 
 ## Studio example
 
-A full workspace (File, Home, Insert, Layout, Review, View, a sample library,
+A full Office workspace (File, Home, Insert, Layout, Review, View, a sample library,
 and an OS window frame) lives under `example/`:
 
 ```bash
@@ -471,13 +746,13 @@ See [example/README.md](example/README.md) for a guided tour.
 your chrome (ribbons, dialogs, file pickers)
         │
         ▼
-QudsWordEditor / QudsSheetEditor / QudsSlideEditor / QudsPdfViewer
+QudsWordEditor / QudsSheetEditor / QudsSlideEditor / QudsPdfViewer / QudsReportDesigner
         │
         ▼
-OfficeController  ·  PdfViewerController
+OfficeController  ·  PdfViewerController  ·  ReportDesignerController
         │
         ▼
-quds_office_engine   models, layout, PdfFile, export
+quds_office_engine   models, layout, PdfFile, .qrep reports, export
 ```
 
 | File | Role |
@@ -496,6 +771,12 @@ quds_office_engine   models, layout, PdfFile, export
 | `pdf_find.dart` | Display-list search with Arabic folding |
 | `office_ruler.dart` | Interactive Word ruler |
 | `word_notes_pane.dart` | Footnotes and endnotes host pane |
+| `quds_report_designer.dart` | `QudsReportDesigner` widget, shortcuts, menus |
+| `report_designer_controller.dart` | Template editing, selection, undo, inspector metadata |
+| `render_report_designer.dart` | Band canvas `RenderBox` |
+| `render_report_inspector.dart` | Inspector `RenderBox` (sections, steppers, palette) |
+| `render_report_preview.dart` | Paginated preview `RenderBox` |
+| `report_completion_popup.dart` | `{{ }}` autocomplete popup |
 
 ---
 

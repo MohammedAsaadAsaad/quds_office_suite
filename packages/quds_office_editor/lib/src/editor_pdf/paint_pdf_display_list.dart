@@ -153,8 +153,9 @@ abstract final class PaintPdfDisplayList {
           :final PdfBlendMode blend,
         ):
           final Rect rect = Rect.fromLTWH(x, y, width, height);
-          final ui.Image? image =
-              placeholder ? null : decodeImage?.call(bytes, jpeg);
+          final ui.Image? image = placeholder
+              ? null
+              : decodeImage?.call(bytes, jpeg);
           if (image != null) {
             canvas.drawImageRect(
               image,

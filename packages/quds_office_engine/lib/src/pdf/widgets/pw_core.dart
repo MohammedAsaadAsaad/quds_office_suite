@@ -296,7 +296,7 @@ abstract class PwBox {
 /// Empty box.
 class EmptyBox extends PwBox {
   /// EmptyBox API.
-  EmptyBox([PwSize size = PwSize.zero]) : super(size);
+  EmptyBox([super.size = PwSize.zero]);
 
   @override
   void paint(Context context, PwOffset offset) {}
@@ -636,7 +636,7 @@ class Page {
   Page({
     PageTheme? pageTheme,
     PdfPageFormat? pageFormat,
-    required BuildCallback build,
+    required BuildCallback this._build,
     ThemeData? theme,
     PageOrientation? orientation,
     EdgeInsetsGeometry? margin,
@@ -652,7 +652,6 @@ class Page {
              margin: margin,
              textDirection: textDirection,
            ),
-       _build = build,
        _buildList = null;
 
   Page._multi({
@@ -924,13 +923,13 @@ class MultiPage extends Page {
   MultiPage({
     PageTheme? pageTheme,
     PdfPageFormat? pageFormat,
-    required BuildListCallback build,
+    required super.build,
     ThemeData? theme,
     PageOrientation? orientation,
     EdgeInsetsGeometry? margin,
     TextDirection? textDirection,
-    BuildCallback? header,
-    BuildCallback? footer,
+    super.header,
+    super.footer,
     BuildCallback? background,
     BuildCallback? foreground,
   }) : super._multi(
@@ -945,9 +944,6 @@ class MultiPage extends Page {
                buildBackground: background,
                buildForeground: foreground,
              ),
-         build: build,
-         header: header,
-         footer: footer,
        );
 }
 

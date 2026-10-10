@@ -323,10 +323,7 @@ abstract final class PaintRunText {
     }
     final int base = _runTextBase(paragraph, run, text);
     final int offset = (first.glyph.logicalIndex - base).clamp(0, text.length);
-    final int extent = math.min(
-      text.length,
-      offset + _utf16Len(text, offset),
-    );
+    final int extent = math.min(text.length, offset + _utf16Len(text, offset));
     final List<ui.TextBox> boxes = extent > offset
         ? painter.getBoxesForSelection(
             TextSelection(baseOffset: offset, extentOffset: extent),
@@ -423,9 +420,7 @@ abstract final class PaintRunText {
         min = glyph.glyph.logicalIndex;
       }
     }
-    if (min >= 0 &&
-        min < paragraph.length &&
-        paragraph.startsWith(text, min)) {
+    if (min >= 0 && min < paragraph.length && paragraph.startsWith(text, min)) {
       return min;
     }
     final int at = paragraph.indexOf(text);
@@ -483,14 +478,16 @@ abstract final class PaintRunText {
     required String paragraph,
     String? themeFamily,
   }) {
-    final List<List<LaidOutGlyph>> segments =
-        paintSegments(line).toList(growable: false);
+    final List<List<LaidOutGlyph>> segments = paintSegments(
+      line,
+    ).toList(growable: false);
     for (int s = 0; s < segments.length; s++) {
       final List<LaidOutGlyph> run = segments[s];
       final LaidOutGlyph first = run.first;
       final (:int min, :int max) = _runSpan(run);
       final bool lastRun = s == segments.length - 1;
-      final bool inRun = logicalIndex >= min &&
+      final bool inRun =
+          logicalIndex >= min &&
           (logicalIndex < max || (logicalIndex == max && lastRun));
       if (!inRun) {
         continue;
@@ -586,11 +583,7 @@ abstract final class PaintRunText {
       return CaretEngine.hitLogicalIndex(line, x);
     }
     final double localX = (x - bestOrigin).clamp(0.0, bestPainter.width);
-    final int local = hitIndex(
-      bestPainter,
-      Offset(localX, 0),
-      bestText.length,
-    );
+    final int local = hitIndex(bestPainter, Offset(localX, 0), bestText.length);
     final int max = paragraph.isEmpty ? 0 : paragraph.length;
     return (bestBase + local).clamp(0, max);
   }

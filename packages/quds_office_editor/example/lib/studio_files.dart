@@ -199,7 +199,7 @@ abstract final class StudioFiles {
     if (needsArabic && !needsLatin && arabicFace != null) {
       return OfficeFontSet(
         primary: arabicFace,
-        fallbacks: <SfntFont>[if (latin != null) latin],
+        fallbacks: <SfntFont>[?latin],
       );
     }
     final SfntFont? covered = exportFontCovering(texts);

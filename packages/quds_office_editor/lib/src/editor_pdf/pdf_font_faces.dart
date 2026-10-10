@@ -26,7 +26,9 @@ abstract final class PdfFontFaces {
         n.contains('liberationserif')) {
       return 'Times New Roman';
     }
-    if (n.contains('courier') || n.contains('mono') || n.contains('liberationmono')) {
+    if (n.contains('courier') ||
+        n.contains('mono') ||
+        n.contains('liberationmono')) {
       return 'Courier New';
     }
     if (n.contains('helvetica') ||
@@ -66,7 +68,10 @@ abstract final class PdfFontFaces {
   ///
   /// Raster tiles captured before that freeze the host fallback. Zoom rebuilt
   /// them later, which is why the correct face only appeared after zoom.
-  static bool readyFor(Iterable<Object> ops, Uint8List? Function(Object op) bytesOf) {
+  static bool readyFor(
+    Iterable<Object> ops,
+    Uint8List? Function(Object op) bytesOf,
+  ) {
     for (final Object op in ops) {
       final Uint8List? bytes = bytesOf(op);
       if (bytes == null || bytes.length < 16) {
@@ -95,15 +100,18 @@ abstract final class PdfFontFaces {
     final String name = 'PdfFace-$key';
     final FontLoader loader = FontLoader(name);
     loader.addFont(Future<ByteData>.value(ByteData.sublistView(bytes)));
-    loader.load().then((_) {
-      _ready[key] = name;
-      _loading.remove(key);
-      onReady();
-    }).catchError((Object _) {
-      _loading.remove(key);
-      _failed.add(key);
-      onReady();
-    });
+    loader
+        .load()
+        .then((_) {
+          _ready[key] = name;
+          _loading.remove(key);
+          onReady();
+        })
+        .catchError((Object _) {
+          _loading.remove(key);
+          _failed.add(key);
+          onReady();
+        });
   }
 
   static int _key(Uint8List bytes) {

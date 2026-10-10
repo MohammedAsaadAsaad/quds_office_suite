@@ -2,7 +2,7 @@ part of 'catalog.dart';
 
 /// Extra papers beyond the core seventeen.
 const List<TemplateRef> suiteRefs = <TemplateRef>[
-  const TemplateRef(
+  TemplateRef(
     id: 'commerce.purchase-order',
     category: TemplateCategory.commerce,
     className: 'PurchaseOrderTemplate',
@@ -11,7 +11,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'Buyer, supplier, lines, and a needed-by date.',
     blurbAr: 'مشترٍ ومورّد وبنود وتاريخ الحاجة.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'commerce.sales-order',
     category: TemplateCategory.commerce,
     className: 'SalesOrderTemplate',
@@ -20,7 +20,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'Seller, buyer, promised lines.',
     blurbAr: 'بائع ومشترٍ وبنود موعودة.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'commerce.credit-note',
     category: TemplateCategory.commerce,
     className: 'CreditNoteTemplate',
@@ -29,7 +29,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'Credit against an invoice. Totals stay strings.',
     blurbAr: 'دائن مقابل فاتورة. المجاميع نصوص.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'commerce.debit-note',
     category: TemplateCategory.commerce,
     className: 'DebitNoteTemplate',
@@ -38,7 +38,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'Extra charge after the original bill.',
     blurbAr: 'قيد إضافي بعد الفاتورة الأصلية.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'commerce.proforma',
     category: TemplateCategory.commerce,
     className: 'ProformaTemplate',
@@ -47,7 +47,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'Estimate for customs or a deposit. Not a tax invoice.',
     blurbAr: 'تقدير للجمارك أو العربون. ليست فاتورة ضريبية.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'commerce.service-estimate',
     category: TemplateCategory.commerce,
     className: 'ServiceEstimateTemplate',
@@ -56,7 +56,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'Labour and parts before the work starts.',
     blurbAr: 'عمل وقطع قبل بدء الخدمة.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'commerce.commission',
     category: TemplateCategory.commerce,
     className: 'CommissionNoteTemplate',
@@ -65,7 +65,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'Agent, deals, and a commission total.',
     blurbAr: 'وكيل وصفقات ومجموع عمولة.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'logistics.bill',
     category: TemplateCategory.logistics,
     className: 'BillOfLadingTemplate',
@@ -74,7 +74,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'Shipper, consignee, and crates. Not a customs filing.',
     blurbAr: 'شاحن ومرسل إليه وصناديق. ليست إقراراً جمركياً.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'logistics.freight-quote',
     category: TemplateCategory.logistics,
     className: 'FreightQuoteTemplate',
@@ -83,7 +83,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'Lane, weight, and a quoted freight total.',
     blurbAr: 'مسار ووزن ومجموع شحن معروض.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'education.fee-receipt',
     category: TemplateCategory.education,
     className: 'FeeReceiptTemplate',
@@ -92,7 +92,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'Payer, term, and a received total.',
     blurbAr: 'دافع وفصل ومجموع مقبوض.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'property.rent-receipt',
     category: TemplateCategory.property,
     className: 'RentReceiptTemplate',
@@ -101,7 +101,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'Landlord, tenant, and the month received.',
     blurbAr: 'مالك ومستأجر والشهر المقبوض.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'programs.donation',
     category: TemplateCategory.programs,
     className: 'DonationReceiptTemplate',
@@ -110,7 +110,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'Donor, fund, and an acknowledgment total.',
     blurbAr: 'متبرع وصندوق ومجموع إقرار.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'finance.payment-voucher',
     category: TemplateCategory.finance,
     className: 'PaymentVoucherTemplate',
@@ -119,7 +119,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'Payer, payee, and the amount leaving the account.',
     blurbAr: 'دافع ومستفيد والمبلغ الخارج من الحساب.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'finance.receipt-voucher',
     category: TemplateCategory.finance,
     className: 'ReceiptVoucherTemplate',
@@ -128,7 +128,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'Receiver, payer, and the amount coming in.',
     blurbAr: 'قابض ودافع والمبلغ الداخل.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'commerce.packing-list',
     category: TemplateCategory.commerce,
     className: 'PackingListTemplate',
@@ -137,7 +137,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'What is in the crates. No prices.',
     blurbAr: 'محتوى الصناديق. بلا أسعار.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'commerce.price-list',
     category: TemplateCategory.commerce,
     className: 'PriceListTemplate',
@@ -146,7 +146,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'SKU, unit, and a formatted price.',
     blurbAr: 'رمز ووحدة وسعر منسّق.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'commerce.goods-received',
     category: TemplateCategory.commerce,
     className: 'GoodsReceivedTemplate',
@@ -155,7 +155,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'Ordered versus received on the dock.',
     blurbAr: 'المطلوب مقابل المستلم على الرصيف.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'commerce.return',
     category: TemplateCategory.commerce,
     className: 'ReturnAuthorizationTemplate',
@@ -164,7 +164,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'What may come back, and why.',
     blurbAr: 'ما يُسمح بإرجاعه ولماذا.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'commerce.consignment',
     category: TemplateCategory.commerce,
     className: 'ConsignmentNoteTemplate',
@@ -173,7 +173,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'Goods held for the owner, not sold yet.',
     blurbAr: 'بضاعة بحوزة الجهة ولم تُبع بعد.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'operations.goods-issue',
     category: TemplateCategory.operations,
     className: 'GoodsIssueTemplate',
@@ -182,7 +182,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'Store, requester, and what left the shelf.',
     blurbAr: 'المستودع والطالب وما خرج من الرف.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'operations.inventory',
     category: TemplateCategory.operations,
     className: 'InventoryCountTemplate',
@@ -191,7 +191,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'Book quantity versus the count on the floor.',
     blurbAr: 'كمية الدفتر مقابل العدّ على الأرض.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'operations.assets',
     category: TemplateCategory.operations,
     className: 'AssetRegisterTemplate',
@@ -200,7 +200,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'Tag, owner, and location of gear.',
     blurbAr: 'وسم وصاحب وموقع للمعدات.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'operations.visitors',
     category: TemplateCategory.operations,
     className: 'VisitorLogTemplate',
@@ -209,7 +209,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'Who came, when, and who hosted them.',
     blurbAr: 'من جاء ومتى ومن استقبله.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'operations.roster',
     category: TemplateCategory.operations,
     className: 'ShiftRosterTemplate',
@@ -218,7 +218,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'Who covers which watch.',
     blurbAr: 'من يغطي أي نوبة.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'operations.ticket',
     category: TemplateCategory.operations,
     className: 'ServiceTicketTemplate',
@@ -227,7 +227,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'Request, owner, and status word you supply.',
     blurbAr: 'طلب وصاحب وكلمة حالة تكتبها أنت.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'logistics.pick-list',
     category: TemplateCategory.logistics,
     className: 'PickListTemplate',
@@ -236,7 +236,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'Warehouse picks for one shipment.',
     blurbAr: 'تجهيز مستودع لشحنة واحدة.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'logistics.manifest',
     category: TemplateCategory.logistics,
     className: 'DeliveryManifestTemplate',
@@ -245,7 +245,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'Stops on one run.',
     blurbAr: 'محطات جولة واحدة.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'logistics.waybill',
     category: TemplateCategory.logistics,
     className: 'WaybillTemplate',
@@ -254,7 +254,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'One consignment moving between two sites.',
     blurbAr: 'أمانة واحدة بين موقعين.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'logistics.transfer',
     category: TemplateCategory.logistics,
     className: 'WarehouseTransferTemplate',
@@ -263,7 +263,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'Stock moving from one bin to another.',
     blurbAr: 'مخزون ينتقل من رف إلى آخر.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'logistics.load-sheet',
     category: TemplateCategory.logistics,
     className: 'LoadSheetTemplate',
@@ -272,7 +272,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'What goes on the vehicle, in load order.',
     blurbAr: 'ما يُحمّل على المركبة وبأي ترتيب.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'logistics.notice',
     category: TemplateCategory.logistics,
     className: 'ShippingNoticeTemplate',
@@ -281,7 +281,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'What left, and when it should arrive.',
     blurbAr: 'ما خرج ومتى يُتوقع وصوله.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'people.attendance',
     category: TemplateCategory.people,
     className: 'AttendanceSheetTemplate',
@@ -290,7 +290,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'Names and a mark word you supply.',
     blurbAr: 'أسماء وكلمة حضور تكتبها أنت.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'education.register',
     category: TemplateCategory.education,
     className: 'ClassRegisterTemplate',
@@ -299,7 +299,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'Roll and a mark word for the day.',
     blurbAr: 'أسماء وعلامة لليوم.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'education.transcript',
     category: TemplateCategory.education,
     className: 'TranscriptTemplate',
@@ -308,7 +308,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'Subjects and marks the school already formatted.',
     blurbAr: 'مواد ودرجات نسّقتها المدرسة مسبقاً.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'education.report-card',
     category: TemplateCategory.education,
     className: 'ReportCardTemplate',
@@ -317,7 +317,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'One term, subjects, and a comment column.',
     blurbAr: 'فصل ومواد وعمود تعليق.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'property.listing',
     category: TemplateCategory.property,
     className: 'PropertyListingTemplate',
@@ -326,7 +326,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'Units, rent, and a status word.',
     blurbAr: 'وحدات وإيجار وكلمة حالة.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'programs.beneficiaries',
     category: TemplateCategory.programs,
     className: 'BeneficiaryListTemplate',
@@ -335,7 +335,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'Names and a share the program already formatted.',
     blurbAr: 'أسماء وحصة نسّقها البرنامج مسبقاً.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'programs.distribution',
     category: TemplateCategory.programs,
     className: 'FieldDistributionTemplate',
@@ -344,7 +344,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'What left the store for each household.',
     blurbAr: 'ما خرج من المخزن لكل أسرة.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'programs.workshop',
     category: TemplateCategory.programs,
     className: 'WorkshopRegisterTemplate',
@@ -353,7 +353,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'Who sat the session.',
     blurbAr: 'من حضر الجلسة.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'programs.volunteers',
     category: TemplateCategory.programs,
     className: 'VolunteerHoursTemplate',
@@ -362,7 +362,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'Names and hours already formatted.',
     blurbAr: 'أسماء وساعات منسّقة مسبقاً.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'data.timesheet',
     category: TemplateCategory.data,
     className: 'TimesheetTemplate',
@@ -371,7 +371,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'Days, hours, and a project code.',
     blurbAr: 'أيام وساعات ورمز مشروع.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'data.milestones',
     category: TemplateCategory.data,
     className: 'MilestoneTrackerTemplate',
@@ -380,7 +380,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'Due date and a status word.',
     blurbAr: 'استحقاق وكلمة حالة.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'data.risks',
     category: TemplateCategory.data,
     className: 'RiskRegisterTemplate',
@@ -389,7 +389,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'Risk, owner, and a rating word.',
     blurbAr: 'مخاطرة وصاحب وكلمة تقدير.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'data.issues',
     category: TemplateCategory.data,
     className: 'IssueLogTemplate',
@@ -398,7 +398,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'Open items with an owner and a status word.',
     blurbAr: 'بنود مفتوحة بصاحب وكلمة حالة.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'data.comparison',
     category: TemplateCategory.data,
     className: 'ComparisonTemplate',
@@ -407,7 +407,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'Two options in one table.',
     blurbAr: 'خياران في جدول واحد.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'data.leaderboard',
     category: TemplateCategory.data,
     className: 'LeaderboardTemplate',
@@ -416,7 +416,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'Rank and a score the caller already formatted.',
     blurbAr: 'ترتيب ونتيجة نسّقتها أنت مسبقاً.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'data.exceptions',
     category: TemplateCategory.data,
     className: 'ExceptionReportTemplate',
@@ -425,7 +425,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'Rows that missed the rule.',
     blurbAr: 'صفوف خرجت عن القاعدة.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'finance.profit-loss',
     category: TemplateCategory.finance,
     className: 'ProfitAndLossTemplate',
@@ -434,7 +434,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'Income and costs for a period. Totals are strings.',
     blurbAr: 'إيراد وتكلفة لفترة. المجاميع نصوص.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'finance.balance',
     category: TemplateCategory.finance,
     className: 'BalanceSnapshotTemplate',
@@ -443,7 +443,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'A short asset and liability snapshot, not a full audit.',
     blurbAr: 'ملخص أصول وخصوم قصير، وليس تدقيقاً كاملاً.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'finance.cash-flow',
     category: TemplateCategory.finance,
     className: 'CashFlowTemplate',
@@ -452,7 +452,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'Money in and out for the period.',
     blurbAr: 'الداخل والخارج في الفترة.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'finance.budget-actual',
     category: TemplateCategory.finance,
     className: 'BudgetActualTemplate',
@@ -461,7 +461,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'Plan, actual, and a variance string.',
     blurbAr: 'خطة وفعلي ونص فرق.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'finance.aged-receivables',
     category: TemplateCategory.finance,
     className: 'AgedReceivablesTemplate',
@@ -470,7 +470,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'Who still owes, by bucket.',
     blurbAr: 'من ما زال مديناً، حسب الشريحة.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'finance.aged-payables',
     category: TemplateCategory.finance,
     className: 'AgedPayablesTemplate',
@@ -479,7 +479,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'What the house still owes suppliers.',
     blurbAr: 'ما زالت الجهة مدينة به للمورّدين.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'finance.journal',
     category: TemplateCategory.finance,
     className: 'JournalTemplate',
@@ -488,7 +488,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'Debit and credit lines. Amounts stay strings.',
     blurbAr: 'سطور مدين ودائن. المبالغ نصوص.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'finance.petty-cash',
     category: TemplateCategory.finance,
     className: 'PettyCashTemplate',
@@ -497,7 +497,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'Small movements and a running balance string.',
     blurbAr: 'حركات صغيرة ورصيد جارٍ كنص.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'finance.loan-schedule',
     category: TemplateCategory.finance,
     className: 'LoanScheduleTemplate',
@@ -506,7 +506,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'Installments the caller already split.',
     blurbAr: 'أقساط قسّمها المستدعي مسبقاً.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'finance.reconciliation',
     category: TemplateCategory.finance,
     className: 'BankReconciliationTemplate',
@@ -515,7 +515,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'Book versus bank, with the open items.',
     blurbAr: 'الدفتر مقابل البنك والبنود المفتوحة.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'finance.tax-summary',
     category: TemplateCategory.finance,
     className: 'TaxSummaryTemplate',
@@ -524,7 +524,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'A caller-formatted tax roll-up. Not a filing.',
     blurbAr: 'تجميع ضريبة منسّق مسبقاً. ليس إقراراً.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'finance.payroll-summary',
     category: TemplateCategory.finance,
     className: 'PayrollSummaryTemplate',
@@ -533,7 +533,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'Headcount totals. A single payslip stays its own template.',
     blurbAr: 'مجاميع العدد. قسيمة الفرد قالب مستقل.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'property.tenant-statement',
     category: TemplateCategory.property,
     className: 'TenantStatementTemplate',
@@ -542,7 +542,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'Charges and receipts for one unit.',
     blurbAr: 'قيود ومقبوضات لوحدة واحدة.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'people.offer',
     category: TemplateCategory.people,
     className: 'OfferLetterTemplate',
@@ -551,7 +551,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'Role, start, and a paragraph the caller writes.',
     blurbAr: 'دور وبداية وفقرة يكتبها المستدعي.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'people.appointment',
     category: TemplateCategory.people,
     className: 'AppointmentLetterTemplate',
@@ -560,7 +560,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'Confirms the post after the offer.',
     blurbAr: 'يثبت المنصب بعد العرض.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'people.experience',
     category: TemplateCategory.people,
     className: 'ExperienceLetterTemplate',
@@ -569,7 +569,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'Dates and the work, in the caller\'s words.',
     blurbAr: 'التواريخ والعمل بكلام المستدعي.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'people.warning',
     category: TemplateCategory.people,
     className: 'WarningNoticeTemplate',
@@ -578,7 +578,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'A dated notice. The body is the caller\'s text.',
     blurbAr: 'إشعار مؤرّخ. المتن نص المستدعي.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'people.recommendation',
     category: TemplateCategory.people,
     className: 'RecommendationLetterTemplate',
@@ -587,7 +587,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'A short recommendation the caller writes.',
     blurbAr: 'توصية قصيرة يكتبها المستدعي.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'people.leave',
     category: TemplateCategory.people,
     className: 'LeaveRequestTemplate',
@@ -596,7 +596,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'Dates and a reason. Approval is a sign slot.',
     blurbAr: 'تواريخ وسبب. الاعتماد فتحة توقيع.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'people.welcome',
     category: TemplateCategory.people,
     className: 'WelcomeNoteTemplate',
@@ -605,7 +605,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'A first-day note with the practical facts.',
     blurbAr: 'رسالة اليوم الأول مع الوقائع العملية.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'people.relieving',
     category: TemplateCategory.people,
     className: 'RelievingLetterTemplate',
@@ -614,7 +614,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'Last day and what was handed back.',
     blurbAr: 'آخر يوم وما أُعيد.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'people.reference',
     category: TemplateCategory.people,
     className: 'ReferenceLetterTemplate',
@@ -623,7 +623,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'Confirms that a person is known to the house.',
     blurbAr: 'يثبت أن الشخص معروف لدى الجهة.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'education.admission',
     category: TemplateCategory.education,
     className: 'AdmissionLetterTemplate',
@@ -632,7 +632,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'A place offered, with the start date.',
     blurbAr: 'مقعد معروض مع تاريخ البداية.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'narrative.announcement',
     category: TemplateCategory.narrative,
     className: 'AnnouncementTemplate',
@@ -641,7 +641,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'A short notice to a named audience.',
     blurbAr: 'إشعار قصير لجمهور مسمّى.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'narrative.meeting-notice',
     category: TemplateCategory.narrative,
     className: 'MeetingNoticeTemplate',
@@ -650,7 +650,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'When, where, and why people should come.',
     blurbAr: 'متى وأين ولماذا يحضر الناس.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'narrative.decision',
     category: TemplateCategory.narrative,
     className: 'DecisionNoteTemplate',
@@ -659,7 +659,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'The decision, who made it, and when it starts.',
     blurbAr: 'القرار ومن اتخذه ومتى يسري.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'people.internship',
     category: TemplateCategory.people,
     className: 'InternshipCertificateTemplate',
@@ -668,7 +668,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'Landscape certificate. Body is one paragraph.',
     blurbAr: 'شهادة أفقية. المتن فقرة واحدة.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'narrative.press',
     category: TemplateCategory.narrative,
     className: 'PressReleaseTemplate',
@@ -677,7 +677,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'Headline, a lead, and a quote section.',
     blurbAr: 'عنوان ومقدمة ومقطع اقتباس.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'narrative.project-status',
     category: TemplateCategory.narrative,
     className: 'ProjectStatusTemplate',
@@ -686,7 +686,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'Where the work stands, and what is next.',
     blurbAr: 'أين وقف العمل وما التالي.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'narrative.policy',
     category: TemplateCategory.narrative,
     className: 'PolicyNoteTemplate',
@@ -695,7 +695,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'The rule, and who it binds.',
     blurbAr: 'القاعدة ومن تلزمه.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'narrative.executive',
     category: TemplateCategory.narrative,
     className: 'ExecutiveSummaryTemplate',
@@ -704,7 +704,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'A one-page brief for someone who will not read the pack.',
     blurbAr: 'إحاطة صفحة لمن لن يقرأ الحزمة.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'narrative.after-action',
     category: TemplateCategory.narrative,
     className: 'AfterActionTemplate',
@@ -713,7 +713,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'What happened, what to keep, what to change.',
     blurbAr: 'ما حدث وما يُبقى وما يُغيّر.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'narrative.newsletter',
     category: TemplateCategory.narrative,
     className: 'NewsletterTemplate',
@@ -722,7 +722,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'Two short items and a date.',
     blurbAr: 'خبران قصيران وتاريخ.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'narrative.proposal',
     category: TemplateCategory.narrative,
     className: 'ProposalTemplate',
@@ -731,7 +731,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'The ask, the work, and a next step.',
     blurbAr: 'الطلب والعمل والخطوة التالية.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'operations.safety',
     category: TemplateCategory.operations,
     className: 'SafetyBriefingTemplate',
@@ -740,7 +740,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'Hazards and the rule for this watch.',
     blurbAr: 'مخاطر وقاعدة هذه النوبة.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'operations.incident',
     category: TemplateCategory.operations,
     className: 'IncidentReportTemplate',
@@ -749,7 +749,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'What happened, who saw it, what changed.',
     blurbAr: 'ما حدث ومن رآه وما تغيّر.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'operations.handover',
     category: TemplateCategory.operations,
     className: 'HandoverNoteTemplate',
@@ -758,7 +758,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'What the next watch must know.',
     blurbAr: 'ما يجب أن تعرفه النوبة التالية.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'operations.change',
     category: TemplateCategory.operations,
     className: 'ChangeRequestTemplate',
@@ -767,7 +767,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'What changes, why, and who approves.',
     blurbAr: 'ما يتغيّر ولماذا ومن يعتمد.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'education.syllabus',
     category: TemplateCategory.education,
     className: 'SyllabusTemplate',
@@ -776,7 +776,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'Weeks and what is covered.',
     blurbAr: 'أسابيع وما يُغطى.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'education.assignment',
     category: TemplateCategory.education,
     className: 'AssignmentBriefTemplate',
@@ -785,7 +785,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'The task, the due date, and what good looks like.',
     blurbAr: 'المهمة والاستحقاق وكيف يبدو العمل الجيد.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'education.progress',
     category: TemplateCategory.education,
     className: 'ProgressReportTemplate',
@@ -794,7 +794,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'How the term is going, in two sections.',
     blurbAr: 'كيف يسير الفصل في مقطعين.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'property.lease',
     category: TemplateCategory.property,
     className: 'LeaseSummaryTemplate',
@@ -803,7 +803,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'The points a tenant needs. Not the full deed.',
     blurbAr: 'ما يحتاجه المستأجر. ليس العقد الكامل.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'programs.grant',
     category: TemplateCategory.programs,
     className: 'GrantReportTemplate',
@@ -812,7 +812,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'What the grant paid for, and what is left.',
     blurbAr: 'ما دفعته المنحة وما تبقّى.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'programs.brief',
     category: TemplateCategory.programs,
     className: 'ProgramBriefTemplate',
@@ -821,7 +821,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'Who the program serves this week.',
     blurbAr: 'من يخدمه البرنامج هذا الأسبوع.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'operations.permit',
     category: TemplateCategory.operations,
     className: 'WorkPermitTemplate',
@@ -830,7 +830,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'Checks that must be true before the job starts.',
     blurbAr: 'علامات يجب أن تصدق قبل بدء العمل.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'operations.audit',
     category: TemplateCategory.operations,
     className: 'AuditFindingsTemplate',
@@ -839,7 +839,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'Findings with a mark and a note.',
     blurbAr: 'ملاحظات بعلامة وتعليق.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'property.move-in',
     category: TemplateCategory.property,
     className: 'MoveInChecklistTemplate',
@@ -848,7 +848,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'What the tenant and the office both mark.',
     blurbAr: 'ما يعلّمه المستأجر والمكتب معاً.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'property.maintenance',
     category: TemplateCategory.property,
     className: 'MaintenanceRequestTemplate',
@@ -857,7 +857,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'What is wrong, and the mark after the visit.',
     blurbAr: 'ما العطل والعلامة بعد الزيارة.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'data.scorecard',
     category: TemplateCategory.data,
     className: 'ScorecardTemplate',
@@ -866,7 +866,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'A few scores and a small chart.',
     blurbAr: 'درجات قليلة ورسم صغير.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'data.survey',
     category: TemplateCategory.data,
     className: 'SurveyResultsTemplate',
@@ -875,7 +875,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'Answers rolled up. The chart is optional data.',
     blurbAr: 'إجابات مجمّعة. الرسم بيانات اختيارية.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'data.capacity',
     category: TemplateCategory.data,
     className: 'CapacityReportTemplate',
@@ -884,7 +884,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'How full the rooms and the store are.',
     blurbAr: 'امتلاء الغرف والمخزن.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'programs.impact',
     category: TemplateCategory.programs,
     className: 'ImpactSheetTemplate',
@@ -893,7 +893,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'A few results the program can stand behind.',
     blurbAr: 'نتائج قليلة يقف البرنامج خلفها.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'operations.daily-site',
     category: TemplateCategory.operations,
     className: 'DailySiteReportTemplate',
@@ -902,7 +902,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'The day\'s numbers on one sheet.',
     blurbAr: 'أرقام اليوم في ورقة واحدة.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'people.profile',
     category: TemplateCategory.people,
     className: 'EmployeeProfileTemplate',
@@ -911,7 +911,7 @@ const List<TemplateRef> suiteRefs = <TemplateRef>[
     blurbEn: 'Facts and a few counts. Not an HR system.',
     blurbAr: 'وقائع وأعداد قليلة. ليس نظام موارد بشرية.',
   ),
-  const TemplateRef(
+  TemplateRef(
     id: 'operations.maintenance',
     category: TemplateCategory.operations,
     className: 'MaintenanceLogTemplate',

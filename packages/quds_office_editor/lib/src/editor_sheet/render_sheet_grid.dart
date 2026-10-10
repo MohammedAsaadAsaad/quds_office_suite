@@ -765,9 +765,7 @@ class RenderSheetGrid extends RenderBox implements MouseTrackerAnnotation {
           canvas.drawRect(
             cell,
             ui.Paint()
-              ..color = focusCell
-                  ? _theme.selectionStroke
-                  : _theme.gridLine
+              ..color = focusCell ? _theme.selectionStroke : _theme.gridLine
               ..style = ui.PaintingStyle.stroke
               ..strokeWidth = focusCell ? 1.8 : 1,
           );
@@ -1269,8 +1267,7 @@ class RenderSheetGrid extends RenderBox implements MouseTrackerAnnotation {
         final bool doubleTap =
             _lastTap != null && now.difference(_lastTap!).inMilliseconds < 400;
         _lastTap = now;
-        if (editing &&
-            _isEditCell(ref.col, ref.row, sheet.mergeAtRef(ref))) {
+        if (editing && _isEditCell(ref.col, ref.row, sheet.mergeAtRef(ref))) {
           onPlaceEditCaret?.call(_hitEditIndex(event.localPosition, ref));
         } else if (_canPointRefs) {
           onPointRef?.call(ref, extend: false);
@@ -1591,9 +1588,10 @@ class RenderSheetGrid extends RenderBox implements MouseTrackerAnnotation {
   }
 
   Rect _fullMergeRect(SmlMerge merge) {
-    return _cellRect(merge.c0, merge.r0).expandToInclude(
-      _cellRect(merge.c1, merge.r1),
-    );
+    return _cellRect(
+      merge.c0,
+      merge.r0,
+    ).expandToInclude(_cellRect(merge.c1, merge.r1));
   }
 
   bool _isFillMark(String label) {
@@ -1653,9 +1651,7 @@ class RenderSheetGrid extends RenderBox implements MouseTrackerAnnotation {
     final TextPainter painter = _textPainter(editText, colored: true)
       ..layout(maxWidth: cell.width > 12 ? cell.width - 4 : 8);
     final bool rtl = _rtl || PaintRunText.looksRtl(editText);
-    final double textX = rtl
-        ? cell.right - 2 - painter.width
-        : cell.left + 2;
+    final double textX = rtl ? cell.right - 2 - painter.width : cell.left + 2;
     return PaintRunText.hitIndex(
       painter,
       Offset(local.dx - textX, 0),
@@ -1921,7 +1917,8 @@ class RenderSheetGrid extends RenderBox implements MouseTrackerAnnotation {
     }
     final Path path = Path();
     for (int i = 0; i < values.length; i++) {
-      final double x = left + width * (values.length == 1 ? 0 : i / (values.length - 1));
+      final double x =
+          left + width * (values.length == 1 ? 0 : i / (values.length - 1));
       final double y = bottom - ((values[i] - min) / span) * (bottom - top);
       if (i == 0) {
         path.moveTo(x, y);
@@ -1975,7 +1972,7 @@ class RenderSheetGrid extends RenderBox implements MouseTrackerAnnotation {
     if (isEdit) {
       final int start = editBase < editCaret ? editBase : editCaret;
       final int end = editBase > editCaret ? editBase : editCaret;
-        if (start != end) {
+      if (start != end) {
         final double x0 = textX + PaintRunText.caretDx(painter, start);
         final double x1 = textX + PaintRunText.caretDx(painter, end);
         canvas.drawRect(
@@ -1991,7 +1988,9 @@ class RenderSheetGrid extends RenderBox implements MouseTrackerAnnotation {
     }
     painter.paint(canvas, Offset(textX, textY));
     if (isEdit && config.showsCaret && hasFocus) {
-      final double caretH = painter.height < 2 ? fontSize * 1.25 : painter.height;
+      final double caretH = painter.height < 2
+          ? fontSize * 1.25
+          : painter.height;
       final double caretY = painter.height < 2
           ? cell.top + (cell.height - caretH) / 2
           : textY;
@@ -2000,7 +1999,8 @@ class RenderSheetGrid extends RenderBox implements MouseTrackerAnnotation {
         canvas,
         stem: Rect.fromLTWH(caretX, caretY, 1.0, caretH),
         color: _theme.caret,
-        rtl: _rtl ||
+        rtl:
+            _rtl ||
             config.textDirection == TextDirection.rtl ||
             PaintRunText.looksRtl(label),
       );

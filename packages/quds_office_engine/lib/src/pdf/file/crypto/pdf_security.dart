@@ -262,7 +262,7 @@ class PdfSecurity {
     final BytesBuilder buf = BytesBuilder(copy: false)
       ..add(_pad)
       ..add(id);
-    var hash = Uint8List.fromList(md5.convert(buf.takeBytes()).bytes);
+    final hash = Uint8List.fromList(md5.convert(buf.takeBytes()).bytes);
     var out = PdfRc4.crypt(key, hash);
     for (int i = 1; i <= 19; i++) {
       final Uint8List xorKey = Uint8List.fromList(<int>[

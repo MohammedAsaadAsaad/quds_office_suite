@@ -30,11 +30,7 @@ class PdfPageThumb extends LeafRenderObjectWidget {
 
   @override
   RenderObject createRenderObject(BuildContext context) {
-    return RenderPdfPageThumb(
-      list: list,
-      selected: selected,
-      annots: annots,
-    );
+    return RenderPdfPageThumb(list: list, selected: selected, annots: annots);
   }
 
   @override
@@ -53,12 +49,10 @@ class PdfPageThumb extends LeafRenderObjectWidget {
 class RenderPdfPageThumb extends RenderBox {
   /// RenderPdfPageThumb API.
   RenderPdfPageThumb({
-    required PdfDisplayList list,
-    required bool selected,
-    required List<PdfAnnot> annots,
-  }) : _list = list,
-       _selected = selected,
-       _annots = annots;
+    required this._list,
+    required this._selected,
+    required this._annots,
+  });
 
   PdfDisplayList _list;
   bool _selected;

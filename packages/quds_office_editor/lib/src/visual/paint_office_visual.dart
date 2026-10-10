@@ -204,7 +204,7 @@ abstract final class PaintOfficeVisual {
     String fontFamily,
   ) {
     _frame(canvas, rect, visual, fontFamily);
-    final Rect plot = _plot(rect);
+    final Rect plot = _plot(rect, visual);
     final List<ChartPoint> pts = visual.points;
     if (pts.isEmpty) {
       return;
@@ -253,7 +253,7 @@ abstract final class PaintOfficeVisual {
     String fontFamily,
   ) {
     _frame(canvas, rect, visual, fontFamily);
-    final Rect plot = _plot(rect);
+    final Rect plot = _plot(rect, visual);
     final List<ChartPoint> pts = visual.points;
     if (pts.isEmpty) {
       return;
@@ -294,7 +294,7 @@ abstract final class PaintOfficeVisual {
     String fontFamily,
   ) {
     _frame(canvas, rect, visual, fontFamily);
-    final Rect plot = _plot(rect);
+    final Rect plot = _plot(rect, visual);
     final List<ChartPoint> pts = visual.points;
     final double sum = pts.fold<double>(
       0,
@@ -342,7 +342,7 @@ abstract final class PaintOfficeVisual {
     String fontFamily,
   ) {
     _frame(canvas, rect, visual, fontFamily);
-    final Rect plot = _plot(rect);
+    final Rect plot = _plot(rect, visual);
     final List<ChartPoint> pts = visual.points;
     if (pts.length < 2) {
       return;
@@ -378,7 +378,7 @@ abstract final class PaintOfficeVisual {
     String fontFamily,
   ) {
     _frame(canvas, rect, visual, fontFamily);
-    final Rect plot = _plot(rect);
+    final Rect plot = _plot(rect, visual);
     final List<ChartPoint> pts = visual.points;
     if (pts.isEmpty) {
       return;
@@ -438,7 +438,7 @@ abstract final class PaintOfficeVisual {
     String fontFamily,
   ) {
     _frame(canvas, rect, visual, fontFamily);
-    final Rect plot = _plot(rect);
+    final Rect plot = _plot(rect, visual);
     final List<ChartPoint> pts = visual.points;
     if (pts.isEmpty) {
       return;
@@ -478,7 +478,7 @@ abstract final class PaintOfficeVisual {
     String fontFamily,
   ) {
     _frame(canvas, rect, visual, fontFamily);
-    final Rect plot = _plot(rect);
+    final Rect plot = _plot(rect, visual);
     final List<ChartPoint> pts = visual.points;
     if (pts.isEmpty) {
       return;
@@ -563,7 +563,7 @@ abstract final class PaintOfficeVisual {
     if (visual.chart.showAxes &&
         visual.isChart &&
         visual.kind != OfficeVisualKind.chartPie) {
-      final Rect plot = _plot(rect);
+      final Rect plot = _plot(rect, visual);
       final Paint axis = Paint()
         ..color = const Color(0xFF888888)
         ..strokeWidth = 0.8;
@@ -602,13 +602,20 @@ abstract final class PaintOfficeVisual {
     }
   }
 
-  /// fromLTWH API.
-  static Rect _plot(Rect rect) => Rect.fromLTWH(
-    rect.left + 10,
-    rect.top + 24,
-    rect.width - 20,
-    rect.height - 40,
-  );
+  /// Plot area inside the frame: title strip on top, category labels below,
+  /// plus a legend strip when an axis chart shows its bottom legend.
+  static Rect _plot(Rect rect, OfficeVisual visual) {
+    final bool legend =
+        visual.isChart &&
+        visual.chart.showLegend &&
+        visual.kind != OfficeVisualKind.chartPie;
+    return Rect.fromLTWH(
+      rect.left + 10,
+      rect.top + 24,
+      rect.width - 20,
+      rect.height - (legend ? 56 : 40),
+    );
+  }
 
   static void _label(
     Canvas canvas,

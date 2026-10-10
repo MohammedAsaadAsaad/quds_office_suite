@@ -490,7 +490,7 @@ abstract final class OfficeContextMenu {
     if (!mutate) {
       return items;
     }
-    final PdfEditorController editor = controller as PdfEditorController;
+    final PdfEditorController editor = controller;
     final bool locked =
         editor.file?.permissions != null &&
         !editor.file!.permissions!.canAnnotate;

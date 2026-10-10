@@ -22,6 +22,7 @@ and the PDF-as-a-file program in [PDF.md](PDF.md).
 | PDF structure / Sig | `/StructTreeRoot` is exposed as `PdfFile.structTree` (read). `PdfExtract.readingOrder` walks Alt/ActualText. `/Sig` fields: `ByteRange` coverage, then CMS `SignedData` `messageDigest` match → `valid` / `invalid` / `unverified` / `broken` / `unsupported`. RSA/ECDSA and a system trust list are **not** applied. Creating signatures is out |
 | Fonts | Writer: glyf TrueType embed + subset; multi-face fallback. Reader: `/FontFile2` glyf metrics when `SfntFont` parses; `/Widths`/`W`/`DW`; Standard 14 AFM widths (Helvetica, Times, Courier, Symbol, ZapfDingbats). Raw `/FontFile3` CFF is **wrapped as OTTO** (`PdfCffHost`) so the Flutter host can load it — the engine does **not** rasterize CFF outlines. OpenType `GPOS` LookupType 4 MarkToBase (and type-9 wrappers) positions Arabic tashkeel; other GPOS/GSUB lookups are ignored |
 | Image filters | Flate (+ predictor), ASCIIHex/85, RunLength, LZW, DCT (JPEG passthrough), CCITTFaxDecode G3 1-D and G4 (mixed G3 2-D `K>0` is 1-D best-effort). `/SMask` on DeviceGray/RGB Flate is composed to RGBA in-engine; JPEG+/SMask DCT attaches `softMaskJpeg` for host compose. **JBIG2** MMR generic regions decode (size-capped); arithmetic / symbol / text regions stay `PdfFilterUnsupported`. **JPX stays** unsupported (placeholder on that XObject) |
+| Band reports (`.qrep`) | `quds_reports.dart`: XML parse/validate/write with line:column diagnostics; `QudsExpressionEngine` (`System.*` / `Variables.*` / `Data.*` paths, arithmetic, comparisons, `SUM`/`COUNT`/`AVG`/`MIN`/`MAX`, Arabic `TAFQEET(amount, code)` for regional currencies); bands ReportHeader → PageHeader → GroupHeader → Detail → GroupFooter → PageFooter → ReportSummary with grouping, sorting, filters, `visibleWhen`; `canGrow` text, page breaks, repeating table headers, `System.TotalPages`; UAX #9 BiDi + Arabic shaping + GPOS marks; RTL mirroring of element x (`mirrorRtl`). Exports: PDF (glyf subset, vector Code128 / QR), XLSX (typed cells, `readingOrder` for RTL), DOCX (live `PAGE`/`NUMPAGES`, repeating table header). `ReportMockData.infer` builds preview data from a template's bindings. Charts (`<Chart>`: bar, horizontal bar, stacked bar, line, area, pie, donut) aggregate a dataset by category (`sum`/`avg`/`count`/`min`/`max`/`first`/`last`, sort, top N) or plot static points; PDF draws them as vectors, DOCX and XLSX get native DrawingML charts. `ReportTemplates.all` ships six ready-made templates (Arabic VAT invoice, English invoice, sales dashboard, account statement, inventory, receipt voucher) with sample data. Designer in `quds_office_editor` (`QudsReportDesigner`) |
 | Optional media | PPT `/ppt/media/` sync/hydrate via `quds_office_engine_optional.dart` (not on default export) |
 
 ## Explicitly limited / out of scope (short term)
@@ -37,6 +38,21 @@ and the PDF-as-a-file program in [PDF.md](PDF.md).
 - True sanitizing redaction of every operator in a content stream (overlay + extract filter only)
 - Full PDF encryption of the **written** OOXML-export file; certified PDF/A or PDF/UA authoring
 - Third-party viewer smoke of incremental `/AP` is manual (Adobe / LibreOffice)
+- Band reports:
+  - Report fonts must be TrueType `glyf` faces (CFF/OTF is rejected because it cannot be subset). Without a registered face, Latin falls back to Helvetica and other scripts are not drawn.
+  - Translucent colors (`#AARRGGBB` with partial alpha) are painted opaque in PDF.
+  - When a block does not fit on a page, text splits by line and rectangles split. Images, barcodes, ellipses, and lines move whole; one taller than an empty page overflows the bottom margin.
+  - QR covers versions 1–10 at ECC-M (byte mode). Code128 covers printable ASCII only.
+  - XLSX export is data-oriented. It omits page header/footer bands, images, barcodes, and shapes (charts are exported).
+  - DOCX export omits barcodes and every shape except horizontal lines (written as paragraph rules). Header/footer bands carry text, rules, and images only.
+  - In XLSX and DOCX, transparent text sitting on a filled shape takes that shape's fill as a cell fill or paragraph shading. The shape's outline, corner radius, and any area outside the text are not reproduced.
+  - Charts:
+    - Native DOCX/XLSX charts carry literal values (`c:numLit`/`c:strLit`), not references to worksheet cells. XLSX also writes the chart's data as a table under the chart.
+    - PDF and preview arcs are flattened to polylines (at most 3° per segment). The area fill is an opaque tint of the series color.
+    - Charts move whole across page breaks. A chart taller than an empty page overflows the bottom margin.
+    - DOCX header/footer bands omit charts.
+    - A chart bound to the same dataset as a sorted Detail band sees the rows in the Detail sort order.
+  - The designer canvas is schematic: it shows template text with `{{…}}` bindings and one table body row. Data-bound charts on the canvas plot sample values over sample categories. The live preview, which uses the engine layout and mock or host data, is the exact output.
 - ODF: text extract only
 - Some formula names remain **aliases or documented stubs** (see `FormulaGuide`); unknown names return `#NAME?`
 

@@ -202,11 +202,11 @@ class PdfCanvasView extends LeafRenderObjectWidget {
 class RenderPdfCanvas extends RenderBox implements MouseTrackerAnnotation {
   /// RenderPdfCanvas API.
   RenderPdfCanvas({
-    required List<PdfDisplayList> lists,
-    required VirtualViewport viewport,
-    required double scale,
-    required OfficeSurfaceConfig config,
-    PdfTextSelection? selection,
+    required this._lists,
+    required this._viewport,
+    required this._scale,
+    required this._config,
+    this._selection,
     this.findMarks = const <PdfFindMark>[],
     this.findIndex = -1,
     this.annots = const <List<PdfAnnot>>[],
@@ -228,11 +228,7 @@ class RenderPdfCanvas extends RenderBox implements MouseTrackerAnnotation {
     this.onPageError,
     this.onDraw,
     this.onGestureSettled,
-  }) : _lists = lists,
-       _viewport = viewport,
-       _scale = scale,
-       _config = config,
-       _selection = selection;
+  });
 
   List<PdfDisplayList> _lists;
   VirtualViewport _viewport;
@@ -546,8 +542,7 @@ class RenderPdfCanvas extends RenderBox implements MouseTrackerAnnotation {
           (_contentSize.width <= 0
                   ? 22.0
                   : trackW *
-                        (size.width /
-                            math.max(size.width, _contentSize.width)))
+                        (size.width / math.max(size.width, _contentSize.width)))
               .clamp(22.0, trackW);
       final double x = maxX <= 0
           ? 0
@@ -932,9 +927,7 @@ class RenderPdfCanvas extends RenderBox implements MouseTrackerAnnotation {
     final Canvas canvas = context.canvas;
     final Color chrome =
         backgroundColor ??
-        (nightMode
-            ? const Color(0xFF121212)
-            : _config.theme.canvasBackground);
+        (nightMode ? const Color(0xFF121212) : _config.theme.canvasBackground);
     canvas.drawRect(offset & size, Paint()..color = chrome);
     canvas.save();
     canvas.clipRect(offset & size);
@@ -1082,11 +1075,7 @@ class RenderPdfCanvas extends RenderBox implements MouseTrackerAnnotation {
         }
       }
       canvas.restore();
-      onDraw?.call(
-        canvas,
-        Size(list.page.width, list.page.height),
-        i,
-      );
+      onDraw?.call(canvas, Size(list.page.width, list.page.height), i);
       canvas.restore();
       cursor += (swipeHorizontal ? w : h) + PdfPageLayout.gap;
     }

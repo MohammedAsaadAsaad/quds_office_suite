@@ -1412,9 +1412,7 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
 
   WmlSection _rulerSection() {
     if (laidOut.pages.isEmpty || document.sections.isEmpty) {
-      return document.sections.isEmpty
-          ? WmlSection()
-          : document.sections.first;
+      return document.sections.isEmpty ? WmlSection() : document.sections.first;
     }
     final int sectionIndex = laidOut.pages[_activeRulerPageIndex()].sectionIndex
         .clamp(0, document.sections.length - 1);
@@ -1449,14 +1447,13 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
     final WmlSection section = _rulerSection();
     final LaidOutLine? focus = _rulerFocusLine();
     final WmlParagraph? para = _rulerParagraph();
-    final WmlIndent indent = _rulerIndent ??
-        para?.properties.indent ??
-        const WmlIndent();
-    final List<WmlTabStop> tabs = _rulerTabs ??
-        para?.properties.tabs ??
-        const <WmlTabStop>[];
+    final WmlIndent indent =
+        _rulerIndent ?? para?.properties.indent ?? const WmlIndent();
+    final List<WmlTabStop> tabs =
+        _rulerTabs ?? para?.properties.tabs ?? const <WmlTabStop>[];
     final WmlPageMargins margins = _rulerMargins ?? section.margins;
-    final bool rtl = para?.properties.rightToLeft == true ||
+    final bool rtl =
+        para?.properties.rightToLeft == true ||
         para?.properties.bidiBaseLevel == 1;
     final ({double left, double right}) box = _rulerContentBox(
       section,
@@ -1515,9 +1512,7 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
   }
 
   WmlFrame? _frameOnPage(WmlFrame? frame, int pageIndex) {
-    if (frame == null ||
-        pageIndex < 0 ||
-        pageIndex >= laidOut.pages.length) {
+    if (frame == null || pageIndex < 0 || pageIndex >= laidOut.pages.length) {
       return null;
     }
     for (final LaidOutBox box in laidOut.pages[pageIndex].frames) {
@@ -1689,10 +1684,7 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
         contentLeft: view.contentLeft,
         contentRight: view.contentRight,
       );
-      _rulerTabs = <WmlTabStop>[
-        ..._rulerTabs!,
-        WmlTabStop(position: pos),
-      ];
+      _rulerTabs = <WmlTabStop>[..._rulerTabs!, WmlTabStop(position: pos)];
       _rulerCreatedTab = true;
       _rulerDrag = RulerHit(RulerHitKind.tab, tabIndex: _rulerTabs!.length - 1);
       onPreviewRulerEdit?.call(WordRulerEdit(tabs: _rulerTabs));
@@ -1714,7 +1706,10 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
     if (drag.kind == RulerHitKind.tab) {
       if ((local.dy - WordRuler.size).abs() > 28 && local.dy > WordRuler.size) {
         final int? i = drag.tabIndex;
-        if (i != null && _rulerTabs != null && i >= 0 && i < _rulerTabs!.length) {
+        if (i != null &&
+            _rulerTabs != null &&
+            i >= 0 &&
+            i < _rulerTabs!.length) {
           _rulerTabs = <WmlTabStop>[
             for (int t = 0; t < _rulerTabs!.length; t++)
               if (t != i) _rulerTabs![t],
@@ -1762,7 +1757,8 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
         drag.kind == RulerHitKind.marginRight ||
         drag.kind == RulerHitKind.marginTop ||
         drag.kind == RulerHitKind.marginBottom) {
-      final double pos = drag.kind == RulerHitKind.marginTop ||
+      final double pos =
+          drag.kind == RulerHitKind.marginTop ||
               drag.kind == RulerHitKind.marginBottom
           ? WordRuler.snap(
               WordRuler.pageY(
@@ -1860,6 +1856,23 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
       return (viewW - pageW) / 2;
     }
     return _pageSideGutter;
+  }
+
+  /// Local position of [point] (page points) on page [page]: the inverse
+  /// of pointer hit testing, for anchoring host overlays and tests.
+  Offset windowForPagePoint(int page, Offset point) {
+    if (compact) {
+      return point;
+    }
+    final double scale = _viewScale;
+    var top = 24.0;
+    for (int i = 0; i < page && i < laidOut.pages.length; i++) {
+      top += laidOut.pages[i].height * scale + 24;
+    }
+    return Offset(
+      point.dx * scale + _pageLeftPx() - viewport.origin.dx,
+      point.dy * scale + top - viewport.origin.dy,
+    );
   }
 
   (int, Offset) _hitPage(Offset window) {
@@ -3785,10 +3798,7 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
     canvas.save();
     canvas.translate(page.width / 2, page.height / 2);
     canvas.rotate(-0.6);
-    painter.paint(
-      canvas,
-      Offset(-painter.width / 2, -painter.height / 2),
-    );
+    painter.paint(canvas, Offset(-painter.width / 2, -painter.height / 2));
     canvas.restore();
   }
 
@@ -3804,7 +3814,10 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
       if (box.kind == LaidOutBoxKind.paragraphShade) {
         final Rect shade = Rect.fromLTWH(box.x, box.y, box.width, box.height);
         if (box.fillColor != null && box.fillColor!.isNotEmpty) {
-          canvas.drawRect(shade, Paint()..color = _colorFromHex(box.fillColor!));
+          canvas.drawRect(
+            shade,
+            Paint()..color = _colorFromHex(box.fillColor!),
+          );
         }
         if (box.strokeColor.isNotEmpty) {
           canvas.drawRect(
@@ -4141,12 +4154,7 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
           while (j < end && !line.glyphs[j].glyph.isSpace) {
             j++;
           }
-          _paintTextRun(
-            canvas,
-            line,
-            paragraph,
-            line.glyphs.sublist(i, j),
-          );
+          _paintTextRun(canvas, line, paragraph, line.glyphs.sublist(i, j));
           i = j;
         }
       } else {
@@ -4223,8 +4231,8 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
     }
     final LaidOutGlyph last = line.glyphs.last;
     final double from = last.x + last.advance + 6;
-    final double numberWidth = (line.overlayText?.length ?? 1) *
-        (line.overlaySize * 0.56);
+    final double numberWidth =
+        (line.overlayText?.length ?? 1) * (line.overlaySize * 0.56);
     final double to = WordToc.leaderEndX(
       pageWidth: pageWidth ?? laidOut.pageSize.width,
       marginRight: marginRight ?? 72,
@@ -4333,8 +4341,7 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
       return config.textDirection == TextDirection.rtl ||
           CaretEngine.deviceRtl();
     }
-    final WmlParagraph para =
-        paras[paragraphIndex.clamp(0, paras.length - 1)];
+    final WmlParagraph para = paras[paragraphIndex.clamp(0, paras.length - 1)];
     if (para.properties.rightToLeft == true) {
       return true;
     }
@@ -4600,7 +4607,3 @@ class _RulerView {
   final double contentLeft;
   final double contentRight;
 }
-
-
-
-

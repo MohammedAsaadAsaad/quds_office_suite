@@ -198,8 +198,14 @@ void main() {
     final CaretEngine caret = CaretEngine();
     expect(caret.rtlAtCaret(arabic), isTrue);
     expect(caret.rtlAtCaret(latin), isFalse);
-    expect(CaretEngine.resolveRtl(nearbyText: 'مرحبا', logicalIndex: 2), isTrue);
-    expect(CaretEngine.resolveRtl(nearbyText: 'Hello', logicalIndex: 2), isFalse);
+    expect(
+      CaretEngine.resolveRtl(nearbyText: 'مرحبا', logicalIndex: 2),
+      isTrue,
+    );
+    expect(
+      CaretEngine.resolveRtl(nearbyText: 'Hello', logicalIndex: 2),
+      isFalse,
+    );
     expect(CaretEngine.resolveRtl(paragraphRtl: true), isTrue);
     expect(
       CaretEngine.resolveRtl(nearbyText: 'Hello مرحبا', logicalIndex: 2),
@@ -667,14 +673,8 @@ void main() {
     final LaidOutBox box = word.laidOut.pages.first.frames.firstWhere(
       (LaidOutBox frame) => frame.visual != null,
     );
-    Offset toWindow(double pageX, double pageY) {
-      const double scale = 96 / 72;
-      final double pageW = word.laidOut.pageSize.width * scale;
-      final double left = render.size.width > pageW + 64
-          ? (render.size.width - pageW) / 2
-          : 32;
-      return Offset(pageX * scale + left, pageY * scale + 24);
-    }
+    Offset toWindow(double pageX, double pageY) =>
+        render.windowForPagePoint(0, Offset(pageX, pageY));
 
     expect(
       render.cursorFor(toWindow(box.x + box.width, box.y + box.height)),
@@ -684,7 +684,12 @@ void main() {
       render.cursorFor(toWindow(box.x + box.width / 2, box.y + box.height / 2)),
       SystemMouseCursors.move,
     );
-    expect(render.cursorFor(const Offset(8, 8)), SystemMouseCursors.basic);
+    expect(render.cursorFor(const Offset(8, 8)), SystemMouseCursors.precise);
+    final double pageLeft = render.windowForPagePoint(0, Offset.zero).dx;
+    expect(
+      render.cursorFor(Offset((OfficeChrome.rulerSize + pageLeft) / 2, 300)),
+      SystemMouseCursors.basic,
+    );
   });
 
   testWidgets('word canvas click hits the second table cell', (
@@ -1193,7 +1198,7 @@ void main() {
             onCommitEdit: () {
               editing = false;
             },
-            onTransform: (PmlShape _, PmlTransform __) {
+            onTransform: (PmlShape _, PmlTransform _) {
               transformed = true;
             },
           ),
@@ -1680,14 +1685,8 @@ void main() {
     final LaidOutBox box = word.laidOut.pages.first.frames.firstWhere(
       (LaidOutBox frame) => frame.kind == LaidOutBoxKind.tocEntry,
     );
-    Offset toWindow(double pageX, double pageY) {
-      const double scale = 96 / 72;
-      final double pageW = word.laidOut.pageSize.width * scale;
-      final double left = render.size.width > pageW + 64
-          ? (render.size.width - pageW) / 2
-          : 32;
-      return Offset(pageX * scale + left, pageY * scale + 24);
-    }
+    Offset toWindow(double pageX, double pageY) =>
+        render.windowForPagePoint(0, Offset(pageX, pageY));
 
     expect(
       render.cursorFor(toWindow(box.x + 8, box.y + 6)),
@@ -1779,8 +1778,14 @@ void main() {
   });
 
   test('ruler tab alignment cycles left-center-right-decimal', () {
-    expect(WordRuler.cycleAlignment(WmlTabAlignment.left), WmlTabAlignment.center);
-    expect(WordRuler.cycleAlignment(WmlTabAlignment.decimal), WmlTabAlignment.left);
+    expect(
+      WordRuler.cycleAlignment(WmlTabAlignment.left),
+      WmlTabAlignment.center,
+    );
+    expect(
+      WordRuler.cycleAlignment(WmlTabAlignment.decimal),
+      WmlTabAlignment.left,
+    );
   });
 
   test('ruler zero sits at the content origin', () {
@@ -1864,10 +1869,10 @@ void main() {
   test('ruler paragraph box follows page, cell, column, and frame', () {
     const WmlPageMargins margins = WmlPageMargins(left: 54, right: 54);
     const double pageW = 595.28;
-    expect(
-      WordRuler.paragraphContentBox(margins: margins, pageWidth: pageW),
-      (left: 54, right: pageW - 54),
-    );
+    expect(WordRuler.paragraphContentBox(margins: margins, pageWidth: pageW), (
+      left: 54,
+      right: pageW - 54,
+    ));
     expect(
       WordRuler.paragraphContentBox(
         margins: margins,
@@ -1887,10 +1892,7 @@ void main() {
         frameX: 122,
         frameWidth: 280,
       ),
-      (
-        left: 122 + LaidOutLine.framePad,
-        right: 402 - LaidOutLine.framePad,
-      ),
+      (left: 122 + LaidOutLine.framePad, right: 402 - LaidOutLine.framePad),
     );
     expect(
       WordRuler.paragraphContentBox(
@@ -1924,10 +1926,7 @@ void main() {
         lineBoxX: 54,
         lineBoxWidth: 400,
       ),
-      (
-        left: 122 + LaidOutLine.framePad,
-        right: 178 - LaidOutLine.framePad,
-      ),
+      (left: 122 + LaidOutLine.framePad, right: 178 - LaidOutLine.framePad),
     );
     expect(
       WordRuler.contentOriginX(

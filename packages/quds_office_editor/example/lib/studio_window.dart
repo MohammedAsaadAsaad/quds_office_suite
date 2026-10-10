@@ -19,21 +19,25 @@ class StudioWindow {
     return Platform.isLinux || Platform.isWindows || Platform.isMacOS;
   }
 
-  static Future<void> bootstrap() async {
+  static Future<void> bootstrap({
+    String title = 'Quds Office Studio',
+    Size size = const Size(1280, 720),
+    Size minimumSize = const Size(880, 560),
+  }) async {
     if (!isDesktop) {
       return;
     }
     try {
       await windowManager.ensureInitialized();
-      const WindowOptions options = WindowOptions(
-        size: Size(1280, 720),
-        minimumSize: Size(880, 560),
+      final WindowOptions options = WindowOptions(
+        size: size,
+        minimumSize: minimumSize,
         center: true,
         backgroundColor: Color(0x00000000),
         skipTaskbar: false,
         titleBarStyle: TitleBarStyle.hidden,
         windowButtonVisibility: false,
-        title: 'Quds Office Studio',
+        title: title,
       );
       await windowManager.waitUntilReadyToShow(options, () async {
         await windowManager.setTitleBarStyle(

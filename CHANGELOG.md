@@ -5,7 +5,16 @@ This repository is a Dart workspace. Each published package keeps its own change
 - [`packages/quds_office_engine/CHANGELOG.md`](packages/quds_office_engine/CHANGELOG.md)
 - [`packages/quds_office_editor/CHANGELOG.md`](packages/quds_office_editor/CHANGELOG.md)
 
-## Unreleased
+## 0.6.0 / 0.6.0
+
+- Engine **0.6.0**: band report engine (`quds_reports.dart`): `.qrep`
+  templates, expressions, typed variables, charts, six templates, and
+  PDF / XLSX / DOCX export. Also PDF fidelity waves (GPOS marks, FreeText
+  appearances, page graft, AcroForm write, JBIG2 MMR, CMS digest check).
+- Editor **0.6.0**: `QudsReportDesigner` (canvas, inspector, toolbar, live
+  preview, autocomplete) and the redesigned inspector.
+- New app [`apps/quds_report_studio`](apps/quds_report_studio): a standalone
+  desktop report editor.
 
 ## 0.5.3 / 0.5.1
 

@@ -4,7 +4,6 @@ import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 import 'package:quds_office_engine/quds_office_engine.dart';
-import 'package:quds_office_engine/src/fonts/sfnt_parser.dart';
 import 'package:quds_office_engine/src/pdf/file/crypto/pdf_rc4.dart';
 import 'package:quds_office_engine/src/pdf/file/decode/pdf_ccitt.dart';
 import 'package:quds_office_engine/src/pdf/file/text/pdf_cff_host.dart';

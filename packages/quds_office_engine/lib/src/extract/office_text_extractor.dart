@@ -2,13 +2,13 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import '../builders/docx_builder.dart';
-import '../pdf/file/model/pdf_file.dart';
-import '../pdf/file/text/pdf_extract.dart';
 import '../builders/xlsx_io.dart';
 import '../opc/opc_archive.dart';
 import '../opc/package_part.dart';
 import '../opc/relationships.dart';
 import '../opc/zip/zip_reader.dart';
+import '../pdf/file/model/pdf_file.dart';
+import '../pdf/file/text/pdf_extract.dart';
 import '../xml/namespaces.dart';
 import '../xml/xml_reader.dart';
 
