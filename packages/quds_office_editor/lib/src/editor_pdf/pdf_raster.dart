@@ -91,13 +91,7 @@ abstract final class PdfRaster {
         }
         color.dispose();
         mask.dispose();
-        ui.decodeImageFromPixels(
-          out,
-          w,
-          h,
-          ui.PixelFormat.rgba8888,
-          onReady,
-        );
+        ui.decodeImageFromPixels(out, w, h, ui.PixelFormat.rgba8888, onReady);
       });
     });
   }

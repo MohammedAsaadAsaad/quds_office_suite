@@ -58,6 +58,26 @@ open/save, `QudsPdfViewer`, and `QudsPdfEditor`. Does **not** replace Phase 4
 export (`OfficePdfExport` / writer `PdfDocument`). Do not start until Phases
 1–5 are treated as stable, and do not skip PDF sub-phases P6.1–P6.7.
 
+## Band reports (`.qrep`)
+
+A report module that builds on the Phase 4 writer and the Phase 5 editor
+patterns. It is not a new phase.
+
+- Engine (`lib/src/reports/`, exported by `quds_reports.dart`):
+  - Template model and XML parser/validator/writer.
+  - Expression engine with `TAFQEET`.
+  - Paginating generator to a primitive layout.
+  - Charts (`report_chart.dart`): aggregation, vector rendering, DrawingML for DOCX/XLSX.
+  - PDF / XLSX / DOCX writers.
+  - Ready-made templates with sample data (`ReportTemplates`).
+  - Facade: `QudsReportEngine.fromXml(xml).exportToPdf(data)`.
+- Editor (`lib/src/editor_reports/`):
+  - `ReportDesignerController`: selection, undo, align/distribute, clipboard, properties, mock data.
+  - RenderBox canvas, inspector, toolbar, and paginated preview.
+  - Host widget: `QudsReportDesigner`, with a Templates menu and a Chart tool.
+  - Standalone desktop app: `apps/quds_report_studio` (Quds Report Studio).
+- Limits are listed in [STANDARDS.md](STANDARDS.md).
+
 ## Waves vs phases
 
 Post-audit delivery waves (1–4 in the roadmap) refine Phase 4 fidelity and

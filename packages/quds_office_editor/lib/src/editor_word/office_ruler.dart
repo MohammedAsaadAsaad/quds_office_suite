@@ -68,23 +68,39 @@ abstract final class WordRuler {
   static const double _inch = 72;
 
   /// Widget X of a page point.
-  static double localX(double pageX, {required double pageLeft, required double scale}) {
+  static double localX(
+    double pageX, {
+    required double pageLeft,
+    required double scale,
+  }) {
     return pageLeft + pageX * scale;
   }
 
   /// Widget Y of a page point.
-  static double localY(double pageY, {required double pageTop, required double scale}) {
+  static double localY(
+    double pageY, {
+    required double pageTop,
+    required double scale,
+  }) {
     return pageTop + pageY * scale;
   }
 
   /// Page X from a widget position.
-  static double pageX(double localX, {required double pageLeft, required double scale}) {
+  static double pageX(
+    double localX, {
+    required double pageLeft,
+    required double scale,
+  }) {
     final double s = scale <= 0 ? 1 : scale;
     return (localX - pageLeft) / s;
   }
 
   /// Page Y from a widget position.
-  static double pageY(double localY, {required double pageTop, required double scale}) {
+  static double pageY(
+    double localY, {
+    required double pageTop,
+    required double scale,
+  }) {
     final double s = scale <= 0 ? 1 : scale;
     return (localY - pageTop) / s;
   }
@@ -142,7 +158,10 @@ abstract final class WordRuler {
     double columnSpace = 0,
     bool preferFrame = false,
   }) {
-    if (preferFrame && frameX != null && frameWidth != null && frameWidth > 12) {
+    if (preferFrame &&
+        frameX != null &&
+        frameWidth != null &&
+        frameWidth > 12) {
       return (
         left: frameX + LaidOutLine.framePad,
         right: frameX + frameWidth - LaidOutLine.framePad,
@@ -189,7 +208,8 @@ abstract final class WordRuler {
   }
 
   /// Page Y of the content origin (0 on the vertical ruler): top margin.
-  static double contentOriginY({required WmlPageMargins margins}) => margins.top;
+  static double contentOriginY({required WmlPageMargins margins}) =>
+      margins.top;
 
   /// Widget-space guide for the active drag handle. Horizontal markers yield
   /// [guideX]; top/bottom margins yield [guideY].
@@ -281,10 +301,7 @@ abstract final class WordRuler {
           null,
         );
       case RulerHitKind.marginLeft:
-        return (
-          localX(margins.left, pageLeft: pageLeft, scale: scale),
-          null,
-        );
+        return (localX(margins.left, pageLeft: pageLeft, scale: scale), null);
       case RulerHitKind.marginRight:
         return (
           localX(pageWidth - margins.right, pageLeft: pageLeft, scale: scale),
@@ -509,7 +526,10 @@ abstract final class WordRuler {
         );
       case RulerHitKind.marginRight:
         return margins.copyWith(
-          right: (pageWidth - pagePos).clamp(minM, pageWidth - margins.left - 72),
+          right: (pageWidth - pagePos).clamp(
+            minM,
+            pageWidth - margins.left - 72,
+          ),
         );
       case RulerHitKind.marginTop:
         return margins.copyWith(
@@ -553,7 +573,10 @@ abstract final class WordRuler {
     double? contentLeft,
     double? contentRight,
   }) {
-    if (local.dx < 0 || local.dy < 0 || local.dx > view.width || local.dy > view.height) {
+    if (local.dx < 0 ||
+        local.dy < 0 ||
+        local.dx > view.width ||
+        local.dy > view.height) {
       return null;
     }
     final bool onH = local.dy <= size;
@@ -619,7 +642,11 @@ abstract final class WordRuler {
           return RulerHit(RulerHitKind.tab, tabIndex: i);
         }
       }
-      final double leftM = localX(margins.left, pageLeft: pageLeft, scale: scale);
+      final double leftM = localX(
+        margins.left,
+        pageLeft: pageLeft,
+        scale: scale,
+      );
       final double rightM = localX(
         pageWidth - margins.right,
         pageLeft: pageLeft,
@@ -651,7 +678,8 @@ abstract final class WordRuler {
     return const RulerHit(RulerHitKind.track);
   }
 
-  static bool _nearX(double a, double b, {double slop = 7}) => (a - b).abs() <= slop;
+  static bool _nearX(double a, double b, {double slop = 7}) =>
+      (a - b).abs() <= slop;
 
   static double _tabPageX(
     WmlTabStop tab, {
@@ -676,8 +704,8 @@ abstract final class WordRuler {
       return SystemMouseCursors.basic;
     }
     return switch (hit.kind) {
-      RulerHitKind.marginTop || RulerHitKind.marginBottom =>
-        SystemMouseCursors.resizeRow,
+      RulerHitKind.marginTop ||
+      RulerHitKind.marginBottom => SystemMouseCursors.resizeRow,
       RulerHitKind.track => SystemMouseCursors.precise,
       _ => SystemMouseCursors.resizeColumn,
     };
@@ -744,7 +772,9 @@ abstract final class WordRuler {
     final RulerHit? lit = active ?? hover;
 
     canvas.save();
-    canvas.clipRect(Rect.fromLTWH(size, 0, math.max(0, view.width - size), size));
+    canvas.clipRect(
+      Rect.fromLTWH(size, 0, math.max(0, view.width - size), size),
+    );
     final double wellLeft = math.min(left, right);
     final double wellRight = math.max(left, right);
     final double wellCL = math.min(contentL, contentR);
@@ -760,8 +790,8 @@ abstract final class WordRuler {
       highlight: lit?.kind == RulerHitKind.marginLeft
           ? contentL
           : lit?.kind == RulerHitKind.marginRight
-              ? contentR
-              : null,
+          ? contentR
+          : null,
     );
     _paintHTicks(
       canvas,
@@ -775,7 +805,9 @@ abstract final class WordRuler {
     canvas.restore();
 
     canvas.save();
-    canvas.clipRect(Rect.fromLTWH(0, size, size, math.max(0, view.height - size)));
+    canvas.clipRect(
+      Rect.fromLTWH(0, size, size, math.max(0, view.height - size)),
+    );
     _paintVWell(
       canvas,
       page: Rect.fromLTRB(5, top, size - 2, bottom),
@@ -787,8 +819,8 @@ abstract final class WordRuler {
       highlight: lit?.kind == RulerHitKind.marginTop
           ? contentT
           : lit?.kind == RulerHitKind.marginBottom
-              ? contentB
-              : null,
+          ? contentB
+          : null,
     );
     _paintVTicks(
       canvas,
@@ -800,7 +832,10 @@ abstract final class WordRuler {
     );
     canvas.restore();
 
-    canvas.drawRect(Rect.fromLTWH(0, 0, size, size), Paint()..color = const Color(0xFFE4E4E4));
+    canvas.drawRect(
+      Rect.fromLTWH(0, 0, size, size),
+      Paint()..color = const Color(0xFFE4E4E4),
+    );
     canvas.drawLine(
       Offset(3, 3),
       Offset(size - 4, size - 4),
@@ -827,7 +862,9 @@ abstract final class WordRuler {
     );
 
     canvas.save();
-    canvas.clipRect(Rect.fromLTWH(size, 0, math.max(0, view.width - size), size));
+    canvas.clipRect(
+      Rect.fromLTWH(size, 0, math.max(0, view.width - size), size),
+    );
     _paintDefaultTabs(
       canvas,
       pageLeft: pageLeft,
@@ -902,7 +939,8 @@ abstract final class WordRuler {
       canvas,
       xRight,
       theme: theme,
-      active: hover?.kind == RulerHitKind.rightIndent ||
+      active:
+          hover?.kind == RulerHitKind.rightIndent ||
           active?.kind == RulerHitKind.rightIndent,
     );
     _paintLeftFamily(
@@ -910,11 +948,14 @@ abstract final class WordRuler {
       xFirst,
       xHang,
       theme: theme,
-      firstActive: hover?.kind == RulerHitKind.firstLine ||
+      firstActive:
+          hover?.kind == RulerHitKind.firstLine ||
           active?.kind == RulerHitKind.firstLine,
-      hangActive: hover?.kind == RulerHitKind.hanging ||
+      hangActive:
+          hover?.kind == RulerHitKind.hanging ||
           active?.kind == RulerHitKind.hanging,
-      boxActive: hover?.kind == RulerHitKind.leftIndent ||
+      boxActive:
+          hover?.kind == RulerHitKind.leftIndent ||
           active?.kind == RulerHitKind.leftIndent,
     );
     canvas.restore();
@@ -1050,9 +1091,9 @@ abstract final class WordRuler {
       ..strokeWidth = 1;
     final double sign = rtl ? -1 : 1;
     final double eighth = _inch / 8;
-    final int span = ((math.max(originPageX, pageWidth - originPageX) + _inch) /
-            eighth)
-        .ceil() +
+    final int span =
+        ((math.max(originPageX, pageWidth - originPageX) + _inch) / eighth)
+            .ceil() +
         2;
     for (int n = -span; n <= span; n++) {
       final double page = originPageX + sign * n * eighth;
@@ -1258,7 +1299,8 @@ abstract final class WordRuler {
     );
     canvas.drawRRect(
       box,
-      Paint()..color = active ? const Color(0xFFD6E8F8) : const Color(0xFFFBFBFB),
+      Paint()
+        ..color = active ? const Color(0xFFD6E8F8) : const Color(0xFFFBFBFB),
     );
     canvas.drawRRect(
       box,
@@ -1281,7 +1323,8 @@ abstract final class WordRuler {
     );
     canvas.drawPath(
       path,
-      Paint()..color = active ? const Color(0xFFD6E8F8) : const Color(0xFFFBFBFB),
+      Paint()
+        ..color = active ? const Color(0xFFD6E8F8) : const Color(0xFFFBFBFB),
     );
     canvas.drawPath(
       path,
@@ -1317,30 +1360,45 @@ abstract final class WordRuler {
         canvas.drawLine(Offset(x, y + 3.5), Offset(x - 5.5, y + 3.5), stroke);
       case WmlTabAlignment.center:
         canvas.drawLine(Offset(x, y - 5), Offset(x, y + 3.5), stroke);
-        canvas.drawLine(Offset(x - 4.5, y + 3.5), Offset(x + 4.5, y + 3.5), stroke);
+        canvas.drawLine(
+          Offset(x - 4.5, y + 3.5),
+          Offset(x + 4.5, y + 3.5),
+          stroke,
+        );
       case WmlTabAlignment.decimal:
         canvas.drawLine(Offset(x, y - 5), Offset(x, y + 3.5), stroke);
-        canvas.drawLine(Offset(x - 4.5, y + 3.5), Offset(x + 4.5, y + 3.5), stroke);
+        canvas.drawLine(
+          Offset(x - 4.5, y + 3.5),
+          Offset(x + 4.5, y + 3.5),
+          stroke,
+        );
         canvas.drawCircle(Offset(x + 5, y + 1), 1.15, Paint()..color = color);
     }
   }
 
-  static void _labelCentered(Canvas canvas, String text, Offset center, Color color) {
-    final ParagraphBuilder b = ParagraphBuilder(
-      ParagraphStyle(
-        fontSize: 9,
-        fontWeight: FontWeight.w500,
-        textAlign: TextAlign.center,
-      ),
-    )..pushStyle(
-        TextStyle(
-          color: color.withValues(alpha: 0.92),
-          fontSize: 9,
-          fontWeight: FontWeight.w500,
-        ),
-      );
+  static void _labelCentered(
+    Canvas canvas,
+    String text,
+    Offset center,
+    Color color,
+  ) {
+    final ParagraphBuilder b =
+        ParagraphBuilder(
+          ParagraphStyle(
+            fontSize: 9,
+            fontWeight: FontWeight.w500,
+            textAlign: TextAlign.center,
+          ),
+        )..pushStyle(
+          TextStyle(
+            color: color.withValues(alpha: 0.92),
+            fontSize: 9,
+            fontWeight: FontWeight.w500,
+          ),
+        );
     b.addText(text);
-    final Paragraph p = b.build()..layout(const ParagraphConstraints(width: 28));
+    final Paragraph p = b.build()
+      ..layout(const ParagraphConstraints(width: 28));
     canvas.drawParagraph(p, Offset(center.dx - 14, center.dy));
   }
 
@@ -1364,7 +1422,8 @@ abstract final class WordRuler {
       ParagraphStyle(fontSize: 10, textAlign: TextAlign.center),
     )..pushStyle(TextStyle(color: theme.chromeText, fontSize: 10));
     b.addText(text);
-    final Paragraph p = b.build()..layout(const ParagraphConstraints(width: 64));
+    final Paragraph p = b.build()
+      ..layout(const ParagraphConstraints(width: 64));
     final Rect box = Rect.fromLTWH(x - 32, size + 6, 64, 18);
     canvas.drawRRect(
       RRect.fromRectAndRadius(box, const Radius.circular(4)),

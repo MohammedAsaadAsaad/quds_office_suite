@@ -106,8 +106,7 @@ class PdfViewerOptions {
           preventLinkNavigation ?? this.preventLinkNavigation,
       backgroundColor: backgroundColor ?? this.backgroundColor,
       nightMode: nightMode ?? this.nightMode,
-      showScrollIndicators:
-          showScrollIndicators ?? this.showScrollIndicators,
+      showScrollIndicators: showScrollIndicators ?? this.showScrollIndicators,
       password: password ?? this.password,
     );
   }

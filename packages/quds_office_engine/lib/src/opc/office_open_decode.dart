@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import '../pdf/file/model/pdf_file.dart';
 import '../sheet/formula/formula_eval.dart';
 import '../sheet/model/sml_workbook.dart';
 import '../sheet/serial/sheet_serial.dart';
@@ -8,8 +9,6 @@ import '../slide/serial/slide_serial.dart';
 import '../visual/sheet_chart_data.dart';
 import '../word/layout/word_layout.dart';
 import '../word/model/wml_document.dart';
-import '../pdf/file/io/pdf_open_payload.dart';
-import '../pdf/file/model/pdf_file.dart';
 import '../word/serial/word_deserializer.dart';
 import 'office_open_types.dart';
 import 'repair/office_repair.dart';

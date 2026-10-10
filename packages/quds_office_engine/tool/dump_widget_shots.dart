@@ -1,6 +1,8 @@
 /// Build widget gallery samples + rasterize with pdftoppm (no Flutter).
 ///
 ///   cd packages/quds_office_engine && dart run tool/dump_widget_shots.dart
+library;
+
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -24,15 +26,15 @@ void main() {
 
   final Map<String, Uint8List Function(SfntFont?)> samples =
       <String, Uint8List Function(SfntFont?)>{
-    'engine_invoice': invoice.buildInvoice,
-    'engine_proposal': proposal.buildProposal,
-    'engine_report': report.buildReport,
-    'studio_invoice': _studioInvoice,
-    'studio_proposal': _studioProposal,
-    'studio_quarterly': _studioQuarterly,
-    'studio_agenda': _studioAgenda,
-    'studio_dossier': _studioDossier,
-  };
+        'engine_invoice': (SfntFont? f) => invoice.buildInvoice(font: f),
+        'engine_proposal': (SfntFont? f) => proposal.buildProposal(font: f),
+        'engine_report': (SfntFont? f) => report.buildQuarterlyReport(font: f),
+        'studio_invoice': _studioInvoice,
+        'studio_proposal': _studioProposal,
+        'studio_quarterly': _studioQuarterly,
+        'studio_agenda': _studioAgenda,
+        'studio_dossier': _studioDossier,
+      };
 
   var fail = 0;
   for (final MapEntry<String, Uint8List Function(SfntFont?)> e
@@ -140,7 +142,12 @@ Uint8List _studioInvoice(SfntFont? font) {
           columnWidths: const <double>[3.4, 0.7, 0.9, 1.0],
           headerDecoration: '1A237E',
           data: const <List<String>>[
-            <String>['Platform license — Engine (annual)', '1', '2,400', '2,400'],
+            <String>[
+              'Platform license — Engine (annual)',
+              '1',
+              '2,400',
+              '2,400',
+            ],
             <String>['Editor seats', '8', '180', '1,440'],
             <String>['PDF file stack', '1', '950', '950'],
             <String>['Priority support', '1', '420', '420'],
@@ -162,9 +169,7 @@ Uint8List _studioInvoice(SfntFont? font) {
         const pw.Bullet(
           text: 'Payable within 14 days. Reference the invoice number.',
         ),
-        const pw.Bullet(
-          text: 'Generated with pdf_widgets MultiPage + Table.',
-        ),
+        const pw.Bullet(text: 'Generated with pdf_widgets MultiPage + Table.'),
       ],
     ),
   );
@@ -282,7 +287,10 @@ Uint8List _studioAgenda(SfntFont? font) {
         crossAxisAlignment: pw.CrossAxisAlignment.stretch,
         children: <pw.Widget>[
           pw.Container(
-            padding: const pw.EdgeInsets.symmetric(vertical: 18, horizontal: 16),
+            padding: const pw.EdgeInsets.symmetric(
+              vertical: 18,
+              horizontal: 16,
+            ),
             decoration: const pw.BoxDecoration(color: '1565C0'),
             child: const pw.Text(
               'BOARD MEETING AGENDA',
@@ -370,8 +378,8 @@ Uint8List _studioDossier(SfntFont? font) {
             flex: 3,
             child: pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: const <pw.Widget>[
-                pw.Text(
+              children: <pw.Widget>[
+                const pw.Text(
                   'Narrative',
                   style: pw.TextStyle(
                     fontWeight: pw.FontWeight.bold,
@@ -379,7 +387,7 @@ Uint8List _studioDossier(SfntFont? font) {
                     color: '1A237E',
                   ),
                 ),
-                pw.SizedBox(height: 8),
+                const pw.SizedBox(height: 8),
                 pw.Paragraph(
                   text:
                       'Al Tahreer remains the priority corridor for rental '

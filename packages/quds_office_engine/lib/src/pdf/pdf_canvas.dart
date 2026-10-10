@@ -142,6 +142,9 @@ class PdfCanvas {
   /// setLineWidth API.
   void setLineWidth(double w) => _buf.writeln('${_n(w)} w');
 
+  /// Line join style: 0 miter, 1 round, 2 bevel.
+  void setLineJoin(int style) => _buf.writeln('$style j');
+
   /// setDash API.
   void setDash(List<double> pattern, [double phase = 0]) {
     _buf.writeln('[${pattern.map(_n).join(' ')}] ${_n(phase)} d');

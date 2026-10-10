@@ -12,6 +12,21 @@ cd packages/quds_office_engine
 dart run example/engine_quickstart.dart
 ```
 
+## Band reports
+
+A `.qrep` template plus a data map, exported to PDF, XLSX, and DOCX, then a
+bundled template (`sales_performance`) with its sample data:
+
+```bash
+cd packages/quds_office_engine
+dart run example/report_quickstart.dart out ../quds_office_editor/fonts
+```
+
+The second argument is optional. It points at TrueType faces to embed
+(Liberation + Noto Naskh Arabic); without it, Latin falls back to Helvetica.
+
+![Sales dashboard report](screenshots/report_sales_performance.png)
+
 ## Rich export gallery
 
 Writes **several files per app** — Word, Excel, and PowerPoint — then exports

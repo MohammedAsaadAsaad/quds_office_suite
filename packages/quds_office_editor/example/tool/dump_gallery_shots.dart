@@ -2,13 +2,15 @@
 ///
 /// Run from example/:
 ///   dart run tool/dump_gallery_shots.dart
+library;
+
 import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:quds_office_engine/quds_office_engine.dart';
 
-import '../lib/studio_files.dart';
-import '../lib/studio_pdf_gallery.dart';
+import 'package:quds_office_studio/studio_files.dart';
+import 'package:quds_office_studio/studio_pdf_gallery.dart';
 
 void main() {
   final Directory out = Directory(
@@ -47,12 +49,13 @@ void main() {
       if (r.exitCode != 0) {
         throw StateError('pdftoppm: ${r.stderr}');
       }
-      final List<File> pngs = out
-          .listSync()
-          .whereType<File>()
-          .where((File f) => f.path.contains('/${sample.id}-'))
-          .toList()
-        ..sort((File a, File b) => a.path.compareTo(b.path));
+      final List<File> pngs =
+          out
+              .listSync()
+              .whereType<File>()
+              .where((File f) => f.path.contains('/${sample.id}-'))
+              .toList()
+            ..sort((File a, File b) => a.path.compareTo(b.path));
       stdout.writeln(
         'OK  ${sample.id}  pdf=${bytes.length}  pages=${pngs.length}',
       );

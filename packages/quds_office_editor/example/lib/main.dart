@@ -23,7 +23,8 @@ class QudsOfficeStudioApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
-        fontFamily: 'Noto Naskh Arabic',
+        fontFamily: 'Liberation Sans',
+        fontFamilyFallback: const <String>['Noto Naskh Arabic', 'Tajawal'],
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2B579A)),
       ),
       builder: (BuildContext context, Widget? child) {

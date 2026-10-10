@@ -14,3 +14,4 @@ workspace:
   - packages/quds_office_engine
   - packages/quds_office_editor
   - packages/quds_office_editor/example
+  - apps/quds_report_studio

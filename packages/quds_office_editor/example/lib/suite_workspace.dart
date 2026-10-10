@@ -1262,29 +1262,44 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
           _cmd(Icons.zoom_out, _arabic ? 'تصغير' : 'Zoom out', () {
             _pdf.zoomBy(1 / 1.1);
           }),
-          _cmd(Icons.fit_screen_outlined, _arabic ? 'عرض' : 'Fit width', () {
-            _togglePdfOption(() {
-              _pdfFitPolicy = PdfFitPolicy.width;
-              _pdf.fitVisibleWidth();
-            });
-          }, selected: _pdfFitPolicy == PdfFitPolicy.width),
-          _cmd(Icons.aspect_ratio, _arabic ? 'صفحة' : 'Fit page', () {
-            _togglePdfOption(() {
-              _pdfFitPolicy = PdfFitPolicy.page;
-              final Size e = _pdf.viewport.extent;
-              _pdf.fitPage(
-                e.width > 0 ? e.width : 720,
-                e.height > 0 ? e.height : 900,
-              );
-            });
-          }, selected: _pdfFitPolicy == PdfFitPolicy.page),
-          _cmd(Icons.height, _arabic ? 'ارتفاع' : 'Fit height', () {
-            _togglePdfOption(() {
-              _pdfFitPolicy = PdfFitPolicy.height;
-              final double h = _pdf.viewport.extent.height;
-              _pdf.fitHeight(h > 0 ? h : 900);
-            });
-          }, selected: _pdfFitPolicy == PdfFitPolicy.height),
+          _cmd(
+            Icons.fit_screen_outlined,
+            _arabic ? 'عرض' : 'Fit width',
+            () {
+              _togglePdfOption(() {
+                _pdfFitPolicy = PdfFitPolicy.width;
+                _pdf.fitVisibleWidth();
+              });
+            },
+            selected: _pdfFitPolicy == PdfFitPolicy.width,
+          ),
+          _cmd(
+            Icons.aspect_ratio,
+            _arabic ? 'صفحة' : 'Fit page',
+            () {
+              _togglePdfOption(() {
+                _pdfFitPolicy = PdfFitPolicy.page;
+                final Size e = _pdf.viewport.extent;
+                _pdf.fitPage(
+                  e.width > 0 ? e.width : 720,
+                  e.height > 0 ? e.height : 900,
+                );
+              });
+            },
+            selected: _pdfFitPolicy == PdfFitPolicy.page,
+          ),
+          _cmd(
+            Icons.height,
+            _arabic ? 'ارتفاع' : 'Fit height',
+            () {
+              _togglePdfOption(() {
+                _pdfFitPolicy = PdfFitPolicy.height;
+                final double h = _pdf.viewport.extent.height;
+                _pdf.fitHeight(h > 0 ? h : 900);
+              });
+            },
+            selected: _pdfFitPolicy == PdfFitPolicy.height,
+          ),
           _cmd(Icons.search, _arabic ? 'بحث' : 'Find', _openFind),
         ],
       ),
@@ -4205,7 +4220,9 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
             _pdf,
             picked.path!,
             onError: (Object error) {
-              _toast(_arabic ? 'فشل فتح PDF: $error' : 'PDF open failed: $error');
+              _toast(
+                _arabic ? 'فشل فتح PDF: $error' : 'PDF open failed: $error',
+              );
             },
           );
         } else {
@@ -6769,7 +6786,8 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
                 options: _pdfViewerOptions,
                 events: _pdfEvents,
                 onFollowLink: (PdfLinkAction action) {
-                  final String target = action.uri ??
+                  final String target =
+                      action.uri ??
                       (action.pageIndex != null
                           ? '${_arabic ? 'صفحة' : 'page'} ${action.pageIndex! + 1}'
                           : '?');
@@ -8579,15 +8597,11 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
                         child: child,
                       );
                     },
-                onReorder: (int from, int to) {
+                onReorderItem: (int from, int to) {
                   if (!_canMutate) {
                     return;
                   }
-                  var dest = to;
-                  if (dest > from) {
-                    dest -= 1;
-                  }
-                  _slides.reorderSlide(from, dest);
+                  _slides.reorderSlide(from, to);
                 },
                 itemBuilder: (BuildContext context, int i) {
                   return _slideSorterCard(

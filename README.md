@@ -2,7 +2,7 @@
 
 <p align="center">
   <strong>A production-grade Office stack for Dart and Flutter.</strong><br/>
-  Pure Dart engine. Custom RenderBox editors. Word · Excel · PowerPoint · PDF.
+  Pure Dart engine. Custom RenderBox editors. Word · Excel · PowerPoint · PDF · Band reports.
 </p>
 
 <p align="center">
@@ -15,12 +15,13 @@
 
 ---
 
-Two packages. One suite. Publish and depend on each package **on its own**.
+Two packages and one desktop app. Depend on each package **on its own**.
 
 | Package | Runtime | What it is | pub.dev |
 | --- | --- | --- | --- |
 | **[`quds_office_engine`](packages/quds_office_engine)** | Pure Dart | OOXML + OPC/ZIP + formulas + PDF 1.7 | [pub.dev/packages/quds_office_engine](https://pub.dev/packages/quds_office_engine) |
-| **[`quds_office_editor`](packages/quds_office_editor)** | Flutter | Interactive Word / Sheet / Slide / PDF surfaces | [pub.dev/packages/quds_office_editor](https://pub.dev/packages/quds_office_editor) |
+| **[`quds_office_editor`](packages/quds_office_editor)** | Flutter | Interactive Word / Sheet / Slide / PDF surfaces and the report designer | [pub.dev/packages/quds_office_editor](https://pub.dev/packages/quds_office_editor) |
+| **[`quds_report_studio`](apps/quds_report_studio)** | Flutter desktop app | Standalone report editor: open, design, preview, export `.qrep` | not published (app) |
 
 ```text
 ┌─────────────────────────────────────────────────────────────┐
@@ -31,7 +32,8 @@ Two packages. One suite. Publish and depend on each package **on its own**.
 │  QudsSheetEditor             │  Wml / Sml / Pml models      │
 │  QudsSlideEditor             │  Formula engine              │
 │  QudsPdfViewer / Editor      │  PdfFile + OfficePdfExport   │
-│  custom RenderBox canvases   │  OfficePdfExport             │
+│  QudsReportDesigner          │  quds_reports (.qrep → PDF,  │
+│  custom RenderBox canvases   │    XLSX, DOCX)               │
 │         │                    │  OfficeIsolateOpen / Save    │
 │         └────────────────────┤  OPC · ZIP · OLE · XML       │
 │                              │  BiDi · shaping · fonts      │
@@ -41,12 +43,32 @@ Two packages. One suite. Publish and depend on each package **on its own**.
 The engine **never** imports `dart:ui` or Flutter. The editor **never** uses
 `TextField`, `ListView`, or `InteractiveViewer` for the document surface.
 
-<p align="center">
-  <img src="packages/quds_office_editor/example/screenshots/word.png" alt="Word" width="24%"/>
-  <img src="packages/quds_office_editor/example/screenshots/excel.png" alt="Excel" width="24%"/>
-  <img src="packages/quds_office_editor/example/screenshots/powerpoint.png" alt="PowerPoint" width="24%"/>
-  <img src="packages/quds_office_editor/example/screenshots/pdf.png" alt="PDF" width="24%"/>
-</p>
+![Quds Report Studio: designer, chart element, and inspector](apps/quds_report_studio/screenshots/studio_chart.png)
+
+<table>
+  <tr>
+    <td width="50%"><img src="packages/quds_office_editor/example/screenshots/word.png" alt="Word"/><br/><b>Word</b>: paginated canvas, BiDi caret, outline, comments</td>
+    <td width="50%"><img src="packages/quds_office_editor/example/screenshots/excel.png" alt="Excel"/><br/><b>Excel</b>: virtualized grid, formula engine, charts</td>
+  </tr>
+  <tr>
+    <td><img src="packages/quds_office_editor/example/screenshots/powerpoint.png" alt="PowerPoint"/><br/><b>PowerPoint</b>: stage, animations, Morph, reverse playback</td>
+    <td><img src="packages/quds_office_editor/example/screenshots/pdf.png" alt="PDF"/><br/><b>PDF</b>: open real files, find, annotate, forms</td>
+  </tr>
+  <tr>
+    <td><img src="apps/quds_report_studio/screenshots/studio_preview.png" alt="Report preview"/><br/><b>Report preview</b>: engine pagination, vector charts</td>
+    <td><img src="apps/quds_report_studio/screenshots/studio_rtl_invoice.png" alt="Arabic report"/><br/><b>RTL reports</b>: Arabic invoice with tafqeet and QR</td>
+  </tr>
+</table>
+
+### Report output (rendered by the engine, no Flutter)
+
+<table>
+  <tr>
+    <td width="33%"><img src="packages/quds_office_engine/example/screenshots/report_sales_performance.png" alt="Sales dashboard"/></td>
+    <td width="33%"><img src="packages/quds_office_engine/example/screenshots/report_sales_invoice_ar.png" alt="Arabic invoice"/></td>
+    <td width="33%"><img src="packages/quds_office_engine/example/screenshots/report_inventory_ar.png" alt="Inventory"/></td>
+  </tr>
+</table>
 
 ---
 
@@ -58,6 +80,7 @@ Most Dart “Office” libraries stop at writing a simple DOCX. Quds goes furthe
 - **Own the stack** — ZIP, Deflate, CFBF/OLE, XML, fonts, BiDi, and PDF are implemented here. Fewer mystery dependencies.
 - **Many languages, many directions** — UAX #9 BiDi, Arabic shaping, mixed LTR/RTL, and logical caret movement live in the engine; the editor paints them.
 - **Editors that look like Office** — paginated Word, virtualized Excel, a slide stage with Morph, wipe, push, and **reverse** slideshow playback.
+- **Band reports** — `.qrep` templates with bands, groups, expressions, typed variables, charts, barcodes, and Arabic amount-in-words (`TAFQEET`), exported to PDF, XLSX, and DOCX. A visual designer and a desktop app come with it.
 - **100+ PDF report templates** — classified by domain, direction-aware, with distinct `SheetSkin` layouts (not text-only clones).
 - **Server or UI** — generate reports on a CLI/server with the engine; embed the same models in Flutter with the editor.
 
@@ -69,14 +92,14 @@ Most Dart “Office” libraries stop at writing a simple DOCX. Quds goes furthe
 
 ```yaml
 dependencies:
-  quds_office_engine: ^0.5.3
+  quds_office_engine: ^0.6.0
 ```
 
 ### Editor (pulls the engine)
 
 ```yaml
 dependencies:
-  quds_office_editor: ^0.5.1
+  quds_office_editor: ^0.6.0
 ```
 
 This repository is a [Dart workspace](https://dart.dev/tools/pub/workspaces). From the root:
@@ -170,16 +193,57 @@ class _WordHostState extends State<WordHost> {
 }
 ```
 
-Same pattern for `SheetEditorController` + `QudsSheetEditor` and
-`SlideEditorController` + `QudsSlideEditor`.
+Same pattern for `SheetEditorController` + `QudsSheetEditor`,
+`SlideEditorController` + `QudsSlideEditor`, `PdfViewerController` +
+`QudsPdfViewer`, and `ReportDesignerController` + `QudsReportDesigner`.
+
+---
+
+## 60-second report tour
+
+```dart
+import 'dart:io';
+import 'package:quds_office_engine/quds_reports.dart';
+
+Future<void> main() async {
+  final ReportTemplateInfo info = ReportTemplates.byId('sales_performance')!;
+  // Pass `fonts:` (a ReportFontRegistry) to embed faces; Arabic needs one.
+  final QudsReportEngine engine = QudsReportEngine.fromXml(info.xml);
+  final Map<String, Object?> data = info.sampleData(); // or your own Map
+
+  File('sales.pdf').writeAsBytesSync(await engine.exportToPdf(data));
+  File('sales.xlsx').writeAsBytesSync(await engine.exportToExcel(data));
+  File('sales.docx').writeAsBytesSync(await engine.exportToWord(data));
+}
+```
+
+Design the same template visually with `QudsReportDesigner` (Flutter) or
+in **Quds Report Studio**:
+
+<table>
+  <tr>
+    <td width="50%"><img src="apps/quds_report_studio/screenshots/studio_text_inspector.png" alt="Inspector"/><br/>Inspector: steppers, segmented icons, switches, B/I/U</td>
+    <td width="50%"><img src="apps/quds_report_studio/screenshots/studio_autocomplete.png" alt="Autocomplete"/><br/><code>{{ }}</code> autocomplete from data, functions, and formats</td>
+  </tr>
+</table>
+
+Format, expressions, charts, templates: [engine README → Band reports](packages/quds_office_engine/README.md#band-reports-quds_reportsdart).
+Designer and inspector: [editor README → Report designer](packages/quds_office_editor/README.md#report-designer).
 
 Full walkthrough: [`packages/quds_office_editor/README.md`](packages/quds_office_editor/README.md).
 
 ---
 
-## Run the studio
+## Run the apps
 
-The editor example is a desktop workspace (ribbons, samples, OS window chrome):
+**Quds Report Studio**: the standalone report editor (open, design, preview, export):
+
+```bash
+cd apps/quds_report_studio
+flutter run -d linux     # or windows, macos
+```
+
+**Quds Office Studio**: the editor example, a desktop workspace with ribbons, samples, and OS window chrome:
 
 ```bash
 cd packages/quds_office_editor/example
@@ -206,6 +270,7 @@ flowchart LR
     W[QudsWordEditor]
     X[QudsSheetEditor]
     P[QudsSlideEditor]
+    D[QudsReportDesigner]
     C[Controllers + IME + undo]
   end
   subgraph Engine["quds_office_engine"]
@@ -213,11 +278,13 @@ flowchart LR
     F[Formula + layout + BiDi]
     IO[OPC ZIP OLE XML]
     PDF[OfficePdfExport]
+    R[quds_reports .qrep]
   end
-  UI --> W & X & P
+  UI --> W & X & P & D
   W & X & P --> C --> M
   M --> F --> IO
   M --> PDF
+  D --> R --> PDF
 ```
 
 | Layer | Lives in | Rule |
@@ -235,7 +302,10 @@ quds_office_suite/
 ├── packages/
 │   ├── quds_office_engine/     ← publish this to pub.dev
 │   └── quds_office_editor/     ← publish this to pub.dev
-├── docs/PUBLISHING.md
+│       └── example/            Quds Office Studio (not published)
+├── apps/
+│   └── quds_report_studio/     standalone report editor (not published)
+├── docs/                       MISSION, STANDARDS (limits), PDF, PUBLISHING
 └── LICENSE                     MIT
 ```
 

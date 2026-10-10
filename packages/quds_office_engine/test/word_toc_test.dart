@@ -133,7 +133,7 @@ void main() {
       ..properties.color = 'C00000';
     toc.titleParagraph.inlines.whereType<WmlRun>().first.properties.color =
         'FF00FF';
-    var laid = WordLayoutEngine(font: null).layout(doc);
+    final laid = WordLayoutEngine(font: null).layout(doc);
     WordToc.syncPageNumbers(doc, laid);
     expect(identical(toc.itemParagraphs.first, item), isTrue);
     expect(item.text, 'Custom one');
@@ -223,7 +223,7 @@ void main() {
       toc.entries[1].headingParagraphIndex,
       greaterThan(toc.entries[0].headingParagraphIndex),
     );
-    var laid = WordLayoutEngine(font: null).layout(doc);
+    final laid = WordLayoutEngine(font: null).layout(doc);
     expect(WordToc.syncPageNumbers(doc, laid), isTrue);
     expect(toc.entries[0].pageNumber, 1);
     expect(toc.entries[1].pageNumber, 2);

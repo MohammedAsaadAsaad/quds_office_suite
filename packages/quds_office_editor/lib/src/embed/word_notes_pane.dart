@@ -103,7 +103,8 @@ class _WordNotesPaneState extends State<WordNotesPane> {
                           isDense: true,
                           border: InputBorder.none,
                         ),
-                        onChanged: (String value) => _c.setNoteText(note, value),
+                        onChanged: (String value) =>
+                            _c.setNoteText(note, value),
                       ),
                     ],
                   ),

@@ -250,7 +250,7 @@ List<Widget> _receipt(SheetTemplate sheet) {
             Divider(color: theme.ink, thickness: 0.6, height: 10),
             Divider(color: theme.ink, thickness: 0.4, height: 4),
             SizedBox(height: 6),
-            _ink('$amount', size: 26, bold: true, color: theme.ink, align: TextAlign.center),
+            _ink(amount, size: 26, bold: true, color: theme.ink, align: TextAlign.center),
             _ink(sheet.labels.total, size: 8, color: theme.muted, align: TextAlign.center),
             SizedBox(height: 8),
             for (final SheetRow row in sheet.rows)

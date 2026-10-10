@@ -355,6 +355,29 @@ class XlsxSheetBuilder {
   /// autoFilterRef API.
   String? autoFilterRef;
 
+  /// Charts floating over the sheet.
+  final List<XlsxSheetChart> charts = <XlsxSheetChart>[];
+
+  /// Anchors a DrawingML `c:chartSpace` part with its top-left corner at
+  /// cell ([row], [col]) and the given size in points.
+  void addChart({
+    required int row,
+    required int col,
+    required double widthPoints,
+    required double heightPoints,
+    required String chartXml,
+  }) {
+    charts.add(
+      XlsxSheetChart(
+        row: row,
+        col: col,
+        widthEmu: (widthPoints * 12700).round(),
+        heightEmu: (heightPoints * 12700).round(),
+        xml: chartXml,
+      ),
+    );
+  }
+
   /// addRow API.
   void addRow(List<Object?> values, {int style = 0}) {
     rows.add(<XlsxCell?>[
@@ -439,6 +462,33 @@ class XlsxSheetBuilder {
   }
 }
 
+/// Chart anchored on a worksheet (see [XlsxSheetBuilder.addChart]).
+class XlsxSheetChart {
+  /// XlsxSheetChart API.
+  const XlsxSheetChart({
+    required this.row,
+    required this.col,
+    required this.widthEmu,
+    required this.heightEmu,
+    required this.xml,
+  });
+
+  /// Zero-based anchor row.
+  final int row;
+
+  /// Zero-based anchor column.
+  final int col;
+
+  /// widthEmu API.
+  final int widthEmu;
+
+  /// heightEmu API.
+  final int heightEmu;
+
+  /// `c:chartSpace` part XML.
+  final String xml;
+}
+
 /// Multi-sheet workbook writer with styles, freeze, merges, RTL, and filters.
 class XlsxWorkbookBuilder {
   /// XlsxWorkbookBuilder API.
@@ -482,6 +532,7 @@ class XlsxWorkbookBuilder {
     String vertical = 'center',
     bool wrap = false,
     String? numFmt,
+    bool rightToLeft = false,
   }) {
     final int fontId = _fontId(
       bold: bold,
@@ -503,6 +554,7 @@ class XlsxWorkbookBuilder {
       horizontal: horizontal,
       vertical: vertical,
       wrap: wrap,
+      rightToLeft: rightToLeft,
     );
     for (int i = 0; i < _xfs.length; i++) {
       if (_xfs[i] == xf) {
@@ -540,13 +592,71 @@ class XlsxWorkbookBuilder {
       '/xl/workbook.xml',
     );
     final StringBuffer sheetEls = StringBuffer();
+    var drawingCount = 0;
+    var chartCount = 0;
     for (int i = 0; i < sheets.length; i++) {
       final int id = i + 1;
       final String uri = '/xl/worksheets/sheet$id.xml';
+      String? drawingRid;
+      final List<XlsxSheetChart> charts = sheets[i].charts;
+      if (charts.isNotEmpty) {
+        drawingCount++;
+        drawingRid = 'rIdDrawing1';
+        final String drawingUri = '/xl/drawings/drawing$drawingCount.xml';
+        package
+            .relationshipsFor(uri)
+            .add(
+              type: RelationshipTypes.drawing,
+              target: '../drawings/drawing$drawingCount.xml',
+              id: drawingRid,
+            );
+        final RelationshipCollection drawingRels = package.relationshipsFor(
+          drawingUri,
+        );
+        final StringBuffer anchors = StringBuffer();
+        for (int k = 0; k < charts.length; k++) {
+          chartCount++;
+          final XlsxSheetChart chart = charts[k];
+          package.createPart(
+            '/xl/charts/chart$chartCount.xml',
+            OfficeContentTypes.drawingChart,
+            utf8.encode(chart.xml),
+          );
+          drawingRels.add(
+            type: RelationshipTypes.chart,
+            target: '../charts/chart$chartCount.xml',
+            id: 'rIdChart${k + 1}',
+          );
+          anchors.write(
+            '<xdr:oneCellAnchor><xdr:from><xdr:col>${chart.col}</xdr:col>'
+            '<xdr:colOff>0</xdr:colOff><xdr:row>${chart.row}</xdr:row>'
+            '<xdr:rowOff>0</xdr:rowOff></xdr:from>'
+            '<xdr:ext cx="${chart.widthEmu}" cy="${chart.heightEmu}"/>'
+            '<xdr:graphicFrame macro=""><xdr:nvGraphicFramePr>'
+            '<xdr:cNvPr id="${k + 2}" name="Chart ${k + 1}"/>'
+            '<xdr:cNvGraphicFramePr/></xdr:nvGraphicFramePr>'
+            '<xdr:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/></xdr:xfrm>'
+            '<a:graphic><a:graphicData uri="${OfficeNamespaces.c}">'
+            '<c:chart xmlns:c="${OfficeNamespaces.c}" r:id="rIdChart${k + 1}"/>'
+            '</a:graphicData></a:graphic></xdr:graphicFrame>'
+            '<xdr:clientData/></xdr:oneCellAnchor>',
+          );
+        }
+        package.createPart(
+          drawingUri,
+          OfficeContentTypes.spreadsheetDrawing,
+          utf8.encode(
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            '<xdr:wsDr xmlns:xdr="${OfficeNamespaces.xdr}" '
+            'xmlns:a="${OfficeNamespaces.a}" xmlns:r="${OfficeNamespaces.r}">'
+            '$anchors</xdr:wsDr>',
+          ),
+        );
+      }
       package.createPart(
         uri,
         OfficeContentTypes.sheetWorksheet,
-        utf8.encode(_sheetXml(sheets[i], share)),
+        utf8.encode(_sheetXml(sheets[i], share, drawingRid: drawingRid)),
       );
       wbRels.add(
         type: RelationshipTypes.worksheet,
@@ -644,10 +754,15 @@ class XlsxWorkbookBuilder {
   }
 
   /// Function API.
-  String _sheetXml(XlsxSheetBuilder sheet, int Function(String) share) {
+  String _sheetXml(
+    XlsxSheetBuilder sheet,
+    int Function(String) share, {
+    String? drawingRid,
+  }) {
     final StringBuffer buf = StringBuffer(
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-      '<worksheet xmlns="${OfficeNamespaces.x}">',
+      '<worksheet xmlns="${OfficeNamespaces.x}"'
+      '${drawingRid == null ? '' : ' xmlns:r="${OfficeNamespaces.r}"'}>',
     );
     buf.write('<sheetViews><sheetView workbookViewId="0"');
     if (sheet.rightToLeft) {
@@ -714,6 +829,9 @@ class XlsxWorkbookBuilder {
         );
       }
       buf.write('</mergeCells>');
+    }
+    if (drawingRid != null) {
+      buf.write('<drawing r:id="$drawingRid"/>');
     }
     buf.write('</worksheet>');
     return buf.toString();
@@ -785,7 +903,8 @@ class XlsxWorkbookBuilder {
       if (xf.applyAlignment) {
         buf.write(
           '<alignment horizontal="${xf.horizontal}" vertical="${xf.vertical}"'
-          '${xf.wrap ? ' wrapText="1"' : ''}/>',
+          '${xf.wrap ? ' wrapText="1"' : ''}'
+          '${xf.rightToLeft ? ' readingOrder="2"' : ''}/>',
         );
       }
       buf.write('</xf>');
@@ -877,6 +996,7 @@ class _Xf {
     this.horizontal = 'left',
     this.vertical = 'center',
     this.wrap = false,
+    this.rightToLeft = false,
   });
 
   /// fontId API.
@@ -915,6 +1035,9 @@ class _Xf {
   /// wrap API.
   final bool wrap;
 
+  /// rightToLeft API (alignment `readingOrder="2"`).
+  final bool rightToLeft;
+
   @override
   bool operator ==(Object other) =>
       other is _Xf &&
@@ -929,7 +1052,8 @@ class _Xf {
       other.applyNumFmt == applyNumFmt &&
       other.horizontal == horizontal &&
       other.vertical == vertical &&
-      other.wrap == wrap;
+      other.wrap == wrap &&
+      other.rightToLeft == rightToLeft;
 
   @override
   /// hashCode API.
@@ -946,5 +1070,6 @@ class _Xf {
     horizontal,
     vertical,
     wrap,
+    rightToLeft,
   );
 }

@@ -3,8 +3,8 @@ library;
 
 import 'dart:typed_data';
 
-import '../../fonts/sfnt_parser.dart';
 import '../../builders/office_markup.dart';
+import '../../fonts/sfnt_parser.dart';
 import '../widgets/pw_types.dart';
 import 'kit.dart';
 import 'sheets.dart';

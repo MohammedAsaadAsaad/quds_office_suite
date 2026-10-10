@@ -478,7 +478,9 @@ class CaretEngine {
       }
       final bool leftHalf = x <= glyph.x + glyph.advance / 2;
       if (glyph.glyph.level.isOdd) {
-        return leftHalf ? glyph.glyph.logicalIndex + 1 : glyph.glyph.logicalIndex;
+        return leftHalf
+            ? glyph.glyph.logicalIndex + 1
+            : glyph.glyph.logicalIndex;
       }
       return leftHalf ? glyph.glyph.logicalIndex : glyph.glyph.logicalIndex + 1;
     }

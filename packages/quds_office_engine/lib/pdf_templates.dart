@@ -23,8 +23,6 @@
 /// [TemplateDocument.save].
 library;
 
-export 'src/pdf/widgets/pw_types.dart'
-    show PageOrientation, PdfPageFormat, TextDirection;
 export 'src/builders/office_markup.dart' show ChartPoint;
 export 'src/fonts/sfnt_parser.dart' show SfntFont;
 export 'src/pdf/templates/catalog.dart';
@@ -59,3 +57,5 @@ export 'src/pdf/templates/people.dart';
 export 'src/pdf/templates/sheets.dart'
     show SheetKind, SheetLabels, SheetRow, SheetSkin, SheetTemplate, SuiteSheet;
 export 'src/pdf/templates/suite.dart';
+export 'src/pdf/widgets/pw_types.dart'
+    show PageOrientation, PdfPageFormat, TextDirection;

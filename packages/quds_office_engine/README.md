@@ -9,11 +9,13 @@
   <img alt="Dart 3" src="https://img.shields.io/badge/Dart-3.12%2B-0175C2?logo=dart&logoColor=white"/>
 </p>
 
-**A pure Dart Office and PDF engine.** Open, build, and write `.docx`, `.xlsx`,
-and `.pptx`. Open real PDF files. Compose pages with a Flutter-like widget
-layout. Pick from **100+ direction-aware report templates** with distinct
-skins. Export Office models to native **PDF 1.7**. Assemble, rotate, stamp,
-and crop PDF pages without a native library.
+**A pure Dart Office, PDF, and report engine.** Open, build, and write
+`.docx`, `.xlsx`, and `.pptx`. Open real PDF files. Design **band reports**
+(`.qrep`) with expressions, grouping, charts, and Arabic amount-in-words, then
+export them to PDF, XLSX, and DOCX. Compose pages with a Flutter-like widget
+layout, pick from **100+ direction-aware PDF templates**, export Office models
+to native **PDF 1.7**, and assemble, rotate, stamp, and crop PDF pages without
+a native library.
 
 No Flutter. No `dart:ui`. No Microsoft Office, LibreOffice, or cloud conversion
 step. You pass `Uint8List` in and you get `Uint8List` out.
@@ -23,10 +25,38 @@ This is the model, layout, and IO half of
 Interactive canvases live in
 [`quds_office_editor`](https://pub.dev/packages/quds_office_editor).
 
-<p align="center">
-  <img src="example/screenshots/pdf_widgets.png" alt="Invoice composed with pdf_widgets" width="48%"/>
-  <img src="example/screenshots/office_rtl.png" alt="RTL formal letter exported to PDF" width="48%"/>
-</p>
+<table>
+  <tr>
+    <td width="33%"><img src="example/screenshots/report_sales_performance.png" alt="Sales dashboard report"/></td>
+    <td width="33%"><img src="example/screenshots/report_sales_invoice_ar.png" alt="Arabic VAT invoice report"/></td>
+    <td width="33%"><img src="example/screenshots/report_account_statement_ar.png" alt="Arabic account statement"/></td>
+  </tr>
+  <tr>
+    <td>Band report: KPI cards, vector charts, grouped table</td>
+    <td>Arabic RTL VAT invoice: QR, tafqeet, totals</td>
+    <td>Account statement: running balance, area chart</td>
+  </tr>
+  <tr>
+    <td><img src="example/screenshots/report_sales_performance_xlsx.png" alt="Report exported to XLSX"/></td>
+    <td><img src="example/screenshots/pdf_widgets.png" alt="Invoice composed with pdf_widgets"/></td>
+    <td><img src="example/screenshots/office_rtl.png" alt="RTL formal letter exported to PDF"/></td>
+  </tr>
+  <tr>
+    <td>The same report as XLSX with native Excel charts</td>
+    <td><code>pdf_widgets</code>: Document / Table / MultiPage</td>
+    <td>Office → PDF 1.7: RTL letter with embedded fonts</td>
+  </tr>
+</table>
+
+## Contents
+
+- [Why this package exists](#why-this-package-exists) · [Two packages, one suite](#two-packages-one-suite) · [Languages and directions](#languages-and-writing-directions)
+- [Install](#install) · [Capability map](#capability-map)
+- [Band reports (`quds_reports.dart`)](#band-reports-quds_reportsdart)
+- [Word](#word) · [Excel](#excel) · [PowerPoint](#powerpoint)
+- [PDF 1.7 — three ways](#pdf-17--three-ways) · [PDF toolbox](#pdf-toolbox)
+- [Isolates, find, stats, properties](#isolates-find-stats-properties) · [Theming](#theming)
+- [Honest limits](#honest-limits) · [Package layout](#package-layout) · [Examples](#examples) · [Compatibility](#compatibility)
 
 ---
 
@@ -62,6 +92,7 @@ quds_office_engine          pure Dart, no dart:ui
 ├── PdfToolbox              merge, split, rotate, stamp, crop
 ├── pdf_widgets             constraint layout → PdfDocument
 ├── pdf_templates           100+ report skins on top of widgets
+├── quds_reports            .qrep band reports → PDF / XLSX / DOCX
 └── OfficePdfExport         Word / Excel / PowerPoint → PDF 1.7
          │
          ▼
@@ -69,24 +100,26 @@ quds_office_editor          Flutter RenderBox only
 ├── QudsWordEditor
 ├── QudsSheetEditor
 ├── QudsSlideEditor
-└── QudsPdfViewer / QudsPdfEditor
+├── QudsPdfViewer / QudsPdfEditor
+└── QudsReportDesigner
 ```
 
 | Package | Runtime | Role |
 | --- | --- | --- |
 | **`quds_office_engine`** | Dart VM, web, Flutter | Models, formulas, PDF file, widgets, export |
-| **`quds_office_editor`** | Flutter | Custom `RenderBox` Word, Excel, PowerPoint, and PDF surfaces |
+| **`quds_office_editor`** | Flutter | Custom `RenderBox` Word, Excel, PowerPoint, PDF, and report-designer surfaces |
 
 Use the engine alone for CLI tools, isolates, backends, and codegen. Add the
 editor when a human needs to type, select, present, or annotate a PDF.
 
-Three entry points. Do not mix them carelessly:
+Four entry points. Do not mix them carelessly:
 
 | Import | Use it for |
 | --- | --- |
 | `package:quds_office_engine/quds_office_engine.dart` | Office models, builders, formulas, `PdfFile`, export |
 | `package:quds_office_engine/pdf_widgets.dart` | Flutter-like PDF layout (`Document`, `Text`, `Table`) |
 | `package:quds_office_engine/pdf_templates.dart` | Classified report templates on top of the widgets |
+| `package:quds_office_engine/quds_reports.dart` | `.qrep` band reports: templates, expressions, PDF / XLSX / DOCX export |
 | `package:quds_office_engine/quds_office_engine_optional.dart` | Optional PowerPoint media hydrate |
 
 `pdf_widgets` is a **separate library** on purpose. Its `Text`, `TextStyle`,
@@ -144,7 +177,7 @@ along the diagonal — Arabic cannot be cut glyph by glyph and still join.
 
 ```yaml
 dependencies:
-  quds_office_engine: ^0.5.3
+  quds_office_engine: ^0.6.0
 ```
 
 ```bash
@@ -171,6 +204,7 @@ import 'package:quds_office_engine/pdf_widgets.dart' as pw;
 | **PowerPoint** | Build, open, and write PPTX. Shapes, tables, notes, masters (subset), transitions and animations including Morph, reverse playback clock |
 | **Office → PDF** | Replay Word layout, Excel grid, and slides (or notes pages, including two slides on one page) to PDF 1.7 with subsetted fonts, links, and outlines |
 | **pdf_widgets** | Constraint layout: flex, text, tables, charts, images, TOC, headers, footers, watermarks. Synchronous `Document.save()` |
+| **Band reports** | `.qrep` XML templates with bands, groups, expressions, typed variables, tables, barcodes/QR, and charts → PDF, XLSX, DOCX. Six ready-made templates |
 | **pdf_templates** | 100+ classified reports with **distinct `SheetSkin` layouts**, LTR/RTL, and brand themes |
 | **PdfFile** | Open PDF 1.7, paint a display list, extract text, annotate, fill AcroForm, incremental save |
 | **PdfToolbox** | Merge, extract, split, reorder, remove, rotate, reverse, insert, mix, stamp, number, Bates, crop — a new file with resources grafted |
@@ -178,6 +212,182 @@ import 'package:quds_office_engine/pdf_widgets.dart' as pw;
 
 What this package will **not** pretend to do is listed under
 [Honest limits](#honest-limits).
+
+---
+
+## Band reports (`quds_reports.dart`)
+
+A report engine in the Crystal Reports / FastReport style, in pure Dart. A
+`.qrep` file is XML: bands with absolutely positioned elements and `{{ }}`
+expressions. Feed it a `Map` of data and get paginated **PDF**, **XLSX**, or
+**DOCX** bytes. The visual designer is `QudsReportDesigner` in
+[`quds_office_editor`](https://pub.dev/packages/quds_office_editor).
+
+<table>
+  <tr>
+    <td width="50%"><img src="example/screenshots/report_invoice_en.png" alt="English invoice"/></td>
+    <td width="50%"><img src="example/screenshots/report_inventory_ar.png" alt="Arabic inventory report"/></td>
+  </tr>
+  <tr>
+    <td>English commercial invoice with Code128 barcode</td>
+    <td>Arabic inventory: pie + bar charts, grouped by category</td>
+  </tr>
+</table>
+
+### Quick start
+
+```dart
+import 'dart:io';
+import 'package:quds_office_engine/quds_reports.dart';
+
+Future<void> main() async {
+  final QudsReportEngine engine = QudsReportEngine.fromXml(
+    File('order.qrep').readAsStringSync(),
+    fonts: ReportFontRegistry()
+      ..registerBytes(
+        'Liberation Sans',
+        File('fonts/LiberationSans-Regular.ttf').readAsBytesSync(),
+        bold: File('fonts/LiberationSans-Bold.ttf').readAsBytesSync(),
+      ),
+  );
+  final Map<String, Object?> data = <String, Object?>{
+    'customer': 'Northwind Traders',
+    'items': <Map<String, Object?>>[
+      <String, Object?>{'name': 'Laptop', 'qty': 2, 'price': 1250.0},
+      <String, Object?>{'name': 'Monitor', 'qty': 3, 'price': 410.0},
+    ],
+  };
+  File('order.pdf').writeAsBytesSync(await engine.exportToPdf(data));
+  File('order.xlsx').writeAsBytesSync(await engine.exportToExcel(data));
+  File('order.docx').writeAsBytesSync(await engine.exportToWord(data));
+}
+```
+
+A complete runnable version is
+[`example/report_quickstart.dart`](example/report_quickstart.dart).
+
+### The `.qrep` format
+
+```xml
+<QudsReport name="Order summary" pageSize="A4" orientation="Portrait" isRtl="false"
+            defaultFont="Liberation Sans" defaultFontSize="10">
+  <Settings>
+    <Margins top="15mm" bottom="15mm" left="15mm" right="15mm"/>
+    <Colors primary="#1E3A8A" light="#F4F7FB"/>
+  </Settings>
+  <Variables>
+    <Var name="vatRate" type="number" value="0.15" format="percent"/>
+  </Variables>
+  <Bands>
+    <ReportHeader height="24mm">
+      <Shape kind="RoundedRectangle" x="0mm" y="0mm" width="180mm" height="18mm"
+             fill="primary" strokeWidth="0" cornerRadius="3pt"/>
+      <Text x="5mm" y="3mm" width="120mm" height="8mm" fontSize="16" bold="true"
+            color="#FFFFFF">Order summary</Text>
+      <Text x="5mm" y="11mm" width="120mm" height="5mm">
+        {{Data.customer}} · {{System.CurrentDate | date:dd MMM yyyy}}</Text>
+    </ReportHeader>
+    <Detail dataSource="Data.items" height="8mm">
+      <Text x="0mm" y="1mm" width="110mm" height="6mm">{{item.name}}</Text>
+      <Text x="130mm" y="1mm" width="50mm" height="6mm" alignment="right">
+        {{item.qty * item.price | n2}}</Text>
+    </Detail>
+    <ReportSummary height="12mm">
+      <Text x="130mm" y="2mm" width="50mm" height="7mm" alignment="right" bold="true">
+        {{SUM(item.qty * item.price) * (1 + Variables.vatRate) | currency:USD}}</Text>
+    </ReportSummary>
+  </Bands>
+</QudsReport>
+```
+
+| Concept | Details |
+| --- | --- |
+| **Bands** | `ReportHeader`, `PageHeader`, `GroupHeader`, `Detail` (bound to a data set, with grouping, sorting, filters), `GroupFooter`, `PageFooter`, `ReportSummary` |
+| **Elements** | `Text`, `Image`, `Shape` (rectangle, rounded rectangle, ellipse, line), `Barcode` (Code128), `QrCode`, `Table` (columns, header, totals, repeating header across pages), `Chart` |
+| **Units** | `mm`, `cm`, `in`, `pt`, `px` on any length |
+| **Layout** | `canGrow` / `canShrink` text, word wrap, page breaks, `visibleWhen`, RTL mirroring of X for Arabic templates |
+| **Palette** | Named colors in `<Colors>`, referenced as `fill="primary"` |
+| **Variables** | Typed `<Var>`: `text` (may contain `{{ }}`), `number`, `boolean`, `date` (ISO, `today`, `now`), `list`, `expression`. Host `variables:` override them |
+
+### Expressions
+
+Placeholders evaluate with `QudsExpressionEngine`:
+
+| Paths | `Data.*` (your map), `item.*` (current row), `Group.*`, `Variables.*`, `System.PageNumber`, `System.TotalPages`, `System.CurrentDate`, `System.UserName` |
+| --- | --- |
+| Operators | `+ - * / %`, `= != <> < <= > >=`, `and`/`&&`, `or`/`\|\|`, `not`, `IF(cond, a, b)` |
+| Aggregates | `SUM COUNT AVG MIN MAX DISTINCTCOUNT FIRST LAST` (scoped to the band or group) |
+| Logic | `IF IIF COALESCE NVL ISNULL ISEMPTY AND OR NOT` |
+| Math | `ROUND FLOOR CEIL ABS MOD POWER SQRT` |
+| Text | `CONCAT UPPER LOWER TRIM LEN LEFT RIGHT SUBSTR REPLACE CONTAINS STARTSWITH ENDSWITH PADLEFT JOIN` |
+| Dates | `NOW TODAY DATE YEAR MONTH DAY` |
+| Arabic | `TAFQEET(amount, 'LYD')` amount in words, `NUMBERWORDS(n)` |
+| Formats (after `\|`) | `n0` `n2` `percent` `currency:LYD` `currencyCode:USD` `tafqeet:LYD` `date:dd/MM/yyyy` `time` `datetime` `#,##0.00` `upper` `lower` `trim` |
+
+Register your own functions:
+
+```dart
+QudsReportEngine.fromXml(xml, functions: <String, ReportFunction>{
+  'VAT': (List<ReportValue> args) => ReportNumber((args.first.asNumber ?? 0) * 0.15),
+});
+```
+
+`engine.validate()` reports unknown functions and malformed expressions with
+their element path. `ReportCompleter` powers autocomplete in a designer.
+
+### Charts
+
+`<Chart type="bar|horizontalBar|stackedBar|line|area|pie|donut">` aggregates a
+data set by a category expression (`sum`, `avg`, `count`, `min`, `max`,
+`first`, `last`, with sort and top N) or plots static `<Point>` values. PDF
+draws vector charts. XLSX and DOCX embed **native, editable** Office charts.
+
+<table>
+  <tr>
+    <td width="50%"><img src="example/screenshots/report_sales_performance_xlsx.png" alt="XLSX export"/></td>
+    <td width="50%"><img src="example/screenshots/report_sales_performance_docx.png" alt="DOCX export"/></td>
+  </tr>
+  <tr>
+    <td>XLSX export: typed cells, native chart, chart data table</td>
+    <td>DOCX export: native Word charts and real tables</td>
+  </tr>
+</table>
+
+### Ready-made templates
+
+`ReportTemplates.all` ships six production-style templates, each with sample
+data (`info.sampleData()`):
+
+| id | Template |
+| --- | --- |
+| `sales_invoice_ar` | Arabic VAT sales invoice (QR, amount in words, discounts, tax) |
+| `invoice_en` | English commercial invoice (bill-to / ship-to, Code128) |
+| `sales_performance` | Sales dashboard (KPI cards, 4 charts, grouped orders) |
+| `account_statement_ar` | Arabic customer account statement (running balance, area chart) |
+| `inventory_ar` | Arabic inventory status (reorder flags, pie + bar charts) |
+| `receipt_voucher_ar` | Arabic receipt voucher (A5 landscape) |
+
+```dart
+final ReportTemplateInfo info = ReportTemplates.byId('sales_invoice_ar')!;
+final QudsReportEngine engine = QudsReportEngine.fromXml(info.xml, fonts: fonts);
+final Uint8List pdf = await engine.exportToPdf(info.sampleData());
+```
+
+<table>
+  <tr>
+    <td width="50%"><img src="example/screenshots/report_receipt_voucher_ar.png" alt="Receipt voucher"/></td>
+    <td width="50%"><img src="example/screenshots/report_sales_invoice_ar.png" alt="Arabic invoice"/></td>
+  </tr>
+</table>
+
+### Fonts
+
+Register TrueType (`glyf`) faces in a `ReportFontRegistry`; they are
+subset-embedded in the PDF. Missing glyphs fall through the registered
+families in order, so a Latin face plus an Arabic face covers mixed text.
+Without any registered face, Latin falls back to Helvetica and other scripts
+are not drawn. The editor package bundles Liberation and Noto Naskh Arabic
+(`ReportBundledFonts`).
 
 ---
 
@@ -748,6 +958,9 @@ These are not hidden TODOs. They are the contract.
 | JBIG2 arithmetic / symbol / text regions | MMR generic regions decode; other JBIG2 stays placeholder |
 | True content-stream redaction | Overlay plus extract filter |
 | Arabic `PdfToolbox.stamp` | Helvetica overlay; use `pw.Watermark` for a shaped string |
+| Report fonts other than TrueType `glyf` | CFF/OTF faces are rejected (they cannot be subset) |
+| Report shapes and barcodes in XLSX/DOCX | Data-oriented export: text, tables, rules, images (DOCX), and native charts. A filled shape behind text becomes that text's fill |
+| QR beyond version 10, Code128 beyond ASCII | QR versions 1–10 at ECC-M; Code128 printable ASCII |
 | N-up booklet, grayscale, image extract | Not in `PdfToolbox` |
 
 ---
@@ -761,12 +974,14 @@ lib/
 ├── pdf_file.dart                        PdfFile, PdfToolbox, extract
 ├── pdf_widgets.dart                     constraint layout (separate library)
 ├── pdf_templates.dart                   classified report templates
+├── quds_reports.dart                    .qrep band reports (separate library)
 └── src/
     ├── opc/        ZIP, relationships, OLE, crypto, repair, isolates
     ├── word/       WML model, layout, OMML, serialize
     ├── sheet/      SML model, styles, formula AST + functions
     ├── slide/      PML model, DrawingML, animations, Morph
     ├── pdf/        writer, widgets, and file/ open-annotate-graft
+    ├── reports/    .qrep model, XML, expressions, generator, exporters
     ├── bidi/       UAX #9, shaping, line breaker, direction
     ├── fonts/      SFNT parse, metrics, subset, font set
     ├── builders/   Fluent DOCX / XLSX / PPTX writers
@@ -781,6 +996,7 @@ lib/
 | Script | Writes |
 | --- | --- |
 | [`example/engine_quickstart.dart`](example/engine_quickstart.dart) | One DOCX + PDF |
+| [`example/report_quickstart.dart`](example/report_quickstart.dart) | A `.qrep` report → PDF, XLSX, DOCX, plus a bundled template |
 | [`example/word_report_sample.dart`](example/word_report_sample.dart) | Word report via `DocxDocumentBuilder` |
 | [`example/pdf_widgets_invoice.dart`](example/pdf_widgets_invoice.dart) | Invoice (Row, Table, UrlLink) |
 | [`example/pdf_widgets_report.dart`](example/pdf_widgets_report.dart) | Quarterly report (TOC, charts, landscape) |
@@ -794,6 +1010,7 @@ lib/
 ```bash
 cd packages/quds_office_engine
 dart run example/engine_quickstart.dart
+dart run example/report_quickstart.dart out ../quds_office_editor/fonts
 dart run example/pdf_widgets_invoice.dart
 dart run example/rich_export_gallery.dart
 ```
@@ -809,6 +1026,7 @@ dart run example/rich_export_gallery.dart
 | `.pptx` | Yes | Yes | Shapes, notes, hidden slides, motion |
 | `.odt` / `.ods` / `.odp` | Extract | — | Text extraction |
 | `.pdf` | Yes | Yes | `PdfFile` open; native 1.7 write and toolbox graft |
+| `.qrep` | Yes | Yes | Band-report XML with line:column diagnostics; exports PDF, XLSX, DOCX |
 | Password-protected OOXML | Yes | Yes | When a password is supplied |
 | Password-protected PDF | Yes | Incremental | Standard security Rev 2–4; Rev 5/6 attempted |
 

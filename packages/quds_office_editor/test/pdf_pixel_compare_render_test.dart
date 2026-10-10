@@ -18,48 +18,52 @@ import 'package:quds_office_engine/pdf_file.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  test('render al_tahreer pages for pixel compare', () async {
-    final File pdf = File('/home/mohammed/Desktop/al_tahreer_profile.pdf');
-    expect(pdf.existsSync(), isTrue);
-    await OfficeHostFonts.ensureRegistered();
+  test(
+    'render al_tahreer pages for pixel compare',
+    () async {
+      final File pdf = File('/home/mohammed/Desktop/al_tahreer_profile.pdf');
+      expect(pdf.existsSync(), isTrue);
+      await OfficeHostFonts.ensureRegistered();
 
-    final Directory out = Directory('/tmp/quds_pdf_compare/ours')
-      ..createSync(recursive: true);
-    final PdfFile file = PdfFile.open(pdf.readAsBytesSync());
-    // ignore: avoid_print
-    print('pages=${file.pageCount}');
-
-    for (int i = 0; i < file.pageCount; i++) {
-      final PdfDisplayList list = file.displayList(i);
-      await _warmFonts(list);
-      final Map<int, ui.Image> images = await _decodeImages(list);
-      // Match Poppler `pdftoppm` pixel size: ceil(pts * dpi/72) at 72dpi.
-      final int w = list.page.width.ceil().clamp(1, 4000);
-      final int h = list.page.height.ceil().clamp(1, 4000);
-      final ui.PictureRecorder recorder = ui.PictureRecorder();
-      final Canvas canvas = Canvas(recorder);
-      canvas.drawColor(const Color(0xFFFFFFFF), BlendMode.src);
-      PaintPdfDisplayList.paint(
-        canvas,
-        list,
-        decodeImage: (Uint8List bytes, bool _) =>
-            images[identityHashCode(bytes)],
-      );
-      final ui.Image image = await recorder.endRecording().toImage(w, h);
-      final ByteData? png = await image.toByteData(
-        format: ui.ImageByteFormat.png,
-      );
-      image.dispose();
-      for (final ui.Image img in images.values) {
-        img.dispose();
-      }
-      expect(png, isNotNull);
-      final String name = 'page-${(i + 1).toString().padLeft(2, '0')}.png';
-      File('${out.path}/$name').writeAsBytesSync(png!.buffer.asUint8List());
+      final Directory out = Directory('/tmp/quds_pdf_compare/ours')
+        ..createSync(recursive: true);
+      final PdfFile file = PdfFile.open(pdf.readAsBytesSync());
       // ignore: avoid_print
-      print('wrote $name ${w}x$h ops=${list.ops.length}');
-    }
-  }, timeout: const Timeout(Duration(minutes: 10)));
+      print('pages=${file.pageCount}');
+
+      for (int i = 0; i < file.pageCount; i++) {
+        final PdfDisplayList list = file.displayList(i);
+        await _warmFonts(list);
+        final Map<int, ui.Image> images = await _decodeImages(list);
+        // Match Poppler `pdftoppm` pixel size: ceil(pts * dpi/72) at 72dpi.
+        final int w = list.page.width.ceil().clamp(1, 4000);
+        final int h = list.page.height.ceil().clamp(1, 4000);
+        final ui.PictureRecorder recorder = ui.PictureRecorder();
+        final Canvas canvas = Canvas(recorder);
+        canvas.drawColor(const Color(0xFFFFFFFF), BlendMode.src);
+        PaintPdfDisplayList.paint(
+          canvas,
+          list,
+          decodeImage: (Uint8List bytes, bool _) =>
+              images[identityHashCode(bytes)],
+        );
+        final ui.Image image = await recorder.endRecording().toImage(w, h);
+        final ByteData? png = await image.toByteData(
+          format: ui.ImageByteFormat.png,
+        );
+        image.dispose();
+        for (final ui.Image img in images.values) {
+          img.dispose();
+        }
+        expect(png, isNotNull);
+        final String name = 'page-${(i + 1).toString().padLeft(2, '0')}.png';
+        File('${out.path}/$name').writeAsBytesSync(png!.buffer.asUint8List());
+        // ignore: avoid_print
+        print('wrote $name ${w}x$h ops=${list.ops.length}');
+      }
+    },
+    timeout: const Timeout(Duration(minutes: 10)),
+  );
 }
 
 Future<void> _warmFonts(PdfDisplayList list) async {

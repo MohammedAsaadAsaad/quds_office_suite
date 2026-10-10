@@ -687,173 +687,176 @@ class _QudsWordEditorState extends State<QudsWordEditor>
                   ),
                 Expanded(
                   child: Focus(
-              focusNode: _focus,
-              onFocusChange: (_) => _onFocus(),
-              onKeyEvent: _onWordKey,
-              child: Shortcuts(
-                shortcuts: _shortcuts,
-                child: Actions(
-                  actions: <Type, Action<Intent>>{
-                    ..._documentActions(_c),
-                    OfficeUndoIntent: CallbackAction<OfficeUndoIntent>(
-                      onInvoke: (_) {
-                        _c.undo();
-                        return null;
-                      },
-                    ),
-                    OfficeRedoIntent: CallbackAction<OfficeRedoIntent>(
-                      onInvoke: (_) {
-                        _c.redo();
-                        return null;
-                      },
-                    ),
-                    OfficeSelectAllIntent:
-                        CallbackAction<OfficeSelectAllIntent>(
-                          onInvoke: (_) {
-                            _c.selectAll();
-                            return null;
-                          },
+                    focusNode: _focus,
+                    onFocusChange: (_) => _onFocus(),
+                    onKeyEvent: _onWordKey,
+                    child: Shortcuts(
+                      shortcuts: _shortcuts,
+                      child: Actions(
+                        actions: <Type, Action<Intent>>{
+                          ..._documentActions(_c),
+                          OfficeUndoIntent: CallbackAction<OfficeUndoIntent>(
+                            onInvoke: (_) {
+                              _c.undo();
+                              return null;
+                            },
+                          ),
+                          OfficeRedoIntent: CallbackAction<OfficeRedoIntent>(
+                            onInvoke: (_) {
+                              _c.redo();
+                              return null;
+                            },
+                          ),
+                          OfficeSelectAllIntent:
+                              CallbackAction<OfficeSelectAllIntent>(
+                                onInvoke: (_) {
+                                  _c.selectAll();
+                                  return null;
+                                },
+                              ),
+                          OfficeCopyIntent: CallbackAction<OfficeCopyIntent>(
+                            onInvoke: (_) {
+                              _c.copyToClipboard();
+                              return null;
+                            },
+                          ),
+                          OfficeCutIntent: CallbackAction<OfficeCutIntent>(
+                            onInvoke: (_) {
+                              _c.cutToClipboard();
+                              return null;
+                            },
+                          ),
+                          OfficePasteIntent: CallbackAction<OfficePasteIntent>(
+                            onInvoke: (OfficePasteIntent i) {
+                              _c.pasteFromClipboard(mode: i.mode);
+                              return null;
+                            },
+                          ),
+                          ..._documentActions(_c),
+                          _MoveCaretIntent: CallbackAction<_MoveCaretIntent>(
+                            onInvoke: (_MoveCaretIntent i) {
+                              _c.moveCaretVisual(
+                                toRight: i.delta > 0,
+                                extend: i.extend,
+                              );
+                              return null;
+                            },
+                          ),
+                          _MoveParagraphIntent:
+                              CallbackAction<_MoveParagraphIntent>(
+                                onInvoke: (_MoveParagraphIntent i) {
+                                  _c.moveCaretLine(i.delta, extend: i.extend);
+                                  return null;
+                                },
+                              ),
+                          _DeleteIntent: CallbackAction<_DeleteIntent>(
+                            onInvoke: (_DeleteIntent i) {
+                              _c.deleteSelectionOr(backward: i.backward);
+                              return null;
+                            },
+                          ),
+                          _BreakIntent: CallbackAction<_BreakIntent>(
+                            onInvoke: (_) {
+                              _c.insertParagraphBreak();
+                              return null;
+                            },
+                          ),
+                        },
+                        child: Semantics(
+                          container: true,
+                          label: _c.semanticsLabel,
+                          value: _c.semanticsValue,
+                          readOnly: !config.allowsMutation,
+                          textField: config.allowsMutation,
+                          child: WordCanvas(
+                            document: _c.document,
+                            laidOut: _c.documentLaidOut,
+                            caret: _c.caret,
+                            findHits: _c.findSession.hits,
+                            activeFindIndex: _c.findSession.index,
+                            viewport: _c.viewport,
+                            config: config,
+                            hasFocus:
+                                !_c.isEditingComment &&
+                                (_focus.hasFocus || _c.input.isAttached),
+                            semanticsLabel: _c.semanticsLabel,
+                            semanticsValue: _c.semanticsValue,
+                            selectedVisual: _c.selectedVisual,
+                            selectedFrame: _c.selectedFrame,
+                            editingFrame: _c.editingFrame,
+                            selectedEquation: _c.selectedEquation,
+                            equationSlot: _c.equationSlot,
+                            equationCaret: _c.equationCaret,
+                            pictureCropMode: _c.pictureCropMode,
+                            onBeginVisualTransform: _c.beginVisualTransform,
+                            onPreviewVisualMove: _c.previewVisualMove,
+                            onPreviewVisualResize: _c.previewVisualResize,
+                            onPreviewVisualCrop: _c.previewVisualCrop,
+                            onPreviewVisualRotate: _c.previewVisualRotate,
+                            onCommitVisualTransform: _c.commitVisualTransform,
+                            isVisualInSelection: _c.isVisualInSelection,
+                            onExtendThroughVisual:
+                                _c.extendSelectionThroughVisual,
+                            onSelectVisual: _c.selectVisualFromOffice,
+                            onSelectFrame: (WmlFrame? frame) =>
+                                _c.selectFrame(frame),
+                            onEditFrame: (WmlFrame frame) =>
+                                _c.selectFrame(frame, editing: true),
+                            onBeginFrameTransform: _c.beginFrameTransform,
+                            onPreviewFrameMove: _c.previewFrameMove,
+                            onPreviewFrameResize: _c.previewFrameResize,
+                            onCommitFrameTransform: _c.commitFrameTransform,
+                            onSelectEquation:
+                                (WmlEquation? equation, int? slot, int? caret) {
+                                  _c.selectEquation(
+                                    equation,
+                                    slot: slot,
+                                    caret: caret,
+                                  );
+                                },
+                            onActivateVisual: (OfficeVisual visual) {
+                              _c.selectVisualFromOffice(visual);
+                              _c.cycleSelectedVisualKind();
+                            },
+                            onJumpParagraph: _c.jumpToParagraph,
+                            onFollowLink: _c.followLink,
+                            selectedCommentId: _c.selectedCommentId,
+                            onSelectComment: _c.selectComment,
+                            onContextMenu: _showWordContext,
+                            onInsertTableRowAt: _c.insertTableRowAt,
+                            onInsertTableColumnAt: _c.insertTableColumnAt,
+                            onBeginTableResize: _c.beginTableResize,
+                            onPreviewTableColumnWidth:
+                                _c.previewTableColumnWidth,
+                            onPreviewTableRowHeight: _c.previewTableRowHeight,
+                            onCommitTableResize: _c.commitTableResize,
+                            selectedTable: _c.selectedTable,
+                            onSelectTable: _c.selectTable,
+                            selectedTableBand: _c.selectedTableBand,
+                            onSelectTableBand: _c.selectTableBand,
+                            storyParagraphs: _c.isEditingHeaderFooter
+                                ? _c.headerFooterParagraphs
+                                : null,
+                            editingHeader: _c.isEditingHeader,
+                            editingFooter: _c.isEditingFooter,
+                            onBeginHeaderFooterEdit: _c.beginHeaderFooterEdit,
+                            onEndHeaderFooterEdit: _c.endHeaderFooterEdit,
+                            onBeginRulerEdit: _c.beginRulerEdit,
+                            onPreviewRulerEdit: _c.previewRulerEdit,
+                            onCommitRulerEdit: _c.commitRulerEdit,
+                            onChanged: () {
+                              _focus.requestFocus();
+                              if (config.allowsMutation) {
+                                _c.attachInput();
+                              }
+                              _c.refresh();
+                            },
+                          ),
                         ),
-                    OfficeCopyIntent: CallbackAction<OfficeCopyIntent>(
-                      onInvoke: (_) {
-                        _c.copyToClipboard();
-                        return null;
-                      },
-                    ),
-                    OfficeCutIntent: CallbackAction<OfficeCutIntent>(
-                      onInvoke: (_) {
-                        _c.cutToClipboard();
-                        return null;
-                      },
-                    ),
-                    OfficePasteIntent: CallbackAction<OfficePasteIntent>(
-                      onInvoke: (OfficePasteIntent i) {
-                        _c.pasteFromClipboard(mode: i.mode);
-                        return null;
-                      },
-                    ),
-                    ..._documentActions(_c),
-                    _MoveCaretIntent: CallbackAction<_MoveCaretIntent>(
-                      onInvoke: (_MoveCaretIntent i) {
-                        _c.moveCaretVisual(
-                          toRight: i.delta > 0,
-                          extend: i.extend,
-                        );
-                        return null;
-                      },
-                    ),
-                    _MoveParagraphIntent: CallbackAction<_MoveParagraphIntent>(
-                      onInvoke: (_MoveParagraphIntent i) {
-                        _c.moveCaretLine(i.delta, extend: i.extend);
-                        return null;
-                      },
-                    ),
-                    _DeleteIntent: CallbackAction<_DeleteIntent>(
-                      onInvoke: (_DeleteIntent i) {
-                        _c.deleteSelectionOr(backward: i.backward);
-                        return null;
-                      },
-                    ),
-                    _BreakIntent: CallbackAction<_BreakIntent>(
-                      onInvoke: (_) {
-                        _c.insertParagraphBreak();
-                        return null;
-                      },
-                    ),
-                  },
-                  child: Semantics(
-                    container: true,
-                    label: _c.semanticsLabel,
-                    value: _c.semanticsValue,
-                    readOnly: !config.allowsMutation,
-                    textField: config.allowsMutation,
-                    child: WordCanvas(
-                      document: _c.document,
-                      laidOut: _c.documentLaidOut,
-                      caret: _c.caret,
-                      findHits: _c.findSession.hits,
-                      activeFindIndex: _c.findSession.index,
-                      viewport: _c.viewport,
-                      config: config,
-                      hasFocus:
-                          !_c.isEditingComment &&
-                          (_focus.hasFocus || _c.input.isAttached),
-                      semanticsLabel: _c.semanticsLabel,
-                      semanticsValue: _c.semanticsValue,
-                      selectedVisual: _c.selectedVisual,
-                      selectedFrame: _c.selectedFrame,
-                      editingFrame: _c.editingFrame,
-                      selectedEquation: _c.selectedEquation,
-                      equationSlot: _c.equationSlot,
-                      equationCaret: _c.equationCaret,
-                      pictureCropMode: _c.pictureCropMode,
-                      onBeginVisualTransform: _c.beginVisualTransform,
-                      onPreviewVisualMove: _c.previewVisualMove,
-                      onPreviewVisualResize: _c.previewVisualResize,
-                      onPreviewVisualCrop: _c.previewVisualCrop,
-                      onPreviewVisualRotate: _c.previewVisualRotate,
-                      onCommitVisualTransform: _c.commitVisualTransform,
-                      isVisualInSelection: _c.isVisualInSelection,
-                      onExtendThroughVisual: _c.extendSelectionThroughVisual,
-                      onSelectVisual: _c.selectVisualFromOffice,
-                      onSelectFrame: (WmlFrame? frame) =>
-                          _c.selectFrame(frame),
-                      onEditFrame: (WmlFrame frame) =>
-                          _c.selectFrame(frame, editing: true),
-                      onBeginFrameTransform: _c.beginFrameTransform,
-                      onPreviewFrameMove: _c.previewFrameMove,
-                      onPreviewFrameResize: _c.previewFrameResize,
-                      onCommitFrameTransform: _c.commitFrameTransform,
-                      onSelectEquation:
-                          (WmlEquation? equation, int? slot, int? caret) {
-                            _c.selectEquation(
-                              equation,
-                              slot: slot,
-                              caret: caret,
-                            );
-                          },
-                      onActivateVisual: (OfficeVisual visual) {
-                        _c.selectVisualFromOffice(visual);
-                        _c.cycleSelectedVisualKind();
-                      },
-                      onJumpParagraph: _c.jumpToParagraph,
-                      onFollowLink: _c.followLink,
-                      selectedCommentId: _c.selectedCommentId,
-                      onSelectComment: _c.selectComment,
-                      onContextMenu: _showWordContext,
-                      onInsertTableRowAt: _c.insertTableRowAt,
-                      onInsertTableColumnAt: _c.insertTableColumnAt,
-                      onBeginTableResize: _c.beginTableResize,
-                      onPreviewTableColumnWidth: _c.previewTableColumnWidth,
-                      onPreviewTableRowHeight: _c.previewTableRowHeight,
-                      onCommitTableResize: _c.commitTableResize,
-                      selectedTable: _c.selectedTable,
-                      onSelectTable: _c.selectTable,
-                      selectedTableBand: _c.selectedTableBand,
-                      onSelectTableBand: _c.selectTableBand,
-                      storyParagraphs: _c.isEditingHeaderFooter
-                          ? _c.headerFooterParagraphs
-                          : null,
-                      editingHeader: _c.isEditingHeader,
-                      editingFooter: _c.isEditingFooter,
-                      onBeginHeaderFooterEdit: _c.beginHeaderFooterEdit,
-                      onEndHeaderFooterEdit: _c.endHeaderFooterEdit,
-                      onBeginRulerEdit: _c.beginRulerEdit,
-                      onPreviewRulerEdit: _c.previewRulerEdit,
-                      onCommitRulerEdit: _c.commitRulerEdit,
-                      onChanged: () {
-                        _focus.requestFocus();
-                        if (config.allowsMutation) {
-                          _c.attachInput();
-                        }
-                        _c.refresh();
-                      },
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ),
-                  ),
                 if (config.showNotesPane)
                   SizedBox(
                     width: 240,
@@ -1960,9 +1963,11 @@ class _QudsSlideEditorState extends State<QudsSlideEditor>
                   if (_c.selected == null) {
                     return KeyEventResult.ignored;
                   }
-                  final int step =
-                      HardwareKeyboard.instance.isShiftPressed ? 12700 : 127000;
-                  final int dx = event.logicalKey == LogicalKeyboardKey.arrowLeft
+                  final int step = HardwareKeyboard.instance.isShiftPressed
+                      ? 12700
+                      : 127000;
+                  final int dx =
+                      event.logicalKey == LogicalKeyboardKey.arrowLeft
                       ? -step
                       : (event.logicalKey == LogicalKeyboardKey.arrowRight
                             ? step
@@ -2027,18 +2032,34 @@ class _QudsSlideEditorState extends State<QudsSlideEditor>
                       const _NudgeIntent(0, -127000),
                   const SingleActivator(LogicalKeyboardKey.arrowDown):
                       const _NudgeIntent(0, 127000),
-                  const SingleActivator(LogicalKeyboardKey.arrowLeft, shift: true):
-                      const _NudgeIntent(-12700, 0),
+                  const SingleActivator(
+                    LogicalKeyboardKey.arrowLeft,
+                    shift: true,
+                  ): const _NudgeIntent(
+                    -12700,
+                    0,
+                  ),
                   const SingleActivator(
                     LogicalKeyboardKey.arrowRight,
                     shift: true,
-                  ): const _NudgeIntent(12700, 0),
-                  const SingleActivator(LogicalKeyboardKey.arrowUp, shift: true):
-                      const _NudgeIntent(0, -12700),
+                  ): const _NudgeIntent(
+                    12700,
+                    0,
+                  ),
+                  const SingleActivator(
+                    LogicalKeyboardKey.arrowUp,
+                    shift: true,
+                  ): const _NudgeIntent(
+                    0,
+                    -12700,
+                  ),
                   const SingleActivator(
                     LogicalKeyboardKey.arrowDown,
                     shift: true,
-                  ): const _NudgeIntent(0, 12700),
+                  ): const _NudgeIntent(
+                    0,
+                    12700,
+                  ),
                   const SingleActivator(LogicalKeyboardKey.keyC, control: true):
                       const OfficeCopyIntent(),
                   const SingleActivator(LogicalKeyboardKey.keyX, control: true):

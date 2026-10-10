@@ -4,7 +4,38 @@ All notable changes to `quds_office_engine` are documented here.
 
 ## 0.6.0
 
-Five fidelity waves: OpenType marks, appearances, page graft, AcroForm write,
+**Band report engine (`quds_reports.dart`).**
+
+- `.qrep` templates:
+  - `QudsReportXmlParser` gives line:column diagnostics.
+  - `QudsReportXmlWriter` round-trips templates.
+  - The mutable `ReportTemplate` model is built for designers.
+- `QudsExpressionEngine`:
+  - `System.*`, `Variables.*`, and `Data.*` paths; arithmetic, comparisons, and aggregates.
+  - Formats such as `currency:LYD` and dates.
+  - Arabic `TAFQEET(amount, code)` (`ArabicTafqeet`).
+- Generator:
+  - Report, page, and group headers/footers, detail bands, and repeating tables.
+  - `canGrow` text, page splitting, and `System.TotalPages`.
+  - BiDi, Arabic shaping, and RTL x mirroring (`mirrorRtl`).
+- `QudsReportEngine.fromXml(xml)` exports with `exportToPdf`, `exportToExcel`, and `exportToWord`.
+- `ReportMockData.infer` builds preview data from a template's bindings.
+- Charts (`<Chart>` / `ReportChartElement`):
+  - Types: bar, horizontal bar, stacked bar, line, area, pie, donut.
+  - Data: a dataset grouped by a category expression with `sum`/`avg`/`count`/`min`/`max`/`first`/`last`, sorting, and top N; or static `<Point>` values.
+  - PDF and preview draw vectors (`ReportPathPrimitive`); RTL templates mirror the plot.
+  - DOCX and XLSX embed native DrawingML charts; XLSX adds the data table.
+- `ReportTemplates.all`: six ready-made templates with sample data (Arabic VAT invoice, English invoice, sales dashboard, account statement, inventory, receipt voucher).
+- `ReportCompleter`: suggestions inside `{{ }}` and expressions: functions with signatures, `Data`/row fields from the preview data, `System`/`Group`/`Variables`, format specs after `|`, and currency codes in `TAFQEET`/`FORMAT`.
+- Typed template variables (`<Var name type value format description/>`): `text` (may hold `{{ }}`), `number`, `boolean`, `date` (ISO, `today`, `now`), `list` (`;`-separated), and `expression`. Later variables can use earlier ones, host `variables:` still override, and the validator flags values that don't fit their type.
+- `XlsxSheetBuilder.addChart` anchors a DrawingML chart part on a sheet.
+- XLSX builder `style(rightToLeft:)` emits `readingOrder="2"`.
+- `ReportCompleter.formats` exposes the format specs (with samples) that the designer offers as presets.
+- XLSX and DOCX report exports: transparent text on a filled shape takes the shape's fill (white titles on a colored banner stay readable). XLSX chart placeholder rows get explicit heights, so the chart no longer overlaps its data table in LibreOffice.
+- `tool/dump_report_shots.dart` renders every bundled template to PDF (and the sales dashboard to XLSX/DOCX through LibreOffice) for the README gallery.
+- Limits are listed in `docs/STANDARDS.md`.
+
+**PDF fidelity.** Five waves: OpenType marks, appearances, page graft, AcroForm write,
 and a first slice of “files people send”.
 
 - GPOS LookupType 4 (MarkToBase, including type-9 extensions). Combining

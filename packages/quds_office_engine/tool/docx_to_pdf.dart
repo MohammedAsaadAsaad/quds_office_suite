@@ -3,7 +3,7 @@ import 'dart:typed_data';
 
 import 'package:quds_office_engine/quds_office_engine.dart';
 
-/// Usage: dart run tool/docx_to_pdf.dart <input.docx> <output.pdf>
+/// Usage: `dart run tool/docx_to_pdf.dart <input.docx> <output.pdf>`
 void main(List<String> args) {
   if (args.length < 2) {
     stderr.writeln('Usage: dart run tool/docx_to_pdf.dart <in.docx> <out.pdf>');

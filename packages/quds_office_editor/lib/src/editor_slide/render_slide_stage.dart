@@ -599,7 +599,8 @@ class RenderSlideStage extends RenderBox implements MouseTrackerAnnotation {
         ),
       );
     _startUnion = _unionRect(_dragShapes);
-    _startTx = selected?.transform ??
+    _startTx =
+        selected?.transform ??
         (_dragShapes.isEmpty ? null : _dragShapes.first.transform);
   }
 
@@ -840,9 +841,7 @@ class RenderSlideStage extends RenderBox implements MouseTrackerAnnotation {
         markNeedsPaint();
         return;
       }
-      if (!config.allowsMutation ||
-          _dragShapes.isEmpty ||
-          _startTxs.isEmpty) {
+      if (!config.allowsMutation || _dragShapes.isEmpty || _startTxs.isEmpty) {
         return;
       }
       final Offset local = _toSlide(event.localPosition);
@@ -852,8 +851,7 @@ class RenderSlideStage extends RenderBox implements MouseTrackerAnnotation {
         Rect moving = _unionRect(_dragShapes).shift(delta);
         _loadSnapTargets();
         moving = moving.shift(snaps.snap(moving));
-        final Offset applied =
-            moving.topLeft - _unionRect(_dragShapes).topLeft;
+        final Offset applied = moving.topLeft - _unionRect(_dragShapes).topLeft;
         for (final PmlShape shape in _dragShapes) {
           _applyRect(shape, _shapeRect(shape).shift(applied));
         }
@@ -868,12 +866,12 @@ class RenderSlideStage extends RenderBox implements MouseTrackerAnnotation {
               _drag == _SlideDrag.resize ||
               _drag == _SlideDrag.rotate) &&
           _startTxs.isNotEmpty) {
-        final Map<PmlShape, PmlTransform> next =
-            <PmlShape, PmlTransform>{
-              for (final PmlShape shape in _dragShapes) shape: shape.transform,
-            };
+        final Map<PmlShape, PmlTransform> next = <PmlShape, PmlTransform>{
+          for (final PmlShape shape in _dragShapes) shape: shape.transform,
+        };
         var changed = false;
-        for (final MapEntry<PmlShape, PmlTransform> entry in _startTxs.entries) {
+        for (final MapEntry<PmlShape, PmlTransform> entry
+            in _startTxs.entries) {
           if (!_sameTransform(entry.value, next[entry.key] ?? entry.value)) {
             changed = true;
           }
@@ -1175,7 +1173,8 @@ class RenderSlideStage extends RenderBox implements MouseTrackerAnnotation {
               16,
             ),
             color: ink,
-            rtl: table.rightToLeft ||
+            rtl:
+                table.rightToLeft ||
                 config.textDirection == TextDirection.rtl ||
                 PaintRunText.looksRtl(body),
           );
@@ -1223,7 +1222,8 @@ class RenderSlideStage extends RenderBox implements MouseTrackerAnnotation {
           18,
         ),
         color: color,
-        rtl: shape.rightToLeft ??
+        rtl:
+            shape.rightToLeft ??
             (PaintRunText.looksRtl(body) ||
                 config.textDirection == TextDirection.rtl),
       );
@@ -1325,7 +1325,11 @@ class RenderSlideStage extends RenderBox implements MouseTrackerAnnotation {
 
   void _paintMediaBadge(Canvas canvas, Rect r) {
     final Rect badge = Rect.fromLTWH(r.left + 6, r.bottom - 28, 22, 22);
-    canvas.drawCircle(badge.center, 11, Paint()..color = const Color(0xCC111111));
+    canvas.drawCircle(
+      badge.center,
+      11,
+      Paint()..color = const Color(0xCC111111),
+    );
     canvas.drawPath(
       Path()
         ..moveTo(badge.left + 7, badge.top + 5)
@@ -1494,7 +1498,9 @@ class RenderSlideStage extends RenderBox implements MouseTrackerAnnotation {
 
   void _resizeSelection(Offset delta, Offset local, int handle) {
     if (_dragShapes.length <= 1) {
-      final PmlShape? shape = _dragShapes.isEmpty ? selected : _dragShapes.first;
+      final PmlShape? shape = _dragShapes.isEmpty
+          ? selected
+          : _dragShapes.first;
       if (shape != null) {
         _resize(shape, delta, handle);
       }
@@ -1523,8 +1529,8 @@ class RenderSlideStage extends RenderBox implements MouseTrackerAnnotation {
 
   void _rotateSelectionTo(Offset slide) {
     if (_dragShapes.length <= 1) {
-      final PmlShape? shape = selected ??
-          (_dragShapes.isEmpty ? null : _dragShapes.first);
+      final PmlShape? shape =
+          selected ?? (_dragShapes.isEmpty ? null : _dragShapes.first);
       if (shape != null) {
         _rotateTo(shape, slide);
       }

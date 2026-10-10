@@ -1654,7 +1654,7 @@ class _Frame {
     }
     final PdfCos? d = store.deref(gs['D']);
     if (d is PdfCosArray && d.items.isNotEmpty) {
-      final PdfCos? arr = d.items.first;
+      final PdfCos arr = d.items.first;
       if (arr is PdfCosArray) {
         dash = <double>[
           for (final PdfCos item in arr.items) pdfCosNumber(item) ?? 0,

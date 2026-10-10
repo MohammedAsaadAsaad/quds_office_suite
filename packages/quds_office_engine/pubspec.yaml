@@ -1,10 +1,10 @@
 name: quds_office_engine
 description: >-
-  Pure Dart Office + PDF engine: DOCX, XLSX, PPTX, formulas, BiDi/RTL,
-  PdfFile, pdf_widgets, 100+ report templates, and PDF 1.7 — no Flutter.
+  Pure Dart Office, PDF, and report engine: DOCX/XLSX/PPTX, formulas, BiDi/RTL,
+  PdfFile, pdf_widgets, and .qrep band reports exported to PDF, XLSX, and DOCX.
 version: 0.6.0
 homepage: https://github.com/MohammedAsaadAsaad/quds_office_suite
-repository: https://github.com/MohammedAsaadAsaad/quds_office_suite
+repository: https://github.com/MohammedAsaadAsaad/quds_office_suite/tree/main/packages/quds_office_engine
 issue_tracker: https://github.com/MohammedAsaadAsaad/quds_office_suite/issues
 resolution: workspace
 
@@ -16,9 +16,17 @@ topics:
   - pdf
 
 screenshots:
-  - description: "PDF widgets — invoice composed with Document / Table / MultiPage."
+  - description: "Band report: sales dashboard with KPI cards, vector charts, and grouped tables (PDF)."
+    path: example/screenshots/report_sales_performance.png
+  - description: "Band report: Arabic RTL VAT invoice with QR code and amount in words (PDF)."
+    path: example/screenshots/report_sales_invoice_ar.png
+  - description: "Band report: Arabic account statement with running balance and area chart (PDF)."
+    path: example/screenshots/report_account_statement_ar.png
+  - description: "The same report exported to XLSX with native Excel charts and typed cells."
+    path: example/screenshots/report_sales_performance_xlsx.png
+  - description: "PDF widgets: invoice composed with Document / Table / MultiPage."
     path: example/screenshots/pdf_widgets.png
-  - description: "Office → PDF — RTL formal letter exported to PDF 1.7."
+  - description: "Office to PDF: RTL formal letter exported to PDF 1.7."
     path: example/screenshots/office_rtl.png
 
 platforms:

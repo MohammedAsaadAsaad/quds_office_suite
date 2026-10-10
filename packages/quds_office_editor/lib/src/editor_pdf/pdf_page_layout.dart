@@ -21,11 +21,7 @@ abstract final class PdfPageLayout {
   static double viewScale(double scale) => scale * pointsToPixels;
 
   /// Content-Y of the top of [index] (including the leading gap).
-  static double stackTop(
-    List<PdfDisplayList> lists,
-    int index,
-    double scale,
-  ) {
+  static double stackTop(List<PdfDisplayList> lists, int index, double scale) {
     final double vs = viewScale(scale);
     var top = gap;
     final int last = index < lists.length ? index : lists.length;
