@@ -17,12 +17,11 @@ import 'package:quds_office_engine/pdf_file.dart';
 /// (matches `pdftoppm -r 72`).
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  final File pdf = File('/home/mohammed/Desktop/al_tahreer_profile.pdf');
 
   test(
     'render al_tahreer pages for pixel compare',
     () async {
-      final File pdf = File('/home/mohammed/Desktop/al_tahreer_profile.pdf');
-      expect(pdf.existsSync(), isTrue);
       await OfficeHostFonts.ensureRegistered();
 
       final Directory out = Directory('/tmp/quds_pdf_compare/ours')
@@ -63,6 +62,7 @@ void main() {
       }
     },
     timeout: const Timeout(Duration(minutes: 10)),
+    skip: pdf.existsSync() ? false : 'needs ${pdf.path} (local compare tool)',
   );
 }
 
