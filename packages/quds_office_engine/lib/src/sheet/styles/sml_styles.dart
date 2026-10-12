@@ -560,37 +560,151 @@ String applyNumberFormat(Object? value, String code) {
     return value.toString();
   }
 
-  /// negativeRed API.
-  final bool negativeRed = code.contains('[Red]');
+  final List<String> sections = code.split(';');
+  // Sections: positive; negative; zero. A negative section prints its own
+  // sign (e.g. parentheses), so the value is formatted without one.
+  var section = sections.first;
+  var shown = n;
+  if (n < 0 && sections.length > 1 && sections[1].isNotEmpty) {
+    section = sections[1];
+    shown = -n;
+  } else if (n == 0 && sections.length > 2 && sections[2].isNotEmpty) {
+    section = sections[2];
+  }
+  final bool negativeRed = section.contains('[Red]');
+  final String clean = section.replaceAll('[Red]', '');
 
-  /// clean API.
-  final String clean = code.replaceAll('[Red]', '').split(';').first;
-
-  /// out API.
   String out;
-  if (clean.contains('%')) {
-    out = '${(n * 100).toStringAsFixed(2)}%';
-  } else if (clean.contains('\$') ||
-      clean.contains('¥') ||
-      clean.contains('€')) {
-    out = n.toStringAsFixed(2);
-    if (clean.contains('\$')) {
-      out = '\$$out';
-    }
-  } else if (RegExp(r'0\.0+').hasMatch(clean)) {
-    final int digits =
-        RegExp(r'0\.(0+)').firstMatch(clean)?.group(1)?.length ?? 2;
-    out = n.toStringAsFixed(digits);
-  } else if (_isDateFormat(clean)) {
-    out = formatExcelDate(excelSerialToDate(n), clean);
+  if (_isDateFormat(clean) && !RegExp(r'[0#?]').hasMatch(_literalFree(clean))) {
+    out = formatExcelDate(excelSerialToDate(shown), clean);
   } else {
-    out = n == n.roundToDouble() ? '${n.round()}' : n.toString();
+    out = _formatNumberSection(shown, clean);
   }
   if (negativeRed && n < 0) {
     return 'RED:$out';
   }
   return out;
 }
+
+/// [code] without quoted literals, escapes, and `[…]` blocks.
+String _literalFree(String code) => code
+    .replaceAll(RegExp(r'"[^"]*"'), '')
+    .replaceAll(RegExp(r'\\.'), '')
+    .replaceAll(RegExp(r'\[[^\]]*\]'), '');
+
+/// Formats one numeric section: `0` / `#` / `?` digits, `,` grouping and
+/// thousands scaling, `.` decimals, `%`, and literal prefix / suffix text.
+String _formatNumberSection(double n, String code) {
+  final StringBuffer literal = StringBuffer();
+  final StringBuffer pattern = StringBuffer();
+  var prefix = '';
+  var inPattern = false;
+  var patternDone = false;
+  var percent = false;
+  var i = 0;
+  void emit(String text) {
+    if (patternDone || inPattern) {
+      literal.write(text);
+      patternDone = true;
+      inPattern = false;
+    } else {
+      prefix += text;
+    }
+  }
+
+  while (i < code.length) {
+    final String ch = code[i];
+    if (ch == '"') {
+      final int end = code.indexOf('"', i + 1);
+      emit(code.substring(i + 1, end < 0 ? code.length : end));
+      i = end < 0 ? code.length : end + 1;
+    } else if (ch == r'\' && i + 1 < code.length) {
+      emit(code[i + 1]);
+      i += 2;
+    } else if (ch == '[') {
+      final int end = code.indexOf(']', i + 1);
+      final String inner = code.substring(i + 1, end < 0 ? code.length : end);
+      if (inner.startsWith(r'$')) {
+        final int dash = inner.indexOf('-');
+        emit(inner.substring(1, dash < 0 ? inner.length : dash));
+      }
+      i = end < 0 ? code.length : end + 1;
+    } else if (ch == '_' && i + 1 < code.length) {
+      emit(' ');
+      i += 2;
+    } else if (ch == '*' && i + 1 < code.length) {
+      i += 2;
+    } else if (!patternDone && '0#?,.'.contains(ch)) {
+      inPattern = true;
+      pattern.write(ch);
+      i++;
+    } else {
+      if (ch == '%') {
+        percent = true;
+      }
+      emit(ch);
+      i++;
+    }
+  }
+  final String suffix = literal.toString();
+  final String digits = pattern.toString();
+  if (digits.isEmpty) {
+    final String text = '$prefix$suffix';
+    return text.trim().isEmpty ? _plainNumber(n) : text;
+  }
+  final int dot = digits.indexOf('.');
+  var integerPart = dot < 0 ? digits : digits.substring(0, dot);
+  final String fraction = dot < 0 ? '' : digits.substring(dot + 1);
+  var scale = 1.0;
+  while (integerPart.endsWith(',')) {
+    scale *= 1000;
+    integerPart = integerPart.substring(0, integerPart.length - 1);
+  }
+  final bool group = integerPart.contains(',');
+  final int minInteger = '0'.allMatches(integerPart).length;
+  final int fixed = '0'.allMatches(fraction).length;
+  final int optional = fraction.length - fixed;
+  var value = (percent ? n * 100 : n) / scale;
+  final bool negative = value < 0;
+  value = value.abs();
+  var text = value.toStringAsFixed(fixed + optional);
+  if (optional > 0 && text.contains('.')) {
+    var end = text.length;
+    final int minEnd = text.indexOf('.') + 1 + fixed;
+    while (end > minEnd && text[end - 1] == '0') {
+      end--;
+    }
+    text = text.substring(0, end);
+    if (text.endsWith('.')) {
+      text = text.substring(0, text.length - 1);
+    }
+  }
+  final int point = text.indexOf('.');
+  var whole = point < 0 ? text : text.substring(0, point);
+  final String decimals = point < 0 ? '' : text.substring(point);
+  if (whole == '0' && minInteger == 0) {
+    whole = '';
+  }
+  whole = whole.padLeft(minInteger, '0');
+  if (group && whole.length > 3) {
+    final StringBuffer grouped = StringBuffer();
+    final int head = whole.length % 3;
+    grouped.write(whole.substring(0, head));
+    for (var g = head; g < whole.length; g += 3) {
+      if (grouped.isNotEmpty) {
+        grouped.write(',');
+      }
+      grouped.write(whole.substring(g, g + 3));
+    }
+    whole = grouped.toString();
+  }
+  final bool isZero = RegExp(r'^[0.,]*$').hasMatch('$whole$decimals');
+  final String sign = negative && !isZero ? '-' : '';
+  return '$sign$prefix$whole$decimals$suffix';
+}
+
+String _plainNumber(double n) =>
+    n == n.roundToDouble() ? '${n.round()}' : n.toString();
 
 bool _isDateFormat(String code) {
   final String c = code.toLowerCase();

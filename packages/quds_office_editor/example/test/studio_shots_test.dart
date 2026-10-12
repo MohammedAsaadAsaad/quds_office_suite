@@ -79,7 +79,7 @@ void main() {
     await tester.runAsync(_loadFonts);
     debugDisableShadows = false;
     final GlobalKey boundaryKey = GlobalKey();
-    await tester.binding.setSurfaceSize(const Size(1440, 900));
+    await tester.binding.setSurfaceSize(const Size(1760, 990));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(
       RepaintBoundary(key: boundaryKey, child: const QudsOfficeStudioApp()),

@@ -188,7 +188,10 @@ count.
 - **+ Row**, **+ Column**, and **ƒx Column** add rows, typed columns, and
   calculated columns. A calculated column uses a formula such as
   `qty * unitPrice` that is evaluated for every row in the preview and in
-  every export.
+  every export. It shows up right away in `{{ }}` suggestions, variables,
+  and fields, with its computed value:
+
+  ![A calculated column in suggestions](screenshots/studio_calculated_autocomplete.png)
 - Right-click a cell for insert above/below, rename, and delete. Renaming a
   column or field also updates the report's bindings (`item.qty`,
   `SUM(items.qty)`, `Data.customer`).

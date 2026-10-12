@@ -8,6 +8,7 @@ import 'package:quds_office_engine/quds_office_engine.dart';
 
 import '../editor_sheet/render_sheet_grid.dart';
 import '../editor_slide/render_slide_stage.dart';
+import '../editor_word/paint_run_text.dart';
 import '../editor_word/render_word_canvas.dart';
 import 'office_clipboard.dart';
 import 'office_context_menu.dart';
@@ -238,6 +239,7 @@ class _QudsWordEditorState extends State<QudsWordEditor>
       }
     })..start();
     _c.addListener(_onCtrl);
+    PaintingBinding.instance.systemFonts.addListener(_onSystemFonts);
     _c.onRequestFocus = () {
       if (mounted) {
         _focus.requestFocus();
@@ -262,6 +264,13 @@ class _QudsWordEditorState extends State<QudsWordEditor>
     }
   }
 
+  void _onSystemFonts() {
+    PaintRunText.clearAdvanceCache();
+    if (mounted) {
+      _c.refreshMetrics();
+    }
+  }
+
   void _onCtrl() {
     if (mounted) {
       setState(() {});
@@ -275,6 +284,7 @@ class _QudsWordEditorState extends State<QudsWordEditor>
     _dismissContextMenu();
     _ticker.dispose();
     _c.removeListener(_onCtrl);
+    PaintingBinding.instance.systemFonts.removeListener(_onSystemFonts);
     _c.onRequestFocus = null;
     if (_ownsFocus) {
       _focus.dispose();
@@ -1881,307 +1891,360 @@ class _QudsSlideEditorState extends State<QudsSlideEditor>
               (config.showFindChrome || _c.findSession.active))
             widget.findBarBuilder!(context, _c),
           Expanded(
-            child: Focus(
-              autofocus: true,
-              focusNode: _focus,
-              onKeyEvent: (FocusNode node, KeyEvent event) {
-                final KeyEventResult show = _onSlideKey(node, event);
-                if (show != KeyEventResult.ignored) {
-                  return show;
-                }
-                if (event is! KeyDownEvent) {
-                  return KeyEventResult.ignored;
-                }
-                if (event.logicalKey == LogicalKeyboardKey.tab &&
-                    _c.selectedTable != null &&
-                    _c.config.allowsMutation) {
-                  _c.moveSelectedTableCell(
-                    forward: !HardwareKeyboard.instance.isShiftPressed,
-                  );
-                  return KeyEventResult.handled;
-                }
-                final bool? directionRtl = officeDirectionFromKeyEvent(event);
-                if (directionRtl != null && _c.config.allowsMutation) {
-                  _c.setSelectedTextDirection(rtl: directionRtl);
-                  return KeyEventResult.handled;
-                }
-                final bool ctrl =
-                    HardwareKeyboard.instance.isControlPressed ||
-                    HardwareKeyboard.instance.isMetaPressed;
-                if (ctrl && event.logicalKey == LogicalKeyboardKey.keyA) {
-                  _c.selectAll();
-                  return KeyEventResult.handled;
-                }
-                if (!_c.config.allowsMutation) {
-                  return KeyEventResult.ignored;
-                }
-                if (ctrl && event.logicalKey == LogicalKeyboardKey.keyZ) {
-                  if (HardwareKeyboard.instance.isShiftPressed) {
-                    _c.redo();
-                  } else {
-                    _c.undo();
-                  }
-                  return KeyEventResult.handled;
-                }
-                if (ctrl && event.logicalKey == LogicalKeyboardKey.keyY) {
-                  _c.redo();
-                  return KeyEventResult.handled;
-                }
-                if (ctrl && event.logicalKey == LogicalKeyboardKey.keyC) {
-                  _c.copyToClipboard();
-                  return KeyEventResult.handled;
-                }
-                if (ctrl && event.logicalKey == LogicalKeyboardKey.keyX) {
-                  _c.cutToClipboard();
-                  return KeyEventResult.handled;
-                }
-                if (ctrl && event.logicalKey == LogicalKeyboardKey.keyV) {
-                  _c.pasteFromClipboard(
-                    mode: HardwareKeyboard.instance.isShiftPressed
-                        ? OfficePasteMode.keepTextOnly
-                        : OfficePasteMode.keepSource,
-                  );
-                  return KeyEventResult.handled;
-                }
-                if (event.logicalKey == LogicalKeyboardKey.escape) {
-                  if (_c.editingText) {
-                    _c.cancelTextEdit();
-                    return KeyEventResult.handled;
-                  }
-                }
-                if (event.logicalKey == LogicalKeyboardKey.f2) {
-                  _c.beginTextEdit();
-                  return KeyEventResult.handled;
-                }
-                if (_c.editingText) {
-                  return KeyEventResult.ignored;
-                }
-                if (event.logicalKey == LogicalKeyboardKey.arrowLeft ||
-                    event.logicalKey == LogicalKeyboardKey.arrowRight ||
-                    event.logicalKey == LogicalKeyboardKey.arrowUp ||
-                    event.logicalKey == LogicalKeyboardKey.arrowDown) {
-                  if (_c.selected == null) {
-                    return KeyEventResult.ignored;
-                  }
-                  final int step = HardwareKeyboard.instance.isShiftPressed
-                      ? 12700
-                      : 127000;
-                  final int dx =
-                      event.logicalKey == LogicalKeyboardKey.arrowLeft
-                      ? -step
-                      : (event.logicalKey == LogicalKeyboardKey.arrowRight
-                            ? step
-                            : 0);
-                  final int dy = event.logicalKey == LogicalKeyboardKey.arrowUp
-                      ? -step
-                      : (event.logicalKey == LogicalKeyboardKey.arrowDown
-                            ? step
-                            : 0);
-                  _c.nudgeSelected(dx, dy);
-                  return KeyEventResult.handled;
-                }
-                if (event.logicalKey == LogicalKeyboardKey.enter ||
-                    event.logicalKey == LogicalKeyboardKey.numpadEnter) {
-                  _c.beginTextEdit();
-                  return KeyEventResult.handled;
-                }
-                if (event.logicalKey == LogicalKeyboardKey.delete ||
-                    event.logicalKey == LogicalKeyboardKey.backspace) {
-                  _c.deleteSelectedShape();
-                  return KeyEventResult.handled;
-                }
-                final String? ch = event.character;
-                if (ch != null &&
-                    ch.length == 1 &&
-                    ch.codeUnitAt(0) >= 32 &&
-                    !ctrl) {
-                  _c.beginTextEdit(initial: ch, replace: true);
-                  return KeyEventResult.handled;
-                }
-                return KeyEventResult.ignored;
-              },
-              child: Shortcuts(
-                shortcuts: <ShortcutActivator, Intent>{
-                  const SingleActivator(LogicalKeyboardKey.keyF, control: true):
-                      const OfficeFindIntent(),
-                  const SingleActivator(LogicalKeyboardKey.keyH, control: true):
-                      const OfficeReplaceIntent(),
-                  const SingleActivator(LogicalKeyboardKey.keyP, control: true):
-                      const OfficePrintIntent(),
-                  const SingleActivator(LogicalKeyboardKey.f7):
-                      const OfficeSpellCheckIntent(),
-                  const SingleActivator(LogicalKeyboardKey.f3):
-                      const OfficeFindNextIntent(),
-                  const SingleActivator(LogicalKeyboardKey.f3, shift: true):
-                      const OfficeFindNextIntent(forward: false),
-                  const SingleActivator(LogicalKeyboardKey.keyZ, control: true):
-                      const OfficeUndoIntent(),
-                  const SingleActivator(LogicalKeyboardKey.keyY, control: true):
-                      const OfficeRedoIntent(),
-                  const SingleActivator(LogicalKeyboardKey.keyY, meta: true):
-                      const OfficeRedoIntent(),
-                  const SingleActivator(LogicalKeyboardKey.keyA, control: true):
-                      const OfficeSelectAllIntent(),
-                  const SingleActivator(LogicalKeyboardKey.keyA, meta: true):
-                      const OfficeSelectAllIntent(),
-                  const SingleActivator(LogicalKeyboardKey.arrowLeft):
-                      const _NudgeIntent(-127000, 0),
-                  const SingleActivator(LogicalKeyboardKey.arrowRight):
-                      const _NudgeIntent(127000, 0),
-                  const SingleActivator(LogicalKeyboardKey.arrowUp):
-                      const _NudgeIntent(0, -127000),
-                  const SingleActivator(LogicalKeyboardKey.arrowDown):
-                      const _NudgeIntent(0, 127000),
-                  const SingleActivator(
-                    LogicalKeyboardKey.arrowLeft,
-                    shift: true,
-                  ): const _NudgeIntent(
-                    -12700,
-                    0,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                if (widget.navigationBuilder != null &&
+                    !_c.isPresenting &&
+                    config.effectiveShowNavigationPane(
+                      MediaQuery.sizeOf(context),
+                    ))
+                  SizedBox(
+                    width: 220,
+                    child: widget.navigationBuilder!(context, _c),
                   ),
-                  const SingleActivator(
-                    LogicalKeyboardKey.arrowRight,
-                    shift: true,
-                  ): const _NudgeIntent(
-                    12700,
-                    0,
-                  ),
-                  const SingleActivator(
-                    LogicalKeyboardKey.arrowUp,
-                    shift: true,
-                  ): const _NudgeIntent(
-                    0,
-                    -12700,
-                  ),
-                  const SingleActivator(
-                    LogicalKeyboardKey.arrowDown,
-                    shift: true,
-                  ): const _NudgeIntent(
-                    0,
-                    12700,
-                  ),
-                  const SingleActivator(LogicalKeyboardKey.keyC, control: true):
-                      const OfficeCopyIntent(),
-                  const SingleActivator(LogicalKeyboardKey.keyX, control: true):
-                      const OfficeCutIntent(),
-                  const SingleActivator(LogicalKeyboardKey.keyV, control: true):
-                      const OfficePasteIntent(),
-                  const SingleActivator(
-                    LogicalKeyboardKey.keyV,
-                    control: true,
-                    shift: true,
-                  ): const OfficePasteIntent(
-                    OfficePasteMode.keepTextOnly,
-                  ),
-                },
-                child: Actions(
-                  actions: <Type, Action<Intent>>{
-                    ..._documentActions(_c),
-                    OfficeUndoIntent: CallbackAction<OfficeUndoIntent>(
-                      onInvoke: (_) {
-                        _c.undo();
-                        return null;
-                      },
-                    ),
-                    OfficeRedoIntent: CallbackAction<OfficeRedoIntent>(
-                      onInvoke: (_) {
-                        _c.redo();
-                        return null;
-                      },
-                    ),
-                    OfficeSelectAllIntent:
-                        CallbackAction<OfficeSelectAllIntent>(
-                          onInvoke: (_) {
-                            _c.selectAll();
-                            return null;
-                          },
-                        ),
-                    OfficeCopyIntent: CallbackAction<OfficeCopyIntent>(
-                      onInvoke: (_) {
-                        _c.copyToClipboard();
-                        return null;
-                      },
-                    ),
-                    OfficeCutIntent: CallbackAction<OfficeCutIntent>(
-                      onInvoke: (_) {
-                        _c.cutToClipboard();
-                        return null;
-                      },
-                    ),
-                    OfficePasteIntent: CallbackAction<OfficePasteIntent>(
-                      onInvoke: (OfficePasteIntent i) {
-                        _c.pasteFromClipboard(mode: i.mode);
-                        return null;
-                      },
-                    ),
-                    _NudgeIntent: CallbackAction<_NudgeIntent>(
-                      onInvoke: (_NudgeIntent i) {
-                        if (_c.editingText) {
-                          final int delta = i.dx < 0 || i.dy < 0 ? -1 : 1;
-                          _c.moveTextCaret(delta);
-                          return null;
+                Expanded(
+                  child: Focus(
+                    autofocus: true,
+                    focusNode: _focus,
+                    onKeyEvent: (FocusNode node, KeyEvent event) {
+                      final KeyEventResult show = _onSlideKey(node, event);
+                      if (show != KeyEventResult.ignored) {
+                        return show;
+                      }
+                      if (event is! KeyDownEvent) {
+                        return KeyEventResult.ignored;
+                      }
+                      if (event.logicalKey == LogicalKeyboardKey.tab &&
+                          _c.selectedTable != null &&
+                          _c.config.allowsMutation) {
+                        _c.moveSelectedTableCell(
+                          forward: !HardwareKeyboard.instance.isShiftPressed,
+                        );
+                        return KeyEventResult.handled;
+                      }
+                      final bool? directionRtl = officeDirectionFromKeyEvent(
+                        event,
+                      );
+                      if (directionRtl != null && _c.config.allowsMutation) {
+                        _c.setSelectedTextDirection(rtl: directionRtl);
+                        return KeyEventResult.handled;
+                      }
+                      final bool ctrl =
+                          HardwareKeyboard.instance.isControlPressed ||
+                          HardwareKeyboard.instance.isMetaPressed;
+                      if (ctrl && event.logicalKey == LogicalKeyboardKey.keyA) {
+                        _c.selectAll();
+                        return KeyEventResult.handled;
+                      }
+                      if (!_c.config.allowsMutation) {
+                        return KeyEventResult.ignored;
+                      }
+                      if (ctrl && event.logicalKey == LogicalKeyboardKey.keyZ) {
+                        if (HardwareKeyboard.instance.isShiftPressed) {
+                          _c.redo();
+                        } else {
+                          _c.undo();
                         }
-                        _c.nudgeSelected(i.dx, i.dy);
-                        return null;
+                        return KeyEventResult.handled;
+                      }
+                      if (ctrl && event.logicalKey == LogicalKeyboardKey.keyY) {
+                        _c.redo();
+                        return KeyEventResult.handled;
+                      }
+                      if (ctrl && event.logicalKey == LogicalKeyboardKey.keyC) {
+                        _c.copyToClipboard();
+                        return KeyEventResult.handled;
+                      }
+                      if (ctrl && event.logicalKey == LogicalKeyboardKey.keyX) {
+                        _c.cutToClipboard();
+                        return KeyEventResult.handled;
+                      }
+                      if (ctrl && event.logicalKey == LogicalKeyboardKey.keyV) {
+                        _c.pasteFromClipboard(
+                          mode: HardwareKeyboard.instance.isShiftPressed
+                              ? OfficePasteMode.keepTextOnly
+                              : OfficePasteMode.keepSource,
+                        );
+                        return KeyEventResult.handled;
+                      }
+                      if (event.logicalKey == LogicalKeyboardKey.escape) {
+                        if (_c.editingText) {
+                          _c.cancelTextEdit();
+                          return KeyEventResult.handled;
+                        }
+                      }
+                      if (event.logicalKey == LogicalKeyboardKey.f2) {
+                        _c.beginTextEdit();
+                        return KeyEventResult.handled;
+                      }
+                      if (_c.editingText) {
+                        return KeyEventResult.ignored;
+                      }
+                      if (event.logicalKey == LogicalKeyboardKey.arrowLeft ||
+                          event.logicalKey == LogicalKeyboardKey.arrowRight ||
+                          event.logicalKey == LogicalKeyboardKey.arrowUp ||
+                          event.logicalKey == LogicalKeyboardKey.arrowDown) {
+                        if (_c.selected == null) {
+                          return KeyEventResult.ignored;
+                        }
+                        final int step =
+                            HardwareKeyboard.instance.isShiftPressed
+                            ? 12700
+                            : 127000;
+                        final int dx =
+                            event.logicalKey == LogicalKeyboardKey.arrowLeft
+                            ? -step
+                            : (event.logicalKey == LogicalKeyboardKey.arrowRight
+                                  ? step
+                                  : 0);
+                        final int dy =
+                            event.logicalKey == LogicalKeyboardKey.arrowUp
+                            ? -step
+                            : (event.logicalKey == LogicalKeyboardKey.arrowDown
+                                  ? step
+                                  : 0);
+                        _c.nudgeSelected(dx, dy);
+                        return KeyEventResult.handled;
+                      }
+                      if (event.logicalKey == LogicalKeyboardKey.enter ||
+                          event.logicalKey == LogicalKeyboardKey.numpadEnter) {
+                        _c.beginTextEdit();
+                        return KeyEventResult.handled;
+                      }
+                      if (event.logicalKey == LogicalKeyboardKey.delete ||
+                          event.logicalKey == LogicalKeyboardKey.backspace) {
+                        _c.deleteSelectedShape();
+                        return KeyEventResult.handled;
+                      }
+                      final String? ch = event.character;
+                      if (ch != null &&
+                          ch.length == 1 &&
+                          ch.codeUnitAt(0) >= 32 &&
+                          !ctrl) {
+                        _c.beginTextEdit(initial: ch, replace: true);
+                        return KeyEventResult.handled;
+                      }
+                      return KeyEventResult.ignored;
+                    },
+                    child: Shortcuts(
+                      shortcuts: <ShortcutActivator, Intent>{
+                        const SingleActivator(
+                          LogicalKeyboardKey.keyF,
+                          control: true,
+                        ): const OfficeFindIntent(),
+                        const SingleActivator(
+                          LogicalKeyboardKey.keyH,
+                          control: true,
+                        ): const OfficeReplaceIntent(),
+                        const SingleActivator(
+                          LogicalKeyboardKey.keyP,
+                          control: true,
+                        ): const OfficePrintIntent(),
+                        const SingleActivator(LogicalKeyboardKey.f7):
+                            const OfficeSpellCheckIntent(),
+                        const SingleActivator(LogicalKeyboardKey.f3):
+                            const OfficeFindNextIntent(),
+                        const SingleActivator(
+                          LogicalKeyboardKey.f3,
+                          shift: true,
+                        ): const OfficeFindNextIntent(
+                          forward: false,
+                        ),
+                        const SingleActivator(
+                          LogicalKeyboardKey.keyZ,
+                          control: true,
+                        ): const OfficeUndoIntent(),
+                        const SingleActivator(
+                          LogicalKeyboardKey.keyY,
+                          control: true,
+                        ): const OfficeRedoIntent(),
+                        const SingleActivator(
+                          LogicalKeyboardKey.keyY,
+                          meta: true,
+                        ): const OfficeRedoIntent(),
+                        const SingleActivator(
+                          LogicalKeyboardKey.keyA,
+                          control: true,
+                        ): const OfficeSelectAllIntent(),
+                        const SingleActivator(
+                          LogicalKeyboardKey.keyA,
+                          meta: true,
+                        ): const OfficeSelectAllIntent(),
+                        const SingleActivator(LogicalKeyboardKey.arrowLeft):
+                            const _NudgeIntent(-127000, 0),
+                        const SingleActivator(LogicalKeyboardKey.arrowRight):
+                            const _NudgeIntent(127000, 0),
+                        const SingleActivator(LogicalKeyboardKey.arrowUp):
+                            const _NudgeIntent(0, -127000),
+                        const SingleActivator(LogicalKeyboardKey.arrowDown):
+                            const _NudgeIntent(0, 127000),
+                        const SingleActivator(
+                          LogicalKeyboardKey.arrowLeft,
+                          shift: true,
+                        ): const _NudgeIntent(
+                          -12700,
+                          0,
+                        ),
+                        const SingleActivator(
+                          LogicalKeyboardKey.arrowRight,
+                          shift: true,
+                        ): const _NudgeIntent(
+                          12700,
+                          0,
+                        ),
+                        const SingleActivator(
+                          LogicalKeyboardKey.arrowUp,
+                          shift: true,
+                        ): const _NudgeIntent(
+                          0,
+                          -12700,
+                        ),
+                        const SingleActivator(
+                          LogicalKeyboardKey.arrowDown,
+                          shift: true,
+                        ): const _NudgeIntent(
+                          0,
+                          12700,
+                        ),
+                        const SingleActivator(
+                          LogicalKeyboardKey.keyC,
+                          control: true,
+                        ): const OfficeCopyIntent(),
+                        const SingleActivator(
+                          LogicalKeyboardKey.keyX,
+                          control: true,
+                        ): const OfficeCutIntent(),
+                        const SingleActivator(
+                          LogicalKeyboardKey.keyV,
+                          control: true,
+                        ): const OfficePasteIntent(),
+                        const SingleActivator(
+                          LogicalKeyboardKey.keyV,
+                          control: true,
+                          shift: true,
+                        ): const OfficePasteIntent(
+                          OfficePasteMode.keepTextOnly,
+                        ),
                       },
-                    ),
-                  },
-                  child: Semantics(
-                    container: true,
-                    label: _c.semanticsLabel,
-                    value: _c.semanticsValue,
-                    readOnly: !config.allowsMutation,
-                    child: SlideStage(
-                      slide: _c.isPlayingMotion
-                          ? (_c.slideShow?.currentSlide ?? _c.slide)
-                          : _c.canvasSlide,
-                      selected: _c.isPresenting ? null : _c.selected,
-                      selectedShapes: _c.isPresenting
-                          ? const <PmlShape>[]
-                          : _c.selectedShapes,
-                      viewport: _c.viewport,
-                      config: config,
-                      hasFocus: _focus.hasFocus,
-                      semanticsLabel: _c.semanticsLabel,
-                      semanticsValue: _c.semanticsValue,
-                      editing: _c.editingText,
-                      editCaret: _c.textEditor.caretIndex,
-                      editBase: _c.textEditor.selectionBase,
-                      outgoingSlide: _c.slideShow?.outgoingSlide,
-                      transitionProgress: _c.slideShow?.transitionProgress ?? 1,
-                      playingTransition: _c.isPlayingMotion
-                          ? (_c.slideShow?.playingTransition ??
-                                (_c.slideShow?.currentSlide ?? _c.slide)
-                                    .transition)
-                          : null,
-                      animSamples: _c.isPlayingMotion ? _c.showSamples : null,
-                      presenting: _c.isPlayingMotion,
-                      onShowAdvance: _c.isPresenting ? _c.showNext : _c.endShow,
-                      onSelect: _c.selectShape,
-                      onSelectTableCell: _c.selectTableCell,
-                      onTransforms: _c.applyTransforms,
-                      selectedTableRow: _c.selectedTableRow,
-                      selectedTableCol: _c.selectedTableCol,
-                      onContextMenu: _showSlideContext,
-                      onTransform: _c.applyTransform,
-                      onActivate: _c.beginTextEdit,
-                      onPlaceCaret: (int index, {bool extend = false}) {
-                        _c.placeTextCaret(index, extend: extend);
-                      },
-                      onSelectWord: _c.selectTextWordAt,
-                      onSelectParagraph: _c.selectTextParagraphAt,
-                      onCommitEdit: _c.commitTextEdit,
-                      onChanged: () {
-                        _focus.requestFocus();
-                        _c.refresh();
-                      },
+                      child: Actions(
+                        actions: <Type, Action<Intent>>{
+                          ..._documentActions(_c),
+                          OfficeUndoIntent: CallbackAction<OfficeUndoIntent>(
+                            onInvoke: (_) {
+                              _c.undo();
+                              return null;
+                            },
+                          ),
+                          OfficeRedoIntent: CallbackAction<OfficeRedoIntent>(
+                            onInvoke: (_) {
+                              _c.redo();
+                              return null;
+                            },
+                          ),
+                          OfficeSelectAllIntent:
+                              CallbackAction<OfficeSelectAllIntent>(
+                                onInvoke: (_) {
+                                  _c.selectAll();
+                                  return null;
+                                },
+                              ),
+                          OfficeCopyIntent: CallbackAction<OfficeCopyIntent>(
+                            onInvoke: (_) {
+                              _c.copyToClipboard();
+                              return null;
+                            },
+                          ),
+                          OfficeCutIntent: CallbackAction<OfficeCutIntent>(
+                            onInvoke: (_) {
+                              _c.cutToClipboard();
+                              return null;
+                            },
+                          ),
+                          OfficePasteIntent: CallbackAction<OfficePasteIntent>(
+                            onInvoke: (OfficePasteIntent i) {
+                              _c.pasteFromClipboard(mode: i.mode);
+                              return null;
+                            },
+                          ),
+                          _NudgeIntent: CallbackAction<_NudgeIntent>(
+                            onInvoke: (_NudgeIntent i) {
+                              if (_c.editingText) {
+                                final int delta = i.dx < 0 || i.dy < 0 ? -1 : 1;
+                                _c.moveTextCaret(delta);
+                                return null;
+                              }
+                              _c.nudgeSelected(i.dx, i.dy);
+                              return null;
+                            },
+                          ),
+                        },
+                        child: Semantics(
+                          container: true,
+                          label: _c.semanticsLabel,
+                          value: _c.semanticsValue,
+                          readOnly: !config.allowsMutation,
+                          child: SlideStage(
+                            slide: _c.isPlayingMotion
+                                ? (_c.slideShow?.currentSlide ?? _c.slide)
+                                : _c.canvasSlide,
+                            selected: _c.isPresenting ? null : _c.selected,
+                            selectedShapes: _c.isPresenting
+                                ? const <PmlShape>[]
+                                : _c.selectedShapes,
+                            viewport: _c.viewport,
+                            config: config,
+                            hasFocus: _focus.hasFocus,
+                            semanticsLabel: _c.semanticsLabel,
+                            semanticsValue: _c.semanticsValue,
+                            editing: _c.editingText,
+                            editCaret: _c.textEditor.caretIndex,
+                            editBase: _c.textEditor.selectionBase,
+                            outgoingSlide: _c.slideShow?.outgoingSlide,
+                            transitionProgress:
+                                _c.slideShow?.transitionProgress ?? 1,
+                            playingTransition: _c.isPlayingMotion
+                                ? (_c.slideShow?.playingTransition ??
+                                      (_c.slideShow?.currentSlide ?? _c.slide)
+                                          .transition)
+                                : null,
+                            animSamples: _c.isPlayingMotion
+                                ? _c.showSamples
+                                : null,
+                            presenting: _c.isPlayingMotion,
+                            onShowAdvance: _c.isPresenting
+                                ? _c.showNext
+                                : _c.endShow,
+                            onSelect: _c.selectShape,
+                            onSelectTableCell: _c.selectTableCell,
+                            onTransforms: _c.applyTransforms,
+                            selectedTableRow: _c.selectedTableRow,
+                            selectedTableCol: _c.selectedTableCol,
+                            onContextMenu: _showSlideContext,
+                            onTransform: _c.applyTransform,
+                            onActivate: _c.beginTextEdit,
+                            onPlaceCaret: (int index, {bool extend = false}) {
+                              _c.placeTextCaret(index, extend: extend);
+                            },
+                            onSelectWord: _c.selectTextWordAt,
+                            onSelectParagraph: _c.selectTextParagraphAt,
+                            onCommitEdit: _c.commitTextEdit,
+                            onChanged: () {
+                              _focus.requestFocus();
+                              _c.refresh();
+                            },
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ),
-              ),
+              ],
             ),
           ),
-          if (!_c.isPresenting && _c.speakerNotes.trim().isNotEmpty)
+          if (!_c.isPresenting && widget.notesPaneBuilder != null)
+            widget.notesPaneBuilder!(context, _c)
+          else if (!_c.isPresenting && _c.speakerNotes.trim().isNotEmpty)
             SizedBox(
               height: 72,
               child: SpeakerNotesBar(

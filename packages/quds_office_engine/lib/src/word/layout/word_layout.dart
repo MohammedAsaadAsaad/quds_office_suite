@@ -628,6 +628,14 @@ class _Flow {
 /// Word's default tab-stop interval (0.5 inch).
 const double kDefaultTabWidth = 36;
 
+/// Advance width in points of [codePoint] set in [props] at [sizePoints].
+///
+/// Hosts that paint with their own text stack (for example Flutter's
+/// `TextPainter`) pass this to [WordLayoutEngine.measure] so line breaks use
+/// the same widths the painter will use.
+typedef WordGlyphMeasure =
+    double Function(int codePoint, double sizePoints, WmlRunProps props);
+
 /// Flowable pagination: Knuth-Plass lines accumulated into physical pages.
 class WordLayoutEngine {
   /// WordLayoutEngine API.
@@ -635,6 +643,7 @@ class WordLayoutEngine {
     required this.font,
     this.fonts,
     this.fallbackWidthFactor = 0.5,
+    this.measure,
   });
 
   /// Primary face used when [fonts] does not cover a code point.
@@ -643,21 +652,34 @@ class WordLayoutEngine {
   /// Multi-face pack for mixed-script documents (Latin + Arabic, …).
   final OfficeFontSet? fonts;
 
-  /// fallbackWidthFactor API.
+  /// Em fraction per character when neither [fonts], [font] nor [measure]
+  /// can size a code point. Table cells and frames use at least 0.72 so
+  /// their text stays inside the border.
   final double fallbackWidthFactor;
+
+  /// Host measurement used when [fonts] and [font] do not cover a code point.
+  final WordGlyphMeasure? measure;
 
   final Map<int, FontMetrics> _metricsCache = <int, FontMetrics>{};
 
   WmlDocument? _layoutDoc;
 
-  double _advanceOf(int cp, double sizePoints, double emFallback) {
+  double _advanceOf(
+    int cp,
+    double sizePoints,
+    double emFallback,
+    WmlRunProps props,
+  ) {
     if (cp == 0x09) {
       return kDefaultTabWidth;
     }
     final SfntFont? face = fonts?.faceFor(cp) ??
         (font != null && font!.glyphIdFor(cp) != 0 ? font : null);
     if (face == null) {
-      return sizePoints * emFallback;
+      final WordGlyphMeasure? hostMeasure = measure;
+      return hostMeasure != null
+          ? hostMeasure(cp, sizePoints, props)
+          : sizePoints * emFallback;
     }
     final int key = identityHashCode(face) ^ (sizePoints * 100).round();
     final FontMetrics metrics = _metricsCache.putIfAbsent(
@@ -822,10 +844,7 @@ class WordLayoutEngine {
             flow.y,
             paragraphIndex,
             originX: flow.originX,
-            maxWidthOverride:
-                flow.colWidth -
-                block.properties.indent.left -
-                block.properties.indent.right,
+            maxWidthOverride: flow.colWidth,
             flow: flow,
           );
           flow.y = para.y;
@@ -1039,15 +1058,15 @@ class WordLayoutEngine {
       return (y: y + gap, pageIndex: pageIndex);
     }
     final String text = paragraph.text;
-    // Constrained boxes (cells / columns) use a wider em so lines wrap
-    // before Flutter's TextPainter paints past the border.
-    final double em = maxWidthOverride != null
-        ? math.max(fallbackWidthFactor, 0.72)
-        : fallbackWidthFactor;
+    // Table cells and frames (laid out without page breaks) use a wider em
+    // so the painted text stays inside their border.
+    final double em = allowBreak
+        ? fallbackWidthFactor
+        : math.max(fallbackWidthFactor, 0.72);
     final List<BrokenLine> broken = LineBreaker.breakLines(
       text: text,
       maxWidth: maxWidth,
-      widthOf: (int cp) => _advanceOf(cp, fontSize, em),
+      widthOf: (int cp) => _advanceOf(cp, fontSize, em, runProps),
       glyphIdOf: (int cp) {
         final SfntFont? face = fonts?.faceFor(cp) ?? font;
         return face?.glyphIdFor(cp) ?? cp;

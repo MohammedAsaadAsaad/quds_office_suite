@@ -216,6 +216,8 @@ class PmlShape {
     this.textAlign = PmlTextAlign.left,
     this.groupId,
     this.placeholder = false,
+    this.placeholderType = '',
+    this.placeholderIndex,
     this.mediaName = '',
     List<int>? mediaBytes,
     this.strokeColor = '',
@@ -272,6 +274,13 @@ class PmlShape {
   /// True when this shape is a layout / master placeholder.
   bool placeholder;
 
+  /// `p:ph/@type` (`title`, `ctrTitle`, `body`, `subTitle`, `dt`, …); empty
+  /// when the attribute is absent, which PowerPoint reads as `obj`.
+  String placeholderType;
+
+  /// `p:ph/@idx`, the key slides use to inherit from layout placeholders.
+  int? placeholderIndex;
+
   /// Optional media file name (video/audio).
   String mediaName;
 
@@ -309,6 +318,8 @@ class PmlShape {
       textAlign: textAlign,
       groupId: groupId,
       placeholder: placeholder,
+      placeholderType: placeholderType,
+      placeholderIndex: placeholderIndex,
       mediaName: mediaName,
       mediaBytes: <int>[...mediaBytes],
       strokeColor: strokeColor,

@@ -301,6 +301,42 @@ void main() {
       }
     });
 
+    test('calculated columns complete with their computed values', () {
+      final ReportDesignerController c = ReportDesignerController.fromXml(
+        sampleXml.replaceFirst(
+          '<Bands>',
+          '<DataSchema><Table name="items"><Column name="qty" type="number"/>'
+              '<Column name="calc1" type="number" expression="qty * 2"/>'
+              '</Table></DataSchema><Bands>',
+        ),
+      );
+      final ReportTextElement line = byName(c, 'line') as ReportTextElement;
+      c.beginTextEdit(line.id);
+      final InlineCellEditor ed = c.textEditor;
+      ed.replaceRange(0, ed.formulaBar.length, '{{item.ca');
+      final ReportCompletionItem first = c.completion!.items.first;
+      expect(first.insert, 'calc1');
+      final List<Object?> rows = c.mockData['items']! as List<Object?>;
+      final num qty = (rows.first! as Map<String, Object?>)['qty']! as num;
+      expect(
+        first.detail,
+        ReportUnits.trimNumber(qty.toDouble() * 2, decimals: 3),
+      );
+      c.cancelTextEdit();
+
+      c.addVariable(type: ReportVariableType.expression, value: '0');
+      c.inspectorPage = ReportInspectorPage.variables;
+      c.beginPropertyEdit('var.0.value');
+      c.propertyEditor.replaceRange(
+        0,
+        c.propertyEditor.formulaBar.length,
+        'SUM(items.ca',
+      );
+      expect(c.completion!.items.first.insert, 'calc1');
+      c.cancelPropertyEdit();
+      c.dispose();
+    });
+
     test('bindings complete from data, functions, and formats', () {
       final ReportDesignerController c = sample();
       final ReportTextElement title = byName(c, 'title') as ReportTextElement;

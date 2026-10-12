@@ -549,6 +549,9 @@ class SmlDrawing {
     this.offsetY = 0,
     this.sourceFromA1,
     this.sourceToA1,
+    this.sourceSheetName,
+    this.labelsFromA1,
+    this.labelsToA1,
   });
 
   /// visual API.
@@ -571,4 +574,14 @@ class SmlDrawing {
 
   /// sourceToA1 API.
   String? sourceToA1;
+
+  /// Sheet holding the source and label ranges; null for the drawing's own
+  /// sheet.
+  String? sourceSheetName;
+
+  /// First cell of the category (label) range, e.g. a chart's `c:cat` ref.
+  String? labelsFromA1;
+
+  /// Last cell of the category (label) range.
+  String? labelsToA1;
 }

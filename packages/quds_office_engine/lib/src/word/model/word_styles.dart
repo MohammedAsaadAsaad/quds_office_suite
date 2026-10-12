@@ -19,6 +19,9 @@ class WmlStyle {
     this.font,
     this.csFont,
     this.basedOn,
+    this.numId,
+    this.ilvl,
+    this.indent,
   });
 
   /// id API.
@@ -62,6 +65,16 @@ class WmlStyle {
 
   /// Parent style id (`w:basedOn`), if any.
   final String? basedOn;
+
+  /// List numbering instance from the style's `w:numPr` (`0` turns a list
+  /// off).
+  final int? numId;
+
+  /// List level from the style's `w:numPr`.
+  final int? ilvl;
+
+  /// Paragraph indents from the style's `w:ind`.
+  final WmlIndent? indent;
 
   /// label API.
   String label({required bool arabic}) => arabic ? nameAr : name;
@@ -216,6 +229,9 @@ abstract final class WordStyles {
       font: style.font ?? parent.font,
       csFont: style.csFont ?? parent.csFont,
       basedOn: style.basedOn,
+      numId: style.numId ?? parent.numId,
+      ilvl: style.ilvl ?? parent.ilvl,
+      indent: style.indent ?? parent.indent,
     );
   }
 
@@ -254,9 +270,14 @@ abstract final class WordStyles {
   }
 
   /// Fills missing paragraph/run props from the paragraph's styleId.
+  ///
+  /// Runs in [notBold] / [notItalic] turned that toggle off themselves
+  /// (`w:b w:val="0"`), so the style does not turn it back on.
   static void resolveOntoParagraph(
     WmlParagraph paragraph, {
     WmlDocument? document,
+    Set<WmlRunProps> notBold = const <WmlRunProps>{},
+    Set<WmlRunProps> notItalic = const <WmlRunProps>{},
   }) {
     final String? id = paragraph.properties.styleId;
     if (id == null || id.isEmpty) {
@@ -264,6 +285,20 @@ abstract final class WordStyles {
     }
     final WmlStyle style = resolve(id, document: document);
     paragraph.properties.headingLevel ??= style.headingLevel;
+    if (paragraph.properties.numId == null && style.numId != null) {
+      paragraph.properties
+        ..numId = style.numId
+        ..ilvl = style.ilvl ?? paragraph.properties.ilvl;
+    }
+    final WmlIndent own = paragraph.properties.indent;
+    final WmlIndent? styled = style.indent;
+    if (styled != null &&
+        own.left == 0 &&
+        own.right == 0 &&
+        own.firstLine == 0 &&
+        own.hanging == 0) {
+      paragraph.properties.indent = styled;
+    }
     if (paragraph.properties.spacingBefore == 0 && style.spacingBefore != 0) {
       paragraph.properties.spacingBefore = style.spacingBefore;
     }
@@ -289,6 +324,15 @@ abstract final class WordStyles {
           style.csFont != null &&
           style.csFont!.isNotEmpty) {
         inline.properties.csFont = style.csFont!;
+      }
+      if (style.bold && !notBold.contains(inline.properties)) {
+        inline.properties.bold = true;
+      }
+      if (style.italic && !notItalic.contains(inline.properties)) {
+        inline.properties.italic = true;
+      }
+      if (inline.properties.color == '000000' && style.color != '000000') {
+        inline.properties.color = style.color;
       }
     }
   }

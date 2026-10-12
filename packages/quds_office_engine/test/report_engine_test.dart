@@ -1092,6 +1092,38 @@ void main() {
       );
     });
 
+    test('schema columns complete even when the data lacks them', () {
+      final ReportTemplate schema = QudsReportXmlParser().parse('''
+<QudsReport name="S">
+  <DataSchema>
+    <Table name="items">
+      <Column name="qty" type="number"/>
+      <Column name="calc1" type="number" expression="qty * 2"/>
+    </Table>
+    <Table name="returns"><Column name="reason"/></Table>
+  </DataSchema>
+  <Bands><Detail dataSet="items" height="8mm"/></Bands>
+</QudsReport>''').templateOrThrow;
+      final ReportCompleter s = ReportCompleter(
+        template: schema,
+        band: schema.band(ReportBandKind.detail),
+        data: <String, Object?>{
+          'items': <Object?>[
+            <String, Object?>{'qty': 3},
+          ],
+        },
+      );
+      final ReportCompletionResult item = s.complete('{{item.', 7)!;
+      expect(inserts(item), <String>['qty', 'calc1']);
+      expect(item.items.last.detail, '= qty * 2');
+      expect(inserts(s.complete('{{SUM(items.', 12)), <String>[
+        'qty',
+        'calc1',
+        'count',
+      ]);
+      expect(inserts(s.complete('{{Data.returns.', 15)), <String>['reason']);
+    });
+
     test('functions insert parentheses with the caret inside', () {
       const String text = '{{SU';
       final ReportCompletionResult r = c.complete(text, 4)!;
@@ -1552,6 +1584,34 @@ void main() {
       expect(texts, contains('A x2=21'));
       expect(texts, contains('B x3=12'));
       expect(texts, contains('33'));
+    });
+
+    test('variables see calculated columns', () {
+      final QudsReportEngine engine = QudsReportEngine.fromXml(
+        xml
+            .replaceFirst(
+              '<DataSchema>',
+              '<Variables><Variable name="grand" type="expression" '
+                  'value="SUM(items.total) * 2"/></Variables><DataSchema>',
+            )
+            .replaceFirst(
+              '{{SUM(items.total)}}',
+              '{{SUM(items.total)}}/{{Variables.grand}}',
+            ),
+        fonts: loadFonts(),
+      );
+      final List<String> texts = pageTexts(
+        engine
+            .layout(<String, Object?>{
+              'items': <Object?>[
+                <String, Object?>{'code': 'A', 'qty': 2, 'price': 10.5},
+                <String, Object?>{'code': 'B', 'qty': 3, 'price': 4},
+              ],
+            })
+            .pages
+            .first,
+      );
+      expect(texts, contains('33/66'));
     });
 
     test('host data feeds the report and elements are set by name', () {

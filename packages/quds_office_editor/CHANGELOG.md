@@ -2,7 +2,33 @@
 
 All notable changes to `quds_office_editor` are documented here.
 
-## Unreleased
+## 1.0.0
+
+First stable release, built on `quds_office_engine` 1.0.0. The public API
+now follows semantic versioning: breaking changes wait for 2.0. This release
+brings the report designer's data explorer, embedded images and fonts,
+inspector tabs, and fidelity fixes for Word, Excel, and PowerPoint files.
+
+- Depends on `quds_office_engine: ^1.0.0`.
+
+**Calculated columns in report suggestions.**
+
+- The report designer's `{{ }}` and expression suggestions (text, properties, variables) use the sample data as the report sees it: schema types applied and calculated columns filled in.
+  - A new calculated column such as `calc1` is offered right away, with its computed value.
+
+**Word, Excel and PowerPoint fidelity fixes ([#2](https://github.com/MohammedAsaadAsaad/quds_office_suite/issues/2), [#3](https://github.com/MohammedAsaadAsaad/quds_office_suite/issues/3), [#4](https://github.com/MohammedAsaadAsaad/quds_office_suite/issues/4)).**
+
+- Word:
+  - The Word controllers lay out with the same Flutter text metrics they paint with (`PaintRunText.advanceOf`), so lines no longer run past the column.
+  - Layout runs again when system fonts change.
+  - `WordEditorController.refreshMetrics()` re-measures on demand.
+- Slides:
+  - `QudsSlideEditor` now places `navigationBuilder` (a 220-pt pane shown when `showNavigationPane` allows it) and `notesPaneBuilder`; both were ignored.
+  - An empty `PmlShape.fillColor` paints no fill instead of the `4472C4` fallback.
+    - Text on unfilled shapes contrasts with the slide background.
+    - Empty placeholders get a faint outline while editing.
+  - The stage honors `PmlShape.textColor`.
+  - Text boxes shorter than a line (`cy="0"`) grow with their text instead of being clipped away.
 
 **Embedded report images in `.qrep` packages.**
 

@@ -144,10 +144,27 @@ abstract final class SheetDrawingIo {
         return;
       }
       OfficeVisual? visual;
+      ({String? sheet, SmlRange range})? values;
+      ({String? sheet, SmlRange range})? labels;
       final String? chartRel = chartId;
       final String? embedRel = embed;
       if (chartRel != null) {
-        visual = _loadChart(package, drawingUri, chartRel, name, cx, cy);
+        final String? chartXml = _readChartPart(package, drawingUri, chartRel);
+        if (chartXml != null) {
+          visual = DrawingmlVisualIo.parseChart(
+            chartXml,
+            name: name,
+            width: cx > 0 ? DrawingmlVisualIo.emuToPoints(cx) : 360,
+            height: cy > 0 ? DrawingmlVisualIo.emuToPoints(cy) : 180,
+          );
+          final ({String? categories, String? values}) refs =
+              DrawingmlVisualIo.chartSeriesRefs(chartXml);
+          values = _seriesRange(refs.values);
+          labels = _seriesRange(refs.categories);
+          if (labels != null && labels.sheet != values?.sheet) {
+            labels = null;
+          }
+        }
       } else if (embedRel != null) {
         visual = _loadPicture(
           package,
@@ -167,6 +184,11 @@ abstract final class SheetDrawingIo {
             row: row,
             offsetX: DrawingmlVisualIo.emuToPixels(colOff),
             offsetY: DrawingmlVisualIo.emuToPixels(rowOff),
+            sourceFromA1: values?.range.start.a1,
+            sourceToA1: values?.range.end.a1,
+            sourceSheetName: values?.sheet,
+            labelsFromA1: labels?.range.start.a1,
+            labelsToA1: labels?.range.end.a1,
           ),
         );
       }
@@ -470,13 +492,10 @@ abstract final class SheetDrawingIo {
     );
   }
 
-  static OfficeVisual? _loadChart(
+  static String? _readChartPart(
     OpcPackage package,
     String drawingUri,
     String relationshipId,
-    String name,
-    int cx,
-    int cy,
   ) {
     final PackageRelationship? rel = package
         .relationshipsFor(drawingUri)
@@ -484,18 +503,33 @@ abstract final class SheetDrawingIo {
     if (rel == null) {
       return null;
     }
-    final PackagePart? part = package.getPart(
-      package.relationshipsFor(drawingUri).resolve(rel),
-    );
-    if (part == null) {
+    return package
+        .getPart(package.relationshipsFor(drawingUri).resolve(rel))
+        ?.readText();
+  }
+
+  /// `'Sheet 1'!$B$1:$B$3` → sheet name and range. Null for multi-area or
+  /// unparseable references.
+  static ({String? sheet, SmlRange range})? _seriesRange(String? formula) {
+    if (formula == null || formula.isEmpty || formula.contains(',')) {
       return null;
     }
-    return DrawingmlVisualIo.parseChart(
-      part.readText(),
-      name: name,
-      width: cx > 0 ? DrawingmlVisualIo.emuToPoints(cx) : 360,
-      height: cy > 0 ? DrawingmlVisualIo.emuToPoints(cy) : 180,
-    );
+    final int bang = formula.lastIndexOf('!');
+    String? sheet = bang < 0 ? null : formula.substring(0, bang);
+    if (sheet != null &&
+        sheet.length >= 2 &&
+        sheet.startsWith("'") &&
+        sheet.endsWith("'")) {
+      sheet = sheet.substring(1, sheet.length - 1).replaceAll("''", "'");
+    }
+    final String a1 = formula.substring(bang + 1).replaceAll(r'$', '');
+    try {
+      return (sheet: sheet, range: SmlRange.parse(a1));
+    } on FormatException {
+      return null;
+    } on RangeError {
+      return null;
+    }
   }
 
   static void _writePart(

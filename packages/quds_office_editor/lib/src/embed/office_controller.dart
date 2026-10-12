@@ -418,9 +418,11 @@ class WordEditorController extends OfficeController {
     Uint8List bytes, {
     String? password,
     OfficeSurfaceConfig? config,
+    WordLayoutEngine? layoutEngine,
   }) {
     final WordEditorController controller = WordEditorController(
       config: config,
+      layoutEngine: layoutEngine,
     );
     controller.loadBytes(bytes, password: password);
     return controller;
@@ -435,8 +437,31 @@ class WordEditorController extends OfficeController {
   /// commentLaidOut API.
   LaidOutDocument? commentLaidOut;
 
-  /// layoutEngine API.
+  /// Custom layout engine. When null, lines break with the same Flutter
+  /// metrics the canvas paints with ([PaintRunText.advanceOf]).
   final WordLayoutEngine? layoutEngine;
+
+  WordLayoutEngine? _paintMetricsEngine;
+
+  WordLayoutEngine get _engine =>
+      layoutEngine ??
+      (_paintMetricsEngine ??= WordLayoutEngine(
+        font: null,
+        measure: (int codePoint, double sizePoints, WmlRunProps props) =>
+            PaintRunText.advanceOf(
+              codePoint,
+              sizePoints,
+              props,
+              themeFamily: config.theme.fontFamily,
+            ),
+      ));
+
+  /// Lays the document out again with fresh paint metrics, for example
+  /// after fonts finish loading.
+  void refreshMetrics() {
+    fitPaintMetrics(themeFamily: config.theme.fontFamily);
+    notifyListeners();
+  }
 
   /// documentCaret API.
   final CaretEngine documentCaret = CaretEngine();
@@ -763,7 +788,7 @@ class WordEditorController extends OfficeController {
       commentLaidOut = null;
       return;
     }
-    commentLaidOut = (layoutEngine ?? WordLayoutEngine(font: null)).layout(
+    commentLaidOut = _engine.layout(
       commentDocument,
     );
   }
@@ -786,10 +811,10 @@ class WordEditorController extends OfficeController {
       password: password,
       onProgress: onProgress,
     );
-    _acceptOpenedWord(opened.document, laidOut: opened.laidOut);
+    _acceptOpenedWord(opened.document);
   }
 
-  void _acceptOpenedWord(WmlDocument opened, {LaidOutDocument? laidOut}) {
+  void _acceptOpenedWord(WmlDocument opened) {
     document = opened;
     _editingComment = false;
     documentCaret.paragraphIndex = 0;
@@ -803,12 +828,7 @@ class WordEditorController extends OfficeController {
     equationSlot = 0;
     equationCaret = 0;
     pictureCropMode = false;
-    if (laidOut != null && layoutEngine == null) {
-      documentLaidOut = laidOut;
-      _layoutComment();
-    } else {
-      relayout();
-    }
+    relayout();
     _dirty = false;
     notifyListeners();
   }
@@ -841,8 +861,7 @@ class WordEditorController extends OfficeController {
       WordToc.refreshEmpty(document);
       WordToc.rebindHeadings(document);
     }
-    final WordLayoutEngine engine =
-        layoutEngine ?? WordLayoutEngine(font: null);
+    final WordLayoutEngine engine = _engine;
     final int fromSection = localEdit ? sectionIndexAtCaret : 0;
     documentLaidOut = engine.layout(
       document,
@@ -1004,11 +1023,11 @@ class WordEditorController extends OfficeController {
   }
 
   void _relayoutTocPages() {
-    documentLaidOut = (layoutEngine ?? WordLayoutEngine(font: null)).layout(
+    documentLaidOut = _engine.layout(
       document,
     );
     if (WordToc.syncPageNumbers(document, documentLaidOut)) {
-      documentLaidOut = (layoutEngine ?? WordLayoutEngine(font: null)).layout(
+      documentLaidOut = _engine.layout(
         document,
       );
     }

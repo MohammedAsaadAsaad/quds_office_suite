@@ -269,7 +269,19 @@ void main() {
   });
 
   test('formats numbers via styles.xml codes', () {
-    expect(applyNumberFormat(0.25, '0%'), '25.00%');
+    expect(applyNumberFormat(0.25, '0%'), '25%');
+    expect(applyNumberFormat(0.256, '0.0%'), '25.6%');
+    expect(applyNumberFormat(968000.0000000001, '#,##0'), '968,000');
+    expect(applyNumberFormat(968000.0000000001, '#,##0.00'), '968,000.00');
+    expect(applyNumberFormat(968000.0000000001, '0'), '968000');
+    expect(applyNumberFormat(-1234.5, r'"$"#,##0.00'), r'-$1,234.50');
+    expect(applyNumberFormat(-1234.5, '#,##0.00;(#,##0.00)'), '(1,234.50)');
+    expect(applyNumberFormat(0, '#,##0;-#,##0;"-"'), '-');
+    expect(applyNumberFormat(1234567, '#,##0,'), '1,235');
+    expect(applyNumberFormat(7, '000'), '007');
+    expect(applyNumberFormat(1.5, '0.0#'), '1.5');
+    expect(applyNumberFormat(1234.5, r'#,##0.00 "SAR"'), '1,234.50 SAR');
+    expect(applyNumberFormat(1234.5, r'[$€-407] #,##0.00'), '€ 1,234.50');
     expect(applyNumberFormat(-3, '[Red]0'), 'RED:-3');
     expect(applyNumberFormat(12.3, '0.00'), '12.30');
     final DateTime sep = DateTime.utc(2026, 9, 9);

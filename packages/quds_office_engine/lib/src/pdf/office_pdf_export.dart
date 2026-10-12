@@ -13,6 +13,7 @@ import '../opc/repair/office_repair.dart';
 import '../sheet/formula/formula_eval.dart';
 import '../sheet/model/sml_workbook.dart';
 import '../sheet/serial/sheet_serial.dart';
+import '../sheet/styles/sml_styles.dart';
 import '../slide/model/pml_presentation.dart';
 import '../slide/serial/slide_serial.dart';
 import '../visual/office_visual.dart';
@@ -1204,20 +1205,54 @@ abstract final class OfficePdfExport {
       for (final ({int start, int end}) cb in colBands) {
         final _PageSink sink = _PageSink(pageW, pageH, pack, images);
         sink.canvas.fillRect(0, 0, pageW, pageH, 'FFFFFF');
-        final String headerText = hf == null || hf.isEmpty
-            ? '${sheet.name}  -  $pageNo / $totalGuess'
-            : _sheetHeaderLine(hf, sheet.name, pageNo, totalGuess);
-        sink.drawText(headerText, margin, margin + 10, 9, '595959');
-        if (hf != null &&
-            (hf.footerLeft.isNotEmpty ||
-                hf.footerCenter.isNotEmpty ||
-                hf.footerRight.isNotEmpty)) {
+        void paintHfBand(List<String> sections, double baseline, double size) {
+          const List<_TextAlign> slots = <_TextAlign>[
+            _TextAlign.left,
+            _TextAlign.center,
+            _TextAlign.right,
+          ];
+          for (int i = 0; i < 3; i++) {
+            final String text = _expandSheetTokens(
+              sections[i],
+              sheet.name,
+              pageNo,
+              totalGuess,
+            );
+            sink.drawText(
+              text,
+              margin,
+              baseline,
+              size,
+              '595959',
+              maxWidth: pageW - margin * 2,
+              align: slots[i],
+            );
+          }
+        }
+
+        if (hf == null ||
+            (hf.headerLeft.isEmpty &&
+                hf.headerCenter.isEmpty &&
+                hf.headerRight.isEmpty)) {
           sink.drawText(
-            _sheetFooterLine(hf, sheet.name, pageNo, totalGuess),
+            '${sheet.name}  -  $pageNo / $totalGuess',
             margin,
+            margin + 10,
+            9,
+            '595959',
+          );
+        } else {
+          paintHfBand(
+            <String>[hf.headerLeft, hf.headerCenter, hf.headerRight],
+            margin + 10,
+            9,
+          );
+        }
+        if (hf != null) {
+          paintHfBand(
+            <String>[hf.footerLeft, hf.footerCenter, hf.footerRight],
             pageH - margin,
             8,
-            '595959',
           );
         }
         final double rowGutterX = rtl ? pageW - margin - gutter : margin;
@@ -1319,23 +1354,30 @@ abstract final class OfficePdfExport {
               if (stored == null) {
                 continue;
               }
-              final ({String text, String color}) shown = _sheetDisplay(
-                book,
-                sheet,
-                stored,
-              );
+              final ({String text, String color, bool numeric}) shown =
+                  _sheetDisplay(book, sheet, stored);
               if (shown.text.isEmpty) {
                 continue;
               }
+              final double size = math.max(4, stored.fontSize * scale);
+              final _TextAlign align = switch (stored.horizontalAlign) {
+                SmlHAlign.left => _TextAlign.left,
+                SmlHAlign.center => _TextAlign.center,
+                SmlHAlign.right => _TextAlign.right,
+                SmlHAlign.general =>
+                  shown.numeric ? _TextAlign.right : _TextAlign.auto,
+              };
               sink.canvas.save();
               sink.canvas.clipRect(x + 1, y + 1, spanW - 2, spanH - 2);
               sink.drawText(
                 shown.text,
                 x + 3,
-                y + math.min(spanH, h) * 0.75,
-                8,
+                y + spanH - math.max(2, size * 0.28),
+                size,
                 shown.color,
                 maxWidth: spanW - 6,
+                align: align,
+                bold: stored.fontBold,
               );
               sink.canvas.restore();
             }
@@ -1417,45 +1459,55 @@ abstract final class OfficePdfExport {
     int page,
     int pages,
   ) {
-    return template
-        .replaceAll('&A', sheetName)
-        .replaceAll('&P', '$page')
-        .replaceAll('&N', '$pages')
-        .replaceAll('&&', '&');
+    final StringBuffer out = StringBuffer();
+    var i = 0;
+    while (i < template.length) {
+      final String ch = template[i];
+      if (ch != '&' || i + 1 >= template.length) {
+        out.write(ch);
+        i++;
+        continue;
+      }
+      final String code = template[i + 1];
+      i += 2;
+      switch (code) {
+        case '&':
+          out.write('&');
+        case 'A':
+          out.write(sheetName);
+        case 'P':
+          out.write('$page');
+        case 'N':
+          out.write('$pages');
+        case 'D':
+          final DateTime now = DateTime.now();
+          out.write('${now.year}-${_two(now.month)}-${_two(now.day)}');
+        case 'T':
+          final DateTime now = DateTime.now();
+          out.write('${_two(now.hour)}:${_two(now.minute)}');
+        case '"':
+          final int close = template.indexOf('"', i);
+          i = close < 0 ? template.length : close + 1;
+        case 'K':
+          i = math.min(template.length, i + 6);
+        default:
+          // Font size digits; B / I / U / S / E / X / Y toggles and the
+          // picture, path, and file codes print nothing.
+          if (_isDigit(code)) {
+            while (i < template.length && _isDigit(template[i])) {
+              i++;
+            }
+          }
+      }
+    }
+    return out.toString().trim();
   }
 
-  static String _sheetHeaderLine(
-    SmlHeaderFooter hf,
-    String sheetName,
-    int page,
-    int pages,
-  ) {
-    final List<String> parts = <String>[
-      if (hf.headerLeft.isNotEmpty)
-        _expandSheetTokens(hf.headerLeft, sheetName, page, pages),
-      if (hf.headerCenter.isNotEmpty)
-        _expandSheetTokens(hf.headerCenter, sheetName, page, pages),
-      if (hf.headerRight.isNotEmpty)
-        _expandSheetTokens(hf.headerRight, sheetName, page, pages),
-    ];
-    return parts.isEmpty ? '$sheetName  -  $page / $pages' : parts.join('   ');
-  }
+  static String _two(int n) => n.toString().padLeft(2, '0');
 
-  static String _sheetFooterLine(
-    SmlHeaderFooter hf,
-    String sheetName,
-    int page,
-    int pages,
-  ) {
-    final List<String> parts = <String>[
-      if (hf.footerLeft.isNotEmpty)
-        _expandSheetTokens(hf.footerLeft, sheetName, page, pages),
-      if (hf.footerCenter.isNotEmpty)
-        _expandSheetTokens(hf.footerCenter, sheetName, page, pages),
-      if (hf.footerRight.isNotEmpty)
-        _expandSheetTokens(hf.footerRight, sheetName, page, pages),
-    ];
-    return parts.join('   ');
+  static bool _isDigit(String ch) {
+    final int cu = ch.codeUnitAt(0);
+    return cu >= 0x30 && cu <= 0x39;
   }
 
   /// Packs variable-size axis segments into bands that fit [budget].
@@ -1483,7 +1535,7 @@ abstract final class OfficePdfExport {
     return bands;
   }
 
-  static ({String text, String color}) _sheetDisplay(
+  static ({String text, String color, bool numeric}) _sheetDisplay(
     SmlWorkbook book,
     SmlWorksheet sheet,
     SmlCell cell,
@@ -1492,23 +1544,28 @@ abstract final class OfficePdfExport {
         ? FormulaEvaluator.evaluateCell(book, sheet, cell)
         : cell.value;
     if (value == null) {
-      return (text: '', color: '222222');
+      return (text: '', color: '222222', numeric: false);
     }
+    final bool numeric = value is num;
     if (book.styles != null) {
       final String formatted = book.styles!.format(value, cell.styleIndex);
       final String ink = cell.fontRgb.isNotEmpty ? cell.fontRgb : '222222';
       if (formatted.startsWith('RED:')) {
-        return (text: formatted.substring(4), color: 'C00000');
+        return (
+          text: formatted.substring(4),
+          color: 'C00000',
+          numeric: numeric,
+        );
       }
-      return (text: formatted, color: ink);
+      return (text: formatted, color: ink, numeric: numeric);
     }
     if (value is num) {
       if (value == value.roundToDouble()) {
-        return (text: '${value.round()}', color: '222222');
+        return (text: '${value.round()}', color: '222222', numeric: true);
       }
-      return (text: value.toStringAsFixed(2), color: '222222');
+      return (text: value.toStringAsFixed(2), color: '222222', numeric: true);
     }
-    return (text: value.toString(), color: '222222');
+    return (text: value.toString(), color: '222222', numeric: false);
   }
 
   static void _paintShape(
@@ -1828,6 +1885,9 @@ abstract final class OfficePdfExport {
   }
 }
 
+/// Line placement inside `maxWidth`; [auto] puts RTL lines on the right.
+enum _TextAlign { auto, left, center, right }
+
 class _FontPack {
   _FontPack(this.set, this.faces, this.metrics);
 
@@ -2060,6 +2120,8 @@ class _PageSink {
     double size,
     String color, {
     double? maxWidth,
+    _TextAlign align = _TextAlign.auto,
+    bool bold = false,
   }) {
     if (text.isEmpty) {
       return;
@@ -2086,8 +2148,14 @@ class _PageSink {
         }
         final bool rtl = line.glyphs.any((ShapedGlyph g) => g.level.isOdd);
         var cx = x;
-        if (rtl && maxWidth != null) {
-          cx = x + maxWidth - line.width;
+        if (maxWidth != null) {
+          final double slack = maxWidth - line.width;
+          cx += switch (align) {
+            _TextAlign.auto => rtl ? slack : 0,
+            _TextAlign.left => 0,
+            _TextAlign.center => slack / 2,
+            _TextAlign.right => slack,
+          };
         }
         for (final ShapedGlyph g in line.glyphs) {
           if (g.codePoint < 32) {
@@ -2100,6 +2168,7 @@ class _PageSink {
             y: cy - g.paintDy,
             size: size,
             color: color,
+            bold: bold,
           );
           cx += g.advance;
         }

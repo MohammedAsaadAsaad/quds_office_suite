@@ -267,6 +267,41 @@ abstract final class DrawingmlVisualIo {
   }
 
   /// parseChart API.
+  /// Range formulas (`c:f`) of the first series' categories and values, e.g.
+  /// `'Sheet'!$B$1:$B$3`. Charts written without a value cache (openpyxl and
+  /// other generators) can only be drawn from these.
+  static ({String? categories, String? values}) chartSeriesRefs(String xml) {
+    final XmlPullReader reader = XmlPullReader(xml);
+    String? categories;
+    String? values;
+    String? region;
+    while (reader.next()) {
+      final String name = reader.localName;
+      if (reader.eventType == XmlEventType.endElement) {
+        if (name == region) {
+          region = null;
+        } else if (name == 'ser' && (categories != null || values != null)) {
+          break;
+        }
+        continue;
+      }
+      if (reader.eventType != XmlEventType.startElement) {
+        continue;
+      }
+      if ((name == 'cat' || name == 'val') && !reader.isEmptyElement) {
+        region = name;
+      } else if (name == 'f' && region != null) {
+        final String text = _elementText(reader).trim();
+        if (region == 'cat') {
+          categories ??= text;
+        } else {
+          values ??= text;
+        }
+      }
+    }
+    return (categories: categories, values: values);
+  }
+
   static OfficeVisual parseChart(
     String xml, {
     required String name,

@@ -1034,7 +1034,12 @@ class RenderSlideStage extends RenderBox implements MouseTrackerAnnotation {
   }
 
   Color _textColor(PmlShape shape) {
-    final int rgb = int.tryParse(shape.fillColor, radix: 16) ?? 0x4472C4;
+    final int? own = int.tryParse(shape.textColor, radix: 16);
+    if (own != null) {
+      return Color(0xFF000000 | own);
+    }
+    final int? fill = int.tryParse(shape.fillColor, radix: 16);
+    final int rgb = fill ?? (_theme.slideBackground.toARGB32() & 0xFFFFFF);
     final int r = (rgb >> 16) & 0xFF;
     final int g = (rgb >> 8) & 0xFF;
     final int b = rgb & 0xFF;
@@ -1043,8 +1048,33 @@ class RenderSlideStage extends RenderBox implements MouseTrackerAnnotation {
         : const Color(0xFF1A1A1A);
   }
 
+  /// Boxes too short for a line (e.g. `cy="0"` text boxes) grow with their
+  /// text, as PowerPoint does, instead of clipping it away.
+  static bool _growsWithText(Rect r) => r.height < 24;
+
+  /// Fill of a shape, or nothing when [PmlShape.fillColor] is empty (no fill).
+  void _paintShapeFill(Canvas canvas, PmlShape shape, Rect r, String hex) {
+    final int? fill = int.tryParse(hex, radix: 16);
+    if (fill != null) {
+      canvas.drawRect(r, Paint()..color = Color(0xFF000000 | fill));
+    } else if (shape.placeholder &&
+        shape.text.isEmpty &&
+        !presenting &&
+        config.allowsMutation) {
+      canvas.drawRect(
+        r,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1
+          ..color = const Color(0x66808080),
+      );
+    }
+  }
+
   TextPainter _shapePainter(PmlShape shape, String text, Rect r, Color color) {
-    final int lines = ((r.height - 12) / 18).floor().clamp(1, 12);
+    final int lines = _growsWithText(r)
+        ? 12
+        : ((r.height - 12) / 18).floor().clamp(1, 12);
     final bool rtl = shape.rightToLeft ?? PaintRunText.looksRtl(text);
     final TextAlign align = switch (shape.textAlign) {
       PmlTextAlign.center => TextAlign.center,
@@ -1190,7 +1220,9 @@ class RenderSlideStage extends RenderBox implements MouseTrackerAnnotation {
       return;
     }
     canvas.save();
-    canvas.clipRect(r);
+    if (!_growsWithText(r)) {
+      canvas.clipRect(r);
+    }
     final Color color = _textColor(shape);
     final TextPainter painter = _shapePainter(shape, body, r, color)
       ..layout(maxWidth: r.width - 16);
@@ -1309,15 +1341,7 @@ class RenderSlideStage extends RenderBox implements MouseTrackerAnnotation {
         onImageReady: markNeedsPaint,
       );
     } else {
-      canvas.drawRect(
-        r,
-        Paint()
-          ..color = Color(
-            0xFF000000 |
-                (int.tryParse(fillColor ?? shape.fillColor, radix: 16) ??
-                    0x4472C4),
-          ),
-      );
+      _paintShapeFill(canvas, shape, r, fillColor ?? shape.fillColor);
       _paintShapeText(canvas, shape, r, text: text);
     }
     canvas.restore();
@@ -1374,14 +1398,7 @@ class RenderSlideStage extends RenderBox implements MouseTrackerAnnotation {
           onImageReady: markNeedsPaint,
         );
       } else {
-        canvas.drawRect(
-          r,
-          Paint()
-            ..color = Color(
-              0xFF000000 |
-                  (int.tryParse(shape.fillColor, radix: 16) ?? 0x4472C4),
-            ),
-        );
+        _paintShapeFill(canvas, shape, r, shape.fillColor);
         _paintShapeText(canvas, shape, r);
       }
       if (shape.hasMedia) {

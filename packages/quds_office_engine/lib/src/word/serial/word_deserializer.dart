@@ -29,6 +29,11 @@ class WordDeserializer {
   String? _docUri;
   WmlSection? _pendingParagraphSectPr;
   WmlDocument? _document;
+  final Set<WmlTable> _tablesWithOwnBorders = Set<WmlTable>.identity();
+  final Set<WmlRunProps> _notBold = Set<WmlRunProps>.identity();
+  final Set<WmlRunProps> _notItalic = Set<WmlRunProps>.identity();
+  final Map<WmlTable, _TableLook> _tableLooks =
+      Map<WmlTable, _TableLook>.identity();
 
   /// read API.
   WmlDocument read(OpcPackage package) {
@@ -89,6 +94,9 @@ class WordDeserializer {
     _ensureHeadersFooters(document, package, docUri);
     _readStyles(document, package, docUri);
     _applyDocumentStyles(document);
+    _notBold.clear();
+    _notItalic.clear();
+    _applyTableStyles(document, package, docUri);
     _applyNumbering(document, package, docUri);
     _collapseTocFields(document);
     _readComments(document, package, docUri);
@@ -196,8 +204,7 @@ class WordDeserializer {
 
   bool _takeDrawing(XmlPullReader reader, OpcPackage package, String docUri) {
     if (reader.localName == 'Fallback' &&
-        (reader.prefix == 'mc' ||
-            reader.namespaceUri == OfficeNamespaces.mc)) {
+        (reader.prefix == 'mc' || reader.namespaceUri == OfficeNamespaces.mc)) {
       _skipElement(reader);
       return true;
     }
@@ -502,8 +509,16 @@ class WordDeserializer {
           }
         case 'ind':
           props.indent = WmlIndent(
-            left: _twipAttr(reader, 'left'),
-            right: _twipAttr(reader, 'right'),
+            left: _twipAttr(
+              reader,
+              'left',
+              fallback: _twipAttr(reader, 'start'),
+            ),
+            right: _twipAttr(
+              reader,
+              'right',
+              fallback: _twipAttr(reader, 'end'),
+            ),
             firstLine: _twipAttr(reader, 'firstLine'),
             hanging: _twipAttr(reader, 'hanging'),
           );
@@ -803,13 +818,19 @@ class WordDeserializer {
       }
       switch (reader.localName) {
         case 'b':
-          props.bold =
-              reader.getAttribute('val', namespaceUri: OfficeNamespaces.w) !=
-              '0';
+          props.bold = _onOff(
+            reader.getAttribute('val', namespaceUri: OfficeNamespaces.w),
+          );
+          if (!props.bold) {
+            _notBold.add(props);
+          }
         case 'i':
-          props.italic =
-              reader.getAttribute('val', namespaceUri: OfficeNamespaces.w) !=
-              '0';
+          props.italic = _onOff(
+            reader.getAttribute('val', namespaceUri: OfficeNamespaces.w),
+          );
+          if (!props.italic) {
+            _notItalic.add(props);
+          }
         case 'strike':
           props.strike = true;
         case 'color':
@@ -876,14 +897,11 @@ class WordDeserializer {
           'val',
           namespaceUri: OfficeNamespaces.w,
         );
-        // Table Grid (and most bordered table styles) zero paragraph after
-        // spacing and use single line spacing inside cells.
-        if (_tableStyleLooksGrid(table.properties.styleId)) {
-          table.properties.borderColor ??= '000000';
-          table.properties.borderWidth = 0.5;
-        }
       } else if (reader.localName == 'tblBorders') {
+        _tablesWithOwnBorders.add(table);
         _readTblBorders(reader, table.properties);
+      } else if (reader.localName == 'tblLook') {
+        _tableLooks[table] = _TableLook.read(reader);
       } else if (reader.localName == 'bidiVisual') {
         table.properties.rightToLeft = true;
       } else if (reader.localName == 'gridCol') {
@@ -931,6 +949,87 @@ class WordDeserializer {
         props.borderColor = color;
       }
       props.borders = true;
+    }
+  }
+
+  /// Applies `styles.xml` table styles (borders, header row and banded row
+  /// shading) to tables that do not set their own `w:tblBorders`. Styles
+  /// that are missing from the package fall back to the style-id guess.
+  void _applyTableStyles(
+    WmlDocument document,
+    OpcPackage package,
+    String docUri,
+  ) {
+    final RelationshipCollection rels = package.relationshipsFor(docUri);
+    final PackageRelationship? rel = rels.firstByType(RelationshipTypes.styles);
+    final PackagePart? part = rel == null
+        ? package.getPart('/word/styles.xml')
+        : package.getPart(rels.resolve(rel));
+    final Map<String, _TableStyle> styles = part == null
+        ? <String, _TableStyle>{}
+        : _TableStyle.readAll(part.readText());
+
+    void applyTo(WmlTable table) {
+      final String? styleId = table.properties.styleId;
+      final _TableStyle? style = styleId == null
+          ? null
+          : _TableStyle.resolve(styleId, styles);
+      if (!_tablesWithOwnBorders.contains(table)) {
+        if (style != null && style.bordersDeclared) {
+          table.properties.borders = style.borderColor != null;
+          if (style.borderColor != null) {
+            table.properties
+              ..borderColor = style.borderColor
+              ..borderWidth = style.borderWidth;
+          }
+        } else if (styleId != null && _tableStyleLooksGrid(styleId)) {
+          table.properties
+            ..borderColor ??= '000000'
+            ..borderWidth = 0.5;
+        }
+      }
+      if (style != null) {
+        final _TableLook look = _tableLooks[table] ?? const _TableLook();
+        for (var r = 0; r < table.rows.length; r++) {
+          final bool header = r == 0 && look.firstRow;
+          final int bodyRow = look.firstRow ? r - 1 : r;
+          final String? fill = header
+              ? style.firstRowFill
+              : (look.bandedRows && bodyRow >= 0 && bodyRow.isEven
+                    ? style.band1Fill
+                    : null);
+          if (fill == null) {
+            continue;
+          }
+          for (final WmlTableCell cell in table.rows[r].cells) {
+            cell.fillColor ??= fill;
+          }
+        }
+      }
+      for (final WmlTableRow row in table.rows) {
+        for (final WmlTableCell cell in row.cells) {
+          _walkTables(cell.blocks, applyTo);
+        }
+      }
+    }
+
+    for (final WmlSection section in document.sections) {
+      _walkTables(section.blocks, applyTo);
+    }
+    _tablesWithOwnBorders.clear();
+    _tableLooks.clear();
+  }
+
+  static void _walkTables(
+    List<WmlBlock> blocks,
+    void Function(WmlTable) visit,
+  ) {
+    for (final WmlBlock block in blocks) {
+      if (block is WmlTable) {
+        visit(block);
+      } else if (block is WmlFrame) {
+        _walkTables(block.blocks, visit);
+      }
     }
   }
 
@@ -1323,7 +1422,8 @@ class WordDeserializer {
     final Map<int, _NumberingLevel> levels = _readNumbering(package, docUri);
     if (levels.isEmpty) {
       for (final WmlParagraph paragraph in document.paragraphs) {
-        if (paragraph.properties.numId != null) {
+        final int? numId = paragraph.properties.numId;
+        if (numId != null && numId != 0) {
           paragraph.properties.listLabel ??= '• ';
         }
       }
@@ -1332,7 +1432,8 @@ class WordDeserializer {
     final Map<String, List<int>> counters = <String, List<int>>{};
     for (final WmlParagraph paragraph in document.paragraphs) {
       final int? numId = paragraph.properties.numId;
-      if (numId == null) {
+      // `w:numId="0"` removes the paragraph from any list.
+      if (numId == null || numId == 0) {
         continue;
       }
       final int ilvl = paragraph.properties.ilvl.clamp(0, 8);
@@ -1415,14 +1516,16 @@ class WordDeserializer {
       if (!haveLevel || abstractId < 0) {
         return;
       }
-      byAbstract.putIfAbsent(abstractId, () => <int, _NumberingLevel>{})[ilvl] =
-          _NumberingLevel(
-            fmt: fmt,
-            text: text,
-            start: start,
-            left: leftInd,
-            hanging: hangingInd,
-          );
+      byAbstract.putIfAbsent(
+        abstractId,
+        () => <int, _NumberingLevel>{},
+      )[ilvl] = _NumberingLevel(
+        fmt: fmt,
+        text: text,
+        start: start,
+        left: leftInd,
+        hanging: hangingInd,
+      );
       haveLevel = false;
     }
 
@@ -1557,7 +1660,8 @@ class WordDeserializer {
         r'<w:watermark[^>]*>([^<]*)</w:watermark>',
       ).firstMatch(xml);
       if (match != null) {
-        document.watermark = match.group(1)!
+        document.watermark = match
+            .group(1)!
             .replaceAll('&amp;', '&')
             .replaceAll('&lt;', '<')
             .replaceAll('&gt;', '>');
@@ -1570,7 +1674,8 @@ class WordDeserializer {
       }
       final Match? match = vml.firstMatch(header.readText());
       if (match != null && match.group(1)!.isNotEmpty) {
-        document.watermark = match.group(1)!
+        document.watermark = match
+            .group(1)!
             .replaceAll('&amp;', '&')
             .replaceAll('&lt;', '<')
             .replaceAll('&gt;', '>');
@@ -1735,7 +1840,17 @@ class WordDeserializer {
     var spacingAfter = 8.0;
     WmlJustification justification = WmlJustification.left;
     int? headingLevel;
+    int? numId;
+    int? ilvl;
+    WmlIndent? indent;
     while (reader.next()) {
+      // Table-style conditional blocks (`w:tblStylePr`) format table regions,
+      // not the style itself.
+      if (reader.eventType == XmlEventType.startElement &&
+          reader.localName == 'tblStylePr') {
+        reader.skip();
+        continue;
+      }
       if (reader.eventType == XmlEventType.startElement &&
           reader.localName == 'style') {
         id = reader.getAttribute('styleId', namespaceUri: OfficeNamespaces.w);
@@ -1751,6 +1866,29 @@ class WordDeserializer {
         spacingAfter = 8;
         justification = WmlJustification.left;
         headingLevel = null;
+        numId = null;
+        ilvl = null;
+        indent = null;
+      } else if (reader.eventType == XmlEventType.startElement &&
+          id != null &&
+          (reader.localName == 'numId' || reader.localName == 'ilvl')) {
+        final int? value = int.tryParse(
+          reader.getAttribute('val', namespaceUri: OfficeNamespaces.w) ?? '',
+        );
+        if (reader.localName == 'numId') {
+          numId = value;
+        } else {
+          ilvl = value;
+        }
+      } else if (reader.eventType == XmlEventType.startElement &&
+          id != null &&
+          reader.localName == 'ind') {
+        indent = WmlIndent(
+          left: _twipAttr(reader, 'left', fallback: _twipAttr(reader, 'start')),
+          right: _twipAttr(reader, 'right', fallback: _twipAttr(reader, 'end')),
+          firstLine: _twipAttr(reader, 'firstLine'),
+          hanging: _twipAttr(reader, 'hanging'),
+        );
       } else if (reader.eventType == XmlEventType.startElement &&
           reader.localName == 'name' &&
           id != null) {
@@ -1768,7 +1906,8 @@ class WordDeserializer {
             reader.getAttribute('hAnsi', namespaceUri: OfficeNamespaces.w) ??
             font;
         csFont =
-            reader.getAttribute('cs', namespaceUri: OfficeNamespaces.w) ?? csFont;
+            reader.getAttribute('cs', namespaceUri: OfficeNamespaces.w) ??
+            csFont;
       } else if (reader.eventType == XmlEventType.startElement &&
           reader.localName == 'jc') {
         justification = _jc(
@@ -1800,10 +1939,14 @@ class WordDeserializer {
         }
       } else if (reader.eventType == XmlEventType.startElement &&
           reader.localName == 'b') {
-        bold = true;
+        bold = _onOff(
+          reader.getAttribute('val', namespaceUri: OfficeNamespaces.w),
+        );
       } else if (reader.eventType == XmlEventType.startElement &&
           reader.localName == 'i') {
-        italic = true;
+        italic = _onOff(
+          reader.getAttribute('val', namespaceUri: OfficeNamespaces.w),
+        );
       } else if (reader.eventType == XmlEventType.startElement &&
           reader.localName == 'color') {
         color =
@@ -1836,6 +1979,9 @@ class WordDeserializer {
           font: font,
           csFont: csFont,
           basedOn: basedOn,
+          numId: numId,
+          ilvl: ilvl,
+          indent: indent,
         );
         document.styles.add(style);
         if (WordStyles.byId(id) == null) {
@@ -1849,7 +1995,12 @@ class WordDeserializer {
   void _applyDocumentStyles(WmlDocument document) {
     void walk(Iterable<WmlParagraph> story) {
       for (final WmlParagraph paragraph in story) {
-        WordStyles.resolveOntoParagraph(paragraph, document: document);
+        WordStyles.resolveOntoParagraph(
+          paragraph,
+          document: document,
+          notBold: _notBold,
+          notItalic: _notItalic,
+        );
       }
     }
 
@@ -1870,6 +2021,8 @@ class WordDeserializer {
                   WordStyles.resolveOntoParagraph(
                     cellBlock,
                     document: document,
+                    notBold: _notBold,
+                    notItalic: _notItalic,
                   );
                 }
               }
@@ -2126,6 +2279,168 @@ class WordDeserializer {
   }
 }
 
+/// `w:tblLook`: which conditional table-style regions a table turns on.
+class _TableLook {
+  const _TableLook({this.firstRow = true, this.bandedRows = true});
+
+  factory _TableLook.read(XmlPullReader reader) {
+    final String? val = reader.getAttribute(
+      'val',
+      namespaceUri: OfficeNamespaces.w,
+    );
+    final int mask = int.tryParse(val ?? '', radix: 16) ?? 0x04A0;
+    bool flag(String name, bool fallback) {
+      final String? raw = reader.getAttribute(
+        name,
+        namespaceUri: OfficeNamespaces.w,
+      );
+      return raw == null ? fallback : (raw == '1' || raw == 'true');
+    }
+
+    return _TableLook(
+      firstRow: flag('firstRow', mask & 0x0020 != 0),
+      bandedRows: !flag('noHBand', mask & 0x0200 != 0),
+    );
+  }
+
+  final bool firstRow;
+  final bool bandedRows;
+}
+
+/// The parts of a `styles.xml` table style the layout can draw.
+class _TableStyle {
+  _TableStyle({this.basedOn});
+
+  String? basedOn;
+
+  /// The style has its own `w:tblPr/w:tblBorders`.
+  bool bordersDeclared = false;
+
+  /// First drawn border color; null when every border is `nil` / `none`.
+  String? borderColor;
+  double borderWidth = 0.5;
+  String? firstRowFill;
+  String? band1Fill;
+
+  static _TableStyle? resolve(
+    String id,
+    Map<String, _TableStyle> styles, [
+    Set<String>? seen,
+  ]) {
+    final _TableStyle? style = styles[id];
+    final Set<String> visited = seen ?? <String>{};
+    if (style == null || !visited.add(id)) {
+      return style;
+    }
+    final String? parentId = style.basedOn;
+    final _TableStyle? parent = parentId == null
+        ? null
+        : resolve(parentId, styles, visited);
+    if (parent == null) {
+      return style;
+    }
+    final _TableStyle merged = _TableStyle(basedOn: parentId)
+      ..bordersDeclared = style.bordersDeclared || parent.bordersDeclared
+      ..borderColor = style.bordersDeclared
+          ? style.borderColor
+          : parent.borderColor
+      ..borderWidth = style.bordersDeclared
+          ? style.borderWidth
+          : parent.borderWidth
+      ..firstRowFill = style.firstRowFill ?? parent.firstRowFill
+      ..band1Fill = style.band1Fill ?? parent.band1Fill;
+    return merged;
+  }
+
+  static Map<String, _TableStyle> readAll(String xml) {
+    final Map<String, _TableStyle> out = <String, _TableStyle>{};
+    final XmlPullReader reader = XmlPullReader(xml);
+    String? id;
+    String? basedOn;
+    var isTable = false;
+    _TableStyle? current;
+    String? region;
+    var inBorders = false;
+    while (reader.next()) {
+      final String name = reader.localName;
+      if (reader.eventType == XmlEventType.endElement) {
+        if (name == 'tblStylePr') {
+          region = null;
+        } else if (name == 'tblBorders') {
+          inBorders = false;
+        } else if (name == 'style') {
+          if (isTable && id != null && current != null) {
+            out[id] = current..basedOn = basedOn;
+          }
+          id = null;
+          current = null;
+        }
+        continue;
+      }
+      if (reader.eventType != XmlEventType.startElement) {
+        continue;
+      }
+      final String? val = reader.getAttribute(
+        'val',
+        namespaceUri: OfficeNamespaces.w,
+      );
+      if (name == 'style') {
+        isTable =
+            reader.getAttribute('type', namespaceUri: OfficeNamespaces.w) ==
+            'table';
+        id = reader.getAttribute('styleId', namespaceUri: OfficeNamespaces.w);
+        basedOn = null;
+        region = null;
+        inBorders = false;
+        current = _TableStyle();
+      } else if (current == null || !isTable) {
+        continue;
+      } else if (name == 'basedOn') {
+        basedOn = val;
+      } else if (name == 'tblStylePr' && !reader.isEmptyElement) {
+        region = reader.getAttribute('type', namespaceUri: OfficeNamespaces.w);
+      } else if (name == 'tblBorders' && region == null) {
+        current.bordersDeclared = true;
+        inBorders = !reader.isEmptyElement;
+      } else if (inBorders) {
+        if (val == null || val == 'nil' || val == 'none') {
+          continue;
+        }
+        if (current.borderColor == null) {
+          final String? color = reader.getAttribute(
+            'color',
+            namespaceUri: OfficeNamespaces.w,
+          );
+          final int? sz = int.tryParse(
+            reader.getAttribute('sz', namespaceUri: OfficeNamespaces.w) ?? '',
+          );
+          current
+            ..borderColor =
+                color == null || color.isEmpty || color.toLowerCase() == 'auto'
+                ? '000000'
+                : color
+            ..borderWidth = sz == null ? 0.5 : sz / 8.0;
+        }
+      } else if (name == 'shd' &&
+          (region == 'firstRow' || region == 'band1Horz')) {
+        final String? fill = reader.getAttribute(
+          'fill',
+          namespaceUri: OfficeNamespaces.w,
+        );
+        if (fill == null || fill.isEmpty || fill.toLowerCase() == 'auto') {
+          continue;
+        }
+        if (region == 'firstRow') {
+          current.firstRowFill = fill;
+        } else {
+          current.band1Fill = fill;
+        }
+      }
+    }
+    return out;
+  }
+}
+
 class _NumberingLevel {
   const _NumberingLevel({
     required this.fmt,
@@ -2181,7 +2496,20 @@ class _NumberingLevel {
   }
 
   /// Expands `%1`…`%9` using the multilevel [stack] through [ilvl].
-  String decimalLabelStack(List<int> stack, int ilvl) {
+  ///
+  /// Null when the level prints nothing: an empty `w:lvlText`, or a `none`
+  /// format with no literal text (LibreOffice heading outlines).
+  String? decimalLabelStack(List<int> stack, int ilvl) {
+    if (text.isEmpty) {
+      return null;
+    }
+    if (fmt == 'none') {
+      final String literal = text
+          .replaceAll(RegExp('%[1-9]'), '')
+          .replaceAll(RegExp(r'\s{2,}'), ' ')
+          .trim();
+      return literal.isEmpty ? null : '$literal ';
+    }
     if (!text.contains('%')) {
       return '${stack[ilvl]}. ';
     }

@@ -27,18 +27,39 @@ class SlideDeserializer {
       slides: <PmlSlide>[],
       properties: OfficeDocumentProperties.fromPackage(package),
     );
-    final part = package.getPart('/ppt/presentation.xml');
+    final part = package.getPart(_presentationUri);
     if (part == null) {
       return pres;
     }
+    final RelationshipCollection presentationRels = package.relationshipsFor(
+      _presentationUri,
+    );
+    final List<String> slideUris = <String>[];
     final XmlPullReader reader = XmlPullReader(part.readText());
     while (reader.next()) {
       if (reader.eventType != XmlEventType.startElement) {
         continue;
       }
       if (reader.localName == 'sldId') {
-        final int id = int.parse(reader.getAttribute('id') ?? '256');
+        var id = 256;
+        String? relId;
+        for (int a = 0; a < reader.attributeCount; a++) {
+          if (reader.attributeQualifiedName(a) == 'id') {
+            id = int.tryParse(reader.attributeValue(a)) ?? id;
+          } else if (reader.attributeLocalName(a) == 'id' &&
+              reader.attributeNamespace(a) == OfficeNamespaces.r) {
+            relId = reader.attributeValue(a);
+          }
+        }
         pres.slides.add(PmlSlide(id: id));
+        final PackageRelationship? rel = relId == null
+            ? null
+            : presentationRels.byId(relId);
+        slideUris.add(
+          rel != null && rel.type == RelationshipTypes.slide
+              ? presentationRels.resolve(rel)
+              : '/ppt/slides/slide${pres.slides.length}.xml',
+        );
       } else if (reader.localName == 'sldSection') {
         final String name = reader.getAttribute('name') ?? 'Section';
         final int start = int.tryParse(reader.getAttribute('start') ?? '0') ?? 0;
@@ -56,12 +77,27 @@ class SlideDeserializer {
     if (masterBg != null && masterBg.isNotEmpty) {
       pres.master.background = masterBg;
     }
+    final _SlideTemplates templates = _SlideTemplates(package);
     for (int i = 0; i < pres.slides.length; i++) {
-      final String uri = '/ppt/slides/slide${i + 1}.xml';
+      final String uri = slideUris[i];
       final slidePart = package.getPart(uri);
       if (slidePart != null) {
         final String slideXml = slidePart.readText();
-        pres.slides[i].shapes.addAll(parseSlideShapes(slideXml));
+        final _SlideTemplate? layout = templates.layoutOf(uri);
+        final Set<PmlShape> positioned = Set<PmlShape>.identity();
+        final List<PmlShape> shapes = parseSlideShapes(
+          slideXml,
+          colors: layout?.colors ?? templates.defaultColors,
+          positioned: positioned,
+        );
+        if (layout != null) {
+          pres.slides[i].layoutName = layout.name;
+          _inheritPlaceholders(shapes, positioned, <List<PmlShape>>[
+            layout.placeholders,
+            layout.master?.placeholders ?? const <PmlShape>[],
+          ]);
+        }
+        pres.slides[i].shapes.addAll(shapes);
         parseSlideMotion(slideXml, pres.slides[i]);
         pres.slides[i].hidden = _slideIsHidden(slideXml);
         final RelationshipCollection rels = package.relationshipsFor(uri);
@@ -80,8 +116,59 @@ class SlideDeserializer {
         }
       }
     }
+    final List<PmlLayout> layouts = templates.allLayouts();
+    if (layouts.isNotEmpty) {
+      pres.layouts = layouts;
+    }
     return pres;
   }
+
+  /// Gives slide placeholders without their own `xfrm` the geometry of the
+  /// matching layout placeholder, falling back to the master.
+  static void _inheritPlaceholders(
+    List<PmlShape> shapes,
+    Set<PmlShape> positioned,
+    List<List<PmlShape>> sources,
+  ) {
+    for (final PmlShape shape in shapes) {
+      if (!shape.placeholder || positioned.contains(shape)) {
+        continue;
+      }
+      for (final List<PmlShape> source in sources) {
+        final PmlShape? match = _matchPlaceholder(shape, source);
+        if (match != null) {
+          shape.transform = match.transform;
+          positioned.add(shape);
+          break;
+        }
+      }
+    }
+  }
+
+  /// PowerPoint's rule: same `idx` first, then the same type family.
+  static PmlShape? _matchPlaceholder(PmlShape shape, List<PmlShape> source) {
+    final int? idx = shape.placeholderIndex;
+    if (idx != null) {
+      for (final PmlShape candidate in source) {
+        if (candidate.placeholderIndex == idx) {
+          return candidate;
+        }
+      }
+    }
+    final String family = _placeholderFamily(shape.placeholderType);
+    for (final PmlShape candidate in source) {
+      if (_placeholderFamily(candidate.placeholderType) == family) {
+        return candidate;
+      }
+    }
+    return null;
+  }
+
+  static String _placeholderFamily(String type) => switch (type) {
+    'title' || 'ctrTitle' => 'title',
+    '' || 'obj' || 'body' || 'subTitle' => 'body',
+    _ => type,
+  };
 
   /// readBytes API.
   PmlPresentation readBytes(Uint8List bytes, {String? password}) =>
@@ -178,6 +265,230 @@ class SlideDeserializer {
   }
 }
 
+const String _presentationUri = '/ppt/presentation.xml';
+
+/// A parsed slide layout or master: its name, theme colors, and the
+/// placeholders that ended up with a position.
+class _SlideTemplate {
+  _SlideTemplate({
+    required this.name,
+    required this.colors,
+    required this.placeholders,
+    this.master,
+  });
+
+  final String name;
+  final Map<String, String> colors;
+  final List<PmlShape> placeholders;
+  final _SlideTemplate? master;
+}
+
+/// Follows slide → `slideLayout` → `slideMaster` → `theme` relationships,
+/// parsing each part once.
+class _SlideTemplates {
+  _SlideTemplates(this.package)
+    : defaultColors = _colorMap(
+        package.getPart('/ppt/theme/theme1.xml')?.readText(),
+        null,
+      );
+
+  final OpcPackage package;
+  final Map<String, String> defaultColors;
+  final Map<String, _SlideTemplate?> _layouts = <String, _SlideTemplate?>{};
+  final Map<String, _SlideTemplate?> _masters = <String, _SlideTemplate?>{};
+
+  _SlideTemplate? layoutOf(String slideUri) {
+    final String? uri = _target(slideUri, RelationshipTypes.slideLayout);
+    return uri == null ? null : _layout(uri);
+  }
+
+  /// Every layout of every master seen so far, prompts removed: layout
+  /// placeholder text is a UI hint, not slide content.
+  List<PmlLayout> allLayouts() {
+    for (final String masterUri in _masters.keys.toList()) {
+      final RelationshipCollection rels = package.relationshipsFor(masterUri);
+      for (final PackageRelationship rel in rels.items) {
+        if (rel.type == RelationshipTypes.slideLayout) {
+          _layout(rels.resolve(rel));
+        }
+      }
+    }
+    return <PmlLayout>[
+      for (final _SlideTemplate? layout in _layouts.values)
+        if (layout != null)
+          PmlLayout(
+            name: layout.name,
+            placeholders: <PmlShape>[
+              for (final PmlShape shape in layout.placeholders)
+                shape.copy()..text = '',
+            ],
+          ),
+    ];
+  }
+
+  _SlideTemplate? _layout(String uri) {
+    if (_layouts.containsKey(uri)) {
+      return _layouts[uri];
+    }
+    _layouts[uri] = null;
+    final String? xml = package.getPart(uri)?.readText();
+    if (xml == null) {
+      return null;
+    }
+    final String? masterUri = _target(uri, RelationshipTypes.slideMaster);
+    final _SlideTemplate? master = masterUri == null
+        ? null
+        : _master(masterUri);
+    final Map<String, String> colors = master?.colors ?? defaultColors;
+    final Set<PmlShape> positioned = Set<PmlShape>.identity();
+    final List<PmlShape> shapes = parseSlideShapes(
+      xml,
+      colors: colors,
+      positioned: positioned,
+    );
+    if (master != null) {
+      SlideDeserializer._inheritPlaceholders(
+        shapes,
+        positioned,
+        <List<PmlShape>>[master.placeholders],
+      );
+    }
+    return _layouts[uri] = _SlideTemplate(
+      name: _cSldName(xml) ?? 'Layout',
+      colors: colors,
+      placeholders: <PmlShape>[
+        for (final PmlShape shape in shapes)
+          if (shape.placeholder && positioned.contains(shape)) shape,
+      ],
+      master: master,
+    );
+  }
+
+  _SlideTemplate? _master(String uri) {
+    if (_masters.containsKey(uri)) {
+      return _masters[uri];
+    }
+    _masters[uri] = null;
+    final String? xml = package.getPart(uri)?.readText();
+    if (xml == null) {
+      return null;
+    }
+    final String? themeUri = _target(uri, RelationshipTypes.theme);
+    final Map<String, String> colors = _colorMap(
+      themeUri == null ? null : package.getPart(themeUri)?.readText(),
+      xml,
+    );
+    final Set<PmlShape> positioned = Set<PmlShape>.identity();
+    final List<PmlShape> shapes = parseSlideShapes(
+      xml,
+      colors: colors,
+      positioned: positioned,
+    );
+    return _masters[uri] = _SlideTemplate(
+      name: _cSldName(xml) ?? 'Master',
+      colors: colors,
+      placeholders: <PmlShape>[
+        for (final PmlShape shape in shapes)
+          if (shape.placeholder && positioned.contains(shape)) shape,
+      ],
+    );
+  }
+
+  String? _target(String sourceUri, String type) {
+    final RelationshipCollection rels = package.relationshipsFor(sourceUri);
+    final PackageRelationship? rel = rels.firstByType(type);
+    return rel == null ? null : rels.resolve(rel);
+  }
+
+  static String? _cSldName(String xml) {
+    final XmlPullReader reader = XmlPullReader(xml);
+    while (reader.next()) {
+      if (reader.eventType == XmlEventType.startElement &&
+          reader.localName == 'cSld') {
+        final String? name = reader.getAttribute('name');
+        return name == null || name.isEmpty ? null : name;
+      }
+    }
+    return null;
+  }
+
+  /// Theme `a:clrScheme` slots, plus the master's `p:clrMap` aliases
+  /// (`tx1` → `dk1`, `bg1` → `lt1`, …).
+  static Map<String, String> _colorMap(String? themeXml, String? masterXml) {
+    final Map<String, String> scheme = <String, String>{};
+    if (themeXml != null) {
+      final XmlPullReader reader = XmlPullReader(themeXml);
+      String? slot;
+      var inScheme = false;
+      while (reader.next()) {
+        final String name = reader.localName;
+        if (reader.eventType == XmlEventType.endElement) {
+          if (name == 'clrScheme') {
+            break;
+          }
+          if (name == slot) {
+            slot = null;
+          }
+          continue;
+        }
+        if (reader.eventType != XmlEventType.startElement) {
+          continue;
+        }
+        if (name == 'clrScheme') {
+          inScheme = true;
+        } else if (inScheme && _schemeSlots.contains(name)) {
+          slot = name;
+        } else if (slot != null && (name == 'srgbClr' || name == 'sysClr')) {
+          final String? hex = name == 'srgbClr'
+              ? reader.getAttribute('val')
+              : reader.getAttribute('lastClr');
+          if (hex != null && hex.length == 6) {
+            scheme[slot] = hex.toUpperCase();
+          }
+        }
+      }
+    }
+    final Map<String, String> aliases = <String, String>{
+      'bg1': 'lt1',
+      'tx1': 'dk1',
+      'bg2': 'lt2',
+      'tx2': 'dk2',
+    };
+    if (masterXml != null) {
+      final XmlPullReader reader = XmlPullReader(masterXml);
+      while (reader.next()) {
+        if (reader.eventType == XmlEventType.startElement &&
+            reader.localName == 'clrMap') {
+          for (int a = 0; a < reader.attributeCount; a++) {
+            aliases[reader.attributeLocalName(a)] = reader.attributeValue(a);
+          }
+          break;
+        }
+      }
+    }
+    return <String, String>{
+      ...scheme,
+      for (final MapEntry<String, String> alias in aliases.entries)
+        if (scheme[alias.value] != null) alias.key: scheme[alias.value]!,
+    };
+  }
+
+  static const Set<String> _schemeSlots = <String>{
+    'dk1',
+    'lt1',
+    'dk2',
+    'lt2',
+    'accent1',
+    'accent2',
+    'accent3',
+    'accent4',
+    'accent5',
+    'accent6',
+    'hlink',
+    'folHlink',
+  };
+}
+
 /// Class SlideSerializer.
 class SlideSerializer {
   /// writeBytes API.
@@ -188,18 +499,28 @@ class SlideSerializer {
   OpcPackage write(PmlPresentation pres) {
     final OpcPackage package =
         pres.package ?? OpcPackage.create(OpcPackageKind.slide);
-    package.getPart('/ppt/presentation.xml')!.writeText(_presentationXml(pres));
+    final RelationshipCollection presentationRels = package.relationshipsFor(
+      _presentationUri,
+    );
+    final List<String> slideRelIds = <String>[];
     for (int i = 0; i < pres.slides.length; i++) {
       final String uri = '/ppt/slides/slide${i + 1}.xml';
       if (package.getPart(uri) == null) {
         package.createPart(uri, OfficeContentTypes.slide, utf8.encode(''));
-        package
-            .relationshipsFor('/ppt/presentation.xml')
-            .add(
-              type: RelationshipTypes.slide,
-              target: 'slides/slide${i + 1}.xml',
-            );
       }
+      PackageRelationship? slideRel;
+      for (final PackageRelationship rel in presentationRels.items) {
+        if (rel.type == RelationshipTypes.slide &&
+            presentationRels.resolve(rel) == uri) {
+          slideRel = rel;
+          break;
+        }
+      }
+      slideRel ??= presentationRels.add(
+        type: RelationshipTypes.slide,
+        target: 'slides/slide${i + 1}.xml',
+      );
+      slideRelIds.add(slideRel.id);
       final Map<PmlShape, String> embedIds = _syncSlideVisuals(
         pres.slides[i],
         package,
@@ -210,6 +531,9 @@ class SlideSerializer {
           .writeText(slideToXml(pres.slides[i], embedIds: embedIds));
       _syncNotesSlide(pres.slides[i], package, uri, i + 1);
     }
+    package
+        .getPart(_presentationUri)!
+        .writeText(_presentationXml(pres, slideRelIds));
     pres.properties.writeToPackage(package);
     pres.package = package;
     return package;
@@ -320,7 +644,7 @@ class SlideSerializer {
     };
   }
 
-  String _presentationXml(PmlPresentation pres) {
+  String _presentationXml(PmlPresentation pres, List<String> slideRelIds) {
     final XmlWriter w = XmlWriter();
     w.writeStartDocument();
     w.writeStartElement('presentation', prefix: 'p');
@@ -330,7 +654,7 @@ class SlideSerializer {
     for (int i = 0; i < pres.slides.length; i++) {
       w.writeStartElement('sldId', prefix: 'p');
       w.writeAttribute('id', '${pres.slides[i].id}');
-      w.writeAttribute('r:id', 'rId${i + 1}');
+      w.writeAttribute('r:id', slideRelIds[i]);
       w.writeEndElement();
     }
     w.writeEndElement();

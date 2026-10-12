@@ -95,7 +95,10 @@ class PdfCanvas {
     _buf.writeln('1 0 ${_n(shear)} -1 ${_n(x)} ${_n(y)} Tm');
     _buf.writeln('[<$hex>] TJ');
     if (bold) {
-      _buf.writeln('1 0 ${_n(shear)} -1 ${_n(x + 0.35)} ${_n(y)} Tm');
+      // A second pass 5% of the em over thickens stems by about the gap
+      // between a regular and a bold cut.
+      final double dx = math.max(0.35, fontSize * 0.05);
+      _buf.writeln('1 0 ${_n(shear)} -1 ${_n(x + dx)} ${_n(y)} Tm');
       _buf.writeln('[<$hex>] TJ');
     }
   }

@@ -2,6 +2,7 @@
 library;
 
 import 'arabic_tafqeet.dart';
+import 'report_data.dart';
 import 'report_template.dart';
 import 'report_units.dart';
 
@@ -532,7 +533,7 @@ class ReportCompleter {
           ];
         }
         if (rest.length == 1 && rest.first.toLowerCase() == 'rows') {
-          return _fieldsOf(_resolve(_rowDataset));
+          return _withColumns(_fieldsOf(_resolve(_rowDataset)), _rowDataset);
         }
         return const <ReportCompletionItem>[];
       case 'variables' || 'vars' || 'var':
@@ -550,16 +551,52 @@ class ReportCompleter {
                   ),
               ];
       case 'data':
-        return _fieldsOf(_walk(data, rest));
+        return _withColumns(_fieldsOf(_walk(data, rest)), rest.join('.'));
     }
     if (_rowNames.contains(root)) {
-      return _fieldsOf(_walk(_firstRow(_resolve(_rowDataset)), rest));
+      return _withColumns(
+        _fieldsOf(_walk(_firstRow(_resolve(_rowDataset)), rest)),
+        rest.isEmpty ? _rowDataset : null,
+      );
     }
     final Object? top = _lookup(data, parents.first);
-    if (top != null) {
-      return _fieldsOf(_walk(top, rest));
+    return _withColumns(
+      top == null ? <ReportCompletionItem>[] : _fieldsOf(_walk(top, rest)),
+      parents.join('.'),
+    );
+  }
+
+  /// [items] plus the columns `<DataSchema>` declares for table [path] that
+  /// the data does not carry (calculated columns, tables without rows yet).
+  List<ReportCompletionItem> _withColumns(
+    List<ReportCompletionItem> items,
+    String? path,
+  ) {
+    final ReportDataTable? table = path == null || path.isEmpty
+        ? null
+        : template.dataSchema.table(path);
+    if (table == null) {
+      return items;
     }
-    return const <ReportCompletionItem>[];
+    final Set<String> known = <String>{
+      for (final ReportCompletionItem i in items) i.label.toLowerCase(),
+    };
+    final List<ReportCompletionItem> out = <ReportCompletionItem>[...items];
+    for (final ReportDataColumn c in table.columns) {
+      if (c.name.isEmpty || known.contains(c.name.toLowerCase())) {
+        continue;
+      }
+      out.insert(
+        out.length - (items.isNotEmpty && items.last.label == 'count' ? 1 : 0),
+        ReportCompletionItem(
+          label: c.name,
+          insert: c.name,
+          kind: ReportCompletionKind.field,
+          detail: c.isCalculated ? '= ${c.expression!.trim()}' : c.type.name,
+        ),
+      );
+    }
+    return out;
   }
 
   Object? _resolve(String? path) {

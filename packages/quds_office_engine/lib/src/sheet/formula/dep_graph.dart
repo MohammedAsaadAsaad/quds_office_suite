@@ -31,7 +31,12 @@ class FormulaDepGraph {
   }
 
   /// Recalculates in dependency order. Returns cells that were updated.
-  List<String> recalculate() {
+  ///
+  /// When [keepCachedOnUnsupported] is true, a formula this engine cannot
+  /// evaluate (`#NAME?` for an unknown function, `#ERROR!` for syntax it
+  /// cannot parse) keeps the value saved in the file instead of replacing
+  /// it with the error.
+  List<String> recalculate({bool keepCachedOnUnsupported = true}) {
     rebuild();
     final List<String> order = <String>[];
     final Set<String> visiting = <String>{};
@@ -65,13 +70,21 @@ class FormulaDepGraph {
         cell.type = SmlCellType.error;
         continue;
       }
-      if (cell.formula == null) {
+      if (cell.formula == null || cell.formula!.isEmpty) {
         continue;
       }
-      cell.value = evaluateFormula(
+      final Object? cached = cell.value;
+      final Object? result = evaluateFormula(
         cell.formula!,
         FormulaContext(workbook: workbook, sheet: sheet, origin: ref),
       );
+      if (keepCachedOnUnsupported &&
+          _unsupported(result) &&
+          cached != null &&
+          !_unsupported(cached)) {
+        continue;
+      }
+      cell.value = result;
       if (cell.formula != null && cell.formula!.isNotEmpty) {
         if (cell.value is String &&
             (cell.value as String).startsWith('#') &&
@@ -138,6 +151,9 @@ class FormulaDepGraph {
     }
     return out;
   }
+
+  static bool _unsupported(Object? value) =>
+      value is String && (value == '#NAME?' || value.startsWith('#ERROR!'));
 
   static String _key(SmlWorksheet sheet, SmlCellRef ref) =>
       '${sheet.name}!${ref.a1}';

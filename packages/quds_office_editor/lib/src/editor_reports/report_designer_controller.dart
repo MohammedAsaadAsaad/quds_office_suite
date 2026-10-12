@@ -475,6 +475,8 @@ class ReportDesignerController extends ChangeNotifier {
   var _dataColumn = -1;
   List<ReportDataTableView>? _dataViews;
   String _dataViewsKey = '';
+  Map<String, Object?>? _completionData;
+  String _completionDataKey = '';
   List<String> _fieldPaths = const <String>[];
 
   ReportDeviceFonts? _deviceFonts;
@@ -602,6 +604,31 @@ class ReportDesignerController extends ChangeNotifier {
   /// Highlighted suggestion.
   int get completionIndex => _completionIndex;
 
+  /// [mockData] as the report sees it: schema types applied and calculated
+  /// columns filled in, so suggestions offer them.
+  Map<String, Object?> get _preparedData {
+    final String key = '$_revision|$_dataRevision|$mockRows';
+    final Map<String, Object?>? cached = _completionData;
+    if (cached != null && key == _completionDataKey) {
+      return cached;
+    }
+    final Map<String, Object?> raw = mockData;
+    Map<String, Object?> prepared = raw;
+    if (!_template.dataSchema.isEmpty) {
+      try {
+        final Object plain = engine.prepare(raw).toDart();
+        if (plain is Map<String, Object?>) {
+          prepared = plain;
+        }
+      } on Object {
+        prepared = raw;
+      }
+    }
+    _completionData = prepared;
+    _completionDataKey = key;
+    return prepared;
+  }
+
   ReportCompletionResult? _computeCompletion(InlineCellEditor ed, String text) {
     final ReportBand? band;
     final ReportElement? e = editingId != null
@@ -615,7 +642,7 @@ class ReportDesignerController extends ChangeNotifier {
     final ReportCompleter completer = ReportCompleter(
       template: _template,
       band: band,
-      data: mockData,
+      data: _preparedData,
     );
     final int caret = ed.caretIndex;
     if (identical(ed, textEditor)) {

@@ -8,7 +8,7 @@ import 'formula_ast.dart';
 abstract final class FormulaFunctions {
   /// call API.
   static Object? call(String name, List<FormulaNode> args, FormulaContext ctx) {
-    final String n = name.toUpperCase();
+    final String n = stripFutureFunctionPrefix(name.toUpperCase());
     if (n == 'LET') {
       return _let(args, ctx);
     }
@@ -504,6 +504,19 @@ abstract final class FormulaFunctions {
         }
         return '#NAME?';
     }
+  }
+
+  /// Drops the `_xlfn.` / `_xlws.` prefixes Excel stores on functions added
+  /// after Excel 2007 (`_xlfn.CONCAT`, `_xlfn._xlws.FILTER`). The formula text
+  /// keeps them, so files round-trip unchanged.
+  static String stripFutureFunctionPrefix(String name) {
+    var n = name;
+    for (final String prefix in const <String>['_XLFN.', '_XLWS.']) {
+      if (n.toUpperCase().startsWith(prefix)) {
+        n = n.substring(prefix.length);
+      }
+    }
+    return n;
   }
 
   static const Map<String, String> _aliases = <String, String>{

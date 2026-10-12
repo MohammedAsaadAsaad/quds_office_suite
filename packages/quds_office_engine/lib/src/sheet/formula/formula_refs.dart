@@ -55,6 +55,83 @@ class FormulaRefSpan {
   }
 }
 
+/// Moves the relative references of a formula, as Excel does when it fills a
+/// formula down or across (and for `t="shared"` formulas in `.xlsx`).
+abstract final class FormulaRefShift {
+  static final RegExp _ref = RegExp(r'(\$?)([A-Za-z]{1,3})(\$?)(\d+)');
+
+  /// [formula] with relative rows moved by [rows] and relative columns by
+  /// [columns]. `$`-anchored parts stay put; references pushed off the sheet
+  /// become `#REF!`.
+  static String shift(String formula, {int rows = 0, int columns = 0}) {
+    if (rows == 0 && columns == 0) {
+      return formula;
+    }
+    final List<FormulaToken> tokens = FormulaLexer(formula).tokenize();
+    final StringBuffer out = StringBuffer();
+    var last = 0;
+    for (var i = 0; i < tokens.length; i++) {
+      final FormulaToken token = tokens[i];
+      if (token.kind != FormulaTokenKind.cell &&
+          token.kind != FormulaTokenKind.range) {
+        continue;
+      }
+      // `LOG10(` lexes like a cell reference; it is a function call.
+      if (i + 1 < tokens.length &&
+          tokens[i + 1].kind == FormulaTokenKind.lparen) {
+        continue;
+      }
+      if (token.start < last || token.end > formula.length) {
+        continue;
+      }
+      final String source = formula.substring(token.start, token.end);
+      final int bang = source.lastIndexOf('!');
+      out
+        ..write(formula.substring(last, token.start))
+        ..write(source.substring(0, bang + 1))
+        ..write(
+          source
+              .substring(bang + 1)
+              .replaceAllMapped(_ref, (Match m) => _move(m, rows, columns)),
+        );
+      last = token.end;
+    }
+    out.write(formula.substring(last));
+    return out.toString();
+  }
+
+  static String _move(Match m, int rows, int columns) {
+    final bool fixedCol = m.group(1)!.isNotEmpty;
+    final bool fixedRow = m.group(3)!.isNotEmpty;
+    var col = 0;
+    for (final int unit in m.group(2)!.toUpperCase().codeUnits) {
+      col = col * 26 + (unit - 64);
+    }
+    var row = int.parse(m.group(4)!);
+    if (!fixedCol) {
+      col += columns;
+    }
+    if (!fixedRow) {
+      row += rows;
+    }
+    if (col < 1 ||
+        row < 1 ||
+        col > SmlWorksheet.excelColumnCount ||
+        row > SmlWorksheet.excelRowCount) {
+      return '#REF!';
+    }
+    final StringBuffer letters = StringBuffer();
+    var c = col;
+    while (c > 0) {
+      final int rem = (c - 1) % 26;
+      letters.writeCharCode(65 + rem);
+      c = (c - 1) ~/ 26;
+    }
+    final String name = letters.toString().split('').reversed.join();
+    return '${m.group(1)}$name${m.group(3)}$row';
+  }
+}
+
 /// Finds A1 / range tokens in a formula while it is being typed.
 abstract final class FormulaRefScanner {
   /// scan API.

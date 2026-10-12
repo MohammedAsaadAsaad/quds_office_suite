@@ -17,6 +17,10 @@
 
 Two packages and one desktop app. Depend on each package **on its own**.
 
+> **1.0 is out.** Both packages are stable and follow semantic versioning.
+> See *What 1.0 brings* in the [engine](packages/quds_office_engine#what-10-brings)
+> and [editor](packages/quds_office_editor#what-10-brings) READMEs.
+
 | Package | Runtime | What it is | pub.dev |
 | --- | --- | --- | --- |
 | **[`quds_office_engine`](packages/quds_office_engine)** | Pure Dart | OOXML + OPC/ZIP + formulas + PDF 1.7 | [pub.dev/packages/quds_office_engine](https://pub.dev/packages/quds_office_engine) |
@@ -70,6 +74,13 @@ The engine **never** imports `dart:ui` or Flutter. The editor **never** uses
   </tr>
 </table>
 
+### Files from other suites
+
+A DOCX written in LibreOffice Writer. On the left is LibreOffice's own PDF.
+On the right is the engine's, made in pure Dart.
+
+![LibreOffice's PDF next to quds_office_engine's for the same DOCX](packages/quds_office_engine/example/screenshots/office_fidelity_word.png)
+
 ---
 
 ## Why this suite
@@ -92,14 +103,14 @@ Most Dart “Office” libraries stop at writing a simple DOCX. Quds goes furthe
 
 ```yaml
 dependencies:
-  quds_office_engine: ^0.6.0
+  quds_office_engine: ^1.0.0
 ```
 
 ### Editor (pulls the engine)
 
 ```yaml
 dependencies:
-  quds_office_editor: ^0.6.0
+  quds_office_editor: ^1.0.0
 ```
 
 This repository is a [Dart workspace](https://dart.dev/tools/pub/workspaces). From the root:

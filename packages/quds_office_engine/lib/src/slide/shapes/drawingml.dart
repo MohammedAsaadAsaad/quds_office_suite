@@ -7,7 +7,15 @@ import '../anim/pml_motion_io.dart';
 import '../model/pml_presentation.dart';
 
 /// parseSlideShapes helper.
-List<PmlShape> parseSlideShapes(String xml) {
+///
+/// [colors] maps scheme color names (`accent1`, `tx1`, `bg1`, …) to hex so
+/// `a:schemeClr` and `p:style` references resolve; [positioned] collects the
+/// shapes that carry their own `xfrm` offset or extent.
+List<PmlShape> parseSlideShapes(
+  String xml, {
+  Map<String, String> colors = const <String, String>{},
+  Set<PmlShape>? positioned,
+}) {
   /// shapes API.
   final List<PmlShape> shapes = <PmlShape>[];
 
@@ -48,9 +56,19 @@ List<PmlShape> parseSlideShapes(String xml) {
   PmlTableCell? currentCell;
   int? currentGroupId;
   var nextGroupId = 1;
+  var inXfrm = false;
+  var inStyle = false;
+  var explicitFill = false;
+  var explicitLine = false;
+  String? styleRef;
   while (reader.next()) {
     if (reader.eventType == XmlEventType.endElement) {
-      if (reader.localName == 'spPr') {
+      if (reader.localName == 'xfrm') {
+        inXfrm = false;
+      } else if (reader.localName == 'style') {
+        inStyle = false;
+        styleRef = null;
+      } else if (reader.localName == 'spPr') {
         inSpPr = false;
         inLn = false;
         fillPending = false;
@@ -82,6 +100,9 @@ List<PmlShape> parseSlideShapes(String xml) {
         inSpPr = false;
         inTxBody = false;
         inLn = false;
+        inXfrm = false;
+        inStyle = false;
+        styleRef = null;
         fillPending = false;
         textFillPending = false;
         inTbl = false;
@@ -106,6 +127,9 @@ List<PmlShape> parseSlideShapes(String xml) {
         fillColor: '',
         groupId: currentGroupId,
       );
+      if (reader.localName == 'pic') {
+        current.visual = OfficeVisual(kind: OfficeVisualKind.picture);
+      }
       shapes.add(current);
       fillPending = false;
       textFillPending = false;
@@ -113,6 +137,28 @@ List<PmlShape> parseSlideShapes(String xml) {
       inSpPr = false;
       inTxBody = false;
       inLn = false;
+      inXfrm = false;
+      inStyle = false;
+      explicitFill = false;
+      explicitLine = false;
+      styleRef = null;
+    } else if (reader.localName == 'ph' && current != null) {
+      current.placeholder = true;
+      current.placeholderType = reader.getAttribute('type') ?? '';
+      current.placeholderIndex = int.tryParse(reader.getAttribute('idx') ?? '');
+    } else if (reader.localName == 'style' && current != null) {
+      inStyle = true;
+    } else if (inStyle &&
+        (reader.localName == 'fillRef' ||
+            reader.localName == 'lnRef' ||
+            reader.localName == 'fontRef')) {
+      final bool none = reader.getAttribute('idx') == '0';
+      styleRef = switch (reader.localName) {
+        'fillRef' when !none && !explicitFill => 'fill',
+        'lnRef' when !none && !explicitLine => 'line',
+        'fontRef' => 'font',
+        _ => null,
+      };
     } else if (reader.localName == 'spPr') {
       inSpPr = current != null;
       inLn = false;
@@ -149,21 +195,22 @@ List<PmlShape> parseSlideShapes(String xml) {
       }
     } else if (reader.localName == 'solidFill' && inSpPr && inLn) {
       strokePending = current != null;
+      explicitLine = true;
       fillPending = false;
-    } else if (reader.localName == 'srcRect' && current != null) {
-      current.visual ??= OfficeVisual(kind: OfficeVisualKind.picture);
-      DrawingmlVisualIo.applySrcRect(current.visual!.picture, reader);
-    } else if (reader.localName == 'lum' && current != null) {
-      current.visual ??= OfficeVisual(kind: OfficeVisualKind.picture);
-      DrawingmlVisualIo.applyLum(current.visual!.picture, reader);
-    } else if (reader.localName == 'alphaModFix' && current != null) {
-      current.visual ??= OfficeVisual(kind: OfficeVisualKind.picture);
-      current.visual!.picture.transparency =
+    } else if (reader.localName == 'noFill' && inSpPr && inLn) {
+      explicitLine = true;
+      current?.strokeColor = '';
+    } else if (reader.localName == 'srcRect' && current?.visual != null) {
+      DrawingmlVisualIo.applySrcRect(current!.visual!.picture, reader);
+    } else if (reader.localName == 'lum' && current?.visual != null) {
+      DrawingmlVisualIo.applyLum(current!.visual!.picture, reader);
+    } else if (reader.localName == 'alphaModFix' && current?.visual != null) {
+      current!.visual!.picture.transparency =
           DrawingmlVisualIo.alphaToTransparency(reader.getAttribute('amt'));
-    } else if (reader.localName == 'outerShdw' && current != null) {
-      current.visual ??= OfficeVisual(kind: OfficeVisualKind.picture);
-      current.visual!.picture.shadow = true;
-    } else if (reader.localName == 'xfrm' && current != null) {
+    } else if (reader.localName == 'outerShdw' && current?.visual != null) {
+      current!.visual!.picture.shadow = true;
+    } else if (reader.localName == 'xfrm' && current != null && !inXfrm) {
+      inXfrm = !reader.isEmptyElement;
       final int rot = int.tryParse(reader.getAttribute('rot') ?? '0') ?? 0;
       current.transform = PmlTransform(
         x: current.transform.x,
@@ -172,24 +219,28 @@ List<PmlShape> parseSlideShapes(String xml) {
         cy: current.transform.cy,
         rot: rot,
       );
-      current.visual ??= OfficeVisual(kind: OfficeVisualKind.picture);
-      DrawingmlVisualIo.applyXfrm(current.visual!.picture, reader);
-    } else if (reader.localName == 'off' && current != null) {
+      final OfficeVisual? visual = current.visual;
+      if (visual != null) {
+        DrawingmlVisualIo.applyXfrm(visual.picture, reader);
+      }
+    } else if (reader.localName == 'off' && inXfrm && current != null) {
       current.transform = PmlTransform(
-        x: int.parse(reader.getAttribute('x') ?? '0'),
-        y: int.parse(reader.getAttribute('y') ?? '0'),
+        x: int.tryParse(reader.getAttribute('x') ?? '') ?? 0,
+        y: int.tryParse(reader.getAttribute('y') ?? '') ?? 0,
         cx: current.transform.cx,
         cy: current.transform.cy,
         rot: current.transform.rot,
       );
-    } else if (reader.localName == 'ext' && current != null) {
+      positioned?.add(current);
+    } else if (reader.localName == 'ext' && inXfrm && current != null) {
       current.transform = PmlTransform(
         x: current.transform.x,
         y: current.transform.y,
-        cx: int.parse(reader.getAttribute('cx') ?? '0'),
-        cy: int.parse(reader.getAttribute('cy') ?? '0'),
+        cx: int.tryParse(reader.getAttribute('cx') ?? '') ?? 0,
+        cy: int.tryParse(reader.getAttribute('cy') ?? '') ?? 0,
         rot: current.transform.rot,
       );
+      positioned?.add(current);
     } else if (reader.localName == 'prstGeom' && current != null) {
       current.preset = switch (reader.getAttribute('prst')) {
         'ellipse' => PmlShapePreset.ellipse,
@@ -203,9 +254,17 @@ List<PmlShape> parseSlideShapes(String xml) {
         !inLn &&
         current != null) {
       current.fillColor = '';
+      explicitFill = true;
       fillPending = false;
-    } else if (reader.localName == 'solidFill' && inSpPr && !inLn) {
+    } else if ((reader.localName == 'solidFill' ||
+            reader.localName == 'gradFill' ||
+            reader.localName == 'pattFill') &&
+        inSpPr &&
+        !inLn) {
       fillPending = current != null;
+      explicitFill = true;
+    } else if (reader.localName == 'blipFill' && inSpPr && !inLn) {
+      explicitFill = true;
     } else if (reader.localName == 'solidFill' && inTxBody) {
       textFillPending = current != null;
     } else if (reader.localName == 'tbl' && current != null) {
@@ -224,8 +283,8 @@ List<PmlShape> parseSlideShapes(String xml) {
       currentRow.add(currentCell);
     } else if (reader.localName == 'tcPr' && currentCell != null) {
       inTcPr = true;
-    } else if (reader.localName == 'srgbClr' && current != null) {
-      final String? val = reader.getAttribute('val');
+    } else if (_colorElements.contains(reader.localName) && current != null) {
+      final String? val = _readColor(reader, colors);
       if (val != null && val.isNotEmpty) {
         if (inTcPr && currentCell != null) {
           currentCell.fillColor = val;
@@ -235,6 +294,12 @@ List<PmlShape> parseSlideShapes(String xml) {
           current.fillColor = val;
         } else if (textFillPending) {
           current.textColor = val;
+        } else if (styleRef == 'fill') {
+          current.fillColor = val;
+        } else if (styleRef == 'line') {
+          current.strokeColor = val;
+        } else if (styleRef == 'font') {
+          current.textColor = val;
         } else if (currentCell != null && currentCell.textColor.isEmpty) {
           currentCell.textColor = val;
         }
@@ -242,10 +307,15 @@ List<PmlShape> parseSlideShapes(String xml) {
       fillPending = false;
       textFillPending = false;
       strokePending = false;
+      styleRef = null;
     } else if ((reader.localName == 'blip' || reader.localName == 'chart') &&
-        current != null) {
+        current != null &&
+        !inTxBody) {
       current.embedRelId =
           reader.getAttribute('embed') ?? reader.getAttribute('id');
+      if (reader.localName == 'blip') {
+        current.visual ??= OfficeVisual(kind: OfficeVisualKind.picture);
+      }
     } else if (reader.localName == 'pPr' && current != null && inTxBody) {
       final String? algn = reader.getAttribute('algn');
       current.textAlign = switch (algn) {
@@ -285,6 +355,152 @@ List<PmlShape> parseSlideShapes(String xml) {
     }
   }
   return shapes;
+}
+
+const Set<String> _colorElements = <String>{
+  'srgbClr',
+  'schemeClr',
+  'sysClr',
+  'prstClr',
+};
+
+/// Reads a DrawingML color element (consuming it) as `RRGGBB`, applying the
+/// `lumMod` / `lumOff` / `shade` / `tint` modifiers PowerPoint themes use.
+String? _readColor(XmlPullReader reader, Map<String, String> colors) {
+  final String name = reader.localName;
+  final String val = reader.getAttribute('val') ?? '';
+  String? hex = switch (name) {
+    'srgbClr' => val,
+    'schemeClr' => colors[val],
+    'sysClr' => reader.getAttribute('lastClr') ?? _systemColors[val],
+    'prstClr' => _presetColors[val],
+    _ => null,
+  };
+  if (reader.isEmptyElement) {
+    return _normalHex(hex);
+  }
+  double lumMod = 1;
+  double lumOff = 0;
+  final int depth = reader.depth;
+  while (reader.next() && reader.depth >= depth) {
+    if (reader.eventType != XmlEventType.startElement) {
+      continue;
+    }
+    final double amount =
+        (int.tryParse(reader.getAttribute('val') ?? '') ?? 100000) / 100000;
+    hex = _normalHex(hex);
+    switch (reader.localName) {
+      case 'lumMod':
+        lumMod = amount;
+      case 'lumOff':
+        lumOff = amount;
+      case 'shade' when hex != null:
+        hex = _mapChannels(hex, (int c) => c * amount);
+      case 'tint' when hex != null:
+        hex = _mapChannels(hex, (int c) => c + (255 - c) * (1 - amount));
+    }
+  }
+  hex = _normalHex(hex);
+  if (hex == null || (lumMod == 1 && lumOff == 0)) {
+    return hex;
+  }
+  return _applyLuminance(hex, lumMod, lumOff);
+}
+
+const Map<String, String> _systemColors = <String, String>{
+  'windowText': '000000',
+  'window': 'FFFFFF',
+};
+
+const Map<String, String> _presetColors = <String, String>{
+  'black': '000000',
+  'white': 'FFFFFF',
+  'red': 'FF0000',
+  'green': '008000',
+  'blue': '0000FF',
+  'yellow': 'FFFF00',
+  'gray': '808080',
+};
+
+String? _normalHex(String? hex) {
+  if (hex == null || hex.length != 6 || int.tryParse(hex, radix: 16) == null) {
+    return null;
+  }
+  return hex.toUpperCase();
+}
+
+String _mapChannels(String hex, double Function(int channel) map) {
+  final int rgb = int.parse(hex, radix: 16);
+  final StringBuffer out = StringBuffer();
+  for (final int shift in <int>[16, 8, 0]) {
+    final int c = map((rgb >> shift) & 0xFF).round().clamp(0, 255);
+    out.write(c.toRadixString(16).padLeft(2, '0'));
+  }
+  return out.toString().toUpperCase();
+}
+
+String _applyLuminance(String hex, double lumMod, double lumOff) {
+  final int rgb = int.parse(hex, radix: 16);
+  final double r = ((rgb >> 16) & 0xFF) / 255;
+  final double g = ((rgb >> 8) & 0xFF) / 255;
+  final double b = (rgb & 0xFF) / 255;
+  final double max = <double>[
+    r,
+    g,
+    b,
+  ].reduce((double a, double v) => a > v ? a : v);
+  final double min = <double>[
+    r,
+    g,
+    b,
+  ].reduce((double a, double v) => a < v ? a : v);
+  double h = 0;
+  double s = 0;
+  double l = (max + min) / 2;
+  final double d = max - min;
+  if (d > 0) {
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    if (max == r) {
+      h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+    } else if (max == g) {
+      h = ((b - r) / d + 2) / 6;
+    } else {
+      h = ((r - g) / d + 4) / 6;
+    }
+  }
+  l = (l * lumMod + lumOff).clamp(0.0, 1.0);
+  double channel(double t) {
+    final double q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+    final double p = 2 * l - q;
+    double k = t;
+    if (k < 0) {
+      k += 1;
+    }
+    if (k > 1) {
+      k -= 1;
+    }
+    if (k < 1 / 6) {
+      return p + (q - p) * 6 * k;
+    }
+    if (k < 1 / 2) {
+      return q;
+    }
+    if (k < 2 / 3) {
+      return p + (q - p) * (2 / 3 - k) * 6;
+    }
+    return p;
+  }
+
+  final List<double> out = s == 0
+      ? <double>[l, l, l]
+      : <double>[channel(h + 1 / 3), channel(h), channel(h - 1 / 3)];
+  return out
+      .map(
+        (double c) =>
+            (c * 255).round().clamp(0, 255).toRadixString(16).padLeft(2, '0'),
+      )
+      .join()
+      .toUpperCase();
 }
 
 /// parseChartVisual helper.

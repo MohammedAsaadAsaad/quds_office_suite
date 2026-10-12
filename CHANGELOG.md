@@ -5,8 +5,13 @@ This repository is a Dart workspace. Each published package keeps its own change
 - [`packages/quds_office_engine/CHANGELOG.md`](packages/quds_office_engine/CHANGELOG.md)
 - [`packages/quds_office_editor/CHANGELOG.md`](packages/quds_office_editor/CHANGELOG.md)
 
-## Unreleased
+## 1.0.0 / 1.0.0
 
+First stable release of both packages (engine **1.0.0**, editor **1.0.0**).
+The public API now follows semantic versioning.
+
+- Fidelity fixes for Word, Excel, and PowerPoint files from other suites ([#2](https://github.com/MohammedAsaadAsaad/quds_office_suite/issues/2), [#3](https://github.com/MohammedAsaadAsaad/quds_office_suite/issues/3), [#4](https://github.com/MohammedAsaadAsaad/quds_office_suite/issues/4)), plus LibreOffice outline lists, style bold inheritance, and Excel header codes and cell alignment in PDF export. The engine README compares LibreOffice's own PDFs with the engine's for the same files.
+- Calculated columns show up in report suggestions, variables, and fields.
 - `.qrep` files are ZIP packages: `layout.xml` plus pre-saved images (`ReportPackage`, `QudsReportEngine.fromPackage`). Legacy plain-XML files still open.
 - The designer and Report Studio embed, rename, insert, and remove report images (undoable) and save them inside the `.qrep`.
 - The report inspector has Properties / Variables / Images tabs and a resizable width; Report Studio remembers the width in `settings.json`.

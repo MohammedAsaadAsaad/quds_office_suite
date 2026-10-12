@@ -68,6 +68,33 @@ abstract final class SheetChartData {
     return points;
   }
 
+  /// Points from a value range paired cell-by-cell with a category range,
+  /// as a chart series' `c:val` / `c:cat` references describe them.
+  static List<ChartPoint> fromSeries({
+    required SmlWorkbook book,
+    required SmlWorksheet sheet,
+    required SmlRange values,
+    required SmlRange labels,
+  }) {
+    final List<SmlCellRef> valueCells = values.cells.toList();
+    final List<SmlCellRef> labelCells = labels.cells.toList();
+    final List<ChartPoint> points = <ChartPoint>[];
+    for (int i = 0; i < valueCells.length; i++) {
+      final String label = i < labelCells.length
+          ? _labelText(book, sheet, labelCells[i])
+          : '';
+      points.add(
+        ChartPoint(
+          label: label.isEmpty ? '${i + 1}' : label,
+          value: _number(book, sheet, valueCells[i]) ?? 0,
+          color:
+              VisualPalette.fills[points.length % VisualPalette.fills.length],
+        ),
+      );
+    }
+    return points;
+  }
+
   /// refreshDrawing API.
   static void refreshDrawing(
     SmlWorkbook book,
@@ -79,14 +106,28 @@ abstract final class SheetChartData {
     if (fromA1 == null || toA1 == null || !drawing.visual.isChart) {
       return;
     }
+    final String? sourceName = drawing.sourceSheetName;
+    final SmlWorksheet? source = sourceName == null
+        ? sheet
+        : book.sheetByName(sourceName);
+    if (source == null) {
+      return;
+    }
     final SmlCellRef from = SmlCellRef.parse(fromA1);
     final SmlCellRef to = SmlCellRef.parse(toA1);
-    final List<ChartPoint> next = fromRange(
-      book: book,
-      sheet: sheet,
-      from: from,
-      to: to,
-    );
+    final String? labelsFrom = drawing.labelsFromA1;
+    final String? labelsTo = drawing.labelsToA1;
+    final List<ChartPoint> next = labelsFrom != null && labelsTo != null
+        ? fromSeries(
+            book: book,
+            sheet: source,
+            values: SmlRange(from, to),
+            labels: SmlRange(
+              SmlCellRef.parse(labelsFrom),
+              SmlCellRef.parse(labelsTo),
+            ),
+          )
+        : fromRange(book: book, sheet: source, from: from, to: to);
     if (next.isEmpty) {
       return;
     }
@@ -124,11 +165,37 @@ abstract final class SheetChartData {
         return value.toDouble();
       }
       if (value is String) {
-        return double.tryParse(value);
+        return double.tryParse(value) ?? cell.asNumber;
       }
-      return null;
+      return cell.asNumber;
     }
     return cell.asNumber;
+  }
+
+  static String _labelText(
+    SmlWorkbook book,
+    SmlWorksheet sheet,
+    SmlCellRef ref,
+  ) {
+    final SmlCell cell = sheet.cell(ref);
+    Object? value = cell.value;
+    if (cell.formula != null && cell.formula!.isNotEmpty) {
+      final Object? evaluated = FormulaEvaluator.evaluateCell(
+        book,
+        sheet,
+        cell,
+      );
+      if (evaluated != null &&
+          !(evaluated is String && evaluated.startsWith('#'))) {
+        value = evaluated;
+      }
+    }
+    if (value is num) {
+      return value == value.truncateToDouble() && value.abs() < 1e15
+          ? value.toInt().toString()
+          : value.toString();
+    }
+    return value?.toString().trim() ?? '';
   }
 
   static String _columnLabel(SmlWorksheet sheet, int col, int valueRow) {

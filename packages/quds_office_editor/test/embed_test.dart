@@ -2817,4 +2817,74 @@ void main() {
     expect(requested, isTrue);
     expect(word.findSession.active, isTrue);
   });
+
+  testWidgets('word lines laid out with paint metrics fit the column', (
+    WidgetTester tester,
+  ) async {
+    const String lorem =
+        'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do '
+        'eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim '
+        'ad minim veniam, quis nostrud exercitation ullamco laboris nisi.';
+    final WordEditorController word = WordEditorController.fromBytes(
+      (DocxDocumentBuilder()..paragraph(lorem)).build(),
+    );
+    final double column = word.document.sections.first.contentWidth;
+    double widest(LaidOutDocument laid) {
+      double max = 0;
+      for (final LaidOutPage page in laid.pages) {
+        for (final LaidOutLine line in page.lines) {
+          if (line.glyphs.isEmpty) {
+            continue;
+          }
+          final TextPainter painter = PaintRunText.plain(
+            text: String.fromCharCodes(
+              line.glyphs.map((LaidOutGlyph g) => g.glyph.codePoint),
+            ).trimRight(),
+            fontSize: line.glyphs.first.fontSize,
+            color: const Color(0xFF000000),
+          )..layout();
+          max = painter.width > max ? painter.width : max;
+        }
+      }
+      return max;
+    }
+
+    expect(widest(word.laidOut), lessThanOrEqualTo(column + 1));
+    expect(
+      widest(WordLayoutEngine(font: null).layout(word.document)),
+      greaterThan(column),
+      reason: 'the 0.5 em fallback underestimates the painted text',
+    );
+  });
+
+  testWidgets('slide editor places the navigation and notes builders', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final SlideEditorController slides = SlideEditorController();
+    await tester.pumpWidget(
+      Directionality(
+        textDirection: TextDirection.ltr,
+        child: QudsSlideEditor(
+          controller: slides,
+          config: const OfficeSurfaceConfig(
+            showNavigationPane: true,
+            adaptiveChrome: false,
+          ),
+          navigationBuilder: (BuildContext context, SlideEditorController c) =>
+              const SizedBox(key: ValueKey<String>('rail')),
+          notesPaneBuilder: (BuildContext context, SlideEditorController c) =>
+              const SizedBox(key: ValueKey<String>('notes'), height: 40),
+        ),
+      ),
+    );
+    expect(find.byKey(const ValueKey<String>('rail')), findsOneWidget);
+    expect(find.byKey(const ValueKey<String>('notes')), findsOneWidget);
+    expect(
+      tester.getSize(find.byKey(const ValueKey<String>('rail'))).width,
+      220,
+    );
+  });
 }

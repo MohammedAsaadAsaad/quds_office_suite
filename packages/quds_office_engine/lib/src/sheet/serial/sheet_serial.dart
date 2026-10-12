@@ -10,6 +10,7 @@ import '../../xml/namespaces.dart';
 import '../../xml/xml_reader.dart';
 import '../../xml/xml_writer.dart';
 import '../formula/dep_graph.dart';
+import '../formula/formula_refs.dart';
 import '../model/sml_analysis.dart';
 import '../model/sml_sparkline.dart';
 import '../model/sml_workbook.dart';
@@ -98,8 +99,7 @@ class SheetDeserializer {
           reader.localName == 'definedName') {
         name = reader.getAttribute('name');
         localSheetId = reader.getAttribute('localSheetId');
-      } else if (reader.eventType == XmlEventType.characters &&
-          name != null) {
+      } else if (reader.eventType == XmlEventType.characters && name != null) {
         final String raw = reader.text.trim();
         if (name == '_xlnm.Print_Titles') {
           _applyPrintTitles(book, raw, localSheetId);
@@ -203,24 +203,40 @@ class SheetDeserializer {
     String raw, {
     required bool header,
   }) {
-    String left = '';
-    String center = '';
-    String right = '';
-    final RegExp section = RegExp(r'&([LCR])([^&]*)');
-    for (final RegExpMatch match in section.allMatches(raw)) {
-      final String body = match.group(2) ?? '';
-      switch (match.group(1)) {
-        case 'L':
-          left = body;
-        case 'C':
-          center = body;
-        case 'R':
-          right = body;
+    // Formatting codes (`&"Arial,Bold"`, `&12`, `&B`, `&&`) stay in the
+    // section text; only `&L` / `&C` / `&R` switch sections.
+    final Map<String, StringBuffer> sections = <String, StringBuffer>{
+      'L': StringBuffer(),
+      'C': StringBuffer(),
+      'R': StringBuffer(),
+    };
+    StringBuffer current = sections['C']!;
+    var i = 0;
+    while (i < raw.length) {
+      final String ch = raw[i];
+      if (ch != '&' || i + 1 >= raw.length) {
+        current.write(ch);
+        i++;
+        continue;
+      }
+      final String code = raw[i + 1];
+      final StringBuffer? target = sections[code];
+      if (target != null) {
+        current = target;
+        i += 2;
+      } else if (code == '"') {
+        final int close = raw.indexOf('"', i + 2);
+        final int end = close < 0 ? raw.length : close + 1;
+        current.write(raw.substring(i, end));
+        i = end;
+      } else {
+        current.write(raw.substring(i, i + 2));
+        i += 2;
       }
     }
-    if (left.isEmpty && center.isEmpty && right.isEmpty && raw.isNotEmpty) {
-      center = raw;
-    }
+    final String left = sections['L'].toString();
+    final String center = sections['C'].toString();
+    final String right = sections['R'].toString();
     if (header) {
       hf
         ..headerLeft = left
@@ -244,6 +260,9 @@ class SheetDeserializer {
   ) {
     final XmlPullReader reader = XmlPullReader(xml);
     SmlCell? current;
+    // `t="shared"` masters by `si`: formula text and the cell it is written for.
+    final Map<String, ({String formula, SmlCellRef anchor})> shared =
+        <String, ({String formula, SmlCellRef anchor})>{};
     while (reader.next()) {
       if (reader.eventType == XmlEventType.startElement &&
           reader.localName == 'sheetView') {
@@ -368,7 +387,7 @@ class SheetDeserializer {
           's' => SmlCellType.string,
           'b' => SmlCellType.boolean,
           'e' => SmlCellType.error,
-          'str' => SmlCellType.string,
+          'str' || 'inlineStr' => SmlCellType.string,
           _ => SmlCellType.number,
         };
       } else if (reader.eventType == XmlEventType.startElement &&
@@ -383,13 +402,42 @@ class SheetDeserializer {
         current = null;
       }
       if (reader.eventType == XmlEventType.startElement &&
+          reader.localName == 'is' &&
+          current != null) {
+        current.value = _readInlineString(reader);
+      }
+      if (reader.eventType == XmlEventType.startElement &&
           (reader.localName == 'v' || reader.localName == 'f') &&
           current != null) {
         final String name = reader.localName;
+        final String? formulaKind = name == 'f'
+            ? reader.getAttribute('t')
+            : null;
+        final String? sharedIndex = name == 'f'
+            ? reader.getAttribute('si')
+            : null;
         final String text = _readText(reader);
         if (name == 'f') {
-          current.formula = text;
-          current.type = SmlCellType.formula;
+          String? formula = text;
+          if (formulaKind == 'shared' && sharedIndex != null) {
+            final ({String formula, SmlCellRef anchor})? master =
+                shared[sharedIndex];
+            if (text.isNotEmpty) {
+              shared[sharedIndex] = (formula: text, anchor: current.ref);
+            } else if (master != null) {
+              formula = FormulaRefShift.shift(
+                master.formula,
+                rows: current.ref.row - master.anchor.row,
+                columns: current.ref.col - master.anchor.col,
+              );
+            } else {
+              formula = null;
+            }
+          }
+          if (formula != null && formula.isNotEmpty) {
+            current.formula = formula;
+            current.type = SmlCellType.formula;
+          }
         } else if (current.type == SmlCellType.string &&
             int.tryParse(text) != null) {
           current.value = sst[int.parse(text)];
@@ -442,7 +490,9 @@ class SheetDeserializer {
         }
       }
     }
-    final PackagePart? tables = package.getPart('/xl/tables${sheet.sheetId}.xml');
+    final PackagePart? tables = package.getPart(
+      '/xl/tables${sheet.sheetId}.xml',
+    );
     if (tables != null) {
       final XmlPullReader reader = XmlPullReader(tables.readText());
       while (reader.next()) {
@@ -451,9 +501,7 @@ class SheetDeserializer {
           final String name = reader.getAttribute('name') ?? 'Table';
           final String? ref = reader.getAttribute('ref');
           if (ref != null) {
-            sheet.tables.add(
-              SmlTable(name: name, range: SmlRange.parse(ref)),
-            );
+            sheet.tables.add(SmlTable(name: name, range: SmlRange.parse(ref)));
           }
         }
       }
@@ -495,12 +543,45 @@ class SheetDeserializer {
           final String? ref = reader.getAttribute('ref');
           if (ref != null) {
             sheet.pivots.add(
-              SmlPivotTable(source: SmlRange.parse(ref), rowField: 0, dataField: 1),
+              SmlPivotTable(
+                source: SmlRange.parse(ref),
+                rowField: 0,
+                dataField: 1,
+              ),
             );
           }
         }
       }
     }
+  }
+
+  /// Text of an inline string (`<is>`): plain `<t>` or rich-text runs,
+  /// without phonetic (`<rPh>`) readings.
+  static String _readInlineString(XmlPullReader reader) {
+    if (reader.isEmptyElement) {
+      return '';
+    }
+    final StringBuffer buffer = StringBuffer();
+    final int depth = reader.depth;
+    var inText = false;
+    while (reader.next() && reader.depth >= depth) {
+      if (reader.eventType == XmlEventType.startElement) {
+        if (reader.localName == 'rPh') {
+          reader.skip();
+        } else if (reader.localName == 't') {
+          inText = !reader.isEmptyElement;
+        }
+      } else if (reader.eventType == XmlEventType.endElement) {
+        if (reader.localName == 't') {
+          inText = false;
+        }
+      } else if (inText &&
+          (reader.eventType == XmlEventType.characters ||
+              reader.eventType == XmlEventType.cdata)) {
+        buffer.write(reader.text);
+      }
+    }
+    return buffer.toString();
   }
 
   static String _readText(XmlPullReader reader) {
@@ -657,7 +738,10 @@ class SheetSerializer {
         namespaceUri: OfficeNamespaces.x,
       );
       w.writeAttribute('refreshedBy', 'Quds Office');
-      w.writeAttribute('recordCount', '${sheet.pivots.first.source.cells.length}');
+      w.writeAttribute(
+        'recordCount',
+        '${sheet.pivots.first.source.cells.length}',
+      );
       w.writeStartElement('cacheSource');
       w.writeAttribute('type', 'worksheet');
       w.writeEmptyElement(
@@ -670,7 +754,8 @@ class SheetSerializer {
       );
       w.writeEndElement();
       w.writeEndElement();
-      final String cacheUri = '/xl/pivotCache/pivotCacheDefinition${sheet.sheetId}.xml';
+      final String cacheUri =
+          '/xl/pivotCache/pivotCacheDefinition${sheet.sheetId}.xml';
       final PackagePart? cache = package.getPart(cacheUri);
       if (cache == null) {
         package.createPart(
@@ -683,7 +768,10 @@ class SheetSerializer {
       }
       final XmlWriter table = XmlWriter();
       table.writeStartDocument();
-      table.writeStartElement('pivotTableDefinition', namespaceUri: OfficeNamespaces.x);
+      table.writeStartElement(
+        'pivotTableDefinition',
+        namespaceUri: OfficeNamespaces.x,
+      );
       table.writeAttribute('name', sheet.pivots.first.name);
       table.writeEmptyElement(
         'location',
@@ -825,14 +913,14 @@ class SheetSerializer {
         }
         if (sheet.printTitleCols != null) {
           final SmlRange c = sheet.printTitleCols!;
-          final String a = SmlCellRef(c.minCol, 0).a1.replaceAll(
-            RegExp(r'\d+'),
-            '',
-          );
-          final String b = SmlCellRef(c.maxCol, 0).a1.replaceAll(
-            RegExp(r'\d+'),
-            '',
-          );
+          final String a = SmlCellRef(
+            c.minCol,
+            0,
+          ).a1.replaceAll(RegExp(r'\d+'), '');
+          final String b = SmlCellRef(
+            c.maxCol,
+            0,
+          ).a1.replaceAll(RegExp(r'\d+'), '');
           parts.add("'${sheet.name}'!\$$a:\$$b");
         }
         if (parts.isEmpty) {
@@ -939,17 +1027,14 @@ class SheetSerializer {
       w.writeAttribute('count', '${sheet.validations.length}');
       for (final SmlDataValidation rule in sheet.validations) {
         w.writeStartElement('dataValidation');
-        w.writeAttribute(
-          'type',
-          switch (rule.kind) {
-            SmlValidationKind.list => 'list',
-            SmlValidationKind.whole => 'whole',
-            SmlValidationKind.decimal => 'decimal',
-            SmlValidationKind.date => 'date',
-            SmlValidationKind.textLength => 'textLength',
-            SmlValidationKind.custom => 'custom',
-          },
-        );
+        w.writeAttribute('type', switch (rule.kind) {
+          SmlValidationKind.list => 'list',
+          SmlValidationKind.whole => 'whole',
+          SmlValidationKind.decimal => 'decimal',
+          SmlValidationKind.date => 'date',
+          SmlValidationKind.textLength => 'textLength',
+          SmlValidationKind.custom => 'custom',
+        });
         w.writeAttribute(
           'sqref',
           '${rule.range.start.a1}:${rule.range.end.a1}',
@@ -973,16 +1058,13 @@ class SheetSerializer {
         );
         w.writeStartElement('cfRule');
         w.writeAttribute('type', 'cellIs');
-        w.writeAttribute(
-          'operator',
-          switch (rule.kind) {
-            SmlConditionalKind.greaterThan => 'greaterThan',
-            SmlConditionalKind.lessThan => 'lessThan',
-            SmlConditionalKind.equal => 'equal',
-            SmlConditionalKind.contains => 'containsText',
-            SmlConditionalKind.duplicate => 'duplicateValues',
-          },
-        );
+        w.writeAttribute('operator', switch (rule.kind) {
+          SmlConditionalKind.greaterThan => 'greaterThan',
+          SmlConditionalKind.lessThan => 'lessThan',
+          SmlConditionalKind.equal => 'equal',
+          SmlConditionalKind.contains => 'containsText',
+          SmlConditionalKind.duplicate => 'duplicateValues',
+        });
         if (rule.formula.isNotEmpty) {
           w.writeStartElement('formula');
           w.writeText(rule.formula);

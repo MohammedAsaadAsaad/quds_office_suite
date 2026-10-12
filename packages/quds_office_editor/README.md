@@ -46,12 +46,56 @@ document.
 > [Linux .deb](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.0.0/quds-report-studio_1.0.0_amd64.deb)
 > ([all downloads](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/tag/studio-v1.0.0)).
 
+## What 1.0 brings
+
+1.0 is the first stable release, built on `quds_office_engine` 1.0. From
+here on the public API follows semantic versioning, and breaking changes
+wait for 2.0. Every image below is a real frame painted by the widgets in
+this package, with real fonts, from `flutter test`.
+
+<table>
+  <tr>
+    <td width="50%"><img src="example/screenshots/report_data_explorer.png" alt="Data explorer"/></td>
+    <td width="50%"><img src="example/screenshots/report_template_catalog.png" alt="Template with saved images"/></td>
+  </tr>
+  <tr>
+    <td><b>Data explorer</b> (F6): a painted grid over the report's sample data. Typed columns, calculated <b>ƒx</b> columns, CSV / JSON import, safe renames</td>
+    <td><b>16 bilingual templates</b>: each loads with its sample data and its logo, stamp, and product photos saved inside the <code>.qrep</code></td>
+  </tr>
+  <tr>
+    <td><img src="example/screenshots/report_data_fields.png" alt="Typed fields"/></td>
+    <td><img src="example/screenshots/report_templates.png" alt="Templates menu"/></td>
+  </tr>
+  <tr>
+    <td><b>Typed fields</b>: every single value the report uses, with its type and a description that shows in suggestions</td>
+    <td><b>Templates by category</b>: sales, finance, inventory, analytics, and HR, each in Arabic or English</td>
+  </tr>
+</table>
+
+**Suggestions that know your data.** Add a calculated column in the data
+explorer, and it is offered at once inside `{{ }}`, with its computed value:
+
+![A calculated column offered inside SUM( ) with its value](example/screenshots/report_calculated_autocomplete.png)
+
+- **Report designer**: data explorer, typed data schema, inspector tabs
+  (Properties, Variables, Images, Fonts) in a resizable panel, element
+  names that hosts fill from code, and 16 Arabic and English templates.
+  Images and TrueType fonts are saved inside the `.qrep`.
+- **Office surfaces**: the Word canvas lays out with the same Flutter text
+  metrics it paints with, so lines fit their column. The slide stage paints
+  unfilled shapes and placeholders the way PowerPoint does, honors text
+  colors, and places the `navigationBuilder` and `notesPaneBuilder` panes.
+- **Built for real files**: what the engine 1.0 imports (style chains,
+  shared formulas, number formats, layouts, theme colors) shows up in these
+  surfaces with no extra code.
+
 ## Contents
 
+- [What 1.0 brings](#what-10-brings)
 - [Install](#install)
 - [The surfaces at a glance](#the-surfaces-at-a-glance)
 - [Report designer](#report-designer)
-  - [Embed it](#embed-it) · [The canvas](#the-canvas) · [The inspector](#the-inspector) · [Autocomplete](#expressions-and-autocomplete) · [Templates and variables](#templates-and-variables) · [Preview and export](#preview-and-export) · [Keyboard](#keyboard) · [Quds Report Studio](#quds-report-studio-app)
+  - [Embed it](#embed-it) · [The canvas](#the-canvas) · [The inspector](#the-inspector) · [Autocomplete](#expressions-and-autocomplete) · [Templates and variables](#templates-and-variables) · [Preview and export](#preview-and-export) · [Data explorer](#data-explorer) · [Keyboard](#keyboard) · [Quds Report Studio](#quds-report-studio-app)
 - [Why a custom RenderBox](#why-a-custom-renderbox)
 - [Languages and writing directions](#languages-and-writing-directions)
 - [Host fonts](#host-fonts)
@@ -67,7 +111,7 @@ document.
 
 ```yaml
 dependencies:
-  quds_office_editor: ^0.6.0
+  quds_office_editor: ^1.0.0
 ```
 
 ```bash
@@ -75,7 +119,7 @@ flutter pub add quds_office_editor
 ```
 
 Requires Flutter **3.44+** and Dart **3.12+**. The engine comes along as
-`quds_office_engine: ^0.6.0`. Everything is exported from one library:
+`quds_office_engine: ^1.0.0`. Everything is exported from one library:
 
 ```dart
 import 'package:quds_office_editor/quds_office_editor.dart';
@@ -431,7 +475,11 @@ Formats show in the cells.
   selected.
 - **Rows and columns**: + Row, + Column, and **ƒx Column** (a calculated
   column with a formula such as `qty * price`). The right-click menu has
-  insert above/below, rename, and delete.
+  insert above/below, rename, and delete. A new calculated column shows up
+  right away in `{{ }}` suggestions, variables, and fields, with its
+  computed value:
+
+  ![A calculated column offered inside SUM( ) with its value](example/screenshots/report_calculated_autocomplete.png)
 - **Rename safely**: renaming a column rewrites `item.qty`,
   `SUM(items.qty)`, and the formulas that use it. Renaming a field rewrites
   `Data.customer`.

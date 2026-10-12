@@ -268,6 +268,9 @@ class PmlMorph {
   }
 
   static String _lerpHex(String from, String to, double t) {
+    if (from.isEmpty || to.isEmpty) {
+      return t < 0.5 ? from : to;
+    }
     final int a = _rgb(from);
     final int b = _rgb(to);
     final int r = _lerpInt((a >> 16) & 0xFF, (b >> 16) & 0xFF, t);

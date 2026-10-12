@@ -48,6 +48,45 @@ Interactive canvases live in
   </tr>
 </table>
 
+## What 1.0 brings
+
+1.0 is the first stable release. From here on the public API follows
+semantic versioning, and breaking changes wait for 2.0.
+
+| | |
+| --- | --- |
+| **Opens what other suites save** | Word style chains, outline lists, and table styles. Excel shared formulas, inline strings, cached results, number formats, and charts drawn from their ranges. PowerPoint layouts, masters, placeholders, theme colors, and slide order |
+| **A report is one file** | A `.qrep` is a ZIP holding the layout, its images, and its TrueType fonts, so it exports the same on any machine |
+| **Data you can describe** | `<DataSchema>` types fields and tables. Calculated columns (`= qty * price`) feed groups, totals, charts, variables, and suggestions |
+| **16 bilingual templates** | 8 families in Arabic and English: invoices, statements, vouchers, inventory, catalogs, certificates, dashboards |
+| **A desktop designer** | [Quds Report Studio](#quds-report-studio-download-the-desktop-designer) for Windows and Linux edits the same files |
+
+### A LibreOffice file, rendered by this engine
+
+These files were written in LibreOffice 26.2 and saved as DOCX and XLSX.
+On the left is LibreOffice's own PDF export. On the right, `OfficePdfExport`
+reads the same file in pure Dart with one embedded face (Liberation Sans).
+Heading styles, bold runs, bullets, numbered lists, table shading, cell
+formats, formulas, and alignment all come from the file.
+
+![A DOCX saved by LibreOffice Writer: its own PDF next to quds_office_engine's](example/screenshots/office_fidelity_word.png)
+
+![An XLSX saved by LibreOffice Calc: its own PDF next to quds_office_engine's](example/screenshots/office_fidelity_excel.png)
+
+LibreOffice draws boxes for the bullets because the Symbol font is missing
+on the machine that made these images. The engine maps Symbol bullets to •.
+Regenerate the pair with `tool/office_shots/make_inputs.py` and
+`dart run tool/dump_office_shots.dart` from the repository.
+
+```dart
+final Uint8List pdf = OfficePdfExport.fromBytes(
+  File('review.docx').readAsBytesSync(),
+  fonts: OfficeFontSet(
+    primary: SfntFont.parse(File('LiberationSans-Regular.ttf').readAsBytesSync()),
+  ),
+);
+```
+
 ## Quds Report Studio: download the desktop designer
 
 [Quds Report Studio](https://github.com/MohammedAsaadAsaad/quds_office_suite/tree/main/apps/quds_report_studio)
@@ -89,7 +128,7 @@ All files and SHA-256 checksums are on the
 
 ## Contents
 
-- [Quds Report Studio (download)](#quds-report-studio-download-the-desktop-designer)
+- [What 1.0 brings](#what-10-brings) · [Quds Report Studio (download)](#quds-report-studio-download-the-desktop-designer)
 - [Why this package exists](#why-this-package-exists) · [Two packages, one suite](#two-packages-one-suite) · [Languages and directions](#languages-and-writing-directions)
 - [Install](#install) · [Capability map](#capability-map)
 - [Band reports (`quds_reports.dart`)](#band-reports-quds_reportsdart)
@@ -217,7 +256,7 @@ along the diagonal — Arabic cannot be cut glyph by glyph and still join.
 
 ```yaml
 dependencies:
-  quds_office_engine: ^0.6.0
+  quds_office_engine: ^1.0.0
 ```
 
 ```bash
@@ -241,7 +280,7 @@ import 'package:quds_office_engine/pdf_widgets.dart' as pw;
 | --- | --- |
 | **Word** | Build, open, mutate, and write DOCX. Sections, headers, footers, tables, lists, styles, comments, TOC, hyperlinks, fields, footnotes, endnotes, OMML, BiDi, mail merge, captions, citations, revisions |
 | **Excel** | Build, open, and write XLSX. Shared strings, styles, merges, freeze, RTL, charts, pictures, named ranges, sparklines, a formula engine with a dependency graph |
-| **PowerPoint** | Build, open, and write PPTX. Shapes, tables, notes, masters (subset), transitions and animations including Morph, reverse playback clock |
+| **PowerPoint** | Build, open, and write PPTX. Shapes, tables, notes, layouts and masters with placeholder inheritance and theme colors, transitions and animations including Morph, reverse playback clock |
 | **Office → PDF** | Replay Word layout, Excel grid, and slides (or notes pages, including two slides on one page) to PDF 1.7 with subsetted fonts, links, and outlines |
 | **pdf_widgets** | Constraint layout: flex, text, tables, charts, images, TOC, headers, footers, watermarks. Synchronous `Document.save()` |
 | **Band reports** | `.qrep` packages (XML layout + embedded images and fonts) with bands, groups, expressions, typed variables, tables, barcodes/QR, and charts → PDF, XLSX, DOCX. 16 ready-made templates (8 families, Arabic + English) with saved images |
@@ -1170,6 +1209,8 @@ These are not hidden TODOs. They are the contract.
 | --- | --- |
 | Legacy `.doc` / `.xls` / `.ppt`, VBA, ActiveX | OOXML only |
 | Full Excel LAMBDA, Power Pivot, Power Query | Formula subset, simple SUM pivot, CSV helper |
+| Multi-series Office charts | One series per chart (`OfficeVisual.points`); further series are not drawn |
+| Slide text alignment and anchoring inherited from layouts and masters | Geometry and colors inherit; alignment comes from the shape's own paragraphs, and `bodyPr anchor` is not read |
 | PDF body reflow (edit text like Word) | Annotations, form fill, page assembly |
 | OCR, image recompress, PDF-to-Office layout recovery | Text extract from the content stream only |
 | Creating signatures, full CMS/PAdES trust | ByteRange + `messageDigest` match (`valid`/`invalid`) |

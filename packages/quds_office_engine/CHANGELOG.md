@@ -2,7 +2,70 @@
 
 All notable changes to `quds_office_engine` are documented here.
 
-## Unreleased
+## 1.0.0
+
+First stable release. The public API now follows semantic versioning:
+breaking changes wait for 2.0. This release brings `.qrep` packages with
+embedded images and fonts, report data schemas with calculated columns, 16
+bilingual report templates, and a fidelity pass over Word, Excel, and
+PowerPoint files saved by other office suites.
+
+**Files saved by LibreOffice and other suites.**
+
+- Word:
+  - Numbering levels with `numFmt="none"` or an empty `lvlText` print no label. Writer ties every heading style to such an outline list, which used to show as an extra "1." before each heading.
+  - Runs inherit bold, italic and color from their paragraph style chain. A run's own `w:b w:val="0"` still wins.
+  - `w:b` / `w:i` with `false` or `off` turn the toggle off, in runs and in styles.
+- Excel:
+  - Header and footer sections keep their formatting codes (`&"Arial,Bold"`, `&12`). These codes used to swallow the section text.
+  - PDF export expands `&D` and `&T`, drops font, size, color and toggle codes, and places the left, center and right sections on their own.
+  - PDF export draws each cell at its font size, bold when the cell font is bold, and honors left / center / right alignment. Numbers under General alignment sit on the right, as in Excel.
+- PDF: faux bold (used when no bold face is embedded) offsets its second pass by 5% of the em instead of 0.35 pt, so it reads as bold at every size.
+
+**Calculated columns in suggestions.**
+
+- `ReportCompleter` also suggests the columns `<DataSchema>` declares for a table (after `item.`, `items.`, `Data.items.`, `Group.rows.`), including calculated columns and tables with no sample rows yet.
+  - Calculated columns show their expression as the detail.
+
+**Word import and layout fixes ([#2](https://github.com/MohammedAsaadAsaad/quds_office_suite/issues/2)).**
+
+- `WordLayoutEngine(measure:)` takes a `WordGlyphMeasure` that gives glyph widths when no font face is loaded, so line breaks match the host's text painting.
+- Body text uses `fallbackWidthFactor`; the wider 0.72 em estimate is now limited to table cells and frames.
+- Paragraph indents are subtracted once, not twice.
+- Style numbering and indents (`w:numPr`, `w:ind` in `styles.xml`) now apply through `basedOn`, so heading and list styles get their markers.
+  - `w:numId="0"` removes numbering.
+  - `w:start` / `w:end` indents are read.
+- Table styles from `styles.xml` apply `tblBorders` plus `firstRow` / `band1Horz` shading, following `w:tblLook`.
+  - A table's own borders and cell fills win.
+
+**Excel import fixes ([#3](https://github.com/MohammedAsaadAsaad/quds_office_suite/issues/3)).**
+
+- `t="inlineStr"` cells keep their text: rich runs are joined, phonetic runs skipped.
+- Shared formulas (`<f t="shared" si>`) expand from the master formula to every follower with `FormulaRefShift.shift`.
+  - Relative references move, `$` parts stay fixed, and references pushed off the grid become `#REF!`.
+- `FormulaDepGraph.recalculate` skips empty formulas.
+  - It keeps a cell's cached value when the engine cannot compute the formula (`#NAME?` / `#ERROR!`), so recalc and save no longer overwrite Excel's result.
+- `_xlfn.` / `_xlws.` function prefixes are ignored when evaluating; the formula text keeps them.
+- Number formats support positive;negative;zero sections, thousands grouping, `,` scaling, `%`, quoted literals, `[Red]` and `[$€-407]` currency tokens.
+  - `0%` no longer shows two decimals.
+- Charts without a value cache are drawn from their `c:val` / `c:cat` ranges, on the same sheet or another one.
+  - `SmlDrawing` gains `sourceSheetName`, `labelsFromA1` and `labelsToA1`; `SheetChartData.fromSeries` pairs values with category labels.
+
+**PowerPoint import fixes ([#4](https://github.com/MohammedAsaadAsaad/quds_office_suite/issues/4)).**
+
+- Only `p:pic` and shapes with a `blip` fill become pictures. Text boxes no longer turn into empty "Picture" boxes because of an `xfrm` or a shadow.
+- `off` / `ext` are read only inside the shape's own `xfrm`, so `a:extLst/a:ext` no longer zeroes a shape's size.
+- `p:ph` is read into `PmlShape.placeholder`, `placeholderType` and `placeholderIndex`.
+- Slides follow their `slideLayout` → `slideMaster` → `theme` relationships:
+  - Placeholders without their own `xfrm` inherit the layout's geometry (matched by `idx`, then by type), then the master's.
+  - `PmlSlide.layoutName` is set.
+  - `PmlPresentation.layouts` lists the deck's layouts, without their prompt text.
+- `a:schemeClr` / `a:sysClr` colors resolve through the theme and the master's `p:clrMap`, with `lumMod`, `lumOff`, `shade` and `tint`.
+  - `p:style` `fillRef` / `lnRef` / `fontRef` give default fill, outline and text colors, so PowerPoint autoshapes keep their fill.
+  - `gradFill` / `pattFill` use their first color.
+- Slide order follows `p:sldIdLst` through `presentation.xml.rels`, and slide parts no longer have to be named `slide1..n`.
+  - `SlideSerializer` writes the real relationship ids into `p:sldIdLst`.
+- Morph transitions keep an empty fill instead of blending through blue.
 
 **`.qrep` packages.**
 

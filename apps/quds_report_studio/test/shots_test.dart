@@ -180,6 +180,23 @@ void main() {
     await tester.pump();
     await tester.runAsync(() => _save(boundary, 'studio_data_fields.png'));
     c.toggleData();
+    await tester.pump();
+    final ReportTextElement line = c.template.allElements
+        .map(((ReportBand, ReportElement) be) => be.$2)
+        .whereType<ReportTextElement>()
+        .firstWhere((ReportTextElement t) => t.text.contains('{{Data.'));
+    c.beginTextEdit(line.id);
+    c.textEditor.replaceRange(
+      0,
+      c.textEditor.formulaBar.length,
+      'Lines total: {{SUM(items.line',
+    );
+    await tester.pump();
+    await tester.runAsync(
+      () => _save(boundary, 'studio_calculated_autocomplete.png'),
+    );
+    c.cancelTextEdit();
+    c.select(null);
     page.document.newFromTemplate(ReportTemplates.byId('invoice_en')!);
     await tester.pump();
     c.addImage(

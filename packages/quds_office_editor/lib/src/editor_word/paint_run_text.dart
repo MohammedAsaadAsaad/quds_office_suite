@@ -271,6 +271,57 @@ abstract final class PaintRunText {
     );
   }
 
+  static final Map<String, double> _advanceCache = <String, double>{};
+
+  /// Forgets measured widths, e.g. after new fonts finish loading.
+  static void clearAdvanceCache() => _advanceCache.clear();
+
+  /// Width of [codePoint] painted in [props] at [sizePoints], as
+  /// [painterFor] would paint it. Feeds [WordLayoutEngine.measure] so line
+  /// breaks agree with [fitLine].
+  static double advanceOf(
+    int codePoint,
+    double sizePoints,
+    WmlRunProps props, {
+    String? themeFamily,
+  }) {
+    final String text = String.fromCharCode(codePoint);
+    final String runFamily = OfficeTypeface.familyForRun(props, codePoint);
+    final String key =
+        '$runFamily|$themeFamily|$sizePoints|${props.bold}|${props.italic}|'
+        '$codePoint';
+    final double? cached = _advanceCache[key];
+    if (cached != null) {
+      return cached;
+    }
+    final TextPainter painter = TextPainter(
+      text: TextSpan(
+        text: text,
+        style: TextStyle(
+          fontSize: sizePoints,
+          fontFamily: familyFor(
+            text: text,
+            runFamily: runFamily,
+            themeFamily: themeFamily,
+          ),
+          fontFamilyFallback: fallbacksFor(text, runFamily: runFamily),
+          fontWeight: props.bold ? FontWeight.bold : FontWeight.normal,
+          fontStyle: props.italic ? FontStyle.italic : FontStyle.normal,
+          height: 1.0,
+        ),
+      ),
+      textDirection: looksRtl(text) ? TextDirection.rtl : TextDirection.ltr,
+      maxLines: 1,
+    )..layout();
+    final double width = painter.width;
+    painter.dispose();
+    if (_advanceCache.length >= 20000) {
+      _advanceCache.clear();
+    }
+    _advanceCache[key] = width;
+    return width;
+  }
+
   /// runText API.
   static String runText(String paragraph, List<LaidOutGlyph> run) {
     if (paragraph.isEmpty || run.isEmpty) {
