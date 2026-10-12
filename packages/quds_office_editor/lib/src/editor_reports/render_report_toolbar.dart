@@ -116,6 +116,12 @@ enum ReportToolbarIcon {
 
   /// Band rows (add band).
   band,
+
+  /// Letter pair (fonts).
+  font,
+
+  /// Database cylinder (data explorer).
+  data,
 }
 
 /// One toolbar button.
@@ -800,6 +806,30 @@ class RenderReportToolbar extends RenderBox implements MouseTrackerAnnotation {
         bar(1.5, 10.5, 13, 2.5);
         line(11.5, 12.5, 11.5, 15.5);
         line(10, 14, 13, 14);
+      case ReportToolbarIcon.font:
+        canvas.drawPath(
+          Path()
+            ..moveTo(l + 1, t + 14)
+            ..lineTo(l + 5.5, t + 2)
+            ..lineTo(l + 10, t + 14),
+          stroke,
+        );
+        line(2.8, 10, 8.2, 10);
+        canvas.drawCircle(p(12.5, 11.5), 2.3, stroke);
+        line(14.8, 9, 14.8, 14);
+      case ReportToolbarIcon.data:
+        canvas.drawOval(Rect.fromLTWH(l + 2.5, t + 1.5, 11, 4), stroke);
+        line(2.5, 3.5, 2.5, 12.5);
+        line(13.5, 3.5, 13.5, 12.5);
+        for (final double y in <double>[8, 12.5]) {
+          canvas.drawArc(
+            Rect.fromLTWH(l + 2.5, t + y - 2, 11, 4),
+            0,
+            math.pi,
+            false,
+            stroke,
+          );
+        }
     }
   }
 

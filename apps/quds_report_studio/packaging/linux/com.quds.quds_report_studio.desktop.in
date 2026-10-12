@@ -1,0 +1,15 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Quds Report Studio
+Name[ar]=استوديو تقارير القدس
+GenericName=Report designer
+Comment=Design, preview and export .qrep band reports
+Comment[ar]=صمّم تقارير ‎.qrep‎ واستعرضها وصدّرها
+Exec=@EXEC@ %f
+Icon=quds-report-studio
+Terminal=false
+Categories=Office;
+MimeType=application/vnd.quds.qrep+zip;
+StartupWMClass=com.quds.quds_report_studio
+Keywords=report;qrep;pdf;invoice;designer;

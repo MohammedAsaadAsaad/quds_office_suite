@@ -266,14 +266,17 @@ class _Deflater {
     int bestLen = 0;
     int bestDist = 0;
     final int minPos = cursor > window ? cursor - window : 0;
-    for (int i = candidates.length - 1; i >= 0; i--) {
+    final int maxChain = _level >= 7 ? 1024 : 128;
+    final int stop = candidates.length > maxChain
+        ? candidates.length - maxChain
+        : 0;
+    for (int i = candidates.length - 1; i >= stop; i--) {
       final int pos = candidates[i];
       if (pos < minPos) {
         break;
       }
       int len = 0;
       while (cursor + len < _src.length &&
-          pos + len < cursor &&
           _src[pos + len] == _src[cursor + len] &&
           len < 258) {
         len++;

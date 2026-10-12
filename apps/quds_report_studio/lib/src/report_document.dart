@@ -1,15 +1,18 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:quds_office_editor/quds_office_editor.dart';
 
 /// The open `.qrep` file: designer state, path, and unsaved-changes flag.
+///
+/// Files are saved as `.qrep` packages (ZIP: `layout.xml` plus embedded
+/// images and fonts); legacy plain-XML `.qrep` files still open.
 class ReportDocument extends ChangeNotifier {
   ReportDocument({ReportDesignerController? controller})
     : controller = controller ?? ReportDesignerController() {
     _savedXml = this.controller.toXml();
+    _savedAssets = _assetSignature();
     this.controller.addListener(_onEdit);
   }
 
@@ -19,6 +22,7 @@ class ReportDocument extends ChangeNotifier {
   String? _path;
   String _name = 'Untitled';
   String _savedXml = '';
+  String _savedAssets = '';
   bool _dirty = false;
   int _checkedRevision = -1;
   Timer? _debounce;
@@ -45,7 +49,8 @@ class ReportDocument extends ChangeNotifier {
 
   void _recheck() {
     _checkedRevision = controller.revision;
-    final bool dirty = controller.toXml() != _savedXml;
+    final bool dirty =
+        controller.toXml() != _savedXml || _assetSignature() != _savedAssets;
     if (dirty != _dirty) {
       _dirty = dirty;
       notifyListeners();
@@ -57,6 +62,7 @@ class ReportDocument extends ChangeNotifier {
     _path = path;
     _name = name;
     _savedXml = controller.toXml();
+    _savedAssets = _assetSignature();
     _checkedRevision = controller.revision;
     _dirty = false;
     notifyListeners();
@@ -75,25 +81,36 @@ class ReportDocument extends ChangeNotifier {
     _markClean(name: info.id);
   }
 
-  /// Loads XML read from [path] (or a picker with no path, on the web).
+  /// Embedded images, fonts and sample data by identity: undo restores the
+  /// same objects, so returning to the saved state reads as clean again.
+  String _assetSignature() => <String>[
+    'data:${identityHashCode(controller.sampleData)}',
+    for (final String key in controller.imageNames)
+      '$key:${controller.images[key]!.length}:'
+          '${identityHashCode(controller.images[key])}',
+    for (final String family in controller.embeddedFamilies)
+      'font:$family:${identityHashCode(controller.embeddedFonts[family])}',
+  ].join('|');
+
+  /// Loads `.qrep` bytes read from [path] (or a picker with no path, on the
+  /// web): a package or a legacy plain-XML file.
   ///
-  /// Throws [ReportTemplateException] for malformed templates.
-  void loadXml(String xml, {String? path, required String name}) {
+  /// Throws [ReportPackageException] or [ReportTemplateException].
+  void loadBytes(Uint8List bytes, {String? path, required String name}) {
     controller.mockData = null;
-    controller.loadXml(xml);
+    controller.loadPackage(bytes);
     _markClean(path: path, name: _stem(name));
   }
 
   /// Reads and loads [path].
   Future<void> open(String path) async {
-    final String xml = await File(path).readAsString();
-    loadXml(xml, path: path, name: baseName(path));
+    final Uint8List bytes = await File(path).readAsBytes();
+    loadBytes(bytes, path: path, name: baseName(path));
   }
 
-  /// Writes the template to [target] (defaults to [path]).
+  /// Writes the `.qrep` package to [target].
   Future<void> saveTo(String target) async {
-    final String xml = controller.toXml();
-    await File(target).writeAsBytes(utf8.encode(xml), flush: true);
+    await File(target).writeAsBytes(controller.toPackage(), flush: true);
     _markClean(path: target, name: _stem(baseName(target)));
   }
 

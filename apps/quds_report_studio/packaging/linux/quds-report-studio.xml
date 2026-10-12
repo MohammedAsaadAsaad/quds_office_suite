@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="application/vnd.quds.qrep+zip">
+    <comment>Quds report</comment>
+    <comment xml:lang="ar">تقرير قدس</comment>
+    <sub-class-of type="application/zip"/>
+    <icon name="application-vnd.quds.qrep+zip"/>
+    <glob pattern="*.qrep" weight="80"/>
+  </mime-type>
+</mime-info>

@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:flutter/gestures.dart';
+import 'package:flutter/material.dart' show MaterialApp;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -41,6 +44,30 @@ ReportDesignerController sample({bool rtl = false}) {
     xml,
     clock: () => DateTime(2026, 10, 10, 9, 30),
   );
+}
+
+class FakeDeviceFonts implements ReportDeviceFonts {
+  FakeDeviceFonts(this.byFamily);
+
+  final Map<String, ReportFontFiles> byFamily;
+  var listed = 0;
+
+  @override
+  Future<List<String>> families() async {
+    listed++;
+    return byFamily.keys.toList()..sort();
+  }
+
+  @override
+  Future<ReportFontFiles?> load(String family) async => byFamily[family];
+}
+
+Uint8List fontFile(String name) => File('fonts/$name').readAsBytesSync();
+
+Future<void> settle() async {
+  for (int i = 0; i < 5; i++) {
+    await Future<void>.delayed(Duration.zero);
+  }
 }
 
 void main() {
@@ -165,12 +192,8 @@ void main() {
       c.paste();
       expect(c.selection, hasLength(1));
       expect(c.selection.single, isNot(title.id));
-      expect(
-        c.template.allElements.where(
-          ((ReportBand, ReportElement) p) => p.$2.name == 'title',
-        ),
-        hasLength(2),
-      );
+      expect(c.primary!.name, 'title1');
+      expect(c.template.duplicateElementNames, isEmpty);
       c.deleteSelection();
       expect(c.selection, isEmpty);
       c.dispose();
@@ -266,8 +289,11 @@ void main() {
           clock: () => DateTime(2026, 10, 10, 9, 30),
         );
         c.loadTemplate(info);
-        expect(c.hasHostData, isTrue, reason: info.id);
+        expect(c.hasHostData, isFalse, reason: info.id);
+        expect(c.hasSampleData, isTrue, reason: info.id);
+        expect(c.template.duplicateElementNames, isEmpty, reason: info.id);
         expect(c.template.isRtl, info.rtl, reason: info.id);
+        expect(c.images.keys.toSet(), info.images().keys.toSet());
         final ReportDocumentLayout? layout = c.previewLayout;
         expect(c.previewError, isNull, reason: info.id);
         expect(layout!.pages, isNotEmpty, reason: info.id);
@@ -334,6 +360,13 @@ void main() {
       expect(v.name, 'variable1');
       expect(
         c.properties.map((ReportProperty p) => p.key),
+        isNot(contains('var.0.name')),
+        reason: 'variables have their own inspector page',
+      );
+      c.inspectorPage = ReportInspectorPage.variables;
+      expect(c.inspectorTitle, 'Variables');
+      expect(
+        c.properties.map((ReportProperty p) => p.key),
         containsAll(<String>[
           'var+',
           'var.0.name',
@@ -343,6 +376,20 @@ void main() {
       );
       c.setProperty('var.0.type', 'number');
       expect(v.type, ReportVariableType.number);
+
+      c.select(byName(c, 'title').id);
+      expect(c.inspectorPage, ReportInspectorPage.properties);
+      c.inspectorPage = ReportInspectorPage.variables;
+      c.setProperty('var.0.value', '42');
+      expect(v.value, '42', reason: 'variable edits ignore the selection');
+      expect(c.inspectorPage, ReportInspectorPage.variables);
+      c.select(null);
+      expect(
+        c.inspectorPage,
+        ReportInspectorPage.variables,
+        reason: 'clearing the selection keeps the page',
+      );
+      c.setProperty('var.0.value', '0');
       expect(v.value, '0');
       c.setProperty('var.0.value', 'abc');
       expect(v.value, '0');
@@ -453,6 +500,7 @@ void main() {
 
       c.select(null);
       c.addVariable();
+      c.inspectorPage = ReportInspectorPage.variables;
       expect(prop('var.0.insert').pair && prop('var.0.remove').pair, isTrue);
       c.dispose();
     });
@@ -483,6 +531,7 @@ void main() {
     Future<ReportDesignerController> pumpDesigner(
       WidgetTester tester, {
       ReportDesignerController? controller,
+      ReportDeviceFonts? deviceFonts,
     }) async {
       tester.view.physicalSize = const Size(1400, 900);
       tester.view.devicePixelRatio = 1;
@@ -497,6 +546,7 @@ void main() {
             loadBundledFonts: false,
             templates: const <ReportTemplateInfo>[],
             onExport: (ReportExportFormat f, Uint8List bytes) {},
+            deviceFonts: deviceFonts,
           ),
         ),
       );
@@ -541,6 +591,75 @@ void main() {
       expect(inspector.isCollapsed('Font'), isTrue);
       inspector.openPalette(null);
       await tester.pump();
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('inspector tabs switch pages and the splitter resizes it', (
+      WidgetTester tester,
+    ) async {
+      final FakeDeviceFonts device = FakeDeviceFonts(<String, ReportFontFiles>{
+        'Liberation Serif': ReportFontFiles(
+          regular: fontFile('LiberationSerif-Regular.ttf'),
+        ),
+      });
+      final ReportDesignerController c = await pumpDesigner(
+        tester,
+        deviceFonts: device,
+      );
+      expect(c.deviceFonts, same(device));
+      c.addVariable();
+      await tester.pump();
+      final Finder inspector = find.byType(ReportInspector);
+      Offset tab(int i) {
+        final Offset o = tester.getTopLeft(inspector);
+        final double w =
+            (tester.getSize(inspector).width - 24) /
+            ReportInspectorPage.values.length;
+        return o +
+            Offset(
+              12 + w * (i + 0.5),
+              RenderReportInspector.titleHeight +
+                  RenderReportInspector.tabsHeight / 2,
+            );
+      }
+
+      await tester.tapAt(tab(1));
+      await tester.pump();
+      expect(c.inspectorPage, ReportInspectorPage.variables);
+      await tester.tapAt(tab(2));
+      await tester.pump();
+      expect(c.inspectorPage, ReportInspectorPage.images);
+      await tester.tapAt(tab(3));
+      await tester.pump();
+      expect(c.inspectorPage, ReportInspectorPage.fonts);
+      await tester.runAsync(settle);
+      await tester.pump();
+      expect(device.listed, 1);
+      expect(
+        c.properties.map((ReportProperty p) => p.label),
+        contains('Liberation Serif'),
+      );
+      await tester.tapAt(tab(0));
+      await tester.pump();
+      expect(c.inspectorPage, ReportInspectorPage.properties);
+
+      expect(tester.getSize(inspector).width, 300);
+      final Offset edge =
+          tester.getTopLeft(inspector) +
+          Offset(-3, tester.getSize(inspector).height / 2);
+      await tester.dragFrom(edge, const Offset(-120, 0));
+      await tester.pump();
+      expect(tester.getSize(inspector).width, closeTo(420, 1));
+      await tester.dragFrom(
+        tester.getTopLeft(inspector) + const Offset(-3, 200),
+        const Offset(400, 0),
+      );
+      await tester.pump();
+      expect(tester.getSize(inspector).width, 240, reason: 'minimum width');
+      await tester.tapAt(tab(3));
+      await tester.pump();
+      expect(c.inspectorPage, ReportInspectorPage.fonts, reason: 'icon tabs');
+      await tester.pump(const Duration(milliseconds: 400));
       expect(tester.takeException(), isNull);
     });
 
@@ -616,6 +735,45 @@ void main() {
       await tester.sendKeyEvent(LogicalKeyboardKey.f5);
       await tester.pump();
       expect(find.byType(ReportDesignerCanvas), findsOneWidget);
+    });
+
+    testWidgets('templates menu groups families and asks for a language', (
+      WidgetTester tester,
+    ) async {
+      tester.view.physicalSize = const Size(1400, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final ReportDesignerController c = sample();
+      addTearDown(c.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: QudsReportDesigner(
+            controller: c,
+            loadBundledFonts: false,
+            templates: ReportTemplates.all,
+            onExport: (ReportExportFormat f, Uint8List bytes) {},
+          ),
+        ),
+      );
+      await tester.pump();
+      final Offset bar = tester.getTopLeft(find.byType(ReportToolbar));
+      final RenderReportToolbar toolbar = tester.renderObject(
+        find.byType(ReportToolbar),
+      );
+      await tester.tapAt(bar + toolbar.rectOf('templates')!.center);
+      await tester.pump();
+      expect(find.text('Human resources  ·  الموارد البشرية'), findsOneWidget);
+      expect(find.text('Product catalog'), findsOneWidget);
+      expect(find.text('كتالوج المنتجات'), findsOneWidget);
+      await tester.tap(find.text('Certificate of appreciation'));
+      await tester.pump();
+      expect(find.text('English'), findsOneWidget);
+      await tester.tap(find.text('العربية'));
+      await tester.pump();
+      expect(c.template.isRtl, isTrue);
+      expect(c.images.keys, containsAll(<String>['logo', 'seal', 'stamp']));
+      expect(c.template.name, 'شهادة شكر وتقدير');
+      expect(tester.takeException(), isNull);
     });
 
     testWidgets('creating with a tool adds an element where clicked', (
@@ -696,6 +854,573 @@ void main() {
         ),
         closeTo(1, 1e-9),
       );
+    });
+  });
+
+  group('Report package images', () {
+    final Uint8List wide = PngBytes.rgb(
+      width: 40,
+      height: 10,
+      plot: (int x, int y, List<int> rgb) => rgb[2] = 255,
+    );
+
+    test('saves and reopens embedded images with the layout', () {
+      final ReportDesignerController c = ReportDesignerController.fromXml(
+        sampleXml,
+      );
+      expect(c.addImage('Company Logo.png', wide), 'Company_Logo');
+      expect(c.addImage('notes.txt', Uint8List.fromList(<int>[1, 2])), isNull);
+      final ReportImageElement e = c.insertImage('Company_Logo')!;
+      expect(e.source, 'Company_Logo');
+      expect(e.width / e.height, closeTo(4, 0.01));
+
+      final Uint8List bytes = c.toPackage();
+      expect(ReportPackage.isPackage(bytes), isTrue);
+      final ReportDesignerController back =
+          ReportDesignerController.fromPackage(bytes);
+      expect(back.imageNames, <String>['Company_Logo']);
+      expect(back.images['Company_Logo'], wide);
+      expect(
+        back.template.bands
+            .expand((ReportBand b) => b.elements)
+            .whereType<ReportImageElement>()
+            .single
+            .source,
+        'Company_Logo',
+      );
+
+      back.loadXml(sampleXml);
+      expect(back.images, isEmpty, reason: 'images belong to the document');
+      back.loadPackage(bytes);
+      expect(back.imageNames, <String>['Company_Logo']);
+    });
+
+    test('rename, remove and import are undoable', () async {
+      final ReportDesignerController c = ReportDesignerController.fromXml(
+        sampleXml,
+      );
+      final String key = c.addImage('logo.png', wide)!;
+      final ReportImageElement e = c.insertImage(key)!;
+      final String id = e.id;
+      ReportImageElement element() =>
+          c.template.findElement(id)!.$2 as ReportImageElement;
+
+      expect(c.renameImage(key, 'bad name'), isFalse);
+      expect(c.renameImage(key, 'brand'), isTrue);
+      expect(c.imageNames, <String>['brand']);
+      expect(element().source, 'brand');
+      c.undo();
+      expect(c.imageNames, <String>['logo']);
+      expect(element().source, 'logo');
+
+      expect(c.removeImage('logo'), isTrue);
+      expect(c.images, isEmpty);
+      c.undo();
+      expect(c.images['logo'], wide);
+
+      c.select(id);
+      expect(
+        c.properties.map((ReportProperty p) => p.key),
+        isNot(contains('source.import')),
+      );
+      c.imagePicker = () async => (name: 'stamp.png', bytes: wide);
+      final ReportProperty source = c.properties.firstWhere(
+        (ReportProperty p) => p.key == 'source',
+      );
+      expect(source.presets, <String>['logo']);
+      c.setProperty('source.import', 'Import image…');
+      await Future<void>.delayed(Duration.zero);
+      expect(c.imageNames, <String>['logo', 'stamp']);
+      expect(element().source, 'stamp');
+      c.undo();
+      expect(c.imageNames, <String>['logo']);
+      expect(element().source, 'logo');
+    });
+
+    test('report inspector lists embedded images', () {
+      final ReportDesignerController c = ReportDesignerController.fromXml(
+        sampleXml,
+      )..imagePicker = () async => null;
+      c.addImage('logo.png', wide);
+      c.select(null);
+      expect(
+        c.properties.map((ReportProperty p) => p.key),
+        isNot(contains('image+')),
+      );
+      c.inspectorPage = ReportInspectorPage.images;
+      final List<ReportProperty> props = c.properties;
+      final Map<String, ReportProperty> byKey = <String, ReportProperty>{
+        for (final ReportProperty p in props) p.key: p,
+      };
+      expect(byKey['image+']!.kind, ReportPropertyKind.action);
+      expect(byKey['img.0.name']!.value, 'logo');
+      expect(byKey['img.0.insert']!.group, startsWith('logo · PNG 40×10, '));
+      c.setProperty('img.0.name', 'brand');
+      expect(c.imageNames, <String>['brand']);
+      c.setProperty('img.0.insert', 'Insert into report');
+      expect(c.selectedElements.single, isA<ReportImageElement>());
+      expect(c.inspectorPage, ReportInspectorPage.properties);
+      c.select(null);
+      c.inspectorPage = ReportInspectorPage.images;
+      c.setProperty('img.0.remove', 'Remove');
+      expect(c.images, isEmpty);
+    });
+  });
+
+  group('Report package fonts', () {
+    List<ReportProperty> page(ReportDesignerController c) => c.properties;
+    List<String> deviceRows(ReportDesignerController c) => <String>[
+      for (final ReportProperty p in page(c))
+        if (p.key.startsWith('dev.')) p.label,
+    ];
+    ReportProperty prop(ReportDesignerController c, String key) =>
+        page(c).firstWhere((ReportProperty p) => p.key == key);
+
+    test('embeds faces, saves them in the package, and undoes', () {
+      final ReportDesignerController c = ReportDesignerController.fromXml(
+        sampleXml,
+      );
+      final Uint8List regular = fontFile('LiberationSerif-Regular.ttf');
+      final Uint8List bold = fontFile('LiberationSerif-Bold.ttf');
+      expect(c.addFont(regular), 'Liberation Serif');
+      expect(c.addFont(bold), 'Liberation Serif');
+      expect(c.embeddedFamilies, <String>['Liberation Serif']);
+      expect(
+        () => c.addFont(fontFile('LiberationSerif-Italic.ttf')),
+        throwsA(isA<ReportFontException>()),
+      );
+      expect(c.fonts.isEmpty, isTrue, reason: 'host registry untouched');
+      expect(c.effectiveFonts.has('Liberation Serif'), isTrue);
+      expect(c.engine.fonts.has('Liberation Serif'), isTrue);
+      expect(c.fontFamilies, contains('Liberation Serif'));
+
+      c.setProperty('defaultFont', 'Liberation Serif');
+      final ReportTextPrimitive text = c.previewLayout!.pages.first.primitives
+          .whereType<ReportTextPrimitive>()
+          .first;
+      expect(
+        c.effectiveFonts
+            .faceFor(text.font.family, 0x48, bold: text.font.bold)!
+            .bytes,
+        text.font.bold ? bold : regular,
+      );
+
+      final ReportDesignerController back =
+          ReportDesignerController.fromPackage(c.toPackage());
+      expect(back.embeddedFamilies, <String>['Liberation Serif']);
+      expect(back.embeddedFonts['Liberation Serif']!.bold, bold);
+      expect(back.template.defaultFont, 'Liberation Serif');
+      back.loadXml(sampleXml);
+      expect(back.embeddedFonts, isEmpty, reason: 'fonts belong to the file');
+
+      c.undo();
+      c.undo();
+      expect(c.embeddedFonts['Liberation Serif']!.bold, isNull);
+      c.undo();
+      expect(c.embeddedFonts, isEmpty);
+      expect(c.effectiveFonts, same(c.fonts));
+    });
+
+    test('fonts page imports files and embeds installed fonts', () async {
+      final FakeDeviceFonts device = FakeDeviceFonts(<String, ReportFontFiles>{
+        'Liberation Serif': ReportFontFiles(
+          regular: fontFile('LiberationSerif-Regular.ttf'),
+          bold: fontFile('LiberationSerif-Bold.ttf'),
+        ),
+        'Liberation Mono': ReportFontFiles(
+          regular: fontFile('LiberationMono-Regular.ttf'),
+        ),
+        'Broken': ReportFontFiles(regular: Uint8List(40)),
+      });
+      final ReportDesignerController c =
+          ReportDesignerController.fromXml(sampleXml)
+            ..deviceFonts = device
+            ..fontPicker = () async => <({String name, Uint8List bytes})>[
+              (name: 'a.ttf', bytes: fontFile('LiberationSans-Regular.ttf')),
+              (name: 'b.ttf', bytes: fontFile('LiberationSans-Italic.ttf')),
+            ];
+      addTearDown(c.dispose);
+      c.inspectorPage = ReportInspectorPage.fonts;
+      expect(c.inspectorTitle, 'Fonts');
+      expect(prop(c, 'font.none').kind, ReportPropertyKind.note);
+      expect(prop(c, 'font.status').value, 'Looking for installed fonts…');
+      await settle();
+      expect(deviceRows(c), <String>[
+        'Broken',
+        'Liberation Mono',
+        'Liberation Serif',
+      ]);
+
+      c.setProperty('font.search', 'SERIF');
+      expect(deviceRows(c), <String>['Liberation Serif']);
+      c.setProperty('dev.0', 'Embed');
+      await settle();
+      expect(c.embeddedFamilies, <String>['Liberation Serif']);
+      expect(c.notice, startsWith('Embedded Liberation Serif (Regular + Bold'));
+      expect(deviceRows(c), isEmpty, reason: 'embedded families leave');
+      expect(prop(c, 'font.status').value, contains('No installed font'));
+      expect(prop(c, 'font.0.uses').value, 'No elements');
+      c.setProperty('font.0.default', 'true');
+      expect(c.template.defaultFont, 'Liberation Serif');
+      expect(prop(c, 'font.0.default').value, 'true');
+
+      c.setProperty('font.search', '');
+      c.setProperty('dev.0', 'Embed');
+      await settle();
+      expect(c.notice, startsWith('Could not embed Broken'));
+      expect(c.embeddedFamilies, <String>['Liberation Serif']);
+
+      c.setProperty('font+', 'Import font file…');
+      await settle();
+      expect(c.embeddedFamilies, <String>[
+        'Liberation Sans',
+        'Liberation Serif',
+      ]);
+      expect(c.notice, contains('Embedded Liberation Sans'));
+      expect(c.notice, contains('b.ttf: '));
+      c.undo();
+      expect(c.embeddedFamilies, <String>['Liberation Serif']);
+
+      c.select(byName(c, 'title').id);
+      c.setProperty('fontFamily', 'Liberation Mono');
+      await settle();
+      expect(c.embeddedFamilies, <String>[
+        'Liberation Mono',
+        'Liberation Serif',
+      ]);
+      c.select(null);
+      c.inspectorPage = ReportInspectorPage.fonts;
+      expect(prop(c, 'font.0.uses').value, '1 element');
+      c.setProperty('font.0.remove', 'Remove');
+      expect(c.embeddedFamilies, <String>['Liberation Serif']);
+      expect(device.listed, 1, reason: 'the device list is read once');
+    });
+  });
+
+  group('Element names', () {
+    test('every element gets a unique name it keeps on rename', () {
+      final ReportDesignerController c = sample();
+      expect(c.template.duplicateElementNames, isEmpty);
+      final List<String?> names = <String?>[
+        for (final (ReportBand _, ReportElement e) in c.template.allElements)
+          e.name,
+      ];
+      expect(names, <String>['title', 'sub', 'box', 'line', 'text1']);
+      final ReportElement? added = c.addElement(
+        ReportDesignTool.text,
+        ReportBandKind.reportHeader,
+        const ReportRect(10, 10, 0, 0),
+      );
+      expect(added!.name, 'text2');
+      c.setProperty('name', 'title');
+      expect(added.name, 'text2');
+      expect(c.notice, contains('already named "title"'));
+      c.setProperty('name', '2nd');
+      expect(added.name, 'text2');
+      expect(c.notice, contains('not a valid name'));
+      c.setProperty('name', 'grandTotal');
+      expect(added.name, 'grandTotal');
+      c.setProperty('name', '');
+      expect(added.name, 'text2');
+      c.selectAll();
+      c.setProperty('name', 'same');
+      expect(c.notice, contains('single element'));
+      expect(c.engine.element('grandTotal'), isNull);
+      expect(c.engine.element('TITLE'), same(byName(c, 'title')));
+      c.dispose();
+    });
+  });
+
+  group('Report data explorer', () {
+    int col(ReportDesignerController c, String name) => c.dataTable.columns
+        .indexWhere((ReportDataColumnView v) => v.name == name);
+
+    test('lists inferred tables and fields; edits create sample data', () {
+      final ReportDesignerController c = sample();
+      c.mode = ReportDesignMode.data;
+      expect(c.dataTables.map((ReportDataTableView t) => t.title), <String>[
+        'Fields',
+        'items',
+      ]);
+      final ReportDataTableView items = c.dataTable;
+      expect(items.name, 'items');
+      expect(items.rows, hasLength(c.mockRows));
+      expect(
+        items.columns.map((ReportDataColumnView v) => v.name),
+        containsAll(<String>['name', 'qty']),
+      );
+      expect(items.columns[col(c, 'qty')].type, ReportDataType.number);
+      expect(c.hasSampleData, isFalse);
+      final Map<String, Object?> inferred = c.mockData;
+
+      expect(c.setDataCell(0, col(c, 'qty'), '7'), isTrue);
+      expect(c.hasSampleData, isTrue);
+      expect(c.dataTable.rows[0][col(c, 'qty')], const ReportNumber(7));
+      expect(c.setDataCell(0, col(c, 'qty'), 'abc'), isFalse);
+      expect(c.notice, contains('not a valid number'));
+      c.undo();
+      expect(c.hasSampleData, isFalse);
+      expect(c.mockData, inferred);
+      c.redo();
+      expect(c.sampleData, isNotNull);
+
+      c.selectDataTable('');
+      expect(c.dataTable.isFields, isTrue);
+      expect(
+        c.dataTable.rows.map((List<ReportValue> r) => r.first.displayText),
+        contains('customer'),
+      );
+      c.selectDataCell(0, 1);
+      expect(c.canEditDataCell(0, 1), isTrue);
+      expect(c.canEditDataCell(0, 0), isFalse);
+      expect(c.beginCellEdit(0, 1, initial: 'A'), isTrue);
+      expect(c.editingDataCell, (row: 0, column: 1));
+      c.propertyEditor.replaceRange(1, 1, 'cme');
+      c.commitPropertyEdit();
+      expect(c.mockData['customer'], 'Acme');
+      expect(c.inspectorTitle, 'Data: Fields');
+      c.dispose();
+    });
+
+    test('rows, typed and calculated columns, and renames', () {
+      final ReportDesignerController c = sample();
+      c.mode = ReportDesignMode.data;
+      final int rows = c.dataTable.rows.length;
+      c.selectDataCell(1, -1);
+      expect(c.addDataRow(), isTrue);
+      expect(c.dataTable.rows, hasLength(rows + 1));
+      expect(c.dataRow, 2);
+      expect(c.removeDataRows(<int>[2]), isTrue);
+      expect(c.dataTable.rows, hasLength(rows));
+
+      expect(
+        c.addDataColumn(name: 'price', type: ReportDataType.number),
+        'price',
+      );
+      expect(c.dataColumn, col(c, 'price'));
+      expect(c.inspectorTitle, 'Column: price');
+      for (int r = 0; r < rows; r++) {
+        c.setDataCell(r, col(c, 'price'), '${r + 1}.5');
+      }
+      expect(
+        c.addDataColumn(
+          name: 'total',
+          type: ReportDataType.number,
+          expression: 'qty * price',
+        ),
+        'total',
+      );
+      expect(c.addDataColumn(name: 'total'), isNull);
+      expect(c.notice, contains('already exists'));
+      final ReportDataTableView t = c.dataTable;
+      final int q = col(c, 'qty');
+      final int p = col(c, 'price');
+      final int total = col(c, 'total');
+      expect(t.columns[total].isCalculated, isTrue);
+      expect(c.canEditDataCell(0, total), isFalse);
+      expect(
+        t.rows[0][total].asNumber,
+        t.rows[0][q].asNumber! * t.rows[0][p].asNumber!,
+      );
+      c.selectDataCell(-1, total);
+      c.setProperty('data.col.format', 'n2');
+      expect(
+        c.dataCellDisplay(c.dataTable.columns[total], const ReportNumber(3)),
+        '3.00',
+      );
+
+      expect(c.renameDataColumn('qty', 'quantity'), isTrue);
+      expect(
+        (byName(c, 'line') as ReportTextElement).text,
+        '{{item.name}} {{item.quantity}}',
+      );
+      expect(
+        (byName(c, 'text1') as ReportTextElement).text,
+        '{{SUM(items.quantity)}}',
+      );
+      expect(
+        c.template.dataSchema.table('items')!.column('total')!.expression,
+        'quantity * price',
+      );
+      expect(c.dataTable.rows[0][col(c, 'total')].asNumber, isNotNull);
+      expect(c.previewError, isNull);
+
+      expect(c.setDataColumnType('price', ReportDataType.text), isTrue);
+      final List<Object?> raw = c.mockData['items']! as List<Object?>;
+      expect((raw.first! as Map<String, Object?>)['price'], '1.5');
+      expect(c.removeDataColumn('price'), isTrue);
+      expect(col(c, 'price'), -1);
+
+      final String xml = c.toXml();
+      expect(xml, contains('<DataSchema>'));
+      final ReportDesignerController back =
+          ReportDesignerController.fromPackage(c.toPackage());
+      expect(back.sampleData!['items'], isA<List<Object?>>());
+      expect(
+        back.template.dataSchema.table('items')!.column('total'),
+        isNotNull,
+      );
+      expect(back.toXml(), xml);
+      back.dispose();
+      c.dispose();
+    });
+
+    test('fields, tables, imports and host data', () {
+      final ReportDesignerController c = sample();
+      c.mode = ReportDesignMode.data;
+      expect(c.addDataField('invoice.no'), isTrue);
+      expect(c.dataTable.isFields, isTrue);
+      expect(c.addDataField('invoice.no'), isFalse);
+      expect(c.setDataField('invoice.no', 'INV-1'), isTrue);
+      expect(ReportData.valueAt(c.mockData, 'invoice.no'), 'INV-1');
+      expect(c.renameDataField('customer', 'client'), isTrue);
+      expect(
+        (byName(c, 'title') as ReportTextElement).text,
+        'Hello {{Data.client}}',
+      );
+      expect(c.setDataFieldType('invoice.no', ReportDataType.number), isTrue);
+
+      expect(c.addDataTable('orders'), isTrue);
+      expect(c.dataTable.name, 'orders');
+      expect(c.addDataTable('orders'), isFalse);
+      expect(c.addDataTable('bad name'), isFalse);
+      expect(c.importDataText('orders.csv', 'id;amount\nA;10\nB;2,5'), isTrue);
+      expect(c.dataTable.rows, hasLength(2));
+      expect(c.dataTable.columns[1].type, ReportDataType.number);
+      expect(c.removeDataTable('orders'), isTrue);
+      expect(
+        c.dataTables.any((ReportDataTableView t) => t.name == 'orders'),
+        isFalse,
+      );
+
+      c.selectDataTable('');
+      expect(c.importDataText('People List.csv', 'name,age\nAli,30\n'), isTrue);
+      expect(c.dataTable.name, 'People_List');
+      expect(
+        c.importDataText(
+          'data.json',
+          '{"customer":"Z","when":"2026-03-04","items":[{"name":"Q","qty":3}]}',
+        ),
+        isTrue,
+      );
+      expect(c.mockData['customer'], 'Z');
+      expect(c.mockData['when'], DateTime(2026, 3, 4));
+      expect(c.importDataText('bad.json', '{'), isFalse);
+      expect(c.notice, contains('Invalid JSON'));
+      expect(c.importDataText('bad.json', '[1, 2]'), isFalse);
+
+      c.mockData = <String, Object?>{
+        'items': <Object?>[
+          <String, Object?>{'name': 'Host', 'qty': 1},
+        ],
+      };
+      expect(c.hasHostData, isTrue);
+      expect(c.dataEditable, isFalse);
+      c.selectDataTable('items');
+      expect(c.dataTable.rows.single.first, const ReportText('Host'));
+      expect(c.setDataCell(0, 0, 'x'), isFalse);
+      expect(c.notice, contains('read-only'));
+      expect(c.addDataColumn(name: 'double', expression: 'qty * 2'), 'double');
+      expect(c.dataTable.rows.single[col(c, 'double')].asNumber, 2);
+      expect(
+        c.properties.map((ReportProperty p) => p.key),
+        isNot(contains('data.row+')),
+      );
+      c.dispose();
+    });
+
+    testWidgets('designer shows the explorer and edits cells', (
+      WidgetTester tester,
+    ) async {
+      tester.view.physicalSize = const Size(1400, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final ReportDesignerController c = sample();
+      addTearDown(c.dispose);
+      var picked = 0;
+      await tester.pumpWidget(
+        Directionality(
+          textDirection: TextDirection.ltr,
+          child: Overlay(
+            initialEntries: <OverlayEntry>[
+              OverlayEntry(
+                builder: (BuildContext context) => QudsReportDesigner(
+                  controller: c,
+                  loadBundledFonts: false,
+                  templates: const <ReportTemplateInfo>[],
+                  onPickData: () async {
+                    picked++;
+                    return (name: 'rows.csv', text: 'name,qty\nPicked,4\n');
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(c.dataPicker, isNotNull);
+      await tester.sendKeyEvent(LogicalKeyboardKey.f6);
+      await tester.pump();
+      expect(c.mode, ReportDesignMode.data);
+      final Finder explorer = find.byType(ReportDataExplorer);
+      expect(explorer, findsOneWidget);
+      final RenderReportDataExplorer ro = tester.renderObject(explorer);
+      final Offset origin = tester.getTopLeft(explorer);
+
+      final int name = col(c, 'name');
+      await tester.tapAt(origin + ro.cellRect(0, name).center);
+      await tester.pump();
+      expect((c.dataRow, c.dataColumn), (0, name));
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.pump();
+      expect(c.dataRow, 1);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyZ);
+      await tester.pump();
+      expect(c.editingDataCell, (row: 1, column: name));
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pump();
+      expect(c.editingDataCell, isNull);
+      expect(c.dataRow, 2);
+      expect(c.dataTable.rows[1][name].displayText, 'z');
+
+      await tester.tapAt(origin + ro.cellRect(0, name).center);
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.tapAt(origin + ro.cellRect(0, name).center);
+      await tester.pump();
+      expect(c.editingDataCell, (row: 0, column: name));
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pump();
+      expect(c.editingDataCell, isNull);
+
+      await tester.tapAt(origin + ro.sidebarRect('')!.center);
+      await tester.pump();
+      expect(c.dataTable.isFields, isTrue);
+      await tester.tapAt(origin + ro.sidebarRect('items')!.center);
+      await tester.pump();
+
+      await tester.tapAt(
+        origin + ro.cellRect(0, name).center,
+        buttons: kSecondaryMouseButton,
+      );
+      await tester.pump();
+      expect(find.text('Insert row above'), findsOneWidget);
+      await tester.tap(find.text('Insert row above'));
+      await tester.pump();
+      expect(c.dataTable.rows.first[name], ReportNull.instance);
+
+      c.setProperty('data.import', '');
+      await tester.runAsync(settle);
+      await tester.pump();
+      expect(picked, 1);
+      expect(c.dataTable.rows.single[name].displayText, 'Picked');
+
+      tester.view.physicalSize = const Size(700, 600);
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      await tester.sendKeyEvent(LogicalKeyboardKey.f6);
+      await tester.pump();
+      expect(c.mode, ReportDesignMode.design);
     });
   });
 }

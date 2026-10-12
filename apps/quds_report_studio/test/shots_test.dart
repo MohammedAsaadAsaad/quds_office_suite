@@ -10,6 +10,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quds_office_editor/quds_office_editor.dart';
 import 'package:quds_report_studio/main.dart';
+import 'package:quds_report_studio/src/device_fonts.dart';
 import 'package:quds_report_studio/src/recent_files.dart';
 import 'package:quds_report_studio/src/report_studio_page.dart';
 
@@ -82,7 +83,10 @@ void main() {
     await tester.pumpWidget(
       RepaintBoundary(
         key: boundary,
-        child: ReportStudioApp(recent: recent),
+        child: ReportStudioApp(
+          recent: recent,
+          deviceFonts: StudioDeviceFonts(),
+        ),
       ),
     );
     await tester.runAsync(() => ReportBundledFonts.shared());
@@ -104,6 +108,10 @@ void main() {
     c.setProperty('var.1.format', 'percent');
     await tester.pump();
     await tester.runAsync(() => _save(boundary, 'studio_report_settings.png'));
+    c.inspectorPage = ReportInspectorPage.variables;
+    await tester.pump();
+    await tester.runAsync(() => _save(boundary, 'studio_variables.png'));
+    c.inspectorPage = ReportInspectorPage.properties;
 
     final ReportElement text = c.template.allElements
         .map(((ReportBand, ReportElement) be) => be.$2)
@@ -155,6 +163,86 @@ void main() {
     c.cancelTextEdit();
     await tester.pump();
 
+    c.select(null);
+    c.toggleData();
+    c.selectDataTable('items');
+    c.addDataColumn(
+      name: 'lineTotal',
+      type: ReportDataType.number,
+      expression: 'qty * unitPrice',
+    );
+    c.setProperty('data.col.format', 'n2');
+    c.selectDataCell(2, c.dataColumn);
+    await tester.pump();
+    await tester.runAsync(() => _save(boundary, 'studio_data_explorer.png'));
+    c.selectDataTable('');
+    c.selectDataCell(3, 1);
+    await tester.pump();
+    await tester.runAsync(() => _save(boundary, 'studio_data_fields.png'));
+    c.toggleData();
+    page.document.newFromTemplate(ReportTemplates.byId('invoice_en')!);
+    await tester.pump();
+    c.addImage(
+      'company_logo.png',
+      PngBytes.rgb(
+        width: 360,
+        height: 120,
+        plot: (int x, int y, List<int> rgb) {
+          final bool mark = (x - 60) * (x - 60) + (y - 60) * (y - 60) < 1600;
+          rgb[0] = mark ? 245 : 30 + x ~/ 6;
+          rgb[1] = mark ? 158 : 58 + y ~/ 4;
+          rgb[2] = mark ? 11 : 138;
+        },
+      ),
+    );
+    c.addImage(
+      'paid_stamp.png',
+      PngBytes.rgb(
+        width: 200,
+        height: 200,
+        plot: (int x, int y, List<int> rgb) {
+          final int d = (x - 100) * (x - 100) + (y - 100) * (y - 100);
+          final bool ring = d < 9000 && d > 6400;
+          rgb[0] = ring ? 200 : 255;
+          rgb[1] = ring ? 30 : 255;
+          rgb[2] = ring ? 40 : 255;
+        },
+      ),
+    );
+    c.inspectorPage = ReportInspectorPage.images;
+    await tester.pump();
+    await tester.runAsync(() => _save(boundary, 'studio_images.png'));
+    c.insertImage('company_logo');
+    await tester.pump();
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 300)),
+    );
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.runAsync(() => _save(boundary, 'studio_image_element.png'));
+
+    page.document.newFromTemplate(ReportTemplates.byId('invoice_en')!);
+    c.select(null);
+    await tester.runAsync(c.loadDeviceFamilies);
+    c.inspectorPage = ReportInspectorPage.fonts;
+    final List<String> installed = c.deviceFamilies ?? const <String>[];
+    final String family = installed.contains('Lato')
+        ? 'Lato'
+        : installed.firstWhere(
+            (String f) => f.contains('Sans'),
+            orElse: () => 'Liberation Serif',
+          );
+    c.setProperty('font.search', 'Sans');
+    await tester.runAsync(() => c.embedDeviceFont(family));
+    c.setProperty('font.0.default', 'true');
+    for (int i = 0; i < 4; i++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 150)),
+      );
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.runAsync(() => _save(boundary, 'studio_fonts.png'));
+
     page.document.newFromTemplate(ReportTemplates.byId('sales_invoice_ar')!);
     await tester.pump();
     await tester.runAsync(() => _save(boundary, 'studio_rtl_invoice.png'));
@@ -164,9 +252,38 @@ void main() {
     await tester.tap(find.text('New from template'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 200));
+    await tester.tap(find.text('Sales  ·  المبيعات'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.tap(find.text('Product catalog'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
     await tester.runAsync(() => _save(boundary, 'studio_templates_menu.png'));
-    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
-    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.tap(find.text('العربية'));
+    await tester.pump();
+    c.zoom = 1.1;
+    c.inspectorPage = ReportInspectorPage.images;
+    c.togglePreview();
+    await tester.pump();
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 400)),
+    );
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.runAsync(() => _save(boundary, 'studio_template_catalog.png'));
+    c.togglePreview();
+
+    page.document.newFromTemplate(ReportTemplates.byId('certificate_en')!);
+    c.zoom = 0.95;
+    c.togglePreview();
+    await tester.pump();
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 400)),
+    );
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.runAsync(
+      () => _save(boundary, 'studio_template_certificate.png'),
+    );
+    c.togglePreview();
     await tester.pump();
     await tester.pumpWidget(const SizedBox.shrink());
     debugDisableShadows = true;

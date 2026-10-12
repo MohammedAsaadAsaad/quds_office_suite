@@ -3,6 +3,7 @@ library;
 
 import '../xml/xml_node.dart';
 import '../xml/xml_reader.dart';
+import 'report_data.dart';
 import 'report_expression.dart';
 import 'report_format.dart';
 import 'report_template.dart';
@@ -370,6 +371,8 @@ class QudsReportXmlParser {
           _readSettings(child);
         case 'Variables':
           _readVariables(child);
+        case 'DataSchema' || 'Data':
+          _readDataSchema(child);
         case 'Bands':
           sawBands = true;
           _readBands(child);
@@ -551,6 +554,92 @@ class QudsReportXmlParser {
         _warn('$path[$name]', 'Duplicate variable name');
       }
       _template.variables.add(variable);
+    }
+  }
+
+  ReportDataType _dataType(XmlElement e, String path) {
+    final String? raw = _attr(e, const <String>['type', 'dataType']);
+    if (raw == null) {
+      return ReportDataType.text;
+    }
+    final ReportDataType? type = ReportDataType.fromName(raw);
+    if (type == null) {
+      _warn(path, 'Unknown data type "$raw" (using text)');
+    }
+    return type ?? ReportDataType.text;
+  }
+
+  void _readDataSchema(XmlElement schema) {
+    final ReportDataSchema s = _template.dataSchema;
+    for (final XmlElement child in schema.childElements) {
+      final String path = 'DataSchema/${child.localName}';
+      final String? name = _attr(child, const <String>['name', 'path'])?.trim();
+      switch (child.localName) {
+        case 'Table' || 'DataSet':
+          if (name == null || name.isEmpty) {
+            _error(path, 'Table needs a name');
+            continue;
+          }
+          if (s.table(name) != null) {
+            _warn('$path[$name]', 'Duplicate table');
+            continue;
+          }
+          final ReportDataTable table = ReportDataTable(
+            name: name,
+            description: _attr(child, const <String>['description']) ?? '',
+          );
+          for (final XmlElement c in child.childElements) {
+            final String cp = '$path[$name]/${c.localName}';
+            if (c.localName != 'Column' && c.localName != 'Field') {
+              _warn(cp, 'Unknown element ignored');
+              continue;
+            }
+            final String? col = _attr(c, const <String>['name'])?.trim();
+            if (col == null || col.isEmpty) {
+              _error(cp, 'Column needs a name');
+              continue;
+            }
+            if (table.column(col) != null) {
+              _warn('$cp[$col]', 'Duplicate column');
+              continue;
+            }
+            final String? expr = _attr(c, const <String>[
+              'expression',
+              'formula',
+            ]);
+            if (expr != null && expr.trim().isNotEmpty) {
+              _checkExpression(expr, '$cp[$col]');
+            }
+            table.columns.add(
+              ReportDataColumn(
+                name: col,
+                type: _dataType(c, '$cp[$col]'),
+                expression: expr == null || expr.trim().isEmpty ? null : expr,
+                format: _attr(c, const <String>['format']),
+                description: _attr(c, const <String>['description']) ?? '',
+              ),
+            );
+          }
+          s.tables.add(table);
+        case 'Field':
+          if (name == null || name.isEmpty) {
+            _error(path, 'Field needs a name');
+            continue;
+          }
+          if (s.field(name) != null) {
+            _warn('$path[$name]', 'Duplicate field');
+            continue;
+          }
+          s.fields.add(
+            ReportDataField(
+              name: name,
+              type: _dataType(child, '$path[$name]'),
+              description: _attr(child, const <String>['description']) ?? '',
+            ),
+          );
+        default:
+          _warn(path, 'Unknown element ignored');
+      }
     }
   }
 
@@ -1626,6 +1715,35 @@ class QudsReportXmlWriter {
         );
       }
       b.write('$indent</Variables>\n');
+    }
+
+    final ReportDataSchema schema = t.dataSchema;
+    if (!schema.isEmpty) {
+      b.write('$indent<DataSchema>\n');
+      final String p2 = '$indent$indent';
+      for (final ReportDataField f in schema.fields) {
+        b.write(
+          '$p2<Field${_attrs(<String, String>{'name': f.name, if (f.type != ReportDataType.text) 'type': f.type.name, if (f.description.isNotEmpty) 'description': f.description})}/>\n',
+        );
+      }
+      for (final ReportDataTable table in schema.tables) {
+        final String ta = _attrs(<String, String>{
+          'name': table.name,
+          if (table.description.isNotEmpty) 'description': table.description,
+        });
+        if (table.columns.isEmpty) {
+          b.write('$p2<Table$ta/>\n');
+          continue;
+        }
+        b.write('$p2<Table$ta>\n');
+        for (final ReportDataColumn c in table.columns) {
+          b.write(
+            '$p2$indent<Column${_attrs(<String, String>{'name': c.name, if (c.type != ReportDataType.text) 'type': c.type.name, if (c.isCalculated) 'expression': c.expression!, if (c.format != null && c.format!.trim().isNotEmpty) 'format': c.format!.trim(), if (c.description.isNotEmpty) 'description': c.description})}/>\n',
+          );
+        }
+        b.write('$p2</Table>\n');
+      }
+      b.write('$indent</DataSchema>\n');
     }
 
     b.write('$indent<Bands>\n');

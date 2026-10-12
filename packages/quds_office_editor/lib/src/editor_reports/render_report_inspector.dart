@@ -86,7 +86,7 @@ class ReportInspector extends LeafRenderObjectWidget {
   }
 }
 
-enum _RowKind { title, group, property, pair, glyphs, note }
+enum _RowKind { title, tabs, group, property, pair, glyphs, note }
 
 class _Row {
   _Row(
@@ -118,6 +118,7 @@ enum _HitKind {
   palette,
   action,
   glyph,
+  tab,
 }
 
 class _Hit {
@@ -173,6 +174,9 @@ class RenderReportInspector extends RenderBox
 
   /// Title row height.
   static const double titleHeight = 54;
+
+  /// Page tabs height (Properties / Variables / Images).
+  static const double tabsHeight = 34;
 
   /// Section heading height.
   static const double groupHeight = 30;
@@ -432,7 +436,7 @@ class RenderReportInspector extends RenderBox
       );
     }
     final Rect v = _valueRect(row);
-    final double w = _text(p.value, _font, _accent, v.width).width + 26;
+    final double w = _text(p.value, _font, _accent, v.width).width + 28;
     return Rect.fromLTWH(
       v.left,
       v.top,
@@ -475,8 +479,20 @@ class RenderReportInspector extends RenderBox
         text: _controller.inspectorTitle,
       ),
     );
-    y += titleHeight + 4;
+    y += titleHeight;
+    rows.add(_Row(_RowKind.tabs, Rect.fromLTWH(0, y, size.width, tabsHeight)));
+    y += tabsHeight + 4;
     final List<ReportProperty> props = _controller.properties;
+    final ReportInspectorPage page = _controller.inspectorPage;
+    if (props.isEmpty && page != ReportInspectorPage.properties) {
+      final String note = page == ReportInspectorPage.images
+          ? 'No embedded images. The host app has not enabled image import.'
+          : 'No template variables.';
+      rows.add(
+        _Row(_RowKind.note, Rect.fromLTWH(0, y, size.width, 30), text: note),
+      );
+      y += 30;
+    }
     String? group;
     var i = 0;
     while (i < props.length) {
@@ -544,7 +560,9 @@ class RenderReportInspector extends RenderBox
       y += h;
       i++;
     }
-    if (_controller.selection.isEmpty && _controller.selectedBand == null) {
+    if (page == ReportInspectorPage.properties &&
+        _controller.selection.isEmpty &&
+        _controller.selectedBand == null) {
       const String title = 'Diagnostics';
       y += _sectionGap;
       rows.add(
@@ -589,7 +607,19 @@ class RenderReportInspector extends RenderBox
     _contentHeight = y + _scroll;
   }
 
+  TextPainter _wideNote(ReportProperty p) => _text(
+    p.value,
+    _font - 0.5,
+    _muted,
+    size.width - 2 * _pad,
+    italic: true,
+    lines: 4,
+  );
+
   double _rowHeightFor(ReportProperty p) {
+    if (p.kind == ReportPropertyKind.note && p.label.isEmpty) {
+      return math.max(rowHeight, _wideNote(p).height + 12);
+    }
     if (_controller.editingProperty != p.key ||
         p.kind != ReportPropertyKind.multiline) {
       return rowHeight;
@@ -700,6 +730,11 @@ class RenderReportInspector extends RenderBox
           for (int i = 0; i < rects.length; i++)
             _Hit(_HitKind.glyph, rects[i], property: row.props[i]),
         ];
+      case _RowKind.tabs:
+        return <_Hit>[
+          for (final (ReportInspectorPage page, Rect r) in _tabRects(row.rect))
+            _Hit(_HitKind.tab, r, value: page.name),
+        ];
       case _RowKind.title:
       case _RowKind.note:
         return const <_Hit>[];
@@ -721,6 +756,8 @@ class RenderReportInspector extends RenderBox
         return <_Hit>[_Hit(_HitKind.menu, v, property: p)];
       case ReportPropertyKind.action:
         return <_Hit>[_Hit(_HitKind.action, v, property: p)];
+      case ReportPropertyKind.note:
+        return const <_Hit>[];
       case ReportPropertyKind.text:
       case ReportPropertyKind.multiline:
       case ReportPropertyKind.length:
@@ -799,6 +836,7 @@ class RenderReportInspector extends RenderBox
             return _field(row.props[1], b, prefix: row.props[1].label).text;
           }
         case _RowKind.title:
+        case _RowKind.tabs:
         case _RowKind.group:
         case _RowKind.glyphs:
         case _RowKind.note:
@@ -994,6 +1032,14 @@ class RenderReportInspector extends RenderBox
         markNeedsPaint();
       case _HitKind.action:
         _controller.setProperty(p!.key, p.value);
+      case _HitKind.tab:
+        final ReportInspectorPage page = ReportInspectorPage.values.byName(
+          hit.value,
+        );
+        if (page != _controller.inspectorPage) {
+          _scroll = 0;
+          _controller.inspectorPage = page;
+        }
     }
   }
 
@@ -1056,6 +1102,8 @@ class RenderReportInspector extends RenderBox
       switch (row.kind) {
         case _RowKind.title:
           _paintTitle(canvas, row);
+        case _RowKind.tabs:
+          _paintTabs(canvas, row, hot);
         case _RowKind.group:
           _paintGroup(canvas, row, hot);
         case _RowKind.note:
@@ -1134,6 +1182,29 @@ class RenderReportInspector extends RenderBox
   }
 
   (ReportToolbarIcon, String) get _titleBadge {
+    switch (_controller.inspectorPage) {
+      case ReportInspectorPage.variables:
+        final int n = _controller.template.variables.length;
+        return (
+          ReportToolbarIcon.variables,
+          '$n template ${n == 1 ? 'variable' : 'variables'} · '
+              '{{Variables.name}}',
+        );
+      case ReportInspectorPage.images:
+        final int n = _controller.images.length;
+        return (
+          ReportToolbarIcon.image,
+          '$n embedded ${n == 1 ? 'image' : 'images'} · saved in the .qrep',
+        );
+      case ReportInspectorPage.fonts:
+        final int n = _controller.embeddedFonts.length;
+        return (
+          ReportToolbarIcon.font,
+          '$n embedded ${n == 1 ? 'family' : 'families'} · saved in the .qrep',
+        );
+      case ReportInspectorPage.properties:
+        break;
+    }
     final List<ReportElement> sel = _controller.selectedElements;
     if (sel.length > 1) {
       return (
@@ -1210,6 +1281,143 @@ class RenderReportInspector extends RenderBox
     );
   }
 
+  static const List<(ReportInspectorPage, ReportToolbarIcon, String)>
+  _tabs = <(ReportInspectorPage, ReportToolbarIcon, String)>[
+    (ReportInspectorPage.properties, ReportToolbarIcon.select, 'Properties'),
+    (ReportInspectorPage.variables, ReportToolbarIcon.variables, 'Variables'),
+    (ReportInspectorPage.images, ReportToolbarIcon.image, 'Images'),
+    (ReportInspectorPage.fonts, ReportToolbarIcon.font, 'Fonts'),
+  ];
+
+  List<(ReportInspectorPage, Rect)> _tabRects(Rect row) {
+    final double w = (size.width - 2 * _pad) / _tabs.length;
+    return <(ReportInspectorPage, Rect)>[
+      for (int i = 0; i < _tabs.length; i++)
+        (
+          _tabs[i].$1,
+          Rect.fromLTWH(_pad + i * w, row.top + 4, w, row.height - 4),
+        ),
+    ];
+  }
+
+  int? _tabCount(ReportInspectorPage page) => switch (page) {
+    ReportInspectorPage.properties => null,
+    ReportInspectorPage.variables => _controller.template.variables.length,
+    ReportInspectorPage.images => _controller.images.length,
+    ReportInspectorPage.fonts => _controller.embeddedFonts.length,
+  };
+
+  void _paintTabs(Canvas canvas, _Row row, _Hit? hot) {
+    final Rect r = row.rect;
+    canvas.drawRect(r, Paint()..color = _theme.headerFill);
+    canvas.drawLine(
+      r.bottomLeft,
+      r.bottomRight,
+      Paint()..color = _theme.pageBorder,
+    );
+    final List<(ReportInspectorPage, Rect)> rects = _tabRects(r);
+    const double icon = 13;
+    var showIcon = true;
+    var showLabel = true;
+    for (int i = 0; i < rects.length; i++) {
+      final int? count = _tabCount(rects[i].$1);
+      final double badge = count == null || count == 0
+          ? 0
+          : math.max(16, _text('$count', 9.5, _ink, 40, bold: true).width + 8) +
+                4;
+      final double widest = _text(
+        _tabs[i].$3,
+        11,
+        _ink,
+        rects[i].$2.width,
+        bold: true,
+      ).width;
+      if (icon + 5 + widest + badge > rects[i].$2.width - 6) {
+        showIcon = false;
+      }
+      if (widest + badge > rects[i].$2.width - 6) {
+        showLabel = false;
+      }
+    }
+    if (!showLabel) {
+      showIcon = true;
+    }
+    for (int i = 0; i < rects.length; i++) {
+      final (ReportInspectorPage page, Rect t) = rects[i];
+      final bool active = page == _controller.inspectorPage;
+      final bool h =
+          hot != null && hot.kind == _HitKind.tab && hot.value == page.name;
+      if (h && !active) {
+        canvas.drawRRect(
+          RRect.fromRectAndCorners(
+            t.deflate(1),
+            topLeft: const Radius.circular(5),
+            topRight: const Radius.circular(5),
+          ),
+          Paint()..color = _accent.withValues(alpha: 0.08),
+        );
+      }
+      final Color ink = active ? _accent : _muted;
+      final TextPainter label = _text(
+        _tabs[i].$3,
+        11,
+        active ? _ink : _muted,
+        t.width,
+        bold: active,
+      );
+      final int? count = _tabCount(page);
+      final TextPainter? badge = count == null || count == 0
+          ? null
+          : _text(
+              '$count',
+              9.5,
+              active ? const Color(0xFFFFFFFF) : _ink,
+              40,
+              bold: true,
+            );
+      final double badgeW = badge == null ? 0 : math.max(16, badge.width + 8);
+      final double contentW =
+          (showIcon ? icon + (showLabel ? 5 : 0) : 0) +
+          (showLabel ? label.width : 0) +
+          (badge == null ? 0 : badgeW + 4);
+      var x = t.center.dx - contentW / 2;
+      final double cy = t.center.dy - 1;
+      if (showIcon) {
+        RenderReportToolbar.paintIcon(
+          canvas,
+          _tabs[i].$2,
+          Rect.fromLTWH(x, cy - icon / 2, icon, icon),
+          ink,
+        );
+        x += icon + (showLabel ? 5 : 4);
+      }
+      if (showLabel) {
+        label.paint(canvas, Offset(x, cy - label.height / 2));
+        x += label.width + 4;
+      }
+      if (badge != null) {
+        final Rect b = Rect.fromLTWH(x, cy - 8, badgeW, 16);
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(b, const Radius.circular(8)),
+          Paint()..color = active ? _accent : _ink.withValues(alpha: 0.1),
+        );
+        badge.paint(
+          canvas,
+          Offset(b.center.dx - badge.width / 2, b.center.dy - badge.height / 2),
+        );
+      }
+      if (active) {
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            Rect.fromLTWH(t.left + 6, t.bottom - 2.5, t.width - 12, 2.5),
+            const Radius.circular(1.5),
+          ),
+          Paint()..color = _accent,
+        );
+      }
+    }
+  }
+
   void _paintGroup(Canvas canvas, _Row row, _Hit? hot) {
     final Rect r = row.rect;
     final bool hover = hot?.kind == _HitKind.group && hot!.rect == r;
@@ -1258,6 +1466,10 @@ class RenderReportInspector extends RenderBox
       }
       return;
     }
+    if (p.kind == ReportPropertyKind.note && p.label.isEmpty) {
+      _wideNote(p).paint(canvas, Offset(_pad, r.top + 6));
+      return;
+    }
     _paintLabel(canvas, p.label, r);
     _paintControl(canvas, p, _valueRect(r), hot);
   }
@@ -1278,6 +1490,9 @@ class RenderReportInspector extends RenderBox
     switch (p.kind) {
       case ReportPropertyKind.action:
         _paintAction(canvas, p, v, hot);
+      case ReportPropertyKind.note:
+        final TextPainter tp = _text(p.value, _font, _muted, v.width);
+        tp.paint(canvas, Offset(v.left, v.center.dy - tp.height / 2));
       case ReportPropertyKind.toggle:
         _paintSwitch(
           canvas,
@@ -1577,7 +1792,7 @@ class RenderReportInspector extends RenderBox
       p.value,
       _font,
       tone,
-      button.width - 30,
+      button.width - (_wideAction(p) ? 30 : 24),
       bold: add,
     );
     final double contentWidth = tp.width + (add ? 16 : 0);

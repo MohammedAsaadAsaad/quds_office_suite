@@ -174,15 +174,22 @@ class RenderReportDesigner extends RenderBox implements MouseTrackerAnnotation {
     markNeedsSemanticsUpdate();
   }
 
+  void _onSystemFonts() {
+    _painter.clearText();
+    markNeedsPaint();
+  }
+
   @override
   void attach(PipelineOwner owner) {
     super.attach(owner);
     _controller.addListener(_onChanged);
+    PaintingBinding.instance.systemFonts.addListener(_onSystemFonts);
   }
 
   @override
   void detach() {
     _controller.removeListener(_onChanged);
+    PaintingBinding.instance.systemFonts.removeListener(_onSystemFonts);
     super.detach();
   }
 
@@ -977,7 +984,7 @@ class RenderReportDesigner extends RenderBox implements MouseTrackerAnnotation {
           layout.elementRect(slot, e),
           _controller.images,
           hideText: e.id == editing,
-          fonts: _controller.fonts,
+          fonts: _controller.effectiveFonts,
         );
       }
     }

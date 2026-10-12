@@ -2,6 +2,7 @@
 library;
 
 import 'arabic_tafqeet.dart';
+import 'english_words.dart';
 import 'report_value.dart';
 
 /// Locale-ish defaults applied when a format omits details.
@@ -66,8 +67,10 @@ class ReportFormatDefaults {
 /// | `integer` | `1,251` |
 /// | `percent`, `percent:1` | `12.5%` |
 /// | `date`, `date:dd/MM/yyyy` | `10/10/2026` |
+/// | `dateAr:d MMMM yyyy` | `10 أكتوبر 2026` (Arabic names) |
 /// | `time`, `datetime` | `14:30` |
 /// | `tafqeet:LYD` | Arabic words |
+/// | `words:USD` | English words |
 /// | `upper`, `lower`, `trim` | text case |
 /// | `#,##0.00`, `0.0` | custom numeric pattern |
 class ReportFormatter {
@@ -117,6 +120,14 @@ class ReportFormatter {
         return _digits(
           formatDate(_asDate(value), arg.isEmpty ? defaults.datePattern : arg),
         );
+      case 'datear':
+        return _digits(
+          formatDate(
+            _asDate(value),
+            arg.isEmpty ? defaults.datePattern : arg,
+            arabic: true,
+          ),
+        );
       case 'time':
         return _digits(
           formatDate(_asDate(value), arg.isEmpty ? defaults.timePattern : arg),
@@ -134,6 +145,12 @@ class ReportFormatter {
           return display(value);
         }
         return ArabicTafqeet.amount(n, arg.isEmpty ? 'LYD' : arg);
+      case 'words':
+        final num? amount = value.asNumber;
+        if (amount == null) {
+          return display(value);
+        }
+        return EnglishWords.amount(amount, arg.isEmpty ? 'USD' : arg);
       case 'upper':
         return display(value).toUpperCase();
       case 'lower':
@@ -195,8 +212,32 @@ class ReportFormatter {
   }
 
   /// Date pattern tokens: `yyyy yy MMMM MMM MM M dd d EEEE EEE HH H hh h mm m
-  /// ss s a`. Text in single quotes is literal.
-  String formatDate(DateTime date, String pattern) {
+  /// ss s a`. Text in single quotes is literal. [arabic] spells month and
+  /// day names in Arabic and writes `ص`/`م` for AM/PM.
+  String formatDate(DateTime date, String pattern, {bool arabic = false}) {
+    const List<String> arMonths = <String>[
+      'يناير',
+      'فبراير',
+      'مارس',
+      'أبريل',
+      'مايو',
+      'يونيو',
+      'يوليو',
+      'أغسطس',
+      'سبتمبر',
+      'أكتوبر',
+      'نوفمبر',
+      'ديسمبر',
+    ];
+    const List<String> arDays = <String>[
+      'الاثنين',
+      'الثلاثاء',
+      'الأربعاء',
+      'الخميس',
+      'الجمعة',
+      'السبت',
+      'الأحد',
+    ];
     const List<String> months = <String>[
       'January',
       'February',
@@ -251,14 +292,15 @@ class ReportFormatter {
           out.write(switch (run) {
             1 => '${date.month}',
             2 => two(date.month),
+            _ when arabic => arMonths[date.month - 1],
             3 => months[date.month - 1].substring(0, 3),
             _ => months[date.month - 1],
           });
         case 'd':
           out.write(run == 1 ? '${date.day}' : two(date.day));
         case 'E':
-          final String day = days[date.weekday - 1];
-          out.write(run <= 3 ? day.substring(0, 3) : day);
+          final String day = (arabic ? arDays : days)[date.weekday - 1];
+          out.write(run <= 3 && !arabic ? day.substring(0, 3) : day);
         case 'H':
           out.write(run == 1 ? '${date.hour}' : two(date.hour));
         case 'h':
@@ -268,7 +310,11 @@ class ReportFormatter {
         case 's':
           out.write(run == 1 ? '${date.second}' : two(date.second));
         case 'a':
-          out.write(date.hour < 12 ? 'AM' : 'PM');
+          out.write(
+            arabic
+                ? (date.hour < 12 ? 'ص' : 'م')
+                : (date.hour < 12 ? 'AM' : 'PM'),
+          );
         default:
           out.write(ch * run);
       }

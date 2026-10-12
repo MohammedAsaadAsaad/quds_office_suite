@@ -6,7 +6,7 @@ import 'package:flutter/foundation.dart';
 /// Most-recently-used `.qrep` paths, persisted as JSON in the user's
 /// config directory (`~/.config/quds_report_studio/recent.json` on Linux).
 class RecentFiles extends ChangeNotifier {
-  RecentFiles({File? store}) : _store = store ?? _defaultStore();
+  RecentFiles({File? store}) : _store = store ?? configFile('recent.json');
 
   /// Upper bound of remembered paths.
   static const int limit = 10;
@@ -17,7 +17,8 @@ class RecentFiles extends ChangeNotifier {
   /// Paths, newest first.
   List<String> get paths => List<String>.unmodifiable(_paths);
 
-  static File? _defaultStore() {
+  /// [name] in the studio's config folder; null on the web or without one.
+  static File? configFile(String name) {
     if (kIsWeb) {
       return null;
     }
@@ -34,7 +35,7 @@ class RecentFiles extends ChangeNotifier {
       return null;
     }
     final String sep = Platform.pathSeparator;
-    return File('$base${sep}quds_report_studio${sep}recent.json');
+    return File('$base${sep}quds_report_studio$sep$name');
   }
 
   /// Reads the stored list; missing or corrupt files give an empty list.

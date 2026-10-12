@@ -847,20 +847,28 @@ class _Flow {
     final List<ReportElement> visible = <ReportElement>[
       for (final ReportElement e in elements)
         if (_visible(e.visibleWhen, scope)) e,
-    ]..sort((ReportElement a, ReportElement b) => a.y.compareTo(b.y));
-    final List<double> tops = <double>[];
-    final List<double> bottoms = <double>[];
-    final List<double> growth = <double>[];
-    final List<double> shift = <double>[];
-    final List<_Box> boxes = <_Box>[];
+    ];
+    final int n = visible.length;
+    final List<int> order = List<int>.generate(n, (int i) => i)
+      ..sort((int a, int b) {
+        final int c = visible[a].y.compareTo(visible[b].y);
+        return c != 0 ? c : a - b;
+      });
+    final Float64List tops = Float64List(n);
+    final Float64List bottoms = Float64List(n);
+    final Float64List growth = Float64List(n);
+    final Float64List shift = Float64List(n);
+    final List<_Box?> boxes = List<_Box?>.filled(n, null);
     var designBottom = 0.0;
     var finalBottom = 0.0;
-    for (int i = 0; i < visible.length; i++) {
+    for (int k = 0; k < n; k++) {
+      final int i = order[k];
       final ReportElement e = visible[i];
       final double top = e.y + dy;
       final _Box box = _renderElement(e, scope, kind);
       var s = 0.0;
-      for (int j = 0; j < i; j++) {
+      for (int m = 0; m < k; m++) {
+        final int j = order[m];
         if (bottoms[j] <= top + ReportGenerator._eps) {
           final double cand = shift[j] + growth[j];
           if (cand > s) {
@@ -868,11 +876,11 @@ class _Flow {
           }
         }
       }
-      tops.add(top);
-      bottoms.add(top + e.height);
-      growth.add(box.height - e.height);
-      shift.add(s);
-      boxes.add(box);
+      tops[i] = top;
+      bottoms[i] = top + e.height;
+      growth[i] = box.height - e.height;
+      shift[i] = s;
+      boxes[i] = box;
       if (top + e.height > designBottom) {
         designBottom = top + e.height;
       }
@@ -887,17 +895,17 @@ class _Flow {
     if (needed > height) {
       height = needed;
     }
-    final List<ReportPrimitive> out = <ReportPrimitive>[];
-    final List<ReportFlowItem> flow = <ReportFlowItem>[];
-    for (int i = 0; i < boxes.length; i++) {
-      final double y = tops[i] + shift[i];
-      for (final ReportPrimitive p in boxes[i].primitives) {
-        out.add(_move(p, 0, y));
-      }
-      for (final ReportFlowItem item in boxes[i].flow) {
-        flow.add(_moveItem(item, y));
-      }
-    }
+    // Paint in document order (z-order); flow items follow reading order.
+    final List<ReportPrimitive> out = <ReportPrimitive>[
+      for (int i = 0; i < n; i++)
+        for (final ReportPrimitive p in boxes[i]!.primitives)
+          _move(p, 0, tops[i] + shift[i]),
+    ];
+    final List<ReportFlowItem> flow = <ReportFlowItem>[
+      for (final int i in order)
+        for (final ReportFlowItem item in boxes[i]!.flow)
+          _moveItem(item, tops[i] + shift[i]),
+    ];
     return _Box(
       out,
       height < 0 ? 0 : height,

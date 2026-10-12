@@ -38,6 +38,14 @@ document.
   </tr>
 </table>
 
+> **Try the report designer without writing code:**
+> [Quds Report Studio](#quds-report-studio-app) is a desktop app built on
+> `QudsReportDesigner`. Download the
+> [Windows installer](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.0.0/QudsReportStudio-1.0.0-windows-x64-setup.exe)
+> or the
+> [Linux .deb](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.0.0/quds-report-studio_1.0.0_amd64.deb)
+> ([all downloads](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/tag/studio-v1.0.0)).
+
 ## Contents
 
 - [Install](#install)
@@ -158,17 +166,99 @@ class _ReportHostState extends State<ReportHost> {
 }
 ```
 
-Open and save templates as plain XML:
+Open and save `.qrep` packages: a ZIP holding the XML layout and the images
+and fonts embedded in the report. Older plain-XML `.qrep` files open too:
 
 ```dart
 final ReportDesignerController c =
-    ReportDesignerController.fromXml(File('invoice.qrep').readAsStringSync());
-File('invoice.qrep').writeAsStringSync(c.toXml());
+    ReportDesignerController.fromPackage(File('invoice.qrep').readAsBytesSync());
+File('invoice.qrep').writeAsBytesSync(c.toPackage());
 
-c.loadXml(otherXml);                  // replace the open template
+c.loadPackage(bytes);                 // replace the open report, images and fonts
+c.loadXml(otherXml);                  // or a bare layout (nothing embedded)
 c.mockData = <String, Object?>{...};  // your own preview data (or inferred)
 final Uint8List pdf = await c.export(ReportExportFormat.pdf);
 ```
+
+Embedded images are saved with the report and are not supplied at export
+time. Each one is a PNG or JPEG keyed by name and drawn by
+`<Image source="name"/>`. Every change goes through the undo history:
+
+```dart
+final String? key = c.addImage('Company Logo.png', bytes); // 'Company_Logo'
+c.insertImage(key!);              // new <Image> in the selected band, aspect kept
+c.renameImage(key, 'logo');       // repoints <Image source="Company_Logo">
+c.removeImage('logo');
+```
+
+Pass `onPickImage` to show the import buttons. The inspector's **Images**
+tab lists each image with its type, pixel size, and file size, plus Insert
+and Remove. Image elements get an
+**Import image…** button, and their Source field suggests the embedded
+names. Any file picker works:
+
+```dart
+QudsReportDesigner(
+  controller: c,
+  onPickImage: () async {
+    final FilePickerResult? r = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: <String>['png', 'jpg', 'jpeg'],
+      withData: true,
+    );
+    final PlatformFile? f = r?.files.firstOrNull;
+    return f?.bytes == null ? null : (name: f!.name, bytes: f.bytes!);
+  },
+);
+```
+
+#### Embedded fonts
+
+Fonts embedded in a report are saved inside the `.qrep`, so it exports with
+the same faces on any machine, even one that never had them installed. The
+preview, the charts, and the exports use `controller.effectiveFonts`: the
+host `fonts` plus the embedded families the host lacks. The design canvas
+loads embedded families into Flutter so text there looks the same. Each
+family keeps one regular and one bold TrueType face. Edits are undoable:
+
+```dart
+final String family = c.addFont(File('Amiri-Regular.ttf').readAsBytesSync());
+c.addFont(File('Amiri-Bold.ttf').readAsBytesSync()); // fills the bold slot
+c.setProperty('defaultFont', family);                 // 'Amiri'
+c.removeFont('Amiri');
+```
+
+`addFont` reads the family, weight, and italic flag from the file and throws
+`ReportFontException` for `.ttc` collections, CFF `.otf` files, italic faces,
+and fonts whose license forbids embedding.
+
+The inspector's **Fonts** tab lists embedded families. Each row shows its
+faces, its size, a **Report default** switch, and how many elements use it.
+Two optional parameters add sources:
+
+- **`onPickFont`** (`ReportFontPicker`) shows **Import font file…** for
+  `.ttf` files.
+- **`deviceFonts`** (`ReportDeviceFonts`) lists installed families under
+  **On this device**, with search and a one-click **Embed**. Typing an
+  installed family into a font field embeds it too.
+
+```dart
+class MyDeviceFonts implements ReportDeviceFonts {
+  @override
+  Future<List<String>> families() async => <String>['Amiri', 'Cairo'];
+
+  @override
+  Future<ReportFontFiles?> load(String family) async => ReportFontFiles(
+    regular: await File('/fonts/$family-Regular.ttf').readAsBytes(),
+    bold: await File('/fonts/$family-Bold.ttf').readAsBytes(),
+  );
+}
+
+QudsReportDesigner(controller: c, deviceFonts: MyDeviceFonts());
+```
+
+[Quds Report Studio](https://github.com/MohammedAsaadAsaad/quds_office_suite/tree/main/apps/quds_report_studio)
+has a ready-made implementation that scans the OS font folders.
 
 `QudsReportDesigner` parameters:
 
@@ -176,9 +266,16 @@ final Uint8List pdf = await c.export(ReportExportFormat.pdf);
 | --- | --- | --- |
 | `controller` | required | Template, selection, undo, preview data |
 | `theme` | `OfficeTheme.light` | Chrome tokens |
-| `inspectorWidth` | `300` | Width of the property inspector |
+| `inspectorWidth` | `300` | Default inspector width; double-clicking the splitter restores it |
+| `initialInspectorWidth` | `null` | Starting width, e.g. one saved from `onInspectorWidthChanged` |
+| `minInspectorWidth` / `maxInspectorWidth` | `240` / `640` | Drag limits; the canvas always keeps at least 240 px |
+| `onInspectorWidthChanged` | `null` | Called with the new width after a splitter drag or reset |
 | `onExport` | `null` | Receives exported bytes; hides Export when null |
 | `templates` | `ReportTemplates.all` | Entries in the Templates menu |
+| `onPickImage` | `null` | Host file picker for "Import image…" (PNG / JPEG embedded in the `.qrep`); hides the buttons when null |
+| `onPickFont` | `null` | Host file picker for "Import font file…" (TrueType embedded in the `.qrep`); hides the button when null |
+| `deviceFonts` | `null` | Installed fonts listed on the Fonts tab for one-click embedding; hides the list when null |
+| `onPickData` | `null` | Host file picker for the data explorer's "Import CSV / JSON…"; hides the button when null |
 | `loadBundledFonts` | `true` | Loads Liberation + Noto Naskh Arabic into the preview/export registry |
 | `focusNode` / `autofocus` | internal / `true` | Keyboard focus |
 
@@ -234,12 +331,42 @@ carries metadata (`ReportProperty.hint`, `presets`, `step`, `min`, `pair`,
 | X/Y, Width/Height | Paired fields on one row |
 | Bold / Italic / Underline | Toggle glyph row |
 
-Sections (Layout, Text, Font, Box, Chart, Data, Style, Report, Variables,
-Page, Palette, Diagnostics) collapse independently. The title badge shows the
+The inspector has four tabs:
+
+- **Properties** shows the selection's properties. With nothing selected, it
+  shows report settings (Report, Page, Palette, Diagnostics).
+- **Variables** shows the template variables.
+- **Images** shows the images embedded in the `.qrep`.
+- **Fonts** shows the embedded fonts and, with `deviceFonts`, the installed
+  ones.
+
+The Variables, Images, and Fonts tabs carry a count badge. When the
+inspector is too narrow for the labels, the tabs show icons only. Selecting
+an element or a band jumps back to Properties. `controller.inspectorPage`
+switches tabs in code.
+
+Sections (Layout, Text, Font, Box, Chart, Data, Style, Report, Page,
+Palette, Diagnostics) collapse independently. The title badge shows the
 element kind and its band. Diagnostics list template problems with severity
 icons.
 
-![Report settings, variables, page, and palette](example/screenshots/report_inspector_report.png)
+To resize the inspector, drag the splitter between the canvas and the
+inspector. Double-clicking the splitter restores the default width.
+
+<table>
+  <tr>
+    <td width="25%"><img src="example/screenshots/report_inspector_report.png" alt="Report settings"/></td>
+    <td width="25%"><img src="example/screenshots/report_inspector_variables.png" alt="Variables tab"/></td>
+    <td width="25%"><img src="example/screenshots/report_inspector_images.png" alt="Images tab"/></td>
+    <td width="25%"><img src="example/screenshots/report_inspector_fonts.png" alt="Fonts tab"/></td>
+  </tr>
+  <tr>
+    <td>Properties tab: report settings, page, palette, diagnostics</td>
+    <td>Variables tab: typed variables, insert format, Insert / Remove</td>
+    <td>Images tab: images saved in the <code>.qrep</code></td>
+    <td>Fonts tab: embedded fonts and installed fonts to embed</td>
+  </tr>
+</table>
 
 ### Expressions and autocomplete
 
@@ -259,10 +386,17 @@ Functions insert `NAME()` with the caret inside.
 
 ![Templates menu](example/screenshots/report_templates.png)
 
-- **Templates**: the toolbar menu loads any `ReportTemplates.all` entry with
-  its sample data: Arabic VAT invoice, English commercial invoice, sales
-  dashboard, account statement, inventory status, receipt voucher. A blank
-  report is also available. Pass your own list in `templates:`.
+- **Templates**: the toolbar menu groups the template families by category
+  (sales, finance, inventory, analytics, human resources). Picking a family
+  asks for **العربية** or **English**. Every family ships both versions: VAT
+  invoice, commercial invoice, product catalog, account statement, receipt
+  voucher, inventory status, sales dashboard and certificate. A template
+  loads with its sample data and its **pre-saved images** (logo, stamp,
+  signature, seal, product photos), which then show in the Images tab and
+  save inside the `.qrep`. A blank report is also available. Pass your own
+  list in `templates:`.
+
+  ![Product catalog template with its saved images](example/screenshots/report_template_catalog.png)
 - **Variables**: typed template variables (`text`, `number`, `boolean`,
   `date`, `list`, `expression`) are added and edited in the inspector when
   nothing is selected. The Variables menu inserts `{{Variables.x}}` at the
@@ -279,6 +413,79 @@ navigation. **Export** produces PDF (vector charts, embedded subset fonts),
 XLSX (typed cells, native Excel charts), or DOCX (native Word charts and
 tables) through `onExport` or `controller.export(format)`.
 
+### Data explorer
+
+![Data explorer: items table with a calculated column](example/screenshots/report_data_explorer.png)
+
+F6 (or **Data**) swaps the canvas for `ReportDataExplorer`, a painted data
+grid that works like the data view in Power BI. The sidebar lists **Fields**
+(single values such as `Data.customer`) and every **table** (a data set
+such as `items`) with its row count. The grid shows typed column headers
+(Aa, 12, ✓, date, ƒx), row numbers, and the values the report will print.
+Formats show in the cells.
+
+- **Edit**: double-click, F2, Enter, or just start typing. Enter and Tab
+  commit and move to the next cell. Values are checked against the column
+  type, so `abc` in a number column is rejected. Ctrl+C and Ctrl+V copy and
+  paste a cell. Delete clears a cell, or deletes the row when a whole row is
+  selected.
+- **Rows and columns**: + Row, + Column, and **ƒx Column** (a calculated
+  column with a formula such as `qty * price`). The right-click menu has
+  insert above/below, rename, and delete.
+- **Rename safely**: renaming a column rewrites `item.qty`,
+  `SUM(items.qty)`, and the formulas that use it. Renaming a field rewrites
+  `Data.customer`.
+- **Import CSV / JSON…** (with `onPickData`): a CSV or TSV file fills the
+  current table, a JSON object replaces the sample data, and a JSON array
+  fills a table.
+- The inspector shows the selected table, column (name, type, formula,
+  format, description), or field.
+
+Edits create the report's **sample data**. It is saved in the `.qrep` as
+`data/sample.json`, previewed with, and every change is undoable. Column
+types and formulas go into the template's `<DataSchema>`, so exports apply
+them to the host's real data too. Data set through `controller.mockData` comes
+from the host: the explorer shows it read-only and still lets you design
+columns and formulas on top of it. The data used, in order of priority:
+
+1. `controller.mockData` from the host.
+2. The report's `sampleData`.
+3. Data inferred from the bindings.
+
+```dart
+QudsReportDesigner(
+  controller: c,
+  onPickData: () async {
+    final FilePickerResult? r = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: <String>['csv', 'tsv', 'txt', 'json'],
+      withData: true,
+    );
+    final PlatformFile? f = r?.files.firstOrNull;
+    return f?.bytes == null
+        ? null
+        : (name: f!.name, text: utf8.decode(f.bytes!));
+  },
+);
+
+// The same edits in code:
+c.addDataColumn(name: 'total', type: ReportDataType.number, expression: 'qty * price');
+c.renameDataColumn('qty', 'quantity', table: 'items');
+c.setDataCell(0, 1, '12');
+c.importDataText('orders.csv', csvText);
+```
+
+#### Element names
+
+Every element gets a unique name when it is added or pasted, or when a
+report is loaded (`text1`, `table2`, …). Rename it in the inspector's
+**Name** field, and the designer rejects duplicates and invalid names. In
+code, `QudsReportEngine` uses those names to fill the report: `setText`,
+`setImage`, `setTableRows`, `setChartPoints`, `setVisible`, and
+`elementAs<T>(name)`. See the engine's
+[named elements](https://pub.dev/packages/quds_office_engine#named-elements-fill-a-report-from-code)
+section.
+
 ### Keyboard
 
 | Keys | Action |
@@ -292,6 +499,7 @@ tables) through `onExport` or `controller.export(format)`.
 | F2, Enter, or double-click | Edit text in place |
 | Esc | Cancel edit, close popup, leave a tool, or clear selection |
 | F5 | Toggle design / preview (Esc also leaves preview) |
+| F6 | Toggle the data explorer; there arrows / Tab / PageUp / PageDown move, F2 / Enter / typing edits, Delete clears |
 | Ctrl+= / Ctrl+- / Ctrl+0 | Zoom in / out / fit width |
 | Ctrl+Space | Open autocomplete |
 | ↑/↓ in a numeric field | Step the value (Shift for ×10) |
@@ -302,6 +510,29 @@ The repository includes a standalone desktop app built on this widget:
 [`apps/quds_report_studio`](https://github.com/MohammedAsaadAsaad/quds_office_suite/tree/main/apps/quds_report_studio).
 It has frameless window chrome (move, resize, maximize), New/Open/Save/Save as, recent
 files, an unsaved-changes guard, and a status bar with live diagnostics.
+
+![Quds Report Studio](https://raw.githubusercontent.com/MohammedAsaadAsaad/quds_office_suite/main/apps/quds_report_studio/screenshots/studio_chart.png)
+
+Download it:
+
+| Platform | Installer | Portable |
+| --- | --- | --- |
+| Windows 10/11 (x64) | [QudsReportStudio-1.0.0-windows-x64-setup.exe](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.0.0/QudsReportStudio-1.0.0-windows-x64-setup.exe) | [QudsReportStudio-1.0.0-windows-x64-portable.zip](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.0.0/QudsReportStudio-1.0.0-windows-x64-portable.zip) |
+| Debian / Ubuntu (x64) | [quds-report-studio_1.0.0_amd64.deb](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.0.0/quds-report-studio_1.0.0_amd64.deb) | [QudsReportStudio-1.0.0-linux-x64.tar.gz](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.0.0/QudsReportStudio-1.0.0-linux-x64.tar.gz) |
+
+- **Windows:** run the setup. It doesn't need admin rights unless you
+  choose "all users". Uninstall it from *Settings › Apps*. The portable zip
+  runs in place, and `unregister-qrep.cmd` removes its file association.
+- **Debian / Ubuntu:** `sudo apt install ./quds-report-studio_1.0.0_amd64.deb`,
+  and `sudo apt remove quds-report-studio` to uninstall.
+- **Other Linux distributions:** extract the tar.gz and run `./install.sh`
+  (per user, no root). Run `~/.local/opt/quds-report-studio/uninstall.sh`
+  to remove it.
+- **`.qrep` files:** on its first run the studio registers itself as the app
+  for `.qrep` files, so double-clicking a report opens it in the studio.
+  **File › Open .qrep files with Report Studio** registers it again.
+
+Or run it from source:
 
 ```bash
 cd apps/quds_report_studio

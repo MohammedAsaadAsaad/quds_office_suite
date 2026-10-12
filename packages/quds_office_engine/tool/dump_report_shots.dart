@@ -30,8 +30,8 @@ Future<void> main(List<String> args) async {
   DateTime clock() => DateTime(2026, 10, 10, 9, 30);
 
   for (final ReportTemplateInfo info in ReportTemplates.all) {
-    final QudsReportEngine engine = QudsReportEngine.fromXml(
-      info.xml,
+    final QudsReportEngine engine = QudsReportEngine.fromPackage(
+      info.package().encode(),
       fonts: fonts,
       userName: 'Quds Office',
       clock: clock,

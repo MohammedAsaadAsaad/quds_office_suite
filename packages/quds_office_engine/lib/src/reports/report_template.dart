@@ -4,6 +4,7 @@
 /// never mutates it. All geometry is in points (1/72 inch), y grows down.
 library;
 
+import 'report_data.dart';
 import 'report_format.dart';
 import 'report_units.dart';
 import 'report_value.dart';
@@ -494,6 +495,16 @@ sealed class ReportElement {
     final String? n = name;
     return n == null || n.isEmpty ? kind : '$kind "$n"';
   }
+
+  /// Base for generated names (`text1`, `table2`, …).
+  String get namePrefix => switch (type) {
+    ReportElementType.text => 'text',
+    ReportElementType.image => 'image',
+    ReportElementType.table => 'table',
+    ReportElementType.barcode => 'barcode',
+    ReportElementType.shape => 'shape',
+    ReportElementType.chart => 'chart',
+  };
 }
 
 /// Static or bound text.
@@ -1426,11 +1437,13 @@ class ReportTemplate {
     this.formats = const ReportFormatDefaults(),
     List<ReportVariable>? variables,
     List<ReportBand>? bands,
+    ReportDataSchema? dataSchema,
     Map<String, String>? extraAttributes,
   }) : margins = margins ?? ReportMargins(),
        colors = colors ?? <String, String>{},
        variables = variables ?? <ReportVariable>[],
        bands = bands ?? <ReportBand>[],
+       dataSchema = dataSchema ?? ReportDataSchema(),
        extraAttributes = extraAttributes ?? <String, String>{};
 
   /// name API.
@@ -1478,6 +1491,9 @@ class ReportTemplate {
 
   /// Bands in canonical order.
   final List<ReportBand> bands;
+
+  /// Data tables, columns, and fields the report expects (`<DataSchema>`).
+  ReportDataSchema dataSchema;
 
   /// extraAttributes API.
   final Map<String, String> extraAttributes;
@@ -1580,6 +1596,80 @@ class ReportTemplate {
     return null;
   }
 
+  /// Whether [name] can address an element from code: a letter (Latin,
+  /// Arabic, …) or `_` followed by letters, digits, or `_`.
+  static bool isValidElementName(String name) => ReportData.isValidName(name);
+
+  /// Element whose [ReportElement.name] is [name] (case-insensitive), with
+  /// its band.
+  (ReportBand, ReportElement)? elementNamed(String name) {
+    final String lower = name.trim().toLowerCase();
+    if (lower.isEmpty) {
+      return null;
+    }
+    for (final (ReportBand, ReportElement) pair in allElements) {
+      if (pair.$2.name?.toLowerCase() == lower) {
+        return pair;
+      }
+    }
+    return null;
+  }
+
+  /// Names used by more than one element (case-insensitive), lower-cased.
+  Set<String> get duplicateElementNames {
+    final Set<String> seen = <String>{};
+    final Set<String> dupes = <String>{};
+    for (final (ReportBand _, ReportElement e) in allElements) {
+      final String? n = e.name?.trim().toLowerCase();
+      if (n != null && n.isNotEmpty && !seen.add(n)) {
+        dupes.add(n);
+      }
+    }
+    return dupes;
+  }
+
+  /// [base] followed by the first number no other element uses (`text3`).
+  /// [except] is ignored when checking (the element being renamed).
+  String uniqueElementName(String base, {ReportElement? except}) {
+    final Set<String> taken = <String>{
+      for (final (ReportBand _, ReportElement e) in allElements)
+        if (!identical(e, except) && e.name != null) e.name!.toLowerCase(),
+    };
+    var stem = base.replaceAll(RegExp(r'[^A-Za-z0-9_\u00C0-\uFFFF]'), '');
+    if (stem.isEmpty || RegExp('^[0-9]').hasMatch(stem)) {
+      stem = 'element$stem';
+    }
+    stem = stem.replaceFirst(RegExp(r'\d+$'), '');
+    for (int i = 1; ; i++) {
+      final candidate = '$stem$i';
+      if (!taken.contains(candidate.toLowerCase())) {
+        return candidate;
+      }
+    }
+  }
+
+  /// Names every unnamed element and renames later duplicates so each
+  /// element can be addressed from code. Returns the renamed elements.
+  List<ReportElement> assignElementNames() {
+    final List<ReportElement> changed = <ReportElement>[];
+    final Set<String> seen = <String>{};
+    final List<ReportElement> pending = <ReportElement>[];
+    for (final (ReportBand _, ReportElement e) in allElements) {
+      final String? n = e.name?.trim();
+      if (n == null || n.isEmpty || !seen.add(n.toLowerCase())) {
+        pending.add(e);
+      }
+    }
+    for (final ReportElement e in pending) {
+      e.name = null;
+    }
+    for (final ReportElement e in pending) {
+      e.name = uniqueElementName(e.namePrefix, except: e);
+      changed.add(e);
+    }
+    return changed;
+  }
+
   /// Resolves a raw color (palette name, hex, CSS name) or [fallback].
   ReportColor resolveColor(String? raw, ReportColor fallback) {
     if (raw == null || raw.trim().isEmpty) {
@@ -1626,6 +1716,7 @@ class ReportTemplate {
     bands: <ReportBand>[
       for (final ReportBand b in bands) b.copy(keepIds: keepIds),
     ],
+    dataSchema: dataSchema.copy(),
     extraAttributes: Map<String, String>.of(extraAttributes),
   );
 }

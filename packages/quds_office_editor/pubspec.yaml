@@ -30,6 +30,12 @@ screenshots:
     path: example/screenshots/report_preview.png
   - description: "Arabic RTL invoice template in the report designer."
     path: example/screenshots/report_designer_rtl.png
+  - description: "Ready-made product catalog template with its photos saved inside the .qrep."
+    path: example/screenshots/report_template_catalog.png
+  - description: "Data explorer: edit the report's tables, typed columns, and calculated columns."
+    path: example/screenshots/report_data_explorer.png
+  - description: "Inspector Fonts tab: embed installed fonts into the report."
+    path: example/screenshots/report_inspector_fonts.png
   - description: "Word canvas: paginated pages, BiDi caret, outline, and custom chrome."
     path: example/screenshots/word.png
   - description: "Excel grid: virtualized sheet, formula bar, charts, and sheet tabs."

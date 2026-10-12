@@ -153,6 +153,55 @@ void main() {
     });
   });
 
+  group('English words', () {
+    test('amounts with sub-units and singulars', () {
+      expect(
+        EnglishWords.amount(1250.5, 'LYD'),
+        'One thousand two hundred fifty Libyan dinars and five hundred '
+        'dirhams only',
+      );
+      expect(EnglishWords.amount(1, 'USD'), 'One US dollar only');
+      expect(
+        EnglishWords.amount(21.01, 'USD'),
+        'Twenty-one US dollars and one cent only',
+      );
+      expect(EnglishWords.number(1000115), 'one million one hundred fifteen');
+      expect(EnglishWords.amount(5, 'LYD', only: false), 'Five Libyan dinars');
+      expect(() => EnglishWords.amount(1, 'XXX'), throwsA(isA<Exception>()));
+    });
+
+    test('AMOUNTWORDS, words: and dateAr: formats', () {
+      final QudsExpressionEngine engine = QudsExpressionEngine();
+      final ReportScope scope = ReportScope(
+        data: const ReportRecord(<String, ReportValue>{}),
+        variables: const ReportRecord(<String, ReportValue>{}),
+        system: ReportSystemInfo(
+          now: fixedNow,
+          pageNumber: 1,
+          totalPages: 1,
+          userName: 'u',
+        ),
+      );
+      expect(
+        engine.interpolate("{{AMOUNTWORDS(42, 'EUR')}}", scope),
+        'Forty-two euros only',
+      );
+      expect(
+        engine.interpolate("{{AMOUNTWORDS(500, 'LYD', 'ar')}}", scope),
+        'فقط خمسمائة دينار ليبي لا غير',
+      );
+      const ReportFormatter f = ReportFormatter();
+      expect(f.format(ReportNumber(42), 'words:EUR'), 'Forty-two euros only');
+      expect(
+        f.format(
+          ReportDate(DateTime(2026, 10, 12, 15)),
+          'dateAr:EEEE d MMMM yyyy hh a',
+        ),
+        'الاثنين 12 أكتوبر 2026 03 م',
+      );
+    });
+  });
+
   group('Expression engine', () {
     final QudsExpressionEngine engine = QudsExpressionEngine();
     final ReportRecord data = ReportValue.from(invoiceData(3)) as ReportRecord;
@@ -815,8 +864,8 @@ void main() {
   group('Ready-made templates', () {
     for (final ReportTemplateInfo info in ReportTemplates.all) {
       test('${info.id} parses, validates, and exports', () async {
-        final QudsReportEngine engine = QudsReportEngine.fromXml(
-          info.xml,
+        final QudsReportEngine engine = QudsReportEngine.fromPackage(
+          info.package().encode(),
           fonts: loadFonts(),
           clock: () => fixedNow,
         );
@@ -845,6 +894,152 @@ void main() {
         expect(chartEngineRoundTrip(engine), engine.toXml());
       });
     }
+  });
+
+  group('Template catalog', () {
+    bool isPng(Uint8List b) =>
+        b.length > 8 &&
+        b[0] == 0x89 &&
+        b[1] == 0x50 &&
+        b[2] == 0x4E &&
+        b[3] == 0x47;
+
+    test('every family has one Arabic and one English version', () {
+      final Set<String> ids = <String>{
+        for (final ReportTemplateInfo t in ReportTemplates.all) t.id,
+      };
+      expect(ids, hasLength(ReportTemplates.all.length));
+      expect(ReportTemplates.families, hasLength(8));
+      for (final String family in ReportTemplates.families) {
+        final List<ReportTemplateInfo> v = ReportTemplates.variants(family);
+        expect(
+          v.map((ReportTemplateInfo t) => t.language).toSet(),
+          ReportTemplateLanguage.values.toSet(),
+          reason: family,
+        );
+        expect(v, hasLength(2), reason: family);
+        final ReportTemplateInfo ar = ReportTemplates.find(
+          family,
+          ReportTemplateLanguage.arabic,
+        )!;
+        final ReportTemplateInfo en = ReportTemplates.counterpart(ar)!;
+        expect(en.language, ReportTemplateLanguage.english);
+        expect(ReportTemplates.counterpart(en), same(ar));
+        expect(ar.rtl, isTrue);
+        expect(en.rtl, isFalse);
+        expect(ar.category, en.category);
+        expect(ar.familyTitle, en.familyTitle);
+        expect(ar.familyTitleFor(arabic: true), en.familyTitleAr);
+        expect(ar.familyTitle, isNot(contains('(')));
+        expect(
+          ar.sampleData().keys.toSet(),
+          en.sampleData().keys.toSet(),
+          reason: family,
+        );
+      }
+    });
+
+    test('categories cover the catalog and have bilingual titles', () {
+      final int total = ReportTemplateCategory.values.fold(
+        0,
+        (int sum, ReportTemplateCategory c) =>
+            sum + ReportTemplates.inCategory(c).length,
+      );
+      expect(total, ReportTemplates.all.length);
+      expect(ReportTemplateCategory.hr.titleFor(arabic: true), 'الموارد البشرية');
+      expect(ReportTemplateCategory.sales.titleFor(arabic: false), 'Sales');
+      expect(ReportTemplates.byId('invoice_en')!.family, 'commercial_invoice');
+    });
+
+    test('tokens are filled and XML stays well-formed', () {
+      for (final ReportTemplateInfo t in ReportTemplates.all) {
+        expect(t.xml, isNot(contains('[[')), reason: t.id);
+        expect(QudsReportXmlParser().parse(t.xml).template, isNotNull);
+      }
+      expect(
+        ReportTemplates.byId('sales_invoice_ar')!.xml,
+        contains('فاتورة مبيعات'),
+      );
+      expect(
+        ReportTemplates.byId('sales_invoice_en')!.xml,
+        contains('TAX INVOICE'),
+      );
+    });
+
+    test('templates carry pre-saved PNG images for every source', () {
+      final RegExp source = RegExp(r'<Image[^>]*\bsource="([^"{]+)"');
+      var withImages = 0;
+      for (final ReportTemplateInfo t in ReportTemplates.all) {
+        final Map<String, Uint8List> images = t.images();
+        if (images.isNotEmpty) {
+          withImages++;
+        }
+        for (final Uint8List png in images.values) {
+          expect(isPng(png), isTrue, reason: t.id);
+        }
+        for (final RegExpMatch m in source.allMatches(t.xml)) {
+          expect(images, contains(m.group(1)), reason: '${t.id} ${m[1]}');
+        }
+        final ReportPackage pkg = ReportPackage.decode(t.package().encode());
+        expect(pkg.images.keys.toSet(), images.keys.toSet());
+      }
+      expect(withImages, greaterThanOrEqualTo(10));
+      final ReportTemplateInfo catalog = ReportTemplates.byId(
+        'product_catalog_en',
+      )!;
+      final Map<String, Uint8List> photos = catalog.images();
+      final List<Object?> items = catalog.sampleData()['items']! as List<Object?>;
+      for (final Object? item in items) {
+        final String key = (item! as Map<String, Object?>)['photo']! as String;
+        expect(photos, contains(key));
+      }
+    });
+
+    test('built-in art is deterministic transparent PNG', () {
+      final Uint8List a = ReportTemplateArt.logo(size: 64);
+      expect(isPng(a), isTrue);
+      expect(ReportTemplateArt.logo(size: 64), a);
+      expect(ReportImageFormat.sniff(ReportTemplateArt.stamp(size: 64)), ReportImageFormat.png);
+      for (final ReportProductArt kind in ReportProductArt.values) {
+        expect(isPng(ReportTemplateArt.product(kind, width: 48, height: 36)), isTrue);
+      }
+    });
+  });
+
+  group('Layout order', () {
+    test('elements at the same top paint in document order', () {
+      final QudsReportEngine engine = QudsReportEngine.fromXml('''
+<QudsReport name="Z">
+  <Bands>
+    <ReportHeader height="20mm">
+      <Text x="0mm" y="5mm" width="30mm" height="8mm">label</Text>
+      <Shape kind="Rectangle" x="40mm" y="5mm" width="40mm" height="8mm" fill="#EEEEEE"/>
+      <Text x="40mm" y="5mm" width="40mm" height="8mm">value</Text>
+      <Shape kind="Rectangle" x="90mm" y="5mm" width="40mm" height="8mm" fill="#DDDDDD"/>
+      <Text x="90mm" y="5mm" width="40mm" height="8mm">more</Text>
+    </ReportHeader>
+  </Bands>
+</QudsReport>''', fonts: loadFonts());
+      final List<String> order = <String>[
+        for (final ReportPrimitive p
+            in engine.layout(const <String, Object?>{}).pages.first.primitives)
+          if (p is ReportTextPrimitive) p.text else if (p is ReportRectPrimitive) 'rect',
+      ];
+      expect(order, <String>['label', 'rect', 'value', 'rect', 'more']);
+    });
+  });
+
+  group('Deflate', () {
+    test('long runs use overlapping matches and round-trip', () {
+      final Uint8List zeros = Uint8List(200000);
+      final Uint8List packed = RawDeflate.deflate(zeros, level: 9);
+      expect(packed.length, lessThan(2000));
+      expect(RawDeflate.inflate(packed), zeros);
+      final Uint8List mixed = Uint8List.fromList(<int>[
+        for (int i = 0; i < 50000; i++) (i * 7 + (i ~/ 300)) & 0xFF,
+      ]);
+      expect(RawDeflate.inflate(RawDeflate.deflate(mixed)), mixed);
+    });
   });
 
   group('Completion', () {
@@ -1010,6 +1205,562 @@ void main() {
       expect(
         messages.where((String m) => m.contains('Unknown variable type')),
         hasLength(1),
+      );
+    });
+  });
+
+  group('Report package', () {
+    const String layout =
+        '<QudsReport name="Logo"><Bands><ReportHeader height="30mm">'
+        '<Element type="Image" source="logo" x="0" y="0" width="20mm" '
+        'height="10mm"/></ReportHeader></Bands></QudsReport>';
+    final Uint8List logo = PngBytes.rgb(
+      width: 4,
+      height: 2,
+      plot: (int x, int y, List<int> rgb) => rgb[0] = 200,
+    );
+
+    int imageCount(QudsReportEngine engine) => <ReportPrimitive>[
+      for (final ReportPageLayout page
+          in engine.layout(const <String, Object?>{}).pages)
+        ...page.primitives,
+    ].whereType<ReportImagePrimitive>().length;
+
+    test('round-trips layout and embedded images through a ZIP', () {
+      final Uint8List bytes = ReportPackage(
+        xml: layout,
+        images: <String, Uint8List>{'logo': logo},
+      ).encode();
+      expect(ReportPackage.isPackage(bytes), isTrue);
+      expect(
+        ascii.decode(bytes.sublist(30, 38)),
+        'mimetype',
+        reason: 'mimetype is the first, stored entry',
+      );
+
+      final ReportPackage back = ReportPackage.decode(bytes);
+      expect(back.xml, layout);
+      expect(back.images.keys, <String>['logo']);
+      expect(back.images['logo'], logo);
+
+      final QudsReportEngine engine = QudsReportEngine.fromPackage(bytes);
+      expect(engine.images['logo'], logo);
+      expect(imageCount(engine), 1);
+      expect(ReportPackage.decode(engine.toPackage()).images['logo'], logo);
+    });
+
+    test('opens legacy plain-XML files and lets host images win', () {
+      final Uint8List legacy = Uint8List.fromList(<int>[
+        0xEF,
+        0xBB,
+        0xBF,
+        ...utf8.encode(layout),
+      ]);
+      expect(ReportPackage.isPackage(legacy), isFalse);
+      final ReportPackage package = ReportPackage.decode(legacy);
+      expect(package.xml, layout);
+      expect(package.images, isEmpty);
+      expect(imageCount(QudsReportEngine.fromPackage(legacy)), 0);
+
+      final Uint8List other = PngBytes.rgb(
+        width: 1,
+        height: 1,
+        plot: (int x, int y, List<int> rgb) {},
+      );
+      final QudsReportEngine engine = QudsReportEngine.fromPackage(
+        ReportPackage(
+          xml: layout,
+          images: <String, Uint8List>{'logo': logo},
+        ).encode(),
+        images: <String, Uint8List>{'logo': other},
+      );
+      expect(engine.images['logo'], other);
+    });
+
+    test('rejects damaged packages and bad images', () {
+      final Uint8List good = ReportPackage(xml: layout).encode();
+      expect(
+        () => ReportPackage.decode(Uint8List.sublistView(good, 0, 40)),
+        throwsA(isA<ReportPackageException>()),
+      );
+      expect(
+        () => ReportPackage(
+          xml: layout,
+          images: <String, Uint8List>{
+            'logo': Uint8List.fromList(<int>[1, 2]),
+          },
+        ).encode(),
+        throwsA(isA<ReportPackageException>()),
+      );
+      expect(
+        () => ReportPackage(
+          xml: layout,
+          images: <String, Uint8List>{'bad/name': logo},
+        ).encode(),
+        throwsA(isA<ReportPackageException>()),
+      );
+      expect(
+        () => ReportPackage.decode(Uint8List.fromList(<int>[0xC3, 0x28])),
+        throwsA(isA<ReportPackageException>()),
+      );
+    });
+
+    test('inspects TrueType files and refuses unusable ones', () {
+      const String dir = '../quds_office_editor/fonts';
+      final ReportFontFileInfo regular = ReportFontFile.inspect(
+        File('$dir/LiberationSerif-Regular.ttf').readAsBytesSync(),
+      );
+      expect(regular.family, 'Liberation Serif');
+      expect(regular.weight, 400);
+      expect(regular.bold || regular.italic, isFalse);
+      final ReportFontFileInfo bold = ReportFontFile.inspect(
+        File('$dir/LiberationSerif-Bold.ttf').readAsBytesSync(),
+      );
+      expect(bold.bold, isTrue);
+      expect(bold.style, 'Bold');
+      final ReportFontFileInfo italic = ReportFontFile.inspect(
+        File('$dir/LiberationSerif-Italic.ttf').readAsBytesSync(),
+      );
+      expect(italic.italic, isTrue);
+      expect(
+        ReportFontFile.inspect(
+          File('$dir/NotoNaskhArabic-Regular.ttf').readAsBytesSync(),
+        ).family,
+        'Noto Naskh Arabic',
+      );
+
+      Matcher refuses(String text) => throwsA(
+        isA<ReportFontException>().having(
+          (ReportFontException e) => e.message,
+          'message',
+          contains(text),
+        ),
+      );
+      final Uint8List otf = Uint8List(64)..setAll(0, ascii.encode('OTTO'));
+      expect(() => ReportFontFile.inspect(otf), refuses('.otf'));
+      final Uint8List ttc = Uint8List(64)..setAll(0, ascii.encode('ttcf'));
+      expect(() => ReportFontFile.inspect(ttc), refuses('.ttc'));
+
+      final Uint8List restricted = Uint8List.fromList(
+        File('$dir/LiberationSerif-Regular.ttf').readAsBytesSync(),
+      );
+      final ByteData view = ByteData.sublistView(restricted);
+      final int tables = view.getUint16(4);
+      for (int i = 0; i < tables; i++) {
+        final int at = 12 + i * 16;
+        if (ascii.decode(restricted.sublist(at, at + 4)) == 'OS/2') {
+          view.setUint16(view.getUint32(at + 8) + 8, 0x0002);
+        }
+      }
+      expect(() => ReportFontFile.inspect(restricted), refuses('license'));
+    });
+
+    test('embeds fonts so exports draw with the designed faces', () {
+      const String dir = '../quds_office_editor/fonts';
+      final Uint8List serif = File(
+        '$dir/LiberationSerif-Regular.ttf',
+      ).readAsBytesSync();
+      final Uint8List serifBold = File(
+        '$dir/LiberationSerif-Bold.ttf',
+      ).readAsBytesSync();
+      const String xml =
+          '<QudsReport name="F" defaultFont="Liberation Serif"><Bands>'
+          '<ReportHeader height="20mm"><Element type="Text" x="0" y="0" '
+          'width="80mm" height="8mm" bold="true">Hello</Element>'
+          '</ReportHeader></Bands></QudsReport>';
+      final Uint8List bytes = ReportPackage(
+        xml: xml,
+        fonts: <String, ReportFontFiles>{
+          'Liberation Serif': ReportFontFiles(regular: serif, bold: serifBold),
+        },
+      ).encode();
+      final ReportPackage back = ReportPackage.decode(bytes);
+      expect(back.fonts.keys, <String>['Liberation Serif']);
+      expect(back.fonts['Liberation Serif']!.regular, serif);
+      expect(back.fonts['Liberation Serif']!.bold, serifBold);
+
+      final QudsReportEngine engine = QudsReportEngine.fromPackage(bytes);
+      expect(engine.fonts.has('Liberation Serif'), isTrue);
+      final ReportTextPrimitive hello = engine
+          .layout(const <String, Object?>{})
+          .pages
+          .first
+          .primitives
+          .whereType<ReportTextPrimitive>()
+          .single;
+      expect(hello.font.bold, isTrue);
+      expect(
+        engine.fonts
+            .faceFor(hello.font.family, 'H'.codeUnitAt(0), bold: true)!
+            .bytes,
+        serifBold,
+      );
+      expect(
+        ReportPackage.decode(
+          engine.toPackage(),
+        ).fonts['Liberation Serif']!.bold,
+        serifBold,
+      );
+
+      final ReportFontRegistry host = ReportFontRegistry()
+        ..registerBytes(
+          'Liberation Sans',
+          File('$dir/LiberationSans-Regular.ttf').readAsBytesSync(),
+        );
+      final QudsReportEngine hosted = QudsReportEngine.fromPackage(
+        bytes,
+        fonts: host,
+      );
+      expect(
+        hosted.fonts.families.map((ReportFontFamily f) => f.name),
+        <String>['Liberation Sans', 'Liberation Serif'],
+      );
+      expect(host.families, hasLength(1), reason: 'host registry untouched');
+
+      expect(
+        () => ReportPackage(
+          xml: xml,
+          fonts: <String, ReportFontFiles>{
+            'a/b': ReportFontFiles(regular: serif),
+          },
+        ).encode(),
+        throwsA(isA<ReportPackageException>()),
+      );
+      expect(
+        () => ReportPackage(
+          xml: xml,
+          fonts: <String, ReportFontFiles>{
+            'Bad': ReportFontFiles(regular: Uint8List(40)),
+          },
+        ).encode(),
+        throwsA(isA<ReportPackageException>()),
+      );
+    });
+
+    test('derives unique keys from file names', () {
+      expect(ReportPackage.keyFor('/tmp/Company Logo.PNG'), 'Company_Logo');
+      expect(ReportPackage.keyFor('شعار.jpg'), 'شعار');
+      expect(ReportPackage.keyFor('...png'), 'image');
+      expect(
+        ReportPackage.keyFor('logo.png', taken: <String>['Logo', 'logo2']),
+        'logo3',
+      );
+      expect(ReportPackage.isValidKey('stamp-1'), isTrue);
+      expect(ReportPackage.isValidKey('a.b'), isFalse);
+    });
+  });
+
+  group('Report data', () {
+    const String xml = r'''<QudsReport name="Orders">
+  <DataSchema>
+    <Field name="customer.name" description="Billed customer"/>
+    <Field name="issued" type="date"/>
+    <Table name="items" description="Order lines">
+      <Column name="code"/>
+      <Column name="qty" type="number"/>
+      <Column name="price" type="number" format="n2"/>
+      <Column name="total" type="number" expression="qty * price" format="n2"/>
+      <Column name="label" expression="item.code + ' x' + item.qty"/>
+    </Table>
+  </DataSchema>
+  <Bands>
+    <ReportHeader height="20mm">
+      <Text name="title" x="0" y="0" width="120mm" height="8mm">Orders</Text>
+      <Text name="customer" x="0" y="10mm" width="120mm" height="8mm">{{Data.customer.name}}|{{YEAR(Data.issued)}}</Text>
+    </ReportHeader>
+    <Detail dataSet="items" height="8mm">
+      <Text name="line" x="0" y="0" width="120mm" height="6mm">{{item.label}}={{item.total}}</Text>
+    </Detail>
+    <ReportSummary height="40mm">
+      <Text name="sum" x="0" y="0" width="120mm" height="6mm">{{SUM(items.total)}}</Text>
+      <Table name="extras" x="0" y="8mm" width="120mm">
+        <Columns><Column header="Name"/></Columns>
+        <RowTemplate><Cell field="item.name"/></RowTemplate>
+      </Table>
+      <Barcode name="code" x="0" y="20mm" width="30mm" height="10mm" data="X"/>
+      <Image name="logo" x="40mm" y="20mm" width="20mm" height="10mm" source=""/>
+    </ReportSummary>
+  </Bands>
+</QudsReport>''';
+
+    test('schema round-trips through XML', () {
+      final QudsReportEngine engine = QudsReportEngine.fromXml(xml);
+      expect(
+        engine.diagnostics.where(
+          (ReportDiagnostic d) => d.path.startsWith('DataSchema'),
+        ),
+        isEmpty,
+      );
+      expect(
+        QudsReportXmlParser()
+            .parse(
+              '<QudsReport><DataSchema><Table name="t">'
+              '<Column name="c" type="weird" expression="1 +"/>'
+              '<Column name="c"/></Table><Field/></DataSchema>'
+              '<Bands><Detail height="5mm"/></Bands></QudsReport>',
+            )
+            .diagnostics
+            .map((ReportDiagnostic d) => d.message),
+        containsAll(<Matcher>[
+          contains('Unknown data type'),
+          contains('Duplicate column'),
+          contains('Field needs a name'),
+        ]),
+      );
+      final ReportDataSchema s = engine.template.dataSchema;
+      expect(s.fields.map((ReportDataField f) => f.name), <String>[
+        'customer.name',
+        'issued',
+      ]);
+      expect(s.field('Data.issued')!.type, ReportDataType.date);
+      final ReportDataTable items = s.table('items')!;
+      expect(items.description, 'Order lines');
+      expect(items.column('TOTAL')!.isCalculated, isTrue);
+      expect(items.column('price')!.format, 'n2');
+      final String out = engine.toXml();
+      expect(out, contains('<DataSchema>'));
+      expect(out, contains('expression="qty * price"'));
+      expect(QudsReportEngine.fromXml(out).toXml(), out);
+      expect(
+        engine.template.copy().dataSchema.tables.single.columns,
+        hasLength(5),
+      );
+    });
+
+    test('calculated columns and types apply at export', () {
+      final QudsReportEngine engine = QudsReportEngine.fromXml(
+        xml,
+        fonts: loadFonts(),
+      );
+      final Map<String, Object?> data = <String, Object?>{
+        'customer': <String, Object?>{'name': 'Northwind'},
+        'issued': '2026-10-12',
+        'items': <Object?>[
+          <String, Object?>{'code': 'A', 'qty': '2', 'price': '10.5'},
+          <String, Object?>{'code': 'B', 'qty': 3, 'price': 4},
+        ],
+      };
+      final ReportRecord prepared = engine.prepare(data);
+      final ReportList rows = prepared.field('items')! as ReportList;
+      final ReportRecord first = rows.items.first as ReportRecord;
+      expect(first.field('qty'), isA<ReportNumber>());
+      expect(first.field('total')!.asNumber, 21);
+      expect(first.field('label')!.displayText, 'A x2');
+      expect(prepared.field('issued'), isA<ReportDate>());
+      final List<String> texts = pageTexts(engine.layout(data).pages.first);
+      expect(texts, contains('Northwind|2026'));
+      expect(texts, contains('A x2=21'));
+      expect(texts, contains('B x3=12'));
+      expect(texts, contains('33'));
+    });
+
+    test('host data feeds the report and elements are set by name', () {
+      final QudsReportEngine engine = QudsReportEngine.fromXml(
+        xml,
+        fonts: loadFonts(),
+      );
+      expect(engine.elementNames, <String>[
+        'title',
+        'customer',
+        'line',
+        'sum',
+        'extras',
+        'code',
+        'logo',
+      ]);
+      engine.data
+        ..set('customer.name', 'Contoso')
+        ..set('Data.issued', DateTime(2025))
+        ..setTable('items', <Map<String, Object?>>[
+          <String, Object?>{'code': 'Z', 'qty': 1, 'price': 7},
+        ]);
+      engine
+        ..setText('TITLE', 'Fed {{1 + 1}}')
+        ..setTableRows('extras', <Map<String, Object?>>[
+          <String, Object?>{'name': 'first extra'},
+          <String, Object?>{'name': 'second extra'},
+        ])
+        ..setBarcode('code', 'QX-1')
+        ..setImage(
+          'logo',
+          PngBytes.rgb(
+            width: 2,
+            height: 2,
+            plot: (int x, int y, List<int> rgb) => rgb[1] = 90,
+          ),
+        );
+      engine.elementAs<ReportTextElement>('sum').style.bold = true;
+      expect(engine.elementAs<ReportTableElement>('extras').dataSet, 'extras');
+      expect(engine.data.rows('extras'), hasLength(2));
+
+      List<ReportPrimitive> primitives() => <ReportPrimitive>[
+        for (final ReportPageLayout page
+            in engine.layout(const <String, Object?>{}).pages)
+          ...page.primitives,
+      ];
+      final List<String> texts = <String>[
+        for (final ReportPrimitive p in primitives())
+          if (p is ReportTextPrimitive) p.text,
+      ];
+      expect(texts, containsAll(<String>['Fed 2', 'Contoso|2025', 'Z x1=7']));
+      expect(texts, containsAll(<String>['first extra', 'second extra']));
+      expect(primitives().whereType<ReportImagePrimitive>(), hasLength(1));
+
+      final List<String> passed = pageTexts(
+        engine
+            .layout(<String, Object?>{
+              'customer': <String, Object?>{'name': 'Passed wins'},
+            })
+            .pages
+            .first,
+      );
+      expect(passed, contains('Passed wins|2025'));
+
+      engine.setText('title', 'Literal {{x}}', literal: true);
+      engine.setVisible('customer', false);
+      final List<String> hidden = pageTexts(
+        engine.layout(const <String, Object?>{}).pages.first,
+      );
+      expect(hidden, contains('Literal {{x}}'));
+      expect(hidden.where((String t) => t.startsWith('Contoso')), isEmpty);
+
+      expect(
+        () => engine.setText('missing', 'x'),
+        throwsA(isA<ReportElementException>()),
+      );
+      expect(
+        () => engine.setText('extras', 'x'),
+        throwsA(isA<ReportElementException>()),
+      );
+      expect(engine.exportSync(ReportExportFormat.pdf), isNotEmpty);
+    });
+
+    test('chart points are fed by name', () {
+      final QudsReportEngine engine = QudsReportEngine.fromXml(
+        '<QudsReport><Bands><ReportHeader height="80mm">'
+        '<Chart name="sales" x="0" y="0" width="100mm" height="60mm" '
+        'dataSet="rows" category="item.k"><Series value="SUM(item.v)"/>'
+        '</Chart></ReportHeader></Bands></QudsReport>',
+      );
+      engine.setChartPoints('sales', <String, num>{'North': 3, 'South': 5});
+      final ReportChartElement chart = engine.elementAs<ReportChartElement>(
+        'sales',
+      );
+      expect(chart.dataSet, isNull);
+      expect(chart.series, isEmpty);
+      expect(chart.points.map((ReportChartPoint p) => p.value), <String>[
+        '3',
+        '5',
+      ]);
+    });
+
+    test('names are unique, generated, and duplicates are reported', () {
+      final QudsReportEngine engine = QudsReportEngine.fromXml(
+        '<QudsReport><Bands><ReportHeader height="20mm">'
+        '<Text name="a" x="0" y="0" width="10mm" height="5mm">1</Text>'
+        '<Text name="A" x="0" y="0" width="10mm" height="5mm">2</Text>'
+        '<Text x="0" y="0" width="10mm" height="5mm">3</Text>'
+        '<Shape kind="Rect" x="0" y="0" width="10mm" height="5mm"/>'
+        '</ReportHeader></Bands></QudsReport>',
+      );
+      expect(engine.template.duplicateElementNames, <String>{'a'});
+      expect(
+        engine.validate().map((ReportDiagnostic d) => d.message),
+        contains('Element name "a" is used more than once'),
+      );
+      final List<ReportElement> renamed = engine.template.assignElementNames();
+      expect(renamed, hasLength(3));
+      expect(engine.elementNames, <String>['a', 'text1', 'text2', 'shape1']);
+      expect(engine.template.uniqueElementName('text7'), 'text3');
+      expect(ReportTemplate.isValidElementName('total_2'), isTrue);
+      expect(ReportTemplate.isValidElementName('2total'), isFalse);
+      expect(ReportTemplate.isValidElementName('a b'), isFalse);
+    });
+
+    test('ReportData builds, merges, and converts JSON', () {
+      final ReportData d = ReportData()
+        ..set('a.b.c', 1)
+        ..addRow('rows', <String, Object?>{'x': 1})
+        ..addRow('rows', <String, Object?>{'x': 2});
+      expect(d.get('Data.a.b.c'), 1);
+      expect(d.rows('rows'), hasLength(2));
+      d.merge(<String, Object?>{
+        'a': <String, Object?>{
+          'b': <String, Object?>{'d': 2},
+        },
+      });
+      expect(d.get('a.b.c'), 1);
+      expect(d.get('a.b.d'), 2);
+      expect(d.remove('a.b.c'), isTrue);
+      expect(d.remove('nope.x'), isFalse);
+      final ReportData back = ReportData.fromJson(
+        ReportData(<String, Object?>{
+          'when': DateTime.utc(2026, 1, 2),
+          ...d.toMap(),
+        }).toJson(),
+      );
+      expect(back.get('when'), '2026-01-02T00:00:00.000Z');
+      expect(back.rows('rows').last['x'], 2);
+      expect(
+        () => ReportData.fromJson('[1]'),
+        throwsA(isA<ReportDataException>()),
+      );
+      expect(
+        () => ReportData.fromJson('{'),
+        throwsA(isA<ReportDataException>()),
+      );
+      expect(
+        ReportDataType.infer(<Object?>[1, null, 2.5]),
+        ReportDataType.number,
+      );
+      expect(ReportDataType.infer(<Object?>[1, 'x']), ReportDataType.text);
+      expect(ReportDataType.number.coerce('1,250.5'), 1250.5);
+      expect(ReportDataType.boolean.coerce('Yes'), isTrue);
+      expect(ReportDataType.date.coerce('nope'), 'nope');
+    });
+
+    test('CSV parses quotes, delimiters, and typed columns', () {
+      const String csv =
+          '\uFEFFcode;name;qty;paid;when\r\n'
+          'A;"Big; ""red"" box";2;true;2026-01-05\r\n'
+          'B;"two\nlines";1,5;false;\n';
+      final List<Map<String, Object?>> rows = ReportCsv.rows(csv);
+      expect(rows, hasLength(2));
+      expect(rows[0]['name'], 'Big; "red" box');
+      expect(rows[0]['paid'], isTrue);
+      expect(rows[0]['when'], DateTime(2026, 1, 5));
+      expect(rows[1]['name'], 'two\nlines');
+      expect(rows[1]['when'], isNull);
+      expect(rows[0]['qty'], 2);
+      expect(rows[1]['qty'], 15);
+      final String out = ReportCsv.write(rows);
+      expect(ReportCsv.rows(out)[0]['name'], 'Big; "red" box');
+      expect(() => ReportCsv.rows(''), throwsA(isA<ReportDataException>()));
+      expect(
+        () => ReportCsv.parse('a,"b'),
+        throwsA(isA<ReportDataException>()),
+      );
+    });
+
+    test('sample data travels in the package', () {
+      final QudsReportEngine engine = QudsReportEngine.fromXml(xml)
+        ..sampleData = <String, Object?>{
+          'customer': <String, Object?>{'name': 'Sample'},
+          'items': <Object?>[
+            <String, Object?>{'code': 'S', 'qty': 1, 'price': 2},
+          ],
+        };
+      final Uint8List bytes = engine.toPackage();
+      final ReportPackage package = ReportPackage.decode(bytes);
+      expect(package.sampleData!['customer'], <String, Object?>{
+        'name': 'Sample',
+      });
+      final QudsReportEngine opened = QudsReportEngine.fromPackage(bytes);
+      expect(opened.sampleData, package.sampleData);
+      expect(opened.template.dataSchema.tables.single.name, 'items');
+      expect(
+        ReportPackage.decode(ReportPackage(xml: xml).encode()).sampleData,
+        isNull,
       );
     });
   });

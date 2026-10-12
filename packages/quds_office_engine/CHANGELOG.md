@@ -2,6 +2,73 @@
 
 All notable changes to `quds_office_engine` are documented here.
 
+## Unreleased
+
+**`.qrep` packages.**
+
+- A `.qrep` file is now a ZIP holding `layout.xml` (the `<QudsReport>` template) and pre-saved images under `images/<name>.png|jpg`.
+  - A stored `mimetype` entry (`application/vnd.quds.qrep+zip`) comes first.
+- `ReportPackage`:
+  - `encode()` and `ReportPackage.decode(bytes)`; `decode` also opens legacy plain-XML `.qrep` files.
+  - `keyFor(fileName)` derives unique image keys; `isValidKey` checks a name.
+  - PNG / JPEG only (`ReportImageFormat.sniff`); each entry is capped at 64 MB.
+  - Errors raise `ReportPackageException`.
+- `QudsReportEngine.fromPackage(bytes, {images})` uses the embedded images; host `images:` win on name clashes. `engine.toPackage()` writes a package.
+
+**Embedded fonts in `.qrep` packages.**
+
+- Packages carry TrueType families under `fonts/<family>/regular.ttf|bold.ttf`, so a report exports with the faces it was designed with.
+- `ReportPackage.fonts` (`Map<String, ReportFontFiles>`), `fontRegistry({base})`, `mergeFonts(base, embedded)` and `isValidFontFamily`.
+  - Host families come first and win on name clashes; the host registry is not modified.
+  - Every font is checked when it is written or read.
+- `QudsReportEngine.fromPackage` registers the embedded fonts; `embeddedFonts` keeps them so `toPackage()` writes them back.
+- `ReportFontFile.inspect(bytes)` / `inspectWith(read)` return `ReportFontFileInfo` (family, weight, italic) from the `name`, `OS/2` and `head` tables without parsing glyphs.
+  - They throw `ReportFontException` for `.ttc` collections, CFF (`.otf`) outlines, missing tables, and fonts whose `fsType` forbids embedding.
+
+**Report data schema and sample data.**
+
+- `<DataSchema>` in the layout declares fields and tables with typed columns (`text`, `number`, `boolean`, `date`). This is `ReportTemplate.dataSchema` (`ReportDataSchema`, `ReportDataTable`, `ReportDataColumn`, `ReportDataField`).
+  - Calculated columns (`expression="qty * price"`) are evaluated for every row at export; bare names refer to the row's columns.
+  - Exports coerce values to the declared types. `engine.prepare(data)` returns the record the layout sees.
+  - The parser warns about unknown types, duplicates, missing names, and broken formulas.
+- Packages can carry design-time sample data as `data/sample.json` (`ReportPackage.sampleData`, `engine.sampleData`). Exports only use it when the host passes it.
+- `ReportData`: dotted-path `get` / `set` / `remove` / `setTable` / `addRow` / `rows`, deep `merge`, and JSON round-trip with ISO dates. `ReportDataType` handles inference and coercion.
+- `ReportCsv.parse` / `rows` / `write`: delimiter detection (`,` `;` tab), quotes, BOM, and typed columns.
+
+**Named elements and runtime data.**
+
+- Templates keep element names unique: `uniqueElementName`, `assignElementNames`, `elementNamed` (case-insensitive), `duplicateElementNames`, `isValidElementName`.
+- `QudsReportEngine`:
+  - Host data: the `data` constructor parameter (`ReportData`) is merged under the map passed to each export.
+  - `export(format, {data})` / `exportSync`. `ReportExportFormat` moved here from the editor.
+  - Element access by name: `elementNames`, `element`, `elementAs<T>`.
+  - Setters by name: `setText` (with `literal`), `setImage`, `setBarcode`, `setTableRows`, `setChartRows`, `setChartPoints`, `setVisible`.
+  - An unknown name or wrong type throws `ReportElementException`.
+
+**Bilingual, categorized templates with saved images.**
+
+- `ReportTemplates.all` now has 16 templates: eight families, each with an Arabic (RTL) and an English version.
+  - New families: product catalog (a photo per row) and certificate of appreciation.
+  - New English versions of the VAT invoice, account statement, receipt voucher and inventory report, and an Arabic version of the commercial invoice and the sales dashboard.
+  - Existing ids are unchanged.
+- `ReportTemplateInfo` gains `family`, `language` (`ReportTemplateLanguage`), `familyTitle` / `familyTitleAr`, `strings`, `images()` and `package()`.
+  - Both versions share one layout with `[[key]]` tokens filled from per-language strings.
+- `ReportTemplates.families`, `variants`, `find`, `counterpart` and `inCategory`.
+- `ReportTemplateCategory` gains `hr` (Human resources) and bilingual `title` / `titleAr` / `titleFor`.
+- Templates carry pre-saved PNG images (logo, stamp, signature, seal, product photos) in their package.
+  - The images are drawn by the new `ReportTemplateArt` (`logo`, `stamp`, `signature`, `seal`, `product(ReportProductArt)`), an anti-aliased pure-Dart rasterizer.
+- `AMOUNTWORDS(amount, 'USD', 'en'|'ar')` and the `words:USD` format spell amounts in English (`EnglishWords`, 21 currencies).
+- The `dateAr:` format uses Arabic month and day names (`10 أكتوبر 2026`).
+
+**Fixes.**
+
+- Elements that share a top edge now paint in document order. Before, an unstable sort could draw a filled shape over the text placed on it (for example, the receipt voucher amount).
+- Raw deflate now emits overlapping matches and caps hash-chain walks, so long runs (for example, transparent PNG rows) compress fast and much smaller.
+
+**Docs.**
+
+- The README links to the Quds Report Studio installers for Windows and Linux, which design `.qrep` reports for this engine. The pub.dev screenshots include the studio and the new templates.
+
 ## 0.6.0
 
 **Band report engine (`quds_reports.dart`).**

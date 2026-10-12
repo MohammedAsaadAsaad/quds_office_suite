@@ -194,13 +194,18 @@ class ReportElementPainter {
     _text.clear();
   }
 
-  /// Releases cached painters.
-  void dispose() {
-    _charts.clear();
+  /// Drops cached text layouts (after new fonts load).
+  void clearText() {
     for (final TextPainter tp in _text.values) {
       tp.dispose();
     }
     _text.clear();
+  }
+
+  /// Releases cached painters.
+  void dispose() {
+    _charts.clear();
+    clearText();
   }
 
   void _guideOutline(Canvas canvas, Rect r) {

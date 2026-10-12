@@ -82,12 +82,12 @@ Future<void> main(List<String> args) async {
     '${out.path}/order.docx',
   ).writeAsBytesSync(await engine.exportToWord(data));
 
-  // 2. A bundled template with its sample data.
+  // 2. A bundled template with its saved images and sample data.
   final ReportTemplateInfo dashboard = ReportTemplates.byId(
     'sales_performance',
   )!;
-  final QudsReportEngine sales = QudsReportEngine.fromXml(
-    dashboard.xml,
+  final QudsReportEngine sales = QudsReportEngine.fromPackage(
+    dashboard.package().encode(),
     fonts: fonts,
   );
   File(

@@ -5,6 +5,23 @@ This repository is a Dart workspace. Each published package keeps its own change
 - [`packages/quds_office_engine/CHANGELOG.md`](packages/quds_office_engine/CHANGELOG.md)
 - [`packages/quds_office_editor/CHANGELOG.md`](packages/quds_office_editor/CHANGELOG.md)
 
+## Unreleased
+
+- `.qrep` files are ZIP packages: `layout.xml` plus pre-saved images (`ReportPackage`, `QudsReportEngine.fromPackage`). Legacy plain-XML files still open.
+- The designer and Report Studio embed, rename, insert, and remove report images (undoable) and save them inside the `.qrep`.
+- The report inspector has Properties / Variables / Images tabs and a resizable width; Report Studio remembers the width in `settings.json`.
+- Reports embed TrueType fonts in the `.qrep` (`fonts/<family>/regular.ttf|bold.ttf`), so they export with the designed faces anywhere. The inspector gains a Fonts tab; Report Studio lists installed fonts for one-click embedding and imports `.ttf` files.
+- Reports declare their data in `<DataSchema>`: typed fields and tables, plus calculated columns that are evaluated at export. Sample data is saved in the `.qrep` as `data/sample.json`.
+- The designer and Report Studio have a **data explorer** (F6), a Power BI-style grid. You can browse and edit tables and fields; add, rename, and delete rows and columns, including calculated `ƒx` columns; and import CSV or JSON. Renaming a column or field rewrites its bindings.
+- Every report element has a unique name. `QudsReportEngine` can fill a report from code by name: `setText`, `setImage`, `setTableRows`, `setChartPoints`, `setVisible`, and `elementAs<T>`. It can also hold host data (`engine.data`) and export it with `export(format)`.
+- Report templates are categorized (sales, finance, inventory, analytics, human resources), and each of the eight families ships an Arabic and an English version (16 templates). Templates carry pre-saved images (logo, stamp, signature, seal, product photos). Report Studio's **New from template** goes category, then family, then language. Adds `AMOUNTWORDS` / `words:` (English amounts in words) and `dateAr:` (Arabic month names).
+- Report Studio **1.0.0 installers** ([release `studio-v1.0.0`](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/tag/studio-v1.0.0)):
+  - A new app icon and a `.qrep` document icon (`tool/make_icons.py`) for Windows, Linux, macOS, and web.
+  - Windows: an Inno Setup installer with an uninstaller, and a portable zip. Linux: a `.deb` and a tar.gz with `install.sh` / `uninstall.sh`.
+  - On its first run the studio registers itself for `.qrep` files (the freedesktop MIME type plus a desktop entry on Linux, `HKCU` registry keys on Windows), so opening a `.qrep` file launches the studio. **File › Open .qrep files with Report Studio** registers it again.
+  - The `report-studio-release` workflow builds all packages and attaches them to the GitHub release when a `studio-v*` tag is pushed.
+  - The engine and editor READMEs link to the downloads, and the engine's pub.dev screenshots include the studio.
+
 ## 0.6.0 / 0.6.0
 
 - Engine **0.6.0**: band report engine (`quds_reports.dart`): `.qrep`

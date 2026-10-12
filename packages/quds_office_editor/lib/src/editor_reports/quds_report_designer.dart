@@ -1,3 +1,7 @@
+import 'dart:async';
+import 'dart:math' as math;
+
+import 'package:flutter/gestures.dart' show DragStartBehavior;
 import 'package:flutter/material.dart' show Icons;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
@@ -7,6 +11,7 @@ import '../editor_sheet/inline_cell_editor.dart';
 import '../embed/office_context_menu.dart';
 import '../embed/office_host_fonts.dart';
 import '../embed/office_theme.dart';
+import 'render_report_data_explorer.dart';
 import 'render_report_designer.dart';
 import 'render_report_inspector.dart';
 import 'render_report_preview.dart';
@@ -32,11 +37,19 @@ class QudsReportDesigner extends StatefulWidget {
     required this.controller,
     this.theme = OfficeTheme.light,
     this.inspectorWidth = 300,
+    this.initialInspectorWidth,
+    this.minInspectorWidth = 240,
+    this.maxInspectorWidth = 640,
+    this.onInspectorWidthChanged,
     this.focusNode,
     this.autofocus = true,
     this.loadBundledFonts = true,
     this.onExport,
     this.templates = ReportTemplates.all,
+    this.onPickImage,
+    this.onPickFont,
+    this.deviceFonts,
+    this.onPickData,
   });
 
   /// controller API.
@@ -45,8 +58,23 @@ class QudsReportDesigner extends StatefulWidget {
   /// theme API.
   final OfficeTheme theme;
 
-  /// Width of the property inspector, logical pixels.
+  /// Default width of the property inspector, logical pixels. Drag the
+  /// splitter on its edge to resize; double-click it to restore this width.
   final double inspectorWidth;
+
+  /// Starting width (for example one a host saved from
+  /// [onInspectorWidthChanged]); [inspectorWidth] when null.
+  final double? initialInspectorWidth;
+
+  /// Narrowest the inspector can be dragged.
+  final double minInspectorWidth;
+
+  /// Widest the inspector can be dragged (the canvas keeps at least 240 px).
+  final double maxInspectorWidth;
+
+  /// Called with the new width when a splitter drag ends or is reset, so a
+  /// host can persist it.
+  final ValueChanged<double>? onInspectorWidthChanged;
 
   /// Keyboard focus; created internally when null.
   final FocusNode? focusNode;
@@ -65,6 +93,26 @@ class QudsReportDesigner extends StatefulWidget {
   /// Picking one replaces the template and uses its sample data.
   final List<ReportTemplateInfo> templates;
 
+  /// Opens a host file picker for "Import image…" (PNG / JPEG); the picked
+  /// image is embedded in the report and saved inside the `.qrep` package.
+  /// The import buttons are hidden when null.
+  final ReportImagePicker? onPickImage;
+
+  /// Opens a host file picker for "Import font file…" (TrueType `.ttf`);
+  /// the faces are embedded in the report and saved inside the `.qrep`
+  /// package. The button is hidden when null.
+  final ReportFontPicker? onPickFont;
+
+  /// Installed fonts listed on the inspector's Fonts page, where one click
+  /// embeds a family in the report. Typing an installed family into a font
+  /// field embeds it too. The list is hidden when null.
+  final ReportDeviceFonts? deviceFonts;
+
+  /// Opens a host file picker for the data explorer's "Import…" button
+  /// (`.csv` or `.json`); the rows become the report's sample data, saved
+  /// inside the `.qrep` package. The button is hidden when null.
+  final ReportDataPicker? onPickData;
+
   @override
   State<QudsReportDesigner> createState() => _QudsReportDesignerState();
 }
@@ -74,6 +122,10 @@ class _QudsReportDesignerState extends State<QudsReportDesigner> {
   OverlayEntry? _menu;
   String _message = '';
   final GlobalKey _inspectorKey = GlobalKey();
+  late double _inspectorWidth =
+      widget.initialInspectorWidth ?? widget.inspectorWidth;
+  bool _splitterHot = false;
+  bool _splitterDrag = false;
 
   FocusNode get _focus => widget.focusNode ?? (_ownFocus ??= FocusNode());
 
@@ -85,6 +137,7 @@ class _QudsReportDesignerState extends State<QudsReportDesigner> {
   void initState() {
     super.initState();
     _c.addListener(_onController);
+    _bindPicker(null);
     OfficeHostFonts.ensureRegistered().then((_) {
       if (mounted) {
         _c.refresh();
@@ -101,6 +154,17 @@ class _QudsReportDesignerState extends State<QudsReportDesigner> {
       widget.controller.addListener(_onController);
       _loadFonts();
     }
+    if (!identical(oldWidget.controller, widget.controller) ||
+        (oldWidget.onPickImage == null) != (widget.onPickImage == null) ||
+        oldWidget.onPickFont != widget.onPickFont ||
+        oldWidget.onPickData != widget.onPickData ||
+        !identical(oldWidget.deviceFonts, widget.deviceFonts)) {
+      _bindPicker(oldWidget.controller);
+    }
+    if (oldWidget.initialInspectorWidth != widget.initialInspectorWidth ||
+        oldWidget.inspectorWidth != widget.inspectorWidth) {
+      _inspectorWidth = widget.initialInspectorWidth ?? widget.inspectorWidth;
+    }
     if (oldWidget.focusNode != widget.focusNode && widget.focusNode != null) {
       _ownFocus?.dispose();
       _ownFocus = null;
@@ -110,9 +174,111 @@ class _QudsReportDesignerState extends State<QudsReportDesigner> {
   @override
   void dispose() {
     _dismissMenu();
+    if (_c.imagePicker == _pickImage) {
+      _c.imagePicker = null;
+    }
+    if (_c.fontPicker == widget.onPickFont) {
+      _c.fontPicker = null;
+    }
+    if (_c.dataPicker == widget.onPickData) {
+      _c.dataPicker = null;
+    }
+    if (identical(_c.deviceFonts, widget.deviceFonts)) {
+      _c.deviceFonts = null;
+    }
     _c.removeListener(_onController);
     _ownFocus?.dispose();
     super.dispose();
+  }
+
+  static const double _splitterWidth = 6;
+
+  double _clampInspector(double width, double available) {
+    final double max = math.min(
+      widget.maxInspectorWidth,
+      available - _splitterWidth - 240,
+    );
+    final double lo = math.min(widget.minInspectorWidth, max);
+    return width.clamp(math.max(0, lo), math.max(lo, max)).toDouble();
+  }
+
+  Widget _splitter(OfficeTheme theme, double available) {
+    final bool rtl = Directionality.of(context) == TextDirection.rtl;
+    final bool active = _splitterHot || _splitterDrag;
+    return MouseRegion(
+      cursor: SystemMouseCursors.resizeColumn,
+      onEnter: (_) => setState(() => _splitterHot = true),
+      onExit: (_) => setState(() => _splitterHot = false),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        dragStartBehavior: DragStartBehavior.down,
+        onHorizontalDragStart: (_) => setState(() {
+          _splitterDrag = true;
+          _inspectorWidth = _clampInspector(_inspectorWidth, available);
+        }),
+        onHorizontalDragUpdate: (DragUpdateDetails d) => setState(() {
+          _inspectorWidth = _clampInspector(
+            _inspectorWidth + (rtl ? d.delta.dx : -d.delta.dx),
+            available,
+          );
+        }),
+        onHorizontalDragEnd: (_) {
+          setState(() => _splitterDrag = false);
+          widget.onInspectorWidthChanged?.call(_inspectorWidth);
+        },
+        onDoubleTap: () {
+          setState(() => _inspectorWidth = widget.inspectorWidth);
+          widget.onInspectorWidthChanged?.call(_inspectorWidth);
+        },
+        child: SizedBox(
+          width: _splitterWidth,
+          child: CustomPaint(
+            painter: _SplitterPainter(
+              line: theme.pageBorder,
+              accent: theme.selectionStroke,
+              active: active,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _bindPicker(ReportDesignerController? previous) {
+    if (previous != null && !identical(previous, _c)) {
+      if (previous.imagePicker == _pickImage) {
+        previous.imagePicker = null;
+      }
+      previous
+        ..fontPicker = null
+        ..dataPicker = null
+        ..deviceFonts = null;
+    }
+    _c.imagePicker = widget.onPickImage == null ? null : _pickImage;
+    _c.fontPicker = widget.onPickFont;
+    _c.dataPicker = widget.onPickData;
+    _c.deviceFonts = widget.deviceFonts;
+    _loadCanvasFonts();
+    if (previous != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _c.refresh();
+        }
+      });
+    }
+  }
+
+  Future<({String name, Uint8List bytes})?> _pickImage() async {
+    final ReportImagePicker? pick = widget.onPickImage;
+    final ({String name, Uint8List bytes})? file = await pick?.call();
+    if (file == null || !mounted) {
+      return null;
+    }
+    if (ReportImageFormat.sniff(file.bytes) == null) {
+      setState(() => _message = '"${file.name}" is not a PNG or JPEG image');
+      return null;
+    }
+    return file;
   }
 
   void _loadFonts() {
@@ -136,7 +302,40 @@ class _QudsReportDesignerState extends State<QudsReportDesigner> {
 
   void _onController() {
     if (mounted) {
+      _loadCanvasFonts();
       setState(() => _message = '');
+    }
+  }
+
+  static final Map<String, ReportFontFiles> _canvasFonts =
+      <String, ReportFontFiles>{};
+
+  /// Registers embedded families with the engine's font collection so the
+  /// design canvas (Flutter text) draws them; the canvas repaints when
+  /// [PaintingBinding.systemFonts] reports the new faces.
+  void _loadCanvasFonts() {
+    for (final MapEntry<String, ReportFontFiles> f
+        in _c.embeddedFonts.entries) {
+      if (identical(_canvasFonts[f.key], f.value)) {
+        continue;
+      }
+      _canvasFonts[f.key] = f.value;
+      final FontLoader loader = FontLoader(f.key);
+      for (final Uint8List? face in <Uint8List?>[
+        f.value.regular,
+        f.value.bold,
+      ]) {
+        if (face != null) {
+          loader.addFont(Future<ByteData>.value(ByteData.sublistView(face)));
+        }
+      }
+      unawaited(
+        loader.load().catchError((Object e) {
+          if (mounted) {
+            setState(() => _message = 'Could not load ${f.key}: $e');
+          }
+        }),
+      );
     }
   }
 
@@ -409,20 +608,41 @@ class _QudsReportDesignerState extends State<QudsReportDesigner> {
     ReportTemplateCategory.finance => Icons.account_balance,
     ReportTemplateCategory.inventory => Icons.inventory_2,
     ReportTemplateCategory.analytics => Icons.insights,
+    ReportTemplateCategory.hr => Icons.badge_outlined,
   };
 
+  /// Families grouped under category captions; a family with several
+  /// languages asks for one ([_languageMenu]).
   void _templatesMenu(Offset at) {
     final List<ReportTemplateInfo> list = widget.templates;
+    final List<ReportTemplateInfo> heads = <ReportTemplateInfo>[];
+    final Set<String> seen = <String>{};
+    for (final ReportTemplateInfo info in list) {
+      if (seen.add(info.family)) {
+        heads.add(info);
+      }
+    }
+    List<ReportTemplateInfo> variants(String family) => <ReportTemplateInfo>[
+      for (final ReportTemplateInfo info in list)
+        if (info.family == family) info,
+    ];
     _showMenu(
       at,
       <OfficeContextAction>[
-        const OfficeContextAction.caption('Ready-made reports'),
-        for (final ReportTemplateInfo info in list)
-          OfficeContextAction(
-            id: 'tpl.${info.id}',
-            label: '${info.title}  ·  ${info.titleAr}',
-            icon: _categoryIcon(info.category),
-          ),
+        for (final ReportTemplateCategory c in ReportTemplateCategory.values)
+          if (heads.any(
+            (ReportTemplateInfo t) => t.category == c,
+          )) ...<OfficeContextAction>[
+            OfficeContextAction.caption('${c.title}  ·  ${c.titleAr}'),
+            for (final ReportTemplateInfo t in heads)
+              if (t.category == c)
+                OfficeContextAction(
+                  id: 'fam.${t.family}',
+                  label: t.familyTitle,
+                  icon: _categoryIcon(c),
+                  shortcut: t.familyTitleAr,
+                ),
+          ],
         const OfficeContextAction(
           id: 'blank',
           label: 'Blank report',
@@ -436,15 +656,50 @@ class _QudsReportDesignerState extends State<QudsReportDesigner> {
           _c.replaceTemplate(ReportTemplate());
           return;
         }
-        for (final ReportTemplateInfo info in list) {
-          if (id == 'tpl.${info.id}') {
-            _c.loadTemplate(info);
-            _c.fitWidth();
-            setState(() => _message = 'Loaded "${info.title}"');
+        for (final ReportTemplateInfo t in heads) {
+          if (id == 'fam.${t.family}') {
+            final List<ReportTemplateInfo> v = variants(t.family);
+            if (v.length == 1) {
+              _loadTemplate(v.single);
+            } else {
+              _languageMenu(at, v);
+            }
           }
         }
       },
     );
+  }
+
+  void _languageMenu(Offset at, List<ReportTemplateInfo> variants) {
+    final ReportTemplateInfo first = variants.first;
+    _showMenu(
+      at,
+      <OfficeContextAction>[
+        OfficeContextAction.caption(
+          '${first.familyTitle}  ·  ${first.familyTitleAr}',
+        ),
+        for (final ReportTemplateInfo info in variants)
+          OfficeContextAction(
+            id: 'tpl.${info.id}',
+            label: info.language.label,
+            icon: Icons.translate,
+            shortcut: info.language.code.toUpperCase(),
+          ),
+      ],
+      (String id) {
+        for (final ReportTemplateInfo info in variants) {
+          if (id == 'tpl.${info.id}') {
+            _loadTemplate(info);
+          }
+        }
+      },
+    );
+  }
+
+  void _loadTemplate(ReportTemplateInfo info) {
+    _c.loadTemplate(info);
+    _c.fitWidth();
+    setState(() => _message = 'Loaded "${info.title}"');
   }
 
   Future<void> _export(ReportExportFormat format) async {
@@ -532,6 +787,8 @@ class _QudsReportDesignerState extends State<QudsReportDesigner> {
 
   List<ReportToolbarItem> _toolbarItems() {
     final bool design = _c.mode == ReportDesignMode.design;
+    final bool preview = _c.mode == ReportDesignMode.preview;
+    final bool data = _c.mode == ReportDesignMode.data;
     final int n = _c.selectedElements.length;
     return <ReportToolbarItem>[
       if (widget.templates.isNotEmpty)
@@ -639,12 +896,21 @@ class _QudsReportDesignerState extends State<QudsReportDesigner> {
         enabled: design,
       ),
       ReportToolbarItem(
-        id: 'mode',
-        icon: design ? ReportToolbarIcon.preview : ReportToolbarIcon.design,
-        tooltip: design ? 'Live preview (F5)' : 'Back to design (F5)',
-        label: design ? 'Preview' : 'Design',
-        active: !design,
+        id: 'data',
+        icon: data ? ReportToolbarIcon.design : ReportToolbarIcon.data,
+        tooltip: data
+            ? 'Back to design (F6)'
+            : 'Explore and edit the report data (F6)',
+        label: data ? 'Design' : 'Data',
+        active: data,
         separatorBefore: true,
+      ),
+      ReportToolbarItem(
+        id: 'mode',
+        icon: preview ? ReportToolbarIcon.design : ReportToolbarIcon.preview,
+        tooltip: preview ? 'Back to design (F5)' : 'Live preview (F5)',
+        label: preview ? 'Design' : 'Preview',
+        active: preview,
       ),
       if (widget.onExport != null)
         const ReportToolbarItem(
@@ -705,6 +971,8 @@ class _QudsReportDesignerState extends State<QudsReportDesigner> {
         _c.fitWidth();
       case 'mode':
         _c.togglePreview();
+      case 'data':
+        _c.toggleData();
       case 'export':
         _exportMenu(at);
       case 'templates':
@@ -717,6 +985,32 @@ class _QudsReportDesignerState extends State<QudsReportDesigner> {
   String _status() {
     if (_message.isNotEmpty) {
       return _message;
+    }
+    final String? notice = _c.notice;
+    if (notice != null && notice.isNotEmpty) {
+      return notice;
+    }
+    if (_c.mode == ReportDesignMode.data) {
+      final ReportDataTableView t = _c.dataTable;
+      final StringBuffer d = StringBuffer('Data  ·  ${t.title}');
+      final int row = _c.dataRow;
+      final int col = _c.dataColumn;
+      if (row >= 0 && col >= 0) {
+        d.write('  ·  row ${row + 1}, ${t.columns[col].name}');
+        if (!_c.canEditDataCell(row, col) && !_c.hasHostData) {
+          d.write(
+            t.columns[col].isCalculated ? '  ·  calculated' : '  ·  read-only',
+          );
+        }
+      } else if (col >= 0) {
+        d.write('  ·  column ${t.columns[col].name}');
+      } else if (row >= 0) {
+        d.write('  ·  row ${row + 1}');
+      }
+      if (_c.hasHostData) {
+        d.write('  ·  host data (read-only)');
+      }
+      return d.toString();
     }
     final StringBuffer s = StringBuffer('${(_c.zoom * 100).round()}%');
     final List<ReportElement> sel = _c.selectedElements;
@@ -761,6 +1055,10 @@ class _QudsReportDesignerState extends State<QudsReportDesigner> {
         tab: _c.commitTextEdit,
       );
     }
+    final ({int row, int column})? cell = _c.editingDataCell;
+    if (cell != null) {
+      return _cellEditKey(event, cell);
+    }
     if (_c.editingProperty != null) {
       final ReportProperty? p = _editingProperty();
       if (p != null &&
@@ -800,6 +1098,10 @@ class _QudsReportDesignerState extends State<QudsReportDesigner> {
       _c.togglePreview();
       return KeyEventResult.handled;
     }
+    if (key == LogicalKeyboardKey.f6) {
+      _c.toggleData();
+      return KeyEventResult.handled;
+    }
     if (_ctrl &&
         (key == LogicalKeyboardKey.equal ||
             key == LogicalKeyboardKey.add ||
@@ -824,6 +1126,9 @@ class _QudsReportDesignerState extends State<QudsReportDesigner> {
     if (_ctrl && key == LogicalKeyboardKey.keyY) {
       _c.redo();
       return KeyEventResult.handled;
+    }
+    if (_c.mode == ReportDesignMode.data) {
+      return _dataKey(event);
     }
     if (_c.mode != ReportDesignMode.design) {
       if (key == LogicalKeyboardKey.escape) {
@@ -907,6 +1212,273 @@ class _QudsReportDesignerState extends State<QudsReportDesigner> {
       return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;
+  }
+
+  /// Moves the explorer selection by ([dr], [dc]), starting at the first
+  /// cell when nothing is selected.
+  void _moveCell(int dr, int dc) {
+    final ReportDataTableView t = _c.dataTable;
+    if (t.rows.isEmpty && dr != 0) {
+      return;
+    }
+    final int row = _c.dataRow;
+    final int col = _c.dataColumn;
+    if (row < 0 && col < 0) {
+      _c.selectDataCell(t.rows.isEmpty ? -1 : 0, t.columns.isEmpty ? -1 : 0);
+      return;
+    }
+    _c.selectDataCell(
+      row < 0 ? (dr > 0 ? 0 : -1) : (row + dr).clamp(0, t.rows.length - 1),
+      col < 0 ? 0 : (col + dc).clamp(0, t.columns.length - 1),
+    );
+  }
+
+  KeyEventResult _dataKey(KeyEvent event) {
+    final LogicalKeyboardKey key = event.logicalKey;
+    final int row = _c.dataRow;
+    final int col = _c.dataColumn;
+    final (int, int)? move = switch (key) {
+      LogicalKeyboardKey.arrowUp => (-1, 0),
+      LogicalKeyboardKey.arrowDown => (1, 0),
+      LogicalKeyboardKey.arrowLeft => (0, -1),
+      LogicalKeyboardKey.arrowRight => (0, 1),
+      LogicalKeyboardKey.tab => (0, _shift ? -1 : 1),
+      LogicalKeyboardKey.pageUp => (-20, 0),
+      LogicalKeyboardKey.pageDown => (20, 0),
+      _ => null,
+    };
+    if (move != null) {
+      _moveCell(move.$1, move.$2);
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.escape) {
+      if (row >= 0 || col >= 0) {
+        _c.selectDataCell(-1, -1);
+      } else {
+        _c.toggleData();
+      }
+      return KeyEventResult.handled;
+    }
+    if (_ctrl) {
+      if (key == LogicalKeyboardKey.keyC && row >= 0 && col >= 0) {
+        Clipboard.setData(
+          ClipboardData(
+            text: ReportDesignerController.dataCellText(
+              _c.dataTable.rows[row][col],
+            ),
+          ),
+        );
+        return KeyEventResult.handled;
+      }
+      if (key == LogicalKeyboardKey.keyV && row >= 0 && col >= 0) {
+        Clipboard.getData(Clipboard.kTextPlain).then((ClipboardData? data) {
+          final String? text = data?.text;
+          if (text != null && mounted) {
+            _c.setDataCell(row, col, text.trim());
+          }
+        });
+        return KeyEventResult.handled;
+      }
+      return KeyEventResult.ignored;
+    }
+    if (key == LogicalKeyboardKey.f2 ||
+        key == LogicalKeyboardKey.enter ||
+        key == LogicalKeyboardKey.numpadEnter) {
+      if (!_c.beginCellEdit(row, col) && row >= 0) {
+        _moveCell(1, 0);
+      }
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.delete ||
+        key == LogicalKeyboardKey.backspace) {
+      if (row >= 0 && col >= 0) {
+        _c.setDataCell(row, col, '');
+      } else if (row >= 0 && col < 0 && !_c.dataTable.isFields) {
+        _c.removeDataRows(<int>[row]);
+      }
+      return KeyEventResult.handled;
+    }
+    final String? ch = event.character;
+    if (ch != null &&
+        ch.isNotEmpty &&
+        ch.codeUnitAt(0) >= 0x20 &&
+        ch.codeUnitAt(0) != 0x7F &&
+        row >= 0 &&
+        col >= 0) {
+      _c.beginCellEdit(row, col, initial: ch);
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  KeyEventResult _cellEditKey(KeyEvent event, ({int row, int column}) cell) {
+    final LogicalKeyboardKey key = event.logicalKey;
+    final (int, int)? move = switch (key) {
+      LogicalKeyboardKey.enter ||
+      LogicalKeyboardKey.numpadEnter => (_shift ? -1 : 1, 0),
+      LogicalKeyboardKey.tab => (0, _shift ? -1 : 1),
+      LogicalKeyboardKey.arrowUp => (-1, 0),
+      LogicalKeyboardKey.arrowDown => (1, 0),
+      _ => null,
+    };
+    if (move != null) {
+      _c.commitPropertyEdit();
+      _c.selectDataCell(cell.row, cell.column);
+      _moveCell(move.$1, move.$2);
+      return KeyEventResult.handled;
+    }
+    return _editKey(
+      _c.propertyEditor,
+      event,
+      multiline: false,
+      commit: _c.commitPropertyEdit,
+      cancel: _c.cancelPropertyEdit,
+      tab: _c.commitPropertyEdit,
+    );
+  }
+
+  void _dataMenu(ReportDataContextHit hit) {
+    _activate();
+    final ReportDataTableView t = _c.dataTable;
+    final bool editable = _c.dataEditable;
+    final bool fields = t.isFields;
+    final List<OfficeContextAction> actions = <OfficeContextAction>[
+      if (hit.area == ReportDataArea.cell &&
+          _c.canEditDataCell(hit.row, hit.column))
+        const OfficeContextAction(
+          id: 'edit',
+          label: 'Edit cell',
+          icon: Icons.edit,
+          shortcut: 'F2',
+        ),
+      if (hit.area == ReportDataArea.cell &&
+          _c.canEditDataCell(hit.row, hit.column))
+        const OfficeContextAction(
+          id: 'clear',
+          label: 'Clear cell',
+          icon: Icons.backspace_outlined,
+          shortcut: 'Del',
+        ),
+      if (!fields && editable && hit.row >= 0) ...<OfficeContextAction>[
+        const OfficeContextAction(
+          id: 'rowAbove',
+          label: 'Insert row above',
+          icon: Icons.north,
+          separatorBefore: true,
+        ),
+        const OfficeContextAction(
+          id: 'rowBelow',
+          label: 'Insert row below',
+          icon: Icons.south,
+        ),
+        const OfficeContextAction(
+          id: 'rowDelete',
+          label: 'Delete row',
+          icon: Icons.delete_outline,
+          danger: true,
+        ),
+      ],
+      if (!fields &&
+          editable &&
+          hit.row < 0 &&
+          hit.area != ReportDataArea.table)
+        const OfficeContextAction(
+          id: 'rowAdd',
+          label: 'Add row',
+          icon: Icons.add,
+        ),
+      if (!fields && hit.area != ReportDataArea.table) ...<OfficeContextAction>[
+        const OfficeContextAction(
+          id: 'colAdd',
+          label: 'Add column',
+          icon: Icons.view_column_outlined,
+          separatorBefore: true,
+        ),
+        const OfficeContextAction(
+          id: 'calcAdd',
+          label: 'Add calculated column',
+          icon: Icons.functions,
+        ),
+      ],
+      if (!fields && hit.column >= 0) ...<OfficeContextAction>[
+        OfficeContextAction(
+          id: 'colRename',
+          label: 'Rename column "${t.columns[hit.column].name}"',
+          icon: Icons.drive_file_rename_outline,
+          enabled: editable,
+        ),
+        const OfficeContextAction(
+          id: 'colDelete',
+          label: 'Delete column',
+          icon: Icons.delete_outline,
+          danger: true,
+        ),
+      ],
+      if (fields && editable)
+        const OfficeContextAction(
+          id: 'fieldAdd',
+          label: 'Add field',
+          icon: Icons.add,
+        ),
+      if (fields && editable && hit.row >= 0)
+        const OfficeContextAction(
+          id: 'fieldDelete',
+          label: 'Delete field',
+          icon: Icons.delete_outline,
+          danger: true,
+        ),
+      if (hit.area == ReportDataArea.table && !fields)
+        const OfficeContextAction(
+          id: 'tableDelete',
+          label: 'Delete table',
+          icon: Icons.delete_outline,
+          danger: true,
+        ),
+      if (_c.dataPicker != null && editable)
+        const OfficeContextAction(
+          id: 'import',
+          label: 'Import CSV / JSON…',
+          icon: Icons.upload_file,
+          separatorBefore: true,
+        ),
+    ];
+    if (actions.isEmpty) {
+      return;
+    }
+    _showMenu(hit.globalPosition, actions, (String id) {
+      _c.inspectorPage = ReportInspectorPage.properties;
+      switch (id) {
+        case 'edit':
+          _c.beginCellEdit(hit.row, hit.column);
+        case 'clear':
+          _c.setDataCell(hit.row, hit.column, '');
+        case 'rowAbove':
+          _c.addDataRow(at: hit.row);
+        case 'rowBelow':
+          _c.addDataRow(at: hit.row + 1);
+        case 'rowDelete':
+          _c.removeDataRows(<int>[hit.row]);
+        case 'rowAdd':
+          _c.addDataRow();
+        case 'colAdd':
+          _c.setProperty('data.col+', '');
+        case 'calcAdd':
+          _c.setProperty('data.calc+', '');
+        case 'colRename':
+          _c.selectDataCell(-1, hit.column);
+          _c.beginPropertyEdit('data.col.name');
+        case 'colDelete':
+          _c.removeDataColumn(t.columns[hit.column].name);
+        case 'fieldAdd':
+          _c.beginPropertyEdit('data.field+');
+        case 'fieldDelete':
+          _c.setProperty('data.field.remove', '');
+        case 'tableDelete':
+          _c.removeDataTable(hit.table);
+        case 'import':
+          _c.setProperty('data.import', '');
+      }
+    });
   }
 
   ReportProperty? _editingProperty() {
@@ -1101,25 +1673,31 @@ class _QudsReportDesignerState extends State<QudsReportDesigner> {
   @override
   Widget build(BuildContext context) {
     final OfficeTheme theme = widget.theme;
-    final bool design = _c.mode == ReportDesignMode.design;
-    final Widget surface = design
-        ? ReportDesignerCanvas(
-            controller: _c,
-            theme: theme,
-            onContextMenu: _canvasMenu,
-            onActivate: _activate,
-          )
-        : ReportPreviewSurface(
-            document: _c.previewLayout,
-            error: _c.previewError?.toString(),
-            zoom: _c.zoom,
-            theme: theme,
-            onZoom: (double z) => _c.zoom = z,
-            onPickElement: (String id) {
-              _c.mode = ReportDesignMode.design;
-              _c.select(id);
-            },
-          );
+    final Widget surface = switch (_c.mode) {
+      ReportDesignMode.design => ReportDesignerCanvas(
+        controller: _c,
+        theme: theme,
+        onContextMenu: _canvasMenu,
+        onActivate: _activate,
+      ),
+      ReportDesignMode.data => ReportDataExplorer(
+        controller: _c,
+        theme: theme,
+        onContextMenu: _dataMenu,
+        onActivate: _activate,
+      ),
+      ReportDesignMode.preview => ReportPreviewSurface(
+        document: _c.previewLayout,
+        error: _c.previewError?.toString(),
+        zoom: _c.zoom,
+        theme: theme,
+        onZoom: (double z) => _c.zoom = z,
+        onPickElement: (String id) {
+          _c.mode = ReportDesignMode.design;
+          _c.select(id);
+        },
+      ),
+    };
     return Focus(
       focusNode: _focus,
       autofocus: widget.autofocus,
@@ -1134,26 +1712,74 @@ class _QudsReportDesignerState extends State<QudsReportDesigner> {
             onPressedAt: _onToolbar,
           ),
           Expanded(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: <Widget>[
-                Expanded(child: surface),
-                SizedBox(width: 1, child: ColoredBox(color: theme.pageBorder)),
-                SizedBox(
-                  width: widget.inspectorWidth,
-                  child: ReportInspector(
-                    key: _inspectorKey,
-                    controller: _c,
-                    theme: theme,
-                    onChoose: _inspectorChoice,
-                    onActivate: _activate,
-                  ),
-                ),
-              ],
+            child: LayoutBuilder(
+              builder: (BuildContext context, BoxConstraints box) {
+                final double width = _clampInspector(
+                  _inspectorWidth,
+                  box.maxWidth,
+                );
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    Expanded(child: surface),
+                    _splitter(theme, box.maxWidth),
+                    SizedBox(
+                      width: width,
+                      child: ReportInspector(
+                        key: _inspectorKey,
+                        controller: _c,
+                        theme: theme,
+                        onChoose: _inspectorChoice,
+                        onActivate: _activate,
+                      ),
+                    ),
+                  ],
+                );
+              },
             ),
           ),
         ],
       ),
     );
   }
+}
+
+class _SplitterPainter extends CustomPainter {
+  const _SplitterPainter({
+    required this.line,
+    required this.accent,
+    required this.active,
+  });
+
+  final Color line;
+  final Color accent;
+  final bool active;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final double x = size.width / 2;
+    if (active) {
+      canvas.drawRect(
+        Offset.zero & size,
+        Paint()..color = accent.withValues(alpha: 0.12),
+      );
+    }
+    canvas.drawLine(
+      Offset(x, 0),
+      Offset(x, size.height),
+      Paint()
+        ..color = active ? accent : line
+        ..strokeWidth = active ? 2 : 1,
+    );
+    if (active) {
+      final Paint dot = Paint()..color = accent;
+      for (int i = -1; i <= 1; i++) {
+        canvas.drawCircle(Offset(x, size.height / 2 + i * 6), 1.6, dot);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(_SplitterPainter old) =>
+      old.line != line || old.accent != accent || old.active != active;
 }

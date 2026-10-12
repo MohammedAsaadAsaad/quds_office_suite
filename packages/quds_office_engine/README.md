@@ -48,8 +48,48 @@ Interactive canvases live in
   </tr>
 </table>
 
+## Quds Report Studio: download the desktop designer
+
+[Quds Report Studio](https://github.com/MohammedAsaadAsaad/quds_office_suite/tree/main/apps/quds_report_studio)
+is a free desktop app for designing the `.qrep` reports this engine
+generates. You design a layout once in the studio, then your Dart server,
+CLI, or Flutter app fills it with data and exports it with
+`QudsReportEngine`. It ships with 16 Arabic and English templates.
+
+![Quds Report Studio designing a dashboard report](example/screenshots/report_studio_designer.png)
+
+| Platform | Installer | Portable |
+| --- | --- | --- |
+| Windows 10/11 (x64) | [QudsReportStudio-1.0.0-windows-x64-setup.exe](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.0.0/QudsReportStudio-1.0.0-windows-x64-setup.exe) | [QudsReportStudio-1.0.0-windows-x64-portable.zip](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.0.0/QudsReportStudio-1.0.0-windows-x64-portable.zip) |
+| Debian / Ubuntu (x64) | [quds-report-studio_1.0.0_amd64.deb](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.0.0/quds-report-studio_1.0.0_amd64.deb) | [QudsReportStudio-1.0.0-linux-x64.tar.gz](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.0.0/QudsReportStudio-1.0.0-linux-x64.tar.gz) |
+
+- **Windows:** run the setup. It doesn't need admin rights unless you
+  choose "all users". Uninstall it from *Settings › Apps*.
+- **Debian / Ubuntu:** `sudo apt install ./quds-report-studio_1.0.0_amd64.deb`,
+  and `sudo apt remove quds-report-studio` to uninstall.
+- **Other Linux distributions:** extract the tar.gz and run `./install.sh`
+  (per user, no root). Run `~/.local/opt/quds-report-studio/uninstall.sh`
+  to remove it.
+- **`.qrep` files:** on its first run the studio registers itself as the app
+  for `.qrep` files, so double-clicking a report opens it in the studio.
+
+All files and SHA-256 checksums are on the
+[release page](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/tag/studio-v1.0.0).
+
+<table>
+  <tr>
+    <td width="50%"><img src="example/screenshots/report_studio_templates.png" alt="Product catalog template in Quds Report Studio"/></td>
+    <td width="50%"><img src="example/screenshots/report_certificate_ar.png" alt="Arabic certificate rendered by the engine"/></td>
+  </tr>
+  <tr>
+    <td>A template in the studio, with product photos saved in the <code>.qrep</code></td>
+    <td>The same kind of file rendered to PDF by this engine</td>
+  </tr>
+</table>
+
 ## Contents
 
+- [Quds Report Studio (download)](#quds-report-studio-download-the-desktop-designer)
 - [Why this package exists](#why-this-package-exists) · [Two packages, one suite](#two-packages-one-suite) · [Languages and directions](#languages-and-writing-directions)
 - [Install](#install) · [Capability map](#capability-map)
 - [Band reports (`quds_reports.dart`)](#band-reports-quds_reportsdart)
@@ -204,7 +244,7 @@ import 'package:quds_office_engine/pdf_widgets.dart' as pw;
 | **PowerPoint** | Build, open, and write PPTX. Shapes, tables, notes, masters (subset), transitions and animations including Morph, reverse playback clock |
 | **Office → PDF** | Replay Word layout, Excel grid, and slides (or notes pages, including two slides on one page) to PDF 1.7 with subsetted fonts, links, and outlines |
 | **pdf_widgets** | Constraint layout: flex, text, tables, charts, images, TOC, headers, footers, watermarks. Synchronous `Document.save()` |
-| **Band reports** | `.qrep` XML templates with bands, groups, expressions, typed variables, tables, barcodes/QR, and charts → PDF, XLSX, DOCX. Six ready-made templates |
+| **Band reports** | `.qrep` packages (XML layout + embedded images and fonts) with bands, groups, expressions, typed variables, tables, barcodes/QR, and charts → PDF, XLSX, DOCX. 16 ready-made templates (8 families, Arabic + English) with saved images |
 | **pdf_templates** | 100+ classified reports with **distinct `SheetSkin` layouts**, LTR/RTL, and brand themes |
 | **PdfFile** | Open PDF 1.7, paint a display list, extract text, annotate, fill AcroForm, incremental save |
 | **PdfToolbox** | Merge, extract, split, reorder, remove, rotate, reverse, insert, mix, stamp, number, Bates, crop — a new file with resources grafted |
@@ -218,8 +258,9 @@ What this package will **not** pretend to do is listed under
 ## Band reports (`quds_reports.dart`)
 
 A report engine in the Crystal Reports / FastReport style, in pure Dart. A
-`.qrep` file is XML: bands with absolutely positioned elements and `{{ }}`
-expressions. Feed it a `Map` of data and get paginated **PDF**, **XLSX**, or
+`.qrep` file is a small ZIP package: an XML layout (bands with absolutely
+positioned elements and `{{ }}` expressions) plus the images and fonts saved
+with the report. Feed it a `Map` of data and get paginated **PDF**, **XLSX**, or
 **DOCX** bytes. The visual designer is `QudsReportDesigner` in
 [`quds_office_editor`](https://pub.dev/packages/quds_office_editor).
 
@@ -241,8 +282,8 @@ import 'dart:io';
 import 'package:quds_office_engine/quds_reports.dart';
 
 Future<void> main() async {
-  final QudsReportEngine engine = QudsReportEngine.fromXml(
-    File('order.qrep').readAsStringSync(),
+  final QudsReportEngine engine = QudsReportEngine.fromPackage(
+    File('order.qrep').readAsBytesSync(),
     fonts: ReportFontRegistry()
       ..registerBytes(
         'Liberation Sans',
@@ -267,6 +308,67 @@ A complete runnable version is
 [`example/report_quickstart.dart`](example/report_quickstart.dart).
 
 ### The `.qrep` format
+
+A `.qrep` file is a ZIP archive:
+
+```text
+order.qrep
+├── mimetype          application/vnd.quds.qrep+zip (stored, first entry)
+├── layout.xml        the <QudsReport> layout below
+├── images/
+│   ├── logo.png      drawn by <Image source="logo"/>
+│   └── stamp.jpg
+└── fonts/
+    └── Amiri/
+        ├── regular.ttf   used by fontFamily="Amiri"
+        └── bold.ttf
+```
+
+Images are saved with the report ahead of time, not passed in at export.
+The key is the file name without its extension. `ReportPackage` reads and
+writes the archive:
+
+```dart
+final ReportPackage package = ReportPackage(
+  xml: layoutXml,
+  images: <String, Uint8List>{'logo': File('logo.png').readAsBytesSync()},
+  fonts: <String, ReportFontFiles>{
+    'Amiri': ReportFontFiles(
+      regular: File('Amiri-Regular.ttf').readAsBytesSync(),
+      bold: File('Amiri-Bold.ttf').readAsBytesSync(),
+    ),
+  },
+);
+File('order.qrep').writeAsBytesSync(package.encode());
+
+final ReportPackage back = ReportPackage.decode(File('order.qrep').readAsBytesSync());
+```
+
+`QudsReportEngine.fromPackage` uses the embedded images. Any `images:` you
+pass are added on top and win on a name clash, which lets you swap in a
+per-tenant logo at run time. `engine.toPackage()` writes a package. Older
+plain-XML `.qrep` files still open with both `ReportPackage.decode` and
+`fromPackage`. `fromXml` takes the bare layout string. Embedded images must
+be PNG or JPEG, and each entry is limited to 64 MB.
+
+#### Embedded fonts
+
+Fonts saved in the package make the report export with the faces it was
+designed with, even on a server that has never seen them. `fromPackage`
+registers them next to the `fonts:` you pass. Your registry is not changed,
+and your families win when a name appears in both. Each family keeps a
+regular and a bold TrueType face. Italic text is drawn with those two faces,
+as for host fonts.
+
+`ReportFontFile.inspect(bytes)` reads a file's family, weight, and italic
+flag from its `name`, `OS/2`, and `head` tables without parsing glyphs.
+`inspectWith(read)` does the same through a reader callback, so a host can
+scan installed fonts cheaply. Both throw `ReportFontException` for font
+collections (`.ttc`), CFF outlines (`.otf`), and fonts whose license
+(`OS/2 fsType`) forbids embedding. `ReportPackage` checks every font it
+writes or reads the same way.
+
+The layout:
 
 ```xml
 <QudsReport name="Order summary" pageSize="A4" orientation="Portrait" isRtl="false"
@@ -321,8 +423,8 @@ Placeholders evaluate with `QudsExpressionEngine`:
 | Math | `ROUND FLOOR CEIL ABS MOD POWER SQRT` |
 | Text | `CONCAT UPPER LOWER TRIM LEN LEFT RIGHT SUBSTR REPLACE CONTAINS STARTSWITH ENDSWITH PADLEFT JOIN` |
 | Dates | `NOW TODAY DATE YEAR MONTH DAY` |
-| Arabic | `TAFQEET(amount, 'LYD')` amount in words, `NUMBERWORDS(n)` |
-| Formats (after `\|`) | `n0` `n2` `percent` `currency:LYD` `currencyCode:USD` `tafqeet:LYD` `date:dd/MM/yyyy` `time` `datetime` `#,##0.00` `upper` `lower` `trim` |
+| Amount in words | `TAFQEET(amount, 'LYD')` (Arabic), `AMOUNTWORDS(amount, 'USD', 'en'\|'ar')` (English or Arabic), `NUMBERWORDS(n)` |
+| Formats (after `\|`) | `n0` `n2` `percent` `currency:LYD` `currencyCode:USD` `tafqeet:LYD` `words:USD` `date:dd/MM/yyyy` `dateAr:d MMMM yyyy` (Arabic month and day names) `time` `datetime` `#,##0.00` `upper` `lower` `trim` |
 
 Register your own functions:
 
@@ -355,25 +457,58 @@ draws vector charts. XLSX and DOCX embed **native, editable** Office charts.
 
 ### Ready-made templates
 
-`ReportTemplates.all` ships six production-style templates, each with sample
-data (`info.sampleData()`):
+`ReportTemplates.all` ships 16 production-style templates: eight families,
+each in an **Arabic (RTL)** and an **English** version, grouped by
+`ReportTemplateCategory`. Every template carries sample data
+(`info.sampleData()`), and most carry **pre-saved images** (logo, stamp,
+signature, seal, product photos) that travel inside the `.qrep` package.
 
-| id | Template |
-| --- | --- |
-| `sales_invoice_ar` | Arabic VAT sales invoice (QR, amount in words, discounts, tax) |
-| `invoice_en` | English commercial invoice (bill-to / ship-to, Code128) |
-| `sales_performance` | Sales dashboard (KPI cards, 4 charts, grouped orders) |
-| `account_statement_ar` | Arabic customer account statement (running balance, area chart) |
-| `inventory_ar` | Arabic inventory status (reorder flags, pie + bar charts) |
-| `receipt_voucher_ar` | Arabic receipt voucher (A5 landscape) |
+| Category | Family | Arabic id | English id | Saved images |
+| --- | --- | --- | --- | --- |
+| Sales | VAT sales invoice (QR, discounts, tax, amount in words) | `sales_invoice_ar` | `sales_invoice_en` | logo, stamp, signature |
+| Sales | Commercial invoice (bill-to / ship-to, Code 128) | `commercial_invoice_ar` | `invoice_en` | logo |
+| Sales | Product catalog (photo per row, grouped by category) | `product_catalog_ar` | `product_catalog_en` | logo, 8 product photos |
+| Finance | Customer account statement (running balance, area chart) | `account_statement_ar` | `account_statement_en` | logo |
+| Finance | Receipt voucher (A5 landscape) | `receipt_voucher_ar` | `receipt_voucher_en` | logo, stamp, signature |
+| Inventory | Inventory status (reorder flags, pie and bar charts) | `inventory_ar` | `inventory_en` | none |
+| Analytics | Sales dashboard (KPI cards, 4 charts, grouped orders) | `sales_performance_ar` | `sales_performance` | logo |
+| Human resources | Certificate of appreciation (A4 landscape) | `certificate_ar` | `certificate_en` | logo, stamp, signature, seal |
+
+Both versions of a family share one layout: `[[key]]` tokens are filled from
+per-language `strings` (titles, labels, fonts, date and currency formats), and
+RTL mirroring places everything for Arabic, so the pair never drifts apart.
 
 ```dart
-final ReportTemplateInfo info = ReportTemplates.byId('sales_invoice_ar')!;
-final QudsReportEngine engine = QudsReportEngine.fromXml(info.xml, fonts: fonts);
+final ReportTemplateInfo info = ReportTemplates.find(
+  'product_catalog',
+  ReportTemplateLanguage.english,
+)!;
+final ReportTemplateInfo arabic = ReportTemplates.counterpart(info)!;
+// Layout + saved images + sample data as one .qrep package.
+final QudsReportEngine engine = QudsReportEngine.fromPackage(
+  info.package().encode(),
+  fonts: fonts,
+);
 final Uint8List pdf = await engine.exportToPdf(info.sampleData());
 ```
 
+`ReportTemplates.families`, `variants(family)` and `inCategory(category)`
+list the catalog. `info.family`, `info.language`, `familyTitle` and
+`familyTitleAr` label it in a picker. `ReportTemplateCategory.titleFor`
+gives the category caption in either language. The pictures come from
+`ReportTemplateArt` (logo, stamp, signature, seal and
+`ReportProductArt` photos), which draws them as anti-aliased PNGs in
+pure Dart, so the templates work with no asset files.
+
 <table>
+  <tr>
+    <td width="50%"><img src="example/screenshots/report_product_catalog_ar.png" alt="Arabic product catalog"/></td>
+    <td width="50%"><img src="example/screenshots/report_product_catalog_en.png" alt="English product catalog"/></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="example/screenshots/report_certificate_ar.png" alt="Arabic certificate"/></td>
+    <td width="50%"><img src="example/screenshots/report_certificate_en.png" alt="English certificate"/></td>
+  </tr>
   <tr>
     <td width="50%"><img src="example/screenshots/report_receipt_voucher_ar.png" alt="Receipt voucher"/></td>
     <td width="50%"><img src="example/screenshots/report_sales_invoice_ar.png" alt="Arabic invoice"/></td>
@@ -388,6 +523,91 @@ families in order, so a Latin face plus an Arabic face covers mixed text.
 Without any registered face, Latin falls back to Helvetica and other scripts
 are not drawn. The editor package bundles Liberation and Noto Naskh Arabic
 (`ReportBundledFonts`).
+
+### Data schema and sample data
+
+A report can declare the data it expects in `<DataSchema>`: single
+**fields** (`Data.customer`) and **tables** (data sets such as `items`)
+with typed columns. A column with an `expression` is **calculated**. It
+is evaluated for every row at export, and bare names refer to the
+row's own columns (`item.qty` also works):
+
+```xml
+<DataSchema>
+  <Field name="customer" description="Bill-to name"/>
+  <Field name="invoice.date" type="date"/>
+  <Table name="items">
+    <Column name="name"/>
+    <Column name="qty" type="number"/>
+    <Column name="price" type="number"/>
+    <Column name="total" type="number" expression="qty * price" format="n2"/>
+  </Table>
+</DataSchema>
+```
+
+The types are `text`, `number`, `boolean`, and `date`. Before layout,
+exports coerce values to the declared type, so `'12.5'` becomes `12.5` and
+`'2026-03-04'` becomes a date. They also add the calculated columns, which
+means `{{SUM(items.total)}}` and a table column bound to `total` work like
+any other field. `engine.prepare(data)` returns exactly the record the
+layout sees. `validate()` and the parser warn about unknown types,
+duplicate names, and broken formulas.
+
+The package can also hold **sample data** (`data/sample.json`): rows the
+designer edits in its data explorer and previews with. It travels with the
+report as `ReportPackage.sampleData` and `engine.sampleData`. Exports never
+use it on their own, so you have to pass it explicitly:
+`engine.export(ReportExportFormat.pdf, data: engine.sampleData)`.
+
+`ReportData` is a typed helper for building data with dotted paths, and
+`ReportCsv` reads and writes CSV:
+
+```dart
+final ReportData data = ReportData()
+  ..set('customer', 'Northwind')
+  ..set('invoice.date', DateTime(2026, 10, 12))
+  ..setTable('items', ReportCsv.rows(File('items.csv').readAsStringSync()))
+  ..addRow('items', <String, Object?>{'name': 'Cable', 'qty': 4, 'price': 3.5});
+final Uint8List pdf = await engine.export(
+  ReportExportFormat.pdf,
+  data: data.values,
+);
+```
+
+`ReportCsv.rows` detects `,`, `;`, or tab delimiters and infers number,
+boolean, and date columns. `ReportData.fromJson` / `toJson` round-trip
+JSON, writing dates as ISO-8601 strings.
+
+### Named elements: fill a report from code
+
+Every element in a designed report has a unique name (`title`,
+`itemsTable`, `logo`). The designer assigns one automatically, and you can
+rename it in the inspector. A host finds elements by name, changes them, and
+feeds their content before exporting:
+
+```dart
+final QudsReportEngine engine = QudsReportEngine.fromPackage(bytes, fonts: fonts);
+engine.setText('title', 'Invoice {{Data.invoice.number}}');
+engine.setText('note', 'Prices include {{20}}% VAT', literal: true);
+engine.setImage('logo', tenantLogoPng);
+engine.setBarcode('invoiceCode', 'QS-2026-0381');
+engine.setTableRows('itemsTable', orderLines);
+engine.setChartPoints('salesChart', <String, num>{'Q1': 120, 'Q2': 180});
+engine.setVisible('paidStamp', invoice.isPaid);
+engine.elementAs<ReportTextElement>('total').style.color = '#B91C1C';
+engine.data.set('customer', 'Northwind');
+
+final Uint8List pdf = await engine.export(ReportExportFormat.pdf);
+```
+
+The setters write into `engine.data`, the host data that every export merges
+under the map you pass (the passed map wins). `setTableRows` and
+`setChartRows` store rows at the element's data set. If the element has none,
+they use the detail band's data set, and failing that, the element's name.
+`elementNames` lists the names, `element(name)` looks one up
+(case-insensitive), and an unknown name or wrong type throws
+`ReportElementException`. `ReportTemplate.uniqueElementName` and
+`assignElementNames` keep names unique when you build templates in code.
 
 ---
 
@@ -992,7 +1212,7 @@ lib/
 ---
 
 ## Examples
-
+| `.qrep` | Yes | Yes | ZIP package (`layout.xml` + embedded PNG/JPEG images and TrueType fonts); legacy plain XML opens too. Line:column diagnostics; exports PDF, XLSX, DOCX |
 | Script | Writes |
 | --- | --- |
 | [`example/engine_quickstart.dart`](example/engine_quickstart.dart) | One DOCX + PDF |

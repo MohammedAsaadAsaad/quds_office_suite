@@ -21,7 +21,7 @@ Two packages and one desktop app. Depend on each package **on its own**.
 | --- | --- | --- | --- |
 | **[`quds_office_engine`](packages/quds_office_engine)** | Pure Dart | OOXML + OPC/ZIP + formulas + PDF 1.7 | [pub.dev/packages/quds_office_engine](https://pub.dev/packages/quds_office_engine) |
 | **[`quds_office_editor`](packages/quds_office_editor)** | Flutter | Interactive Word / Sheet / Slide / PDF surfaces and the report designer | [pub.dev/packages/quds_office_editor](https://pub.dev/packages/quds_office_editor) |
-| **[`quds_report_studio`](apps/quds_report_studio)** | Flutter desktop app | Standalone report editor: open, design, preview, export `.qrep` | not published (app) |
+| **[`quds_report_studio`](apps/quds_report_studio)** | Flutter desktop app | Standalone report editor: open, design, preview, export `.qrep` | [Windows and Linux installers](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/tag/studio-v1.0.0) |
 
 ```text
 ┌─────────────────────────────────────────────────────────────┐
@@ -236,7 +236,18 @@ Full walkthrough: [`packages/quds_office_editor/README.md`](packages/quds_office
 
 ## Run the apps
 
-**Quds Report Studio**: the standalone report editor (open, design, preview, export):
+**Quds Report Studio**: the standalone report editor (open, design, preview, export).
+Download it:
+
+| Platform | Installer | Portable |
+| --- | --- | --- |
+| Windows 10/11 (x64) | [setup.exe](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.0.0/QudsReportStudio-1.0.0-windows-x64-setup.exe) | [zip](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.0.0/QudsReportStudio-1.0.0-windows-x64-portable.zip) |
+| Debian / Ubuntu (x64) | [.deb](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.0.0/quds-report-studio_1.0.0_amd64.deb) | [tar.gz](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.0.0/QudsReportStudio-1.0.0-linux-x64.tar.gz) |
+
+It becomes the app for `.qrep` files on its first run. Install and
+uninstall steps are in the
+[studio README](apps/quds_report_studio/README.md#download). Or run it from
+source:
 
 ```bash
 cd apps/quds_report_studio

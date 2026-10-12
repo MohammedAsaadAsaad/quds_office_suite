@@ -4,6 +4,7 @@ library;
 import 'dart:math' as math;
 
 import 'arabic_tafqeet.dart';
+import 'english_words.dart';
 import 'report_expression.dart';
 import 'report_format.dart';
 import 'report_value.dart';
@@ -147,6 +148,7 @@ class ReportScope {
 ///
 /// - Aggregates: `SUM COUNT AVG MIN MAX DISTINCTCOUNT FIRST LAST`
 /// - Arabic: `TAFQEET(amount, 'LYD' [, wrap])`, `NUMBERWORDS(n [, feminine])`
+/// - Words in either language: `AMOUNTWORDS(amount, 'USD' [, 'en' | 'ar'])`
 /// - Logic: `IF IIF COALESCE NVL ISNULL ISEMPTY AND OR NOT`
 /// - Math: `ROUND FLOOR CEIL ABS MOD POWER SQRT`
 /// - Text: `CONCAT UPPER LOWER TRIM LEN LEFT RIGHT SUBSTR REPLACE CONTAINS
@@ -188,6 +190,7 @@ class QudsExpressionEngine {
     ..._aggregates,
     'TAFQEET',
     'NUMBERWORDS',
+    'AMOUNTWORDS',
     'IF',
     'IIF',
     'COALESCE',
@@ -808,6 +811,24 @@ class QudsExpressionEngine {
               code,
               options: wrap ? const TafqeetOptions() : TafqeetOptions.plain,
             ),
+          );
+        } on TafqeetException catch (e) {
+          throw ReportExpressionException(e.message);
+        }
+      case 'AMOUNTWORDS':
+        _arity(name, a, 1, 3);
+        final num? value = a[0].asNumber;
+        if (value == null) {
+          return ReportNull.instance;
+        }
+        final String currency = a.length > 1 ? a[1].displayText : 'USD';
+        final bool arabic =
+            a.length > 2 && a[2].displayText.trim().toLowerCase() == 'ar';
+        try {
+          return ReportText(
+            arabic
+                ? ArabicTafqeet.amount(value, currency)
+                : EnglishWords.amount(value, currency),
           );
         } on TafqeetException catch (e) {
           throw ReportExpressionException(e.message);

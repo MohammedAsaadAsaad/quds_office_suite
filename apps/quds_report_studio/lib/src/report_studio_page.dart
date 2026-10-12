@@ -8,8 +8,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:quds_office_editor/quds_office_editor.dart';
 
+import 'file_association.dart';
 import 'recent_files.dart';
 import 'report_document.dart';
+import 'studio_settings.dart';
 import 'studio_window.dart';
 
 /// Brand colors of the studio chrome.
@@ -25,18 +27,26 @@ class ReportStudioPage extends StatefulWidget {
   const ReportStudioPage({
     super.key,
     required this.recent,
+    required this.settings,
     this.initialPath,
     this.templates = ReportTemplates.all,
+    this.deviceFonts,
   });
 
   /// Recently opened files.
   final RecentFiles recent;
+
+  /// Persisted preferences (inspector width).
+  final StudioSettings settings;
 
   /// File to open on start (command-line argument).
   final String? initialPath;
 
   /// Starter templates offered by File › New from template.
   final List<ReportTemplateInfo> templates;
+
+  /// Installed fonts offered on the inspector's Fonts page.
+  final ReportDeviceFonts? deviceFonts;
 
   @override
   State<ReportStudioPage> createState() => ReportStudioPageState();
@@ -46,6 +56,7 @@ class ReportStudioPage extends StatefulWidget {
 class ReportStudioPageState extends State<ReportStudioPage> {
   final ReportDocument _doc = ReportDocument();
   final MenuController _fileMenu = MenuController();
+  late final double _startInspectorWidth = widget.settings.inspectorWidth;
 
   /// The open document.
   ReportDocument get document => _doc;
@@ -95,6 +106,22 @@ class ReportStudioPageState extends State<ReportStudioPage> {
           duration: const Duration(seconds: 3),
         ),
       );
+  }
+
+  Future<void> _associateFiles() async {
+    final String exe = Platform.resolvedExecutable;
+    final bool ok = await QrepFileAssociation.register(exe);
+    if (ok) {
+      await widget.settings.setAssociatedExecutable(exe);
+    }
+    if (mounted) {
+      _toast(
+        ok
+            ? '.qrep files now open with Report Studio'
+            : 'Could not register .qrep files',
+        error: !ok,
+      );
+    }
   }
 
   void _finishEdits() {
@@ -184,9 +211,11 @@ class ReportStudioPageState extends State<ReportStudioPage> {
       return;
     }
     try {
-      _doc.loadXml(utf8.decode(bytes), name: file.name);
+      _doc.loadBytes(bytes, name: file.name);
     } on ReportTemplateException catch (e) {
       _toast('Cannot open ${file.name}: $e', error: true);
+    } on ReportPackageException catch (e) {
+      _toast('Cannot open ${file.name}: ${e.message}', error: true);
     }
   }
 
@@ -199,6 +228,11 @@ class ReportStudioPageState extends State<ReportStudioPage> {
       await widget.recent.add(path);
     } on ReportTemplateException catch (e) {
       _toast('Cannot open ${ReportDocument.baseName(path)}: $e', error: true);
+    } on ReportPackageException catch (e) {
+      _toast(
+        'Cannot open ${ReportDocument.baseName(path)}: ${e.message}',
+        error: true,
+      );
     } on FileSystemException catch (e) {
       await widget.recent.remove(path);
       _toast(
@@ -234,7 +268,55 @@ class ReportStudioPageState extends State<ReportStudioPage> {
     } on FileSystemException catch (e) {
       _toast('Cannot save: ${e.message}', error: true);
       return false;
+    } on ReportPackageException catch (e) {
+      _toast('Cannot save: ${e.message}', error: true);
+      return false;
     }
+  }
+
+  Future<({String name, Uint8List bytes})?> _pickImage() async {
+    final FilePickerResult? result = await FilePicker.platform.pickFiles(
+      dialogTitle: 'Embed image in report',
+      type: FileType.custom,
+      allowedExtensions: const <String>['png', 'jpg', 'jpeg'],
+      withData: true,
+    );
+    final PlatformFile? file = result?.files.firstOrNull;
+    final Uint8List? bytes = file?.bytes;
+    if (file == null || bytes == null) {
+      return null;
+    }
+    return (name: file.name, bytes: bytes);
+  }
+
+  Future<List<({String name, Uint8List bytes})>?> _pickFonts() async {
+    final FilePickerResult? result = await FilePicker.platform.pickFiles(
+      dialogTitle: 'Embed TrueType fonts in report',
+      type: FileType.custom,
+      allowedExtensions: const <String>['ttf'],
+      allowMultiple: true,
+      withData: true,
+    );
+    return <({String name, Uint8List bytes})>[
+      for (final PlatformFile file in result?.files ?? const <PlatformFile>[])
+        if (file.bytes case final Uint8List bytes)
+          (name: file.name, bytes: bytes),
+    ];
+  }
+
+  Future<({String name, String text})?> _pickData() async {
+    final FilePickerResult? result = await FilePicker.platform.pickFiles(
+      dialogTitle: 'Import sample data',
+      type: FileType.custom,
+      allowedExtensions: const <String>['csv', 'tsv', 'txt', 'json'],
+      withData: true,
+    );
+    final PlatformFile? file = result?.files.firstOrNull;
+    final Uint8List? bytes = file?.bytes;
+    if (file == null || bytes == null) {
+      return null;
+    }
+    return (name: file.name, text: utf8.decode(bytes, allowMalformed: true));
   }
 
   Future<void> _export(ReportExportFormat format, Uint8List bytes) async {
@@ -286,8 +368,14 @@ class ReportStudioPageState extends State<ReportStudioPage> {
                 child: QudsReportDesigner(
                   controller: _doc.controller,
                   templates: widget.templates,
-                  inspectorWidth: 320,
+                  inspectorWidth: StudioSettings.defaultInspectorWidth,
+                  initialInspectorWidth: _startInspectorWidth,
+                  onInspectorWidthChanged: widget.settings.setInspectorWidth,
                   onExport: _export,
+                  onPickImage: _pickImage,
+                  onPickFont: _pickFonts,
+                  onPickData: _pickData,
+                  deviceFonts: widget.deviceFonts,
                 ),
               ),
               _statusBar(),
@@ -383,6 +471,82 @@ class ReportStudioPageState extends State<ReportStudioPage> {
     );
   }
 
+  static IconData _categoryIcon(ReportTemplateCategory c) => switch (c) {
+    ReportTemplateCategory.sales => Icons.point_of_sale,
+    ReportTemplateCategory.finance => Icons.account_balance,
+    ReportTemplateCategory.inventory => Icons.inventory_2,
+    ReportTemplateCategory.analytics => Icons.insights,
+    ReportTemplateCategory.hr => Icons.badge_outlined,
+  };
+
+  /// Category › family › language submenus for [QudsReportStudioPage.templates].
+  List<Widget> _templateMenus() {
+    final List<ReportTemplateInfo> all = widget.templates;
+    final List<ReportTemplateInfo> heads = <ReportTemplateInfo>[];
+    final Set<String> seen = <String>{};
+    for (final ReportTemplateInfo info in all) {
+      if (seen.add(info.family)) {
+        heads.add(info);
+      }
+    }
+    Widget variant(ReportTemplateInfo info) => MenuItemButton(
+      leadingIcon: const Icon(Icons.translate, size: 18),
+      trailingIcon: Text(
+        info.language.code.toUpperCase(),
+        style: const TextStyle(fontSize: 11, color: Color(0xFF6B7280)),
+      ),
+      onPressed: () => _newFrom(info),
+      child: Text(info.language.label),
+    );
+    Widget family(ReportTemplateInfo head) => SubmenuButton(
+      menuChildren: <Widget>[
+        for (final ReportTemplateInfo info in all)
+          if (info.family == head.family) variant(info),
+      ],
+      child: SizedBox(
+        width: 300,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Row(
+              children: <Widget>[
+                Expanded(child: Text(head.familyTitle)),
+                const SizedBox(width: 12),
+                Text(
+                  head.familyTitleAr,
+                  textDirection: TextDirection.rtl,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF6B7280),
+                  ),
+                ),
+              ],
+            ),
+            Text(
+              head.description,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 11, color: Color(0xFF6B7280)),
+            ),
+          ],
+        ),
+      ),
+    );
+    return <Widget>[
+      for (final ReportTemplateCategory c in ReportTemplateCategory.values)
+        if (heads.any((ReportTemplateInfo t) => t.category == c))
+          SubmenuButton(
+            leadingIcon: Icon(_categoryIcon(c), size: 18),
+            menuChildren: <Widget>[
+              for (final ReportTemplateInfo head in heads)
+                if (head.category == c) family(head),
+            ],
+            child: Text('${c.title}  ·  ${c.titleAr}'),
+          ),
+    ];
+  }
+
   Widget _fileMenuButton() {
     final List<String> recent = widget.recent.paths;
     return MenuAnchor(
@@ -400,31 +564,7 @@ class ReportStudioPageState extends State<ReportStudioPage> {
         ),
         SubmenuButton(
           leadingIcon: const Icon(Icons.dashboard_customize_outlined, size: 18),
-          menuChildren: <Widget>[
-            for (final ReportTemplateInfo info in widget.templates)
-              MenuItemButton(
-                onPressed: () => _newFrom(info),
-                child: SizedBox(
-                  width: 280,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Text(info.title),
-                      Text(
-                        info.description,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: Color(0xFF6B7280),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-          ],
+          menuChildren: _templateMenus(),
           child: const Text('New from template'),
         ),
         const Divider(height: 8),
@@ -495,6 +635,14 @@ class ReportStudioPageState extends State<ReportStudioPage> {
           onPressed: () => save(saveAs: true),
           child: const Text('Save as…'),
         ),
+        if (!kIsWeb && (Platform.isLinux || Platform.isWindows)) ...<Widget>[
+          const Divider(height: 8),
+          MenuItemButton(
+            leadingIcon: const Icon(Icons.link, size: 18),
+            onPressed: _associateFiles,
+            child: const Text('Open .qrep files with Report Studio'),
+          ),
+        ],
         if (StudioWindow.supported) ...<Widget>[
           const Divider(height: 8),
           MenuItemButton(
@@ -621,18 +769,11 @@ class _AppMark extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: Container(
-        width: 22,
-        height: 22,
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: <Color>[StudioColors.accent, Color(0xFF7C4DFF)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(5),
-        ),
-        child: const Icon(Icons.assessment, size: 15, color: Colors.white),
+      child: Image.asset(
+        'assets/icon/app_icon_256.png',
+        width: 24,
+        height: 24,
+        filterQuality: FilterQuality.medium,
       ),
     );
   }

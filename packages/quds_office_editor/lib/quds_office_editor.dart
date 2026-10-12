@@ -21,6 +21,7 @@ export 'src/editor_pdf/pdf_page_thumb.dart';
 export 'src/editor_pdf/pdf_text_selection.dart';
 export 'src/editor_pdf/render_pdf_canvas.dart';
 export 'src/editor_reports/quds_report_designer.dart';
+export 'src/editor_reports/render_report_data_explorer.dart';
 export 'src/editor_reports/render_report_designer.dart';
 export 'src/editor_reports/render_report_inspector.dart';
 export 'src/editor_reports/render_report_preview.dart';

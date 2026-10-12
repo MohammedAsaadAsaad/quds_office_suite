@@ -69,11 +69,13 @@ patterns. It is not a new phase.
   - Paginating generator to a primitive layout.
   - Charts (`report_chart.dart`): aggregation, vector rendering, DrawingML for DOCX/XLSX.
   - PDF / XLSX / DOCX writers.
-  - Ready-made templates with sample data (`ReportTemplates`).
-  - Facade: `QudsReportEngine.fromXml(xml).exportToPdf(data)`.
+  - Ready-made templates with sample data (`ReportTemplates`): categorized families, each in Arabic and English, with pre-saved images.
+  - `.qrep` package (`report_package.dart`): a ZIP with `layout.xml`, pre-saved `images/`, and embedded TrueType `fonts/` (`report_font_file.dart` inspects them).
+  - Data (`report_data.dart`): `<DataSchema>` with typed and calculated columns applied at export, `ReportData` / `ReportCsv`, and design-time `data/sample.json` in the package.
+  - Facade: `QudsReportEngine.fromPackage(bytes).exportToPdf(data)` (or `fromXml`). Elements are filled by unique name (`setText`, `setTableRows`, …) and host data is held in `engine.data`.
 - Editor (`lib/src/editor_reports/`):
   - `ReportDesignerController`: selection, undo, align/distribute, clipboard, properties, mock data.
-  - RenderBox canvas, inspector, toolbar, and paginated preview.
+  - RenderBox canvas, inspector, toolbar, paginated preview, and data explorer (`ReportDataExplorer`: sample-data grid with typed and calculated columns, and CSV/JSON import).
   - Host widget: `QudsReportDesigner`, with a Templates menu and a Chart tool.
   - Standalone desktop app: `apps/quds_report_studio` (Quds Report Studio).
 - Limits are listed in [STANDARDS.md](STANDARDS.md).

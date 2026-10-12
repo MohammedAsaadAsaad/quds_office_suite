@@ -121,6 +121,14 @@ install(CODE "
 install(DIRECTORY "${PROJECT_BUILD_DIR}/${FLUTTER_ASSET_DIR_NAME}"
   DESTINATION "${INSTALL_BUNDLE_DATA_DIR}" COMPONENT Runtime)
 
+# Window icon and the files the first run registers for .qrep association.
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../packaging/linux/icons/apps/256.png"
+  DESTINATION "${INSTALL_BUNDLE_DATA_DIR}/icons" RENAME "quds-report-studio.png"
+  COMPONENT Runtime)
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../packaging/linux/icons/mimetypes/256.png"
+  DESTINATION "${INSTALL_BUNDLE_DATA_DIR}/icons"
+  RENAME "application-vnd.quds.qrep+zip.png" COMPONENT Runtime)
+
 # Install the AOT library on non-Debug builds only.
 if(NOT CMAKE_BUILD_TYPE MATCHES "Debug")
   install(FILES "${AOT_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"

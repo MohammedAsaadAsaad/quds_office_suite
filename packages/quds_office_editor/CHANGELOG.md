@@ -2,6 +2,84 @@
 
 All notable changes to `quds_office_editor` are documented here.
 
+## Unreleased
+
+**Embedded report images in `.qrep` packages.**
+
+- Packages:
+  - `ReportDesignerController.fromPackage`, `loadPackage` and `toPackage` read and write the zipped `.qrep` (layout + images).
+  - Legacy plain-XML files still open.
+- Images:
+  - `addImage`, `insertImage`, `renameImage` (repoints `<Image source>`), `removeImage` and `imageNames`.
+  - Image edits are part of the undo history.
+  - Loading or replacing a template now replaces `images` too.
+- `QudsReportDesigner.onPickImage` (`ReportImagePicker`) turns on the import buttons:
+  - The inspector's **Images** tab lists name, type, pixel size and file size, with Insert / Remove.
+  - Image elements get an **Import image…** button, and their Source field suggests the embedded names.
+  - Files that are not PNG / JPEG are reported in the status bar.
+
+**Inspector tabs and resizing.**
+
+- Tabs:
+  - The inspector has **Properties**, **Variables** and **Images** tabs (`ReportInspectorPage`, `controller.inspectorPage`), with count badges.
+  - Variables and images no longer crowd report settings.
+  - Selecting an element or a band returns to Properties.
+  - Variable edits apply even while an element is selected.
+- Resizing:
+  - A splitter between the canvas and the inspector resizes it; double-click restores `inspectorWidth`.
+  - New parameters: `initialInspectorWidth`, `minInspectorWidth`, `maxInspectorWidth` and `onInspectorWidthChanged`.
+
+**Embedded fonts.**
+
+- Controller:
+  - `embeddedFonts` are saved in the `.qrep` by `toPackage`; `fromPackage`, `loadPackage`, `loadXml(fonts:)` and `replaceTemplate(fonts:)` read them.
+  - `effectiveFonts` (host `fonts` plus the embedded families) drives the preview, canvas charts and exports.
+  - `addFont(bytes)` fills the regular or bold slot of the family the file declares; `embedFont(family, files)`, `removeFont`, `importFonts()`, `embedDeviceFont(family)` and `embeddedFamilies`.
+  - Font edits are part of the undo history; italic, CFF, collection and no-embedding fonts are refused with `ReportFontException`.
+  - `fontFamilies` presets include the host and embedded families.
+- Inspector:
+  - A **Fonts** tab (`ReportInspectorPage.fonts`) lists embedded families with faces, size, a **Report default** switch, usage count and Remove.
+  - With `deviceFonts`, an **On this device** list with search and **Embed** buttons. Typing an installed family into a font field embeds it.
+  - Tabs fall back to icons when the inspector is too narrow for their labels.
+  - New read-only property kind `ReportPropertyKind.note`.
+- `QudsReportDesigner`:
+  - `onPickFont` (`ReportFontPicker`) and `deviceFonts` (`ReportDeviceFonts`) parameters.
+  - Embedded families are loaded into Flutter (`FontLoader`) so the design canvas draws them; the canvas re-lays text when system fonts change.
+  - Import results and errors (`controller.notice`) show in the status bar.
+
+**Data explorer.**
+
+- `ReportDataExplorer` / `RenderReportDataExplorer`: a painted data grid that F6 or the toolbar's **Data** button (`ReportDesignMode.data`, `toggleData`) shows in place of the canvas.
+  - The sidebar lists Fields and tables with row counts, plus **+ New table**.
+  - The grid has typed column headers, a row-number gutter, tinted calculated columns, formatted values, scrollbars, and a right-click menu (`ReportDataContextHit`).
+  - Cells are edited in place: double-click, F2, Enter, or typing. Enter and Tab commit and move; values are checked against the column type. Ctrl+C / Ctrl+V and Delete work on cells and rows.
+- Controller:
+  - `sampleData` is saved in the `.qrep` (`data/sample.json`) and used by the preview after host `mockData`. Every edit is undoable.
+  - Explorer views: `dataTables`, `dataTable`, `selectDataTable`, `selectDataCell`, `setDataCell`, `addDataRow`, `removeDataRows`.
+  - Columns: `addDataColumn` (including calculated columns with `expression`), `renameDataColumn`, `removeDataColumn`, `setDataColumnType`, `setDataColumnExpression`, `setDataColumnFormat`.
+  - Tables and fields: `addDataTable`, `removeDataTable`, `addDataField`, `renameDataField`, `setDataField`, `setDataFieldType`.
+  - Imports: `importDataText(fileName, text)` takes CSV, TSV, or JSON; `importDataFile()` uses the host picker.
+  - Renaming a column or field rewrites its bindings (`item.qty`, `SUM(items.qty)`, `Data.customer`) and the formulas that use it.
+  - Types and formulas are written to the template's `<DataSchema>`. Host `mockData` is shown read-only.
+  - Templates loaded from the menu bring their data as sample data.
+- The inspector shows table, column (name, type, formula, format, description), field, and sample-data properties in data mode.
+- `QudsReportDesigner.onPickData` (`ReportDataPicker`) turns on **Import CSV / JSON…**.
+
+**Unique element names.**
+
+- Elements get a unique name when they are added, pasted, or loaded (`text1`, `table2`, …), so code can reach them with `QudsReportEngine.setText`, `setTableRows`, `elementAs`, and the other named-element setters.
+- Duplicate and invalid names typed in the inspector are rejected with a notice. An empty name generates a fresh one.
+- `ReportExportFormat` now comes from `quds_office_engine`, and the editor re-exports it.
+
+**Categorized, bilingual templates.**
+
+- The designer's Templates menu groups families under category captions; picking a family asks for العربية or English.
+- `loadTemplate` loads the template's pre-saved images with its sample data, so logos, stamps, signatures and product photos show in the canvas, preview and Images tab.
+
+**Docs.**
+
+- The README links to the Quds Report Studio installers for Windows and Linux, which are built on `QudsReportDesigner`. The pub.dev screenshots add the template catalog, the data explorer and the Fonts tab.
+
 ## 0.6.0
 
 **Report designer (`QudsReportDesigner`).** Depends on `quds_office_engine` **0.6.0**.

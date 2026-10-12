@@ -16,12 +16,20 @@ topics:
   - pdf
 
 screenshots:
+  - description: "Quds Report Studio: a desktop .qrep designer built on this engine (Windows and Linux installers)."
+    path: example/screenshots/report_studio_designer.png
   - description: "Band report: sales dashboard with KPI cards, vector charts, and grouped tables (PDF)."
     path: example/screenshots/report_sales_performance.png
   - description: "Band report: Arabic RTL VAT invoice with QR code and amount in words (PDF)."
     path: example/screenshots/report_sales_invoice_ar.png
   - description: "Band report: Arabic account statement with running balance and area chart (PDF)."
     path: example/screenshots/report_account_statement_ar.png
+  - description: "Ready-made template: product catalog with photos saved inside the .qrep, open in Quds Report Studio."
+    path: example/screenshots/report_studio_templates.png
+  - description: "Ready-made template: Arabic certificate of appreciation with embedded seal and signature (PDF)."
+    path: example/screenshots/report_certificate_ar.png
+  - description: "Ready-made template: English product catalog rendered by the engine (PDF)."
+    path: example/screenshots/report_product_catalog_en.png
   - description: "The same report exported to XLSX with native Excel charts and typed cells."
     path: example/screenshots/report_sales_performance_xlsx.png
   - description: "PDF widgets: invoice composed with Document / Table / MultiPage."

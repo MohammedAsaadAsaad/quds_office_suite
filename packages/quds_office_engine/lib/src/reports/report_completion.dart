@@ -139,6 +139,11 @@ class ReportCompleter {
     ReportFunctionInfo('LAST', 'values', 'Last value'),
     ReportFunctionInfo('TAFQEET', "amount, 'LYD'", 'Amount in Arabic words'),
     ReportFunctionInfo('NUMBERWORDS', 'n, feminine', 'Number in Arabic words'),
+    ReportFunctionInfo(
+      'AMOUNTWORDS',
+      "amount, 'USD', 'en'",
+      'Amount in English (or Arabic) words',
+    ),
     ReportFunctionInfo('IF', 'condition, then, else', 'Conditional value'),
     ReportFunctionInfo('COALESCE', 'a, b, …', 'First non-empty value'),
     ReportFunctionInfo('ISEMPTY', 'value', 'True when null or blank'),
@@ -214,10 +219,12 @@ class ReportCompleter {
     ('currency:USD', r'1,234.50 $'),
     ('currencyCode:USD', '1,234.50 USD'),
     ('tafqeet:LYD', 'Arabic words'),
+    ('words:USD', 'English words'),
     ('date', 'Default date'),
     ('date:dd/MM/yyyy', '10/10/2026'),
     ('date:yyyy-MM-dd', '2026-10-10'),
     ('date:dd MMM yyyy', '10 Oct 2026'),
+    ('dateAr:d MMMM yyyy', '10 أكتوبر 2026'),
     ('time', 'Default time'),
     ('datetime', 'Date and time'),
     ('#,##0.00', 'Custom pattern'),
@@ -286,7 +293,7 @@ class ReportCompleter {
     final String prefix = text.substring(start, caret);
     final List<ReportCompletionItem> items;
     switch (call.name.toUpperCase()) {
-      case 'TAFQEET':
+      case 'TAFQEET' || 'AMOUNTWORDS':
         items = _currencies((String c) => c);
       case 'FORMAT':
         items = _formatItems();
@@ -305,7 +312,10 @@ class ReportCompleter {
     final int colon = prefix.indexOf(':');
     if (colon > 0) {
       final String kind = prefix.substring(0, colon).toLowerCase();
-      if (kind == 'currency' || kind == 'currencycode' || kind == 'tafqeet') {
+      if (kind == 'currency' ||
+          kind == 'currencycode' ||
+          kind == 'tafqeet' ||
+          kind == 'words') {
         final String head = prefix.substring(0, colon + 1);
         return _result(
           start,
