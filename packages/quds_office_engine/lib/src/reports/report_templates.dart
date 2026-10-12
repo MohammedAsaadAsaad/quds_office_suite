@@ -2626,7 +2626,7 @@ const Map<String, String> _classCertificateAr = <String, String>{
   'title': 'شهادة تقدير',
   'presented': 'تشهد إدارة المدرسة بمنح هذه الشهادة إلى',
   'body':
-      'لإتمام العام الدراسي {{Data.year}} بنجاح، و{{item.note}}. '
+      'لإتمام العام الدراسي \u200E{{Data.year}}\u200E بنجاح، و{{item.note}}. '
       'مع أطيب التمنيات بدوام التوفيق.',
   'issued': 'حُررت بتاريخ',
   'stampLabel': 'ختم المدرسة',
