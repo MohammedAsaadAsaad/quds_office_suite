@@ -517,7 +517,7 @@ void main() {
       final List<ReportTemplateInfo> all = await ReportTemplateLibrary.bundled(
         bundle: _DirectoryBundle('templates', ReportTemplateLibrary.folder),
       );
-      expect(all, hasLength(16));
+      expect(all, hasLength(18));
       expect(all.first.id, 'sales_invoice_ar');
       expect(all.last.category, ReportTemplateCategory.hr);
       expect(

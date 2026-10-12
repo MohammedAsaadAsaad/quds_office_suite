@@ -58,7 +58,7 @@ semantic versioning, and breaking changes wait for 2.0.
 | **Opens what other suites save** | Word style chains, outline lists, and table styles. Excel shared formulas, inline strings, cached results, number formats, and charts drawn from their ranges. PowerPoint layouts, masters, placeholders, theme colors, and slide order |
 | **A report is one file** | A `.qrep` is a ZIP holding the layout, its images, and its TrueType fonts, so it exports the same on any machine |
 | **Data you can describe** | `<DataSchema>` types fields and tables. Calculated columns (`= qty * price`) feed groups, totals, charts, variables, and suggestions |
-| **16 bilingual templates** | 8 families in Arabic and English: invoices, statements, vouchers, inventory, catalogs, certificates, dashboards |
+| **18 bilingual templates** | 9 families in Arabic and English: invoices, statements, vouchers, inventory, catalogs, certificates, class certificates, dashboards |
 | **A desktop designer** | [Quds Report Studio](#quds-report-studio-download-the-desktop-designer) for Windows and Linux edits the same files |
 
 ### A LibreOffice file, rendered by this engine
@@ -93,18 +93,19 @@ final Uint8List pdf = OfficePdfExport.fromBytes(
 is a free desktop app for designing the `.qrep` reports this engine
 generates. You design a layout once in the studio, then your Dart server,
 CLI, or Flutter app fills it with data and exports it with
-`QudsReportEngine`. It ships with 16 Arabic and English templates.
+`QudsReportEngine`. It ships with 18 Arabic and English templates, including
+class certificates (one page per student, the report form of a mail merge).
 
 ![Quds Report Studio designing a dashboard report](example/screenshots/report_studio_designer.png)
 
 | Platform | Installer | Portable |
 | --- | --- | --- |
-| Windows 10/11 (x64) | [QudsReportStudio-1.1.0-windows-x64-setup.exe](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.1.0/QudsReportStudio-1.1.0-windows-x64-setup.exe) | [QudsReportStudio-1.1.0-windows-x64-portable.zip](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.1.0/QudsReportStudio-1.1.0-windows-x64-portable.zip) |
-| Debian / Ubuntu (x64) | [quds-report-studio_1.1.0_amd64.deb](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.1.0/quds-report-studio_1.1.0_amd64.deb) | [QudsReportStudio-1.1.0-linux-x64.tar.gz](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.1.0/QudsReportStudio-1.1.0-linux-x64.tar.gz) |
+| Windows 10/11 (x64) | [QudsReportStudio-1.2.0-windows-x64-setup.exe](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.2.0/QudsReportStudio-1.2.0-windows-x64-setup.exe) | [QudsReportStudio-1.2.0-windows-x64-portable.zip](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.2.0/QudsReportStudio-1.2.0-windows-x64-portable.zip) |
+| Debian / Ubuntu (x64) | [quds-report-studio_1.2.0_amd64.deb](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.2.0/quds-report-studio_1.2.0_amd64.deb) | [QudsReportStudio-1.2.0-linux-x64.tar.gz](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.2.0/QudsReportStudio-1.2.0-linux-x64.tar.gz) |
 
 - **Windows:** run the setup. It doesn't need admin rights unless you
   choose "all users". Uninstall it from *Settings › Apps*.
-- **Debian / Ubuntu:** `sudo apt install ./quds-report-studio_1.1.0_amd64.deb`,
+- **Debian / Ubuntu:** `sudo apt install ./quds-report-studio_1.2.0_amd64.deb`,
   and `sudo apt remove quds-report-studio` to uninstall.
 - **Other Linux distributions:** extract the tar.gz and run `./install.sh`
   (per user, no root). Run `~/.local/opt/quds-report-studio/uninstall.sh`
@@ -113,7 +114,7 @@ CLI, or Flutter app fills it with data and exports it with
   for `.qrep` files, so double-clicking a report opens it in the studio.
 
 All files and SHA-256 checksums are on the
-[release page](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/tag/studio-v1.1.0).
+[release page](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/tag/studio-v1.2.0).
 
 <table>
   <tr>
@@ -256,7 +257,7 @@ along the diagonal — Arabic cannot be cut glyph by glyph and still join.
 
 ```yaml
 dependencies:
-  quds_office_engine: ^1.1.0
+  quds_office_engine: ^1.2.0
 ```
 
 ```bash
@@ -283,7 +284,7 @@ import 'package:quds_office_engine/pdf_widgets.dart' as pw;
 | **PowerPoint** | Build, open, and write PPTX. Shapes, tables, notes, layouts and masters with placeholder inheritance and theme colors, transitions and animations including Morph, reverse playback clock |
 | **Office → PDF** | Replay Word layout, Excel grid, and slides (or notes pages, including two slides on one page) to PDF 1.7 with subsetted fonts, links, and outlines |
 | **pdf_widgets** | Constraint layout: flex, text, tables, charts, images, TOC, headers, footers, watermarks. Synchronous `Document.save()` |
-| **Band reports** | `.qrep` packages (XML layout + embedded images and fonts) with bands, groups, expressions, typed variables, tables, barcodes/QR, and charts → PDF, XLSX, DOCX. 16 ready-made templates (8 families, Arabic + English) with saved images |
+| **Band reports** | `.qrep` packages (XML layout + embedded images and fonts) with bands, groups, expressions, typed variables, tables, barcodes/QR, and charts → PDF, XLSX, DOCX. 18 ready-made templates (9 families, Arabic + English) with saved images |
 | **pdf_templates** | 100+ classified reports with **distinct `SheetSkin` layouts**, LTR/RTL, and brand themes |
 | **PdfFile** | Open PDF 1.7, paint a display list, extract text, annotate, fill AcroForm, incremental save |
 | **PdfToolbox** | Merge, extract, split, reorder, remove, rotate, reverse, insert, mix, stamp, number, Bates, crop — a new file with resources grafted |
@@ -513,8 +514,8 @@ draws vector charts. XLSX and DOCX embed **native, editable** Office charts.
 
 ### Ready-made templates
 
-Sixteen production-style templates ship as ready-made `.qrep` files in
-`quds_office_editor`'s `templates/` folder: eight families, each in an
+Eighteen production-style templates ship as ready-made `.qrep` files in
+`quds_office_editor`'s `templates/` folder: nine families, each in an
 **Arabic (RTL)** and an **English** version, grouped by
 `ReportTemplateCategory`. Every template carries sample data, and most carry
 **pre-saved images** (logo, stamp, signature, seal, product photos).
@@ -529,6 +530,24 @@ Sixteen production-style templates ship as ready-made `.qrep` files in
 | Inventory | Inventory status (reorder flags, pie and bar charts) | `inventory_ar` | `inventory_en` | none |
 | Analytics | Sales dashboard (KPI cards, 4 charts, grouped orders) | `sales_performance_ar` | `sales_performance` | logo |
 | Human resources | Certificate of appreciation (A4 landscape) | `certificate_ar` | `certificate_en` | logo, stamp, signature, seal |
+| Human resources | Class certificates (one page per student row) | `class_certificate_ar` | `class_certificate_en` | logo, stamp, signature, seal |
+
+### One page per record
+
+This is the report form of a mail merge. Word mail merge (`WordMailMerge`)
+fills `«Field»` / `MERGEFIELD` tokens: `merge` fills one record, and
+`mergeAll` returns one document per row. A band report keeps every copy in
+**one file**. Put the layout in a Detail band, set its data set to the
+table (`dataSet="students"`), and turn on **New page before**
+(`newPageBefore="true"`). Preview, PDF, and Word then emit one page per row.
+**Class certificates** is that pattern: eight students in the sample, eight
+pages. Fields on the page use `{{item.name}}` and the other columns of the
+current row; values shared by the whole run (`{{Data.school}}`) stay outside
+the table.
+
+A Detail band that contains a `<Table>` still flows its rows down the page.
+Invoices are that kind of report. The per-row page break applies to a
+free-form Detail band.
 
 A template is an ordinary `.qrep` whose package also holds a
 `template.json` manifest (`ReportTemplateManifest`): id, family, English and

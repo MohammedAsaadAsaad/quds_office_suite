@@ -41,10 +41,10 @@ document.
 > **Try the report designer without writing code:**
 > [Quds Report Studio](#quds-report-studio-app) is a desktop app built on
 > `QudsReportDesigner`. Download the
-> [Windows installer](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.1.0/QudsReportStudio-1.1.0-windows-x64-setup.exe)
+> [Windows installer](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.2.0/QudsReportStudio-1.2.0-windows-x64-setup.exe)
 > or the
-> [Linux .deb](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.1.0/quds-report-studio_1.1.0_amd64.deb)
-> ([all downloads](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/tag/studio-v1.1.0)).
+> [Linux .deb](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.2.0/quds-report-studio_1.2.0_amd64.deb)
+> ([all downloads](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/tag/studio-v1.2.0)).
 
 ## What 1.0 brings
 
@@ -60,7 +60,7 @@ this package, with real fonts, from `flutter test`.
   </tr>
   <tr>
     <td><b>Data explorer</b> (F6): a painted grid over the report's sample data. Typed columns, calculated <b>ƒx</b> columns, CSV / JSON import, safe renames</td>
-    <td><b>16 bilingual templates</b>: each loads with its sample data and its logo, stamp, and product photos saved inside the <code>.qrep</code></td>
+    <td><b>18 bilingual templates</b>: each loads with its sample data and its logo, stamp, and product photos saved inside the <code>.qrep</code></td>
   </tr>
   <tr>
     <td><img src="example/screenshots/report_data_fields.png" alt="Typed fields"/></td>
@@ -111,7 +111,7 @@ explorer, and it is offered at once inside `{{ }}`, with its computed value:
 
 ```yaml
 dependencies:
-  quds_office_editor: ^1.1.0
+  quds_office_editor: ^1.2.0
 ```
 
 ```bash
@@ -119,7 +119,7 @@ flutter pub add quds_office_editor
 ```
 
 Requires Flutter **3.44+** and Dart **3.12+**. The engine comes along as
-`quds_office_engine: ^1.1.0`. Everything is exported from one library:
+`quds_office_engine: ^1.2.0`. Everything is exported from one library:
 
 ```dart
 import 'package:quds_office_editor/quds_office_editor.dart';
@@ -458,7 +458,9 @@ Functions insert `NAME()` with the caret inside.
   (sales, finance, inventory, analytics, human resources). Picking a family
   asks for **العربية** or **English**. Every family ships both versions: VAT
   invoice, commercial invoice, product catalog, account statement, receipt
-  voucher, inventory status, sales dashboard and certificate. A template
+  voucher, inventory status, sales dashboard, certificate, and class
+  certificates. Class certificates are the report form of a mail merge:
+  one page per row of the students table, in preview and in export. A template
   loads with its sample data and its **pre-saved images** (logo, stamp,
   signature, seal, product photos), which then show in the Images tab and
   save inside the `.qrep`. A blank report is also available.
@@ -600,13 +602,13 @@ Download it:
 
 | Platform | Installer | Portable |
 | --- | --- | --- |
-| Windows 10/11 (x64) | [QudsReportStudio-1.1.0-windows-x64-setup.exe](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.1.0/QudsReportStudio-1.1.0-windows-x64-setup.exe) | [QudsReportStudio-1.1.0-windows-x64-portable.zip](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.1.0/QudsReportStudio-1.1.0-windows-x64-portable.zip) |
-| Debian / Ubuntu (x64) | [quds-report-studio_1.1.0_amd64.deb](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.1.0/quds-report-studio_1.1.0_amd64.deb) | [QudsReportStudio-1.1.0-linux-x64.tar.gz](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.1.0/QudsReportStudio-1.1.0-linux-x64.tar.gz) |
+| Windows 10/11 (x64) | [QudsReportStudio-1.2.0-windows-x64-setup.exe](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.2.0/QudsReportStudio-1.2.0-windows-x64-setup.exe) | [QudsReportStudio-1.2.0-windows-x64-portable.zip](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.2.0/QudsReportStudio-1.2.0-windows-x64-portable.zip) |
+| Debian / Ubuntu (x64) | [quds-report-studio_1.2.0_amd64.deb](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.2.0/quds-report-studio_1.2.0_amd64.deb) | [QudsReportStudio-1.2.0-linux-x64.tar.gz](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.2.0/QudsReportStudio-1.2.0-linux-x64.tar.gz) |
 
 - **Windows:** run the setup. It doesn't need admin rights unless you
   choose "all users". Uninstall it from *Settings › Apps*. The portable zip
   runs in place, and `unregister-qrep.cmd` removes its file association.
-- **Debian / Ubuntu:** `sudo apt install ./quds-report-studio_1.1.0_amd64.deb`,
+- **Debian / Ubuntu:** `sudo apt install ./quds-report-studio_1.2.0_amd64.deb`,
   and `sudo apt remove quds-report-studio` to uninstall.
 - **Other Linux distributions:** extract the tar.gz and run `./install.sh`
   (per user, no root). Run `~/.local/opt/quds-report-studio/uninstall.sh`

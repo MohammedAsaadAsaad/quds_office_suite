@@ -2,6 +2,22 @@
 
 All notable changes to `quds_office_engine` are documented here.
 
+## 1.2.0
+
+Reports can do the same job as a mail merge, inside one file.
+
+- A free-form Detail band (no table inside it) honors `newPageBefore` and
+  `newPageAfter`. Each row of its data set starts on its own page. Preview,
+  PDF export, and Word export all include those pages. Word writes a page
+  break between the rows. A Detail band that contains a table still flows
+  its rows down the page, so invoices are unchanged.
+- Word's own mail merge is separate. `WordMailMerge` fills `«Field»` and
+  `MERGEFIELD` tokens. `merge` fills one record, and `mergeAll` returns one
+  document per record.
+- New template family `class_certificate` (Arabic and English): one A4
+  landscape certificate for every row of a `students` table. The sample is
+  a class of eight students, so opening it and previewing shows eight pages.
+
 ## 1.1.0
 
 - `ReportDiagnostic.target` says where a finding points

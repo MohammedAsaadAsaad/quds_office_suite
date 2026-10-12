@@ -594,6 +594,48 @@ abstract final class ReportTemplates {
       sampleData: _certificateEnData,
       images: _certificateImages,
     ),
+    ReportTemplateInfo(
+      id: 'class_certificate_ar',
+      family: 'class_certificate',
+      title: 'Class certificates (Arabic)',
+      titleAr: 'شهادات صف دراسي (عربي)',
+      familyTitle: 'Class certificates',
+      familyTitleAr: 'شهادات صف دراسي',
+      description:
+          'One A4 landscape certificate per row of the students table. '
+          'Preview and PDF export print a page for every student.',
+      descriptionAr:
+          'شهادة A4 أفقية لكل صف في جدول الطلاب. المعاينة وتصدير PDF '
+          'يطبعان صفحة لكل طالب.',
+      category: ReportTemplateCategory.hr,
+      rtl: true,
+      order: 80,
+      xml: _classCertificate,
+      strings: _classCertificateAr,
+      sampleData: _classCertificateArData,
+      images: _certificateImages,
+    ),
+    ReportTemplateInfo(
+      id: 'class_certificate_en',
+      family: 'class_certificate',
+      title: 'Class certificates (English)',
+      titleAr: 'شهادات صف دراسي (إنجليزي)',
+      familyTitle: 'Class certificates',
+      familyTitleAr: 'شهادات صف دراسي',
+      description:
+          'One A4 landscape certificate per row of the students table. '
+          'Preview and PDF export print a page for every student.',
+      descriptionAr:
+          'شهادة A4 أفقية لكل صف في جدول الطلاب. المعاينة وتصدير PDF '
+          'يطبعان صفحة لكل طالب.',
+      category: ReportTemplateCategory.hr,
+      rtl: false,
+      order: 80,
+      xml: _classCertificate,
+      strings: _classCertificateEn,
+      sampleData: _classCertificateEnData,
+      images: _certificateImages,
+    ),
   ];
 
   /// Template with [id], or null.
@@ -2524,5 +2566,210 @@ Map<String, Object?> _certificateData(bool ar) {
       'title': t('Chief Executive Officer', 'المدير التنفيذي'),
     },
     'number': 'HR-2026-0087',
+  };
+}
+
+// -------------------------------------------------------- class certificate
+
+const String _classCertificate = r'''<?xml version="1.0" encoding="UTF-8"?>
+<QudsReport name="[[name]]" isRtl="[[rtl]]" pageSize="A4" orientation="Landscape" defaultFont="[[font]]" defaultFontSize="11">
+    <Settings>
+        <Margins top="10mm" bottom="10mm" left="10mm" right="10mm"/>
+        <Colors primary="#12355B" accent="#C9A227" muted="#6B7280" paper="#FFFDF6" text="#1F2933"/>
+    </Settings>
+    <DataSchema>
+        <Field name="school" type="text" description="[[schoolField]]"/>
+        <Field name="className" type="text" description="[[classField]]"/>
+        <Field name="year" type="text" description="[[yearField]]"/>
+        <Field name="date" type="date" description="[[dateField]]"/>
+        <Field name="signer.name" type="text" description="[[signerNameField]]"/>
+        <Field name="signer.title" type="text" description="[[signerTitleField]]"/>
+        <Table name="students" description="[[studentsTable]]">
+            <Column name="name" type="text" description="[[colName]]"/>
+            <Column name="number" type="text" description="[[colNumber]]"/>
+            <Column name="grade" type="text" description="[[colGrade]]"/>
+            <Column name="note" type="text" description="[[colNote]]"/>
+        </Table>
+    </DataSchema>
+    <Bands>
+        <Detail dataSet="students" height="188mm" newPageBefore="true">
+            <Rectangle x="10mm" y="0mm" width="277mm" height="188mm" fill="paper" color="primary" strokeWidth="3"/>
+            <Rectangle x="15mm" y="5mm" width="267mm" height="178mm" color="accent" strokeWidth="1"/>
+            <Rectangle x="17mm" y="7mm" width="263mm" height="174mm" color="accent" strokeWidth="0.4"/>
+            <Image name="logo" source="logo" x="136.5mm" y="13mm" width="24mm" height="24mm"/>
+            <Text name="schoolName" x="40mm" y="39mm" width="217mm" height="7mm" fontSize="11" color="muted" alignment="center">{{Data.school}}</Text>
+            <Text name="title" x="30mm" y="48mm" width="237mm" height="14mm" fontSize="28" bold="true" color="primary" alignment="center">[[title]]</Text>
+            <Text x="30mm" y="64mm" width="237mm" height="7mm" fontSize="11" color="muted" alignment="center">[[presented]]</Text>
+            <Text name="studentName" x="30mm" y="73mm" width="237mm" height="14mm" fontSize="25" bold="true" color="text" alignment="center">{{item.name}}</Text>
+            <Line x1="93mm" y1="88mm" x2="204mm" y2="88mm" color="accent" strokeWidth="1.2"/>
+            <Text name="studentGrade" x="40mm" y="91mm" width="217mm" height="8mm" fontSize="12" color="primary" alignment="center">{{Data.className}} — {{item.grade}}</Text>
+            <Text name="body" x="40mm" y="102mm" width="217mm" height="18mm" fontSize="11.5" color="text" alignment="center">[[body]]</Text>
+            <Text x="40mm" y="122mm" width="217mm" height="7mm" fontSize="10" color="muted" alignment="center">[[issued]] {{Data.date | [[longDate]]}}</Text>
+            <Image name="signature" source="signature" x="42mm" y="134mm" width="56mm" height="20mm"/>
+            <Line x1="37mm" y1="155mm" x2="103mm" y2="155mm" color="muted" strokeWidth="0.6"/>
+            <Text name="signerName" x="37mm" y="156mm" width="66mm" height="6mm" fontSize="10.5" bold="true" alignment="center">{{Data.signer.name}}</Text>
+            <Text x="37mm" y="162mm" width="66mm" height="6mm" fontSize="9" color="muted" alignment="center">{{Data.signer.title}}</Text>
+            <Image name="seal" source="seal" x="131mm" y="132mm" width="35mm" height="35mm"/>
+            <Image name="stamp" source="stamp" x="212mm" y="122mm" width="32mm" height="32mm"/>
+            <Line x1="194mm" y1="155mm" x2="260mm" y2="155mm" color="muted" strokeWidth="0.6"/>
+            <Text x="194mm" y="156mm" width="66mm" height="6mm" fontSize="10.5" bold="true" alignment="center">[[stampLabel]]</Text>
+            <Text name="certificateNumber" x="194mm" y="162mm" width="66mm" height="6mm" fontSize="9" color="muted" alignment="center">[[number]]: {{item.number}}</Text>
+            <Text name="pageOf" x="40mm" y="174mm" width="217mm" height="6mm" fontSize="9" color="muted" alignment="center">[[page]] {{System.PageNumber}} [[of]] {{System.TotalPages}}</Text>
+        </Detail>
+    </Bands>
+</QudsReport>
+''';
+
+const Map<String, String> _classCertificateAr = <String, String>{
+  ..._ar,
+  'name': 'شهادات الصف',
+  'title': 'شهادة تقدير',
+  'presented': 'تشهد إدارة المدرسة بمنح هذه الشهادة إلى',
+  'body':
+      'لإتمام العام الدراسي \u200E{{Data.year}}\u200E بنجاح، و{{item.note}}. '
+      'مع أطيب التمنيات بدوام التوفيق.',
+  'issued': 'حُررت بتاريخ',
+  'stampLabel': 'ختم المدرسة',
+  'number': 'رقم الشهادة',
+  'schoolField': 'اسم المدرسة',
+  'classField': 'الصف والشعبة',
+  'yearField': 'العام الدراسي',
+  'dateField': 'تاريخ التحرير',
+  'signerNameField': 'اسم الموقّع',
+  'signerTitleField': 'صفة الموقّع',
+  'studentsTable': 'طالب واحد في كل صف، وصفحة لكل طالب',
+  'colName': 'اسم الطالب',
+  'colNumber': 'رقم الشهادة',
+  'colGrade': 'التقدير',
+  'colNote': 'سبب التقدير',
+};
+
+const Map<String, String> _classCertificateEn = <String, String>{
+  ..._en,
+  'name': 'Class certificates',
+  'title': 'Certificate of Achievement',
+  'presented': 'This certificate is proudly presented to',
+  'body':
+      'For successfully completing the {{Data.year}} school year, and '
+      '{{item.note}}. With every wish for continued success.',
+  'issued': 'Issued on',
+  'stampLabel': 'School stamp',
+  'number': 'Certificate No.',
+  'schoolField': 'School name',
+  'classField': 'Class',
+  'yearField': 'School year',
+  'dateField': 'Issue date',
+  'signerNameField': 'Signatory',
+  'signerTitleField': 'Signatory title',
+  'studentsTable': 'One student per row, one page per student',
+  'colName': 'Student name',
+  'colNumber': 'Certificate number',
+  'colGrade': 'Grade',
+  'colNote': 'Citation',
+};
+
+Map<String, Object?> _classCertificateArData() => _classCertificateData(true);
+
+Map<String, Object?> _classCertificateEnData() => _classCertificateData(false);
+
+Map<String, Object?> _classCertificateData(bool ar) {
+  String t(String en, String arabic) => ar ? arabic : en;
+  Map<String, Object?> student(
+    String nameEn,
+    String nameAr,
+    String number,
+    String gradeEn,
+    String gradeAr,
+    String noteEn,
+    String noteAr,
+  ) => <String, Object?>{
+    'name': t(nameEn, nameAr),
+    'number': number,
+    'grade': t(gradeEn, gradeAr),
+    'note': t(noteEn, noteAr),
+  };
+  return <String, Object?>{
+    'school': t('Quds Model School', 'مدرسة القدس النموذجية'),
+    'className': t('Grade 6-A', 'الصف السادس (أ)'),
+    'year': '2025-2026',
+    'date': DateTime(2026, 6, 18),
+    'signer': <String, Object?>{
+      'name': t('Laila Hassan Al-Amin', 'ليلى حسن الأمين'),
+      'title': t('Principal', 'مديرة المدرسة'),
+    },
+    'students': <Map<String, Object?>>[
+      student(
+        'Sara Ahmed Al-Mansouri',
+        'سارة أحمد المنصوري',
+        'G6-2026-01',
+        'Excellent',
+        'ممتاز',
+        'for first place in Arabic',
+        'لحصولها على الترتيب الأول في اللغة العربية',
+      ),
+      student(
+        'Yousef Khaled Al-Barghathi',
+        'يوسف خالد البرغثي',
+        'G6-2026-02',
+        'Excellent',
+        'ممتاز',
+        'for the science fair project',
+        'لمشروع معرض العلوم',
+      ),
+      student(
+        'Layla Omar Al-Sharif',
+        'ليلى عمر الشريف',
+        'G6-2026-03',
+        'Very good',
+        'جيد جدًا',
+        'for excellence in mathematics',
+        'لتفوقها في الرياضيات',
+      ),
+      student(
+        'Mohammed Ali Al-Tarhuni',
+        'محمد علي الترهوني',
+        'G6-2026-04',
+        'Excellent',
+        'ممتاز',
+        'for leading the class reading circle',
+        'لقيادته حلقة القراءة الصفية',
+      ),
+      student(
+        'Nour Al-Huda Salem',
+        'نور الهدى سالم',
+        'G6-2026-05',
+        'Very good',
+        'جيد جدًا',
+        'for the art exhibition',
+        'لمعرض الرسم',
+      ),
+      student(
+        'Adam Hassan Al-Mabrouk',
+        'آدم حسن المبروك',
+        'G6-2026-06',
+        'Excellent',
+        'ممتاز',
+        'for the school sports team',
+        'لفريق المدرسة الرياضي',
+      ),
+      student(
+        'Huda Faraj Ben Latif',
+        'هدى فرج بن لطيف',
+        'G6-2026-07',
+        'Very good',
+        'جيد جدًا',
+        'for helping classmates',
+        'لعون زملاء الصف',
+      ),
+      student(
+        'Kareem Saleh Al-Zlitni',
+        'كريم صالح الزليطني',
+        'G6-2026-08',
+        'Excellent',
+        'ممتاز',
+        'for the history research paper',
+        'لبحثه في التاريخ',
+      ),
+    ],
   };
 }

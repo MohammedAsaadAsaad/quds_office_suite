@@ -645,6 +645,45 @@ void main() {
       ]);
     });
 
+    test('a free-form detail row can take its own page', () {
+      String xml({required bool before, required bool after}) =>
+          '''
+<QudsReport name="Cards" pageSize="A5">
+  <Bands>
+    <Detail dataSet="students" height="12mm"${before ? ' newPageBefore="true"' : ''}${after ? ' newPageAfter="true"' : ''}>
+      <Text x="10mm" y="1mm" width="80mm" height="8mm">{{item.name}}</Text>
+    </Detail>
+  </Bands>
+</QudsReport>''';
+      final Map<String, Object?> data = <String, Object?>{
+        'students': <Map<String, Object?>>[
+          <String, Object?>{'name': 'Sara'},
+          <String, Object?>{'name': 'Yousef'},
+          <String, Object?>{'name': 'Layla'},
+        ],
+      };
+      ReportDocumentLayout lay(String source) =>
+          QudsReportEngine.fromXml(source).layout(data);
+
+      final ReportDocumentLayout shared = lay(xml(before: false, after: false));
+      expect(shared.pages, hasLength(1));
+      expect(pageTexts(shared.pages.single), <String>[
+        'Sara',
+        'Yousef',
+        'Layla',
+      ]);
+
+      for (final ReportDocumentLayout layout in <ReportDocumentLayout>[
+        lay(xml(before: true, after: false)),
+        lay(xml(before: false, after: true)),
+      ]) {
+        expect(layout.pages, hasLength(3));
+        expect(pageTexts(layout.pages[0]), <String>['Sara']);
+        expect(pageTexts(layout.pages[1]), <String>['Yousef']);
+        expect(pageTexts(layout.pages[2]), <String>['Layla']);
+      }
+    });
+
     test('RTL templates mirror element x from the right edge', () {
       ReportTextPrimitive company(String xml) {
         final ReportDocumentLayout layout = QudsReportEngine.fromXml(
@@ -1019,6 +1058,56 @@ void main() {
     }
   });
 
+  group('Class certificates', () {
+    test('each student is a page in preview and in Word', () async {
+      final ReportTemplateInfo info = ReportTemplates.byId(
+        'class_certificate_ar',
+      )!;
+      final QudsReportEngine engine = QudsReportEngine.fromPackage(
+        info.package().encode(),
+        fonts: loadFonts(),
+        clock: () => fixedNow,
+      );
+      final Map<String, Object?> data = info.sampleData();
+      final List<Object?> students = data['students']! as List<Object?>;
+      final ReportDocumentLayout layout = engine.layout(data);
+      expect(layout.pages, hasLength(students.length));
+      expect(layout.warnings, isEmpty);
+      expect(students.length, greaterThan(1));
+      for (int i = 0; i < students.length; i++) {
+        final String name =
+            (students[i]! as Map<String, Object?>)['name']! as String;
+        final List<String> texts = pageTexts(layout.pages[i]);
+        expect(texts, contains(name));
+        expect(texts, contains('صفحة ${i + 1} من ${students.length}'));
+        for (int j = 0; j < students.length; j++) {
+          if (i == j) {
+            continue;
+          }
+          final String other =
+              (students[j]! as Map<String, Object?>)['name']! as String;
+          expect(texts, isNot(contains(other)));
+        }
+      }
+      final String word = partText(
+        await engine.exportToWord(data),
+        '/word/document.xml',
+      );
+      expect('w:type="page"'.allMatches(word), hasLength(students.length - 1));
+      final ReportTemplateInfo english = ReportTemplates.byId(
+        'class_certificate_en',
+      )!;
+      final ReportDocumentLayout en = QudsReportEngine.fromPackage(
+        english.package().encode(),
+        fonts: loadFonts(),
+        clock: () => fixedNow,
+      ).layout(english.sampleData());
+      expect(en.pages, hasLength(students.length));
+      expect(pageTexts(en.pages.first), contains('Sara Ahmed Al-Mansouri'));
+      expect(pageTexts(en.pages.last), contains('Kareem Saleh Al-Zlitni'));
+    });
+  });
+
   group('Template catalog', () {
     bool isPng(Uint8List b) =>
         b.length > 8 &&
@@ -1032,7 +1121,7 @@ void main() {
         for (final ReportTemplateInfo t in ReportTemplates.all) t.id,
       };
       expect(ids, hasLength(ReportTemplates.all.length));
-      expect(ReportTemplates.families, hasLength(8));
+      expect(ReportTemplates.families, hasLength(9));
       for (final String family in ReportTemplates.families) {
         final List<ReportTemplateInfo> v = ReportTemplates.variants(family);
         expect(
