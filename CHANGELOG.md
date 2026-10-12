@@ -5,6 +5,43 @@ This repository is a Dart workspace. Each published package keeps its own change
 - [`packages/quds_office_engine/CHANGELOG.md`](packages/quds_office_engine/CHANGELOG.md)
 - [`packages/quds_office_editor/CHANGELOG.md`](packages/quds_office_editor/CHANGELOG.md)
 
+## 1.1.0 / 1.1.0
+
+Engine **1.1.0**, editor **1.1.0**, and Report Studio **1.1.0**.
+
+- Pinching with two fingers (trackpad or touch screen) zooms the report
+  canvas and the preview.
+- Report Studio no longer shows a message when it opens or saves a report
+  with problems. The error and warning count in the status bar opens a
+  problems panel under the canvas instead. Each problem says what is wrong,
+  what kind of problem it is, and where; clicking it goes there and marks
+  the property to fix.
+- Report templates are ready-made `.qrep` files instead of code. In Report
+  Studio, **File › Save as template** turns the open report into a template,
+  listed under **New from template › My templates**. Any `.qrep` in the
+  studio's templates folder is offered too.
+- The report inspector replaces an embedded image in place: click its
+  thumbnail, and every element showing it updates.
+- Reports with expression errors open in the designer with the errors listed
+  instead of failing to load.
+- `SUM(item.x)` in a template variable totals the detail rows instead of
+  returning 0.
+- Report Studio has light and dark themes and an English or Arabic
+  interface. Both follow the system by default, and the language falls back
+  to English. You can change them from the settings button in the title bar.
+- Report Studio prints. Use Ctrl+P, the printer button, **File › Print…**,
+  or **Print** on the toolbar to open the system print dialog at the
+  report's page size. It uses the `printing` package.
+- A redesigned report inspector:
+  - Icon buttons with tooltips.
+  - A variables explorer with dotted folders (`stats.sum` →
+    `{{Variables.stats.sum}}`).
+  - Image thumbnails.
+  - Font cards.
+  - A font picker that previews each installed font in its own script.
+- The report designer can be localized (`ReportDesignerStrings`, English and
+  Arabic, with full right-to-left layout).
+
 ## 1.0.0 / 1.0.0
 
 First stable release of both packages (engine **1.0.0**, editor **1.0.0**).

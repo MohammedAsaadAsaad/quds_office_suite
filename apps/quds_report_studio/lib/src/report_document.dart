@@ -95,7 +95,9 @@ class ReportDocument extends ChangeNotifier {
   /// Loads `.qrep` bytes read from [path] (or a picker with no path, on the
   /// web): a package or a legacy plain-XML file.
   ///
-  /// Throws [ReportPackageException] or [ReportTemplateException].
+  /// Throws [ReportPackageException], or [ReportTemplateException] when the
+  /// layout cannot be read; template errors are in
+  /// `controller.loadDiagnostics`.
   void loadBytes(Uint8List bytes, {String? path, required String name}) {
     controller.mockData = null;
     controller.loadPackage(bytes);

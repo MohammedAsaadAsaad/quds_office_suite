@@ -15,10 +15,13 @@ import 'render_report_data_explorer.dart';
 import 'render_report_designer.dart';
 import 'render_report_inspector.dart';
 import 'render_report_preview.dart';
+import 'render_report_problems.dart';
 import 'render_report_toolbar.dart';
 import 'report_completion_popup.dart';
 import 'report_bundled_fonts.dart';
 import 'report_designer_controller.dart';
+import 'report_designer_strings.dart';
+import 'report_template_library.dart';
 
 /// Band report designer: toolbar, design canvas or live preview, and the
 /// property inspector, all painted by custom RenderBoxes.
@@ -41,15 +44,19 @@ class QudsReportDesigner extends StatefulWidget {
     this.minInspectorWidth = 240,
     this.maxInspectorWidth = 640,
     this.onInspectorWidthChanged,
+    this.problemsHeight = 180,
+    this.onProblemsHeightChanged,
     this.focusNode,
     this.autofocus = true,
     this.loadBundledFonts = true,
     this.onExport,
-    this.templates = ReportTemplates.all,
+    this.onPrint,
+    this.templates,
     this.onPickImage,
     this.onPickFont,
     this.deviceFonts,
     this.onPickData,
+    this.strings,
   });
 
   /// controller API.
@@ -76,6 +83,15 @@ class QudsReportDesigner extends StatefulWidget {
   /// host can persist it.
   final ValueChanged<double>? onInspectorWidthChanged;
 
+  /// Starting height of the problems panel, which opens under the canvas
+  /// when [ReportDesignerController.problemsOpen] is true. Drag its top
+  /// edge to resize.
+  final double problemsHeight;
+
+  /// Called with the new height when a drag of the problems panel's top
+  /// edge ends, so a host can persist it.
+  final ValueChanged<double>? onProblemsHeightChanged;
+
   /// Keyboard focus; created internally when null.
   final FocusNode? focusNode;
 
@@ -89,9 +105,16 @@ class QudsReportDesigner extends StatefulWidget {
   /// Receives exported bytes; the export button is hidden when null.
   final void Function(ReportExportFormat format, Uint8List bytes)? onExport;
 
+  /// Receives the report as PDF, rendered with the preview data, when the
+  /// user clicks **Print** or presses Ctrl+P. The button is hidden when null.
+  /// The host shows the print dialog, for example with the `printing`
+  /// package.
+  final Future<void> Function(Uint8List pdf)? onPrint;
+
   /// Ready-made reports offered by the Templates button (hidden when empty).
-  /// Picking one replaces the template and uses its sample data.
-  final List<ReportTemplateInfo> templates;
+  /// Picking one replaces the template and uses its sample data. Null offers
+  /// the bundled `.qrep` files ([ReportTemplateLibrary.bundled]).
+  final List<ReportTemplateInfo>? templates;
 
   /// Opens a host file picker for "Import image…" (PNG / JPEG); the picked
   /// image is embedded in the report and saved inside the `.qrep` package.
@@ -113,6 +136,11 @@ class QudsReportDesigner extends StatefulWidget {
   /// inside the `.qrep` package. The button is hidden when null.
   final ReportDataPicker? onPickData;
 
+  /// Interface language; follows the app locale
+  /// ([Localizations.maybeLocaleOf]) when null, English when the locale has
+  /// no translation.
+  final ReportDesignerStrings? strings;
+
   @override
   State<QudsReportDesigner> createState() => _QudsReportDesignerState();
 }
@@ -126,10 +154,35 @@ class _QudsReportDesignerState extends State<QudsReportDesigner> {
       widget.initialInspectorWidth ?? widget.inspectorWidth;
   bool _splitterHot = false;
   bool _splitterDrag = false;
+  late double _problemsHeight = widget.problemsHeight;
+  bool _problemsHot = false;
+  bool _problemsDrag = false;
 
   FocusNode get _focus => widget.focusNode ?? (_ownFocus ??= FocusNode());
 
   ReportDesignerController get _c => widget.controller;
+
+  String _t(String english) => _c.strings.t(english);
+
+  void _syncStrings() {
+    final ReportDesignerStrings s =
+        widget.strings ??
+        ReportDesignerStrings.forLocale(Localizations.maybeLocaleOf(context));
+    if (identical(s, _c.strings)) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _c.strings = s;
+      }
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _syncStrings();
+  }
 
   static const double _mm = 72 / 25.4;
 
@@ -144,11 +197,30 @@ class _QudsReportDesignerState extends State<QudsReportDesigner> {
       }
     });
     _loadFonts();
+    _loadTemplates();
+  }
+
+  List<ReportTemplateInfo> _bundled = const <ReportTemplateInfo>[];
+
+  List<ReportTemplateInfo> get _templates => widget.templates ?? _bundled;
+
+  void _loadTemplates() {
+    if (widget.templates != null || _bundled.isNotEmpty) {
+      return;
+    }
+    unawaited(
+      ReportTemplateLibrary.bundled().then((List<ReportTemplateInfo> all) {
+        if (mounted) {
+          setState(() => _bundled = all);
+        }
+      }),
+    );
   }
 
   @override
   void didUpdateWidget(QudsReportDesigner oldWidget) {
     super.didUpdateWidget(oldWidget);
+    _loadTemplates();
     if (!identical(oldWidget.controller, widget.controller)) {
       oldWidget.controller.removeListener(_onController);
       widget.controller.addListener(_onController);
@@ -164,6 +236,10 @@ class _QudsReportDesignerState extends State<QudsReportDesigner> {
     if (oldWidget.initialInspectorWidth != widget.initialInspectorWidth ||
         oldWidget.inspectorWidth != widget.inspectorWidth) {
       _inspectorWidth = widget.initialInspectorWidth ?? widget.inspectorWidth;
+    }
+    if (!identical(oldWidget.strings, widget.strings) ||
+        !identical(oldWidget.controller, widget.controller)) {
+      _syncStrings();
     }
     if (oldWidget.focusNode != widget.focusNode && widget.focusNode != null) {
       _ownFocus?.dispose();
@@ -242,6 +318,49 @@ class _QudsReportDesignerState extends State<QudsReportDesigner> {
         ),
       ),
     );
+  }
+
+  Widget _problemsSplitter(OfficeTheme theme, double available) {
+    final bool active = _problemsHot || _problemsDrag;
+    return MouseRegion(
+      cursor: SystemMouseCursors.resizeRow,
+      onEnter: (_) => setState(() => _problemsHot = true),
+      onExit: (_) => setState(() => _problemsHot = false),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        dragStartBehavior: DragStartBehavior.down,
+        onVerticalDragStart: (_) => setState(() => _problemsDrag = true),
+        onVerticalDragUpdate: (DragUpdateDetails d) => setState(() {
+          _problemsHeight = _clampProblems(
+            _problemsHeight - d.delta.dy,
+            available,
+          );
+        }),
+        onVerticalDragEnd: (_) {
+          setState(() => _problemsDrag = false);
+          widget.onProblemsHeightChanged?.call(_problemsHeight);
+        },
+        child: SizedBox(
+          height: _splitterWidth,
+          child: CustomPaint(
+            painter: _SplitterPainter(
+              line: theme.pageBorder,
+              accent: theme.selectionStroke,
+              active: active,
+              vertical: false,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  static double _clampProblems(double height, double available) {
+    final double max = math.max(
+      RenderReportProblems.headerHeight,
+      available - 160,
+    );
+    return height.clamp(RenderReportProblems.headerHeight + 46, max).toDouble();
   }
 
   void _bindPicker(ReportDesignerController? previous) {
@@ -361,7 +480,23 @@ class _QudsReportDesignerState extends State<QudsReportDesigner> {
     _menu = OfficeContextMenu.show(
       context: context,
       globalPosition: at,
-      actions: actions,
+      actions: <OfficeContextAction>[
+        for (final OfficeContextAction a in actions)
+          a.isCaption
+              ? OfficeContextAction.caption(
+                  _t(a.label),
+                  separatorBefore: a.separatorBefore,
+                )
+              : OfficeContextAction(
+                  id: a.id,
+                  label: _t(a.label),
+                  icon: a.icon,
+                  shortcut: a.shortcut,
+                  enabled: a.enabled,
+                  danger: a.danger,
+                  separatorBefore: a.separatorBefore,
+                ),
+      ],
       onSelect: (String id) {
         _menu = null;
         onSelect(id);
@@ -451,7 +586,7 @@ class _QudsReportDesignerState extends State<QudsReportDesigner> {
       if (hit.band case final ReportBandKind band)
         OfficeContextAction(
           id: 'removeBand',
-          label: 'Remove ${band.xmlName} band',
+          label: '${_t('Remove band')}: ${_t(band.xmlName)}',
           icon: Icons.remove_circle_outline,
           danger: true,
         ),
@@ -499,7 +634,7 @@ class _QudsReportDesignerState extends State<QudsReportDesigner> {
       for (final ReportBandKind kind in ReportBandKind.values)
         OfficeContextAction(
           id: kind.name,
-          label: kind.xmlName,
+          label: _t(kind.xmlName),
           icon: _c.template.band(kind) != null ? Icons.check : null,
         ),
     ];
@@ -614,7 +749,7 @@ class _QudsReportDesignerState extends State<QudsReportDesigner> {
   /// Families grouped under category captions; a family with several
   /// languages asks for one ([_languageMenu]).
   void _templatesMenu(Offset at) {
-    final List<ReportTemplateInfo> list = widget.templates;
+    final List<ReportTemplateInfo> list = _templates;
     final List<ReportTemplateInfo> heads = <ReportTemplateInfo>[];
     final Set<String> seen = <String>{};
     for (final ReportTemplateInfo info in list) {
@@ -699,7 +834,7 @@ class _QudsReportDesignerState extends State<QudsReportDesigner> {
   void _loadTemplate(ReportTemplateInfo info) {
     _c.loadTemplate(info);
     _c.fitWidth();
-    setState(() => _message = 'Loaded "${info.title}"');
+    setState(() => _message = '${_t('Loaded')} "${info.title}"');
   }
 
   Future<void> _export(ReportExportFormat format) async {
@@ -707,19 +842,41 @@ class _QudsReportDesignerState extends State<QudsReportDesigner> {
     if (sink == null) {
       return;
     }
-    setState(() => _message = 'Exporting ${format.name.toUpperCase()}…');
+    setState(
+      () => _message = '${_t('Exporting')} ${format.name.toUpperCase()}…',
+    );
     try {
       final Uint8List bytes = await _c.export(format);
       sink(format, bytes);
       if (mounted) {
         setState(
           () => _message =
-              'Exported ${format.name.toUpperCase()} (${_size(bytes.length)})',
+              '${_t('Exported')} ${format.name.toUpperCase()} '
+              '(${_size(bytes.length)})',
         );
       }
     } on Object catch (e) {
       if (mounted) {
-        setState(() => _message = 'Export failed: $e');
+        setState(() => _message = '${_t('Export failed')}: $e');
+      }
+    }
+  }
+
+  Future<void> _print() async {
+    final Future<void> Function(Uint8List)? sink = widget.onPrint;
+    if (sink == null) {
+      return;
+    }
+    setState(() => _message = '${_t('Preparing to print')}…');
+    try {
+      final Uint8List pdf = await _c.export(ReportExportFormat.pdf);
+      await sink(pdf);
+      if (mounted) {
+        setState(() => _message = '');
+      }
+    } on Object catch (e) {
+      if (mounted) {
+        setState(() => _message = '${_t('Print failed')}: $e');
       }
     }
   }
@@ -742,7 +899,9 @@ class _QudsReportDesignerState extends State<QudsReportDesigner> {
       for (final String option in choice.choices)
         OfficeContextAction(
           id: option,
-          label: option.isEmpty ? '(none)' : option,
+          label: choice.options == null
+              ? _c.strings.option(option)
+              : (option.isEmpty ? _t('None') : option),
           icon: option == p.value ? Icons.check : null,
           shortcut: choice.details[option],
         ),
@@ -791,7 +950,7 @@ class _QudsReportDesignerState extends State<QudsReportDesigner> {
     final bool data = _c.mode == ReportDesignMode.data;
     final int n = _c.selectedElements.length;
     return <ReportToolbarItem>[
-      if (widget.templates.isNotEmpty)
+      if (_templates.isNotEmpty)
         const ReportToolbarItem(
           id: 'templates',
           icon: ReportToolbarIcon.templates,
@@ -919,6 +1078,13 @@ class _QudsReportDesignerState extends State<QudsReportDesigner> {
           tooltip: 'Export with preview data',
           label: 'Export',
         ),
+      if (widget.onPrint != null)
+        const ReportToolbarItem(
+          id: 'print',
+          icon: ReportToolbarIcon.print,
+          tooltip: 'Print with preview data (Ctrl+P)',
+          label: 'Print',
+        ),
     ];
   }
 
@@ -975,6 +1141,8 @@ class _QudsReportDesignerState extends State<QudsReportDesigner> {
         _c.toggleData();
       case 'export':
         _exportMenu(at);
+      case 'print':
+        _print();
       case 'templates':
         _templatesMenu(at);
       case 'variables':
@@ -988,27 +1156,27 @@ class _QudsReportDesignerState extends State<QudsReportDesigner> {
     }
     final String? notice = _c.notice;
     if (notice != null && notice.isNotEmpty) {
-      return notice;
+      return _t(notice);
     }
     if (_c.mode == ReportDesignMode.data) {
       final ReportDataTableView t = _c.dataTable;
-      final StringBuffer d = StringBuffer('Data  ·  ${t.title}');
+      final StringBuffer d = StringBuffer('${_t('Data')}  ·  ${t.title}');
       final int row = _c.dataRow;
       final int col = _c.dataColumn;
       if (row >= 0 && col >= 0) {
-        d.write('  ·  row ${row + 1}, ${t.columns[col].name}');
+        d.write('  ·  ${_t('Row')} ${row + 1}, ${t.columns[col].name}');
         if (!_c.canEditDataCell(row, col) && !_c.hasHostData) {
           d.write(
-            t.columns[col].isCalculated ? '  ·  calculated' : '  ·  read-only',
+            '  ·  ${_t(t.columns[col].isCalculated ? 'calculated' : 'read-only')}',
           );
         }
       } else if (col >= 0) {
-        d.write('  ·  column ${t.columns[col].name}');
+        d.write('  ·  ${_t('Column')} ${t.columns[col].name}');
       } else if (row >= 0) {
-        d.write('  ·  row ${row + 1}');
+        d.write('  ·  ${_t('Row')} ${row + 1}');
       }
       if (_c.hasHostData) {
-        d.write('  ·  host data (read-only)');
+        d.write('  ·  ${_t('host data (read-only)')}');
       }
       return d.toString();
     }
@@ -1100,6 +1268,10 @@ class _QudsReportDesignerState extends State<QudsReportDesigner> {
     }
     if (key == LogicalKeyboardKey.f6) {
       _c.toggleData();
+      return KeyEventResult.handled;
+    }
+    if (_ctrl && key == LogicalKeyboardKey.keyP && widget.onPrint != null) {
+      _print();
       return KeyEventResult.handled;
     }
     if (_ctrl &&
@@ -1706,7 +1878,18 @@ class _QudsReportDesignerState extends State<QudsReportDesigner> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           ReportToolbar(
-            items: _toolbarItems(),
+            items: <ReportToolbarItem>[
+              for (final ReportToolbarItem i in _toolbarItems())
+                ReportToolbarItem(
+                  id: i.id,
+                  icon: i.icon,
+                  tooltip: _t(i.tooltip),
+                  label: i.label == null ? null : _t(i.label!),
+                  enabled: i.enabled,
+                  active: i.active,
+                  separatorBefore: i.separatorBefore,
+                ),
+            ],
             status: _status(),
             theme: theme,
             onPressedAt: _onToolbar,
@@ -1718,10 +1901,29 @@ class _QudsReportDesignerState extends State<QudsReportDesigner> {
                   _inspectorWidth,
                   box.maxWidth,
                 );
+                final Widget work = _c.problemsOpen
+                    ? Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: <Widget>[
+                          Expanded(child: surface),
+                          _problemsSplitter(theme, box.maxHeight),
+                          SizedBox(
+                            height: _clampProblems(
+                              _problemsHeight,
+                              box.maxHeight,
+                            ),
+                            child: ReportProblemsPanel(
+                              controller: _c,
+                              theme: theme,
+                            ),
+                          ),
+                        ],
+                      )
+                    : surface;
                 return Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: <Widget>[
-                    Expanded(child: surface),
+                    Expanded(child: work),
                     _splitter(theme, box.maxWidth),
                     SizedBox(
                       width: width,
@@ -1749,24 +1951,29 @@ class _SplitterPainter extends CustomPainter {
     required this.line,
     required this.accent,
     required this.active,
+    this.vertical = true,
   });
 
   final Color line;
   final Color accent;
   final bool active;
 
+  /// A vertical line between side-by-side panes; false for a horizontal
+  /// line between stacked panes.
+  final bool vertical;
+
   @override
   void paint(Canvas canvas, Size size) {
-    final double x = size.width / 2;
     if (active) {
       canvas.drawRect(
         Offset.zero & size,
         Paint()..color = accent.withValues(alpha: 0.12),
       );
     }
+    final Offset mid = size.center(Offset.zero);
     canvas.drawLine(
-      Offset(x, 0),
-      Offset(x, size.height),
+      vertical ? Offset(mid.dx, 0) : Offset(0, mid.dy),
+      vertical ? Offset(mid.dx, size.height) : Offset(size.width, mid.dy),
       Paint()
         ..color = active ? accent : line
         ..strokeWidth = active ? 2 : 1,
@@ -1774,12 +1981,19 @@ class _SplitterPainter extends CustomPainter {
     if (active) {
       final Paint dot = Paint()..color = accent;
       for (int i = -1; i <= 1; i++) {
-        canvas.drawCircle(Offset(x, size.height / 2 + i * 6), 1.6, dot);
+        canvas.drawCircle(
+          vertical ? mid + Offset(0, i * 6.0) : mid + Offset(i * 6.0, 0),
+          1.6,
+          dot,
+        );
       }
     }
   }
 
   @override
   bool shouldRepaint(_SplitterPainter old) =>
-      old.line != line || old.accent != accent || old.active != active;
+      old.line != line ||
+      old.accent != accent ||
+      old.active != active ||
+      old.vertical != vertical;
 }

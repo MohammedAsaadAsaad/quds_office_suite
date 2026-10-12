@@ -1,13 +1,13 @@
 ; Inno Setup 6 script: installer and uninstaller for Quds Report Studio.
 ;
-;   iscc /DAppVersion=1.0.0 /DSourceDir=<Release dir> /DOutputDir=<dist> quds_report_studio.iss
+;   iscc /DAppVersion=1.1.0 /DSourceDir=<Release dir> /DOutputDir=<dist> quds_report_studio.iss
 ;
 ; Installs per user by default (no admin); the dialog offers "all users".
 ; Registers .qrep files (QudsReportStudio.qrep ProgID); the uninstaller removes
 ; them, including the per-user keys the studio writes on its first run.
 
 #ifndef AppVersion
-  #define AppVersion "1.0.0"
+  #define AppVersion "1.1.0"
 #endif
 #ifndef SourceDir
   #define SourceDir "..\..\build\windows\x64\runner\Release"

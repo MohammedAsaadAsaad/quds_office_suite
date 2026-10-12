@@ -788,9 +788,7 @@ class WordEditorController extends OfficeController {
       commentLaidOut = null;
       return;
     }
-    commentLaidOut = _engine.layout(
-      commentDocument,
-    );
+    commentLaidOut = _engine.layout(commentDocument);
   }
 
   /// loadBytes API.
@@ -1023,13 +1021,9 @@ class WordEditorController extends OfficeController {
   }
 
   void _relayoutTocPages() {
-    documentLaidOut = _engine.layout(
-      document,
-    );
+    documentLaidOut = _engine.layout(document);
     if (WordToc.syncPageNumbers(document, documentLaidOut)) {
-      documentLaidOut = _engine.layout(
-        document,
-      );
+      documentLaidOut = _engine.layout(document);
     }
     _layoutComment();
   }

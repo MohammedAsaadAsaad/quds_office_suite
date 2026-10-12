@@ -2,6 +2,45 @@
 
 All notable changes to `quds_office_engine` are documented here.
 
+## 1.1.0
+
+- `ReportDiagnostic.target` says where a finding points
+  (`ReportDiagnosticTarget`: band, element index, table column or cell,
+  chart series or point, attribute, variable, data table and column,
+  settings section), and parser and `validate()` paths for the same spot
+  agree. `ReportDiagnostic.kind` (`ReportDiagnosticKind`) says what kind of
+  problem it is, and `summary` drops the exception class name from parser
+  messages.
+- The parser warns "No Detail band" only when the template declares data
+  tables, so certificates and vouchers no longer get it.
+- Templates are files. A `.qrep` that holds a `template.json` manifest
+  (`ReportTemplateManifest`: id, family, titles, descriptions, category,
+  language, order) is a template. `ReportPackage.template` reads and writes
+  the manifest. `ReportTemplateInfo.fromPackage` and
+  `ReportTemplateInfo.decode` build a catalog entry from such a file, and
+  `ReportTemplateInfo.manifest`, `order`, and `compare` describe and sort
+  entries. `ReportTemplateInfo.package()` returns a file-based template's own
+  package, fonts included.
+- `ReportTemplates` is deprecated. The same 16 templates ship as `.qrep`
+  files with `quds_office_editor` (`ReportTemplateLibrary`). The class keeps
+  working until 2.0.
+- `ReportParseResult.readable` is false only when the XML can't be read at
+  all (malformed XML, an empty document, or a root that isn't
+  `<QudsReport>`). A template with expression errors is still readable, so a
+  designer can open it and show the errors.
+- Aggregates over `item.` in template variables, such as
+  `{{SUM(item.amount)}}` or `COUNT()`, now run over the detail band's data
+  set. They returned 0 before, because variables had no rows in scope.
+- Template variable names may contain dots, such as `stats.sum`. Expressions
+  read them as `{{Variables.stats.sum}}`. Adds `ReportVariable.segments`,
+  `folder`, and `leaf`, and `ReportGenerator.nestVariables`.
+  `ReportVariable.isValidName` accepts dotted names. Validation, completion,
+  and variable renames all handle dotted names.
+- `ReportFontFileInfo.scripts` lists the writing systems a font covers,
+  read from its `cmap`. The new `ReportScript` enum has a sample text for
+  each script, plus `previewText` and `primary`, so a font picker can
+  preview each font in its own script.
+
 ## 1.0.0
 
 First stable release. The public API now follows semantic versioning:

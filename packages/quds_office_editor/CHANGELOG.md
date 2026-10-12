@@ -2,6 +2,59 @@
 
 All notable changes to `quds_office_editor` are documented here.
 
+## 1.1.0
+
+Built on `quds_office_engine` 1.1.0.
+
+- Two-finger zoom on the design canvas and the preview: a trackpad pinch or
+  two fingers on a touch screen zoom around the point between the fingers.
+- Problems panel. `ReportDesignerController.problemsOpen` shows it under
+  the canvas (`QudsReportDesigner.problemsHeight`, drag to resize). It lists
+  `controller.problems`: live parser and `validate()` findings, errors
+  first, with each problem's kind, place, and a hint on how to fix it.
+  Clicking a problem calls `revealDiagnostic`, which selects the element or
+  band and scrolls the canvas to it, or opens the variable or data column,
+  and marks the inspector property to fix (`highlightProperty`).
+  `ReportProblemsPanel` is exported. `clearLoadDiagnostics` forgets what
+  the parser corrected when the file was opened. Diagnostic messages are
+  translated (`ReportDesignerStrings.diagnostic`).
+- The 16 ready-made report templates ship as `.qrep` files in `templates/`
+  (package assets). `ReportTemplateLibrary.bundled()` reads them in menu
+  order. `QudsReportDesigner.templates` is now nullable, and null (the new
+  default) offers the bundled files. `loadTemplate` loads a template's
+  embedded fonts too.
+- Embedded images can be replaced. Click a thumbnail on the inspector's
+  Images tab, or use **Replace image…** on an image element. The image keeps
+  its name, so every element showing it updates on the report at once
+  (`ReportDesignerController.replaceImage`, `importReplacement`; undoable).
+- `ReportDesignerController.fromXml`, `loadXml`, and `loadPackage` open a
+  template that has expression errors instead of throwing, and list the
+  errors in the new `loadDiagnostics`. A report saved with a typo, such as a
+  variable `{{sum(item.qty}}`, can be reopened and fixed. They still throw
+  `ReportTemplateException` when the XML can't be read.
+- The report inspector has been redesigned:
+  - Actions are icon buttons with tooltips instead of text rows.
+  - The Variables tab is an explorer. Dotted names (`stats.sum`) appear as
+    folders you can collapse, and the selected variable is edited below the
+    tree (`selectedVariablePath`, `variableFolders`).
+  - Images appear as cards with a thumbnail.
+  - Embedded fonts appear as cards with a live preview, a default star, and a
+    remove button.
+  - Every font field opens a picker of installed fonts. It previews each font
+    in its own script (Arabic, Thai, and so on), and choosing a font embeds
+    it. Hosts report scripts through the new `ReportDeviceFontScripts`
+    interface. `fontPreviewText` gives the sample text.
+- The designer can be localized. `ReportDesignerStrings` ships English and
+  Arabic. Pass it as `QudsReportDesigner.strings`, or let the designer follow
+  the app's locale. In Arabic, the inspector, data explorer, menus, and status
+  messages are mirrored right to left.
+- `QudsReportDesigner.onPrint` adds a **Print** toolbar button and Ctrl+P.
+  It hands the host the report as PDF, rendered with the preview data, so the
+  host can show a print dialog. Adds `ReportToolbarIcon.print`.
+- Dark `OfficeTheme`s are supported. The page stays white, while the
+  inspector, data explorer, popups, and canvas grid use colors that suit the
+  dark chrome.
+
 ## 1.0.0
 
 First stable release, built on `quds_office_engine` 1.0.0. The public API

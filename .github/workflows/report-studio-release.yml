@@ -37,7 +37,6 @@ jobs:
       - name: Resolve workspace
         working-directory: .
         run: flutter pub get
-      - run: flutter build linux --release
       - run: bash packaging/linux/build_packages.sh dist
       - uses: actions/upload-artifact@v4
         with:

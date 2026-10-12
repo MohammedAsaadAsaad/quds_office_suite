@@ -504,6 +504,48 @@ class ReportCompleter {
     return out;
   }
 
+  /// Variables and folders directly under [folder] (`[]` is the top level,
+  /// `['stats']` lists `stats.sum` as `sum`).
+  List<ReportCompletionItem> _variablesUnder(List<String> folder) {
+    final String prefix = folder.isEmpty
+        ? ''
+        : '${folder.join('.').toLowerCase()}.';
+    final List<ReportCompletionItem> out = <ReportCompletionItem>[];
+    final Map<String, int> subfolders = <String, int>{};
+    for (final ReportVariable v in template.variables) {
+      if (!v.name.toLowerCase().startsWith(prefix)) {
+        continue;
+      }
+      final String rest = v.name.substring(prefix.length);
+      final int dot = rest.indexOf('.');
+      if (dot < 0) {
+        out.add(
+          ReportCompletionItem(
+            label: rest,
+            insert: rest,
+            kind: ReportCompletionKind.variable,
+            detail: v.description.isNotEmpty
+                ? v.description
+                : '${v.type.name} · ${v.value}',
+          ),
+        );
+      } else {
+        final String name = rest.substring(0, dot);
+        subfolders[name] = (subfolders[name] ?? 0) + 1;
+      }
+    }
+    return <ReportCompletionItem>[
+      for (final MapEntry<String, int> f in subfolders.entries)
+        ReportCompletionItem(
+          label: f.key,
+          insert: f.key,
+          kind: ReportCompletionKind.field,
+          detail: '${f.value} ${f.value == 1 ? 'variable' : 'variables'}',
+        ),
+      ...out,
+    ];
+  }
+
   List<ReportCompletionItem> _children(List<String> parents) {
     final String root = parents.first.toLowerCase();
     final List<String> rest = parents.sublist(1);
@@ -537,19 +579,7 @@ class ReportCompleter {
         }
         return const <ReportCompletionItem>[];
       case 'variables' || 'vars' || 'var':
-        return rest.isNotEmpty
-            ? const <ReportCompletionItem>[]
-            : <ReportCompletionItem>[
-                for (final ReportVariable v in template.variables)
-                  ReportCompletionItem(
-                    label: v.name,
-                    insert: v.name,
-                    kind: ReportCompletionKind.variable,
-                    detail: v.description.isNotEmpty
-                        ? v.description
-                        : '${v.type.name} · ${v.value}',
-                  ),
-              ];
+        return _variablesUnder(rest);
       case 'data':
         return _withColumns(_fieldsOf(_walk(data, rest)), rest.join('.'));
     }

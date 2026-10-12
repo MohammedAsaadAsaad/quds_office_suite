@@ -401,6 +401,129 @@ void main() {
       expect(issues.single.message, contains('TOTALIZE'));
       expect(invoiceEngine().validate(), isEmpty);
     });
+
+    test('diagnostic paths parse to the spot they point at', () {
+      const String xml = '''
+<QudsReport>
+  <Variables>
+    <Variable name="rate" type="number" value="abc"/>
+  </Variables>
+  <DataSchema>
+    <Table name="items"><Column name="net" expression="price *"/></Table>
+  </DataSchema>
+  <Bands>
+    <Detail height="10mm" dataSet="items" filter="qty &gt;">
+      <Text x="0" y="0" width="20mm" height="5mm" text="ok"/>
+      <Text name="total" x="0" y="0" width="20mm" height="5mm"
+            text="{{BOGUS(1)}}" visibleWhen="qty &gt;"/>
+      <Table x="0" y="0" width="40mm">
+        <Columns><Column header="A" width="20mm"/></Columns>
+        <RowTemplate><Cell text="{{ (1 }}"/></RowTemplate>
+      </Table>
+    </Detail>
+  </Bands>
+</QudsReport>''';
+      final ReportParseResult parsed = QudsReportXmlParser().parse(xml);
+      final List<ReportDiagnostic> all = <ReportDiagnostic>[
+        ...parsed.diagnostics,
+        ...QudsReportEngine(parsed.template).validate(),
+      ];
+      ReportDiagnosticTarget at(String text) => all
+          .firstWhere((ReportDiagnostic d) => d.message.contains(text))
+          .target;
+
+      final ReportDiagnosticTarget fn = at('BOGUS');
+      expect(fn.place, ReportDiagnosticPlace.element);
+      expect(fn.band, ReportBandKind.detail);
+      expect(fn.element, 1);
+      expect(fn.attribute, isNull);
+
+      final List<ReportDiagnosticTarget> visible = all
+          .map((ReportDiagnostic d) => d.target)
+          .where((ReportDiagnosticTarget t) => t.attribute == 'visibleWhen')
+          .toList();
+      expect(visible, isNotEmpty);
+      expect(
+        visible.map((ReportDiagnosticTarget t) => t.key).toSet(),
+        hasLength(1),
+      );
+      expect(visible.first.element, 1);
+
+      final ReportDiagnosticTarget filter = all
+          .map((ReportDiagnostic d) => d.target)
+          .firstWhere((ReportDiagnosticTarget t) => t.attribute == 'filter');
+      expect(filter.place, ReportDiagnosticPlace.band);
+
+      final ReportDiagnosticTarget cell = all
+          .map((ReportDiagnostic d) => d.target)
+          .firstWhere((ReportDiagnosticTarget t) => t.part == 'Cell');
+      expect(cell.element, 2);
+      expect(cell.partIndex, 0);
+
+      final ReportDiagnosticTarget rate = at('is not a number');
+      expect(rate.place, ReportDiagnosticPlace.variable);
+      expect(rate.name, 'rate');
+
+      final List<ReportDiagnosticTarget> net = all
+          .map((ReportDiagnostic d) => d.target)
+          .where(
+            (ReportDiagnosticTarget t) =>
+                t.place == ReportDiagnosticPlace.dataColumn,
+          )
+          .toList();
+      expect(net, isNotEmpty);
+      expect(
+        net.every((ReportDiagnosticTarget t) => t.name == 'items'),
+        isTrue,
+      );
+      expect(
+        net.every((ReportDiagnosticTarget t) => t.column == 'net'),
+        isTrue,
+      );
+
+      expect(ReportDiagnosticTarget.parse('Settings/Margins').name, 'Margins');
+      expect(
+        ReportDiagnosticTarget.parse('').place,
+        ReportDiagnosticPlace.file,
+      );
+      expect(
+        ReportDiagnosticTarget.parse(
+          'Bands/Detail/Chart "c"[4]/Series[1]@value',
+        ),
+        isA<ReportDiagnosticTarget>()
+            .having((ReportDiagnosticTarget t) => t.element, 'element', 4)
+            .having((ReportDiagnosticTarget t) => t.part, 'part', 'Series')
+            .having((ReportDiagnosticTarget t) => t.partIndex, 'index', 1)
+            .having((ReportDiagnosticTarget t) => t.attribute, 'attr', 'value'),
+      );
+      expect(
+        ReportDiagnosticTarget.parse(
+          'Bands/Detail/Table[0] (Table)/Footer/Cell[2]',
+        ).part,
+        'FooterCell',
+      );
+
+      ReportDiagnosticKind kind(String text) =>
+          all.firstWhere((ReportDiagnostic d) => d.message.contains(text)).kind;
+      expect(kind('BOGUS'), ReportDiagnosticKind.unknownFunction);
+      expect(kind('is not a number'), ReportDiagnosticKind.invalidValue);
+      expect(
+        const ReportDiagnostic(
+          ReportDiagnosticSeverity.warning,
+          'Bands/Detail/Text[0]',
+          'Extends past the page edge',
+        ).kind,
+        ReportDiagnosticKind.layout,
+      );
+      expect(
+        const ReportDiagnostic(
+          ReportDiagnosticSeverity.error,
+          'Bands/Detail@filter',
+          'ReportExpressionException: Unexpected end',
+        ).summary,
+        'Unexpected end',
+      );
+    });
   });
 
   group('Pagination', () {
@@ -946,7 +1069,10 @@ void main() {
             sum + ReportTemplates.inCategory(c).length,
       );
       expect(total, ReportTemplates.all.length);
-      expect(ReportTemplateCategory.hr.titleFor(arabic: true), 'الموارد البشرية');
+      expect(
+        ReportTemplateCategory.hr.titleFor(arabic: true),
+        'الموارد البشرية',
+      );
       expect(ReportTemplateCategory.sales.titleFor(arabic: false), 'Sales');
       expect(ReportTemplates.byId('invoice_en')!.family, 'commercial_invoice');
     });
@@ -988,7 +1114,8 @@ void main() {
         'product_catalog_en',
       )!;
       final Map<String, Uint8List> photos = catalog.images();
-      final List<Object?> items = catalog.sampleData()['items']! as List<Object?>;
+      final List<Object?> items =
+          catalog.sampleData()['items']! as List<Object?>;
       for (final Object? item in items) {
         final String key = (item! as Map<String, Object?>)['photo']! as String;
         expect(photos, contains(key));
@@ -999,9 +1126,15 @@ void main() {
       final Uint8List a = ReportTemplateArt.logo(size: 64);
       expect(isPng(a), isTrue);
       expect(ReportTemplateArt.logo(size: 64), a);
-      expect(ReportImageFormat.sniff(ReportTemplateArt.stamp(size: 64)), ReportImageFormat.png);
+      expect(
+        ReportImageFormat.sniff(ReportTemplateArt.stamp(size: 64)),
+        ReportImageFormat.png,
+      );
       for (final ReportProductArt kind in ReportProductArt.values) {
-        expect(isPng(ReportTemplateArt.product(kind, width: 48, height: 36)), isTrue);
+        expect(
+          isPng(ReportTemplateArt.product(kind, width: 48, height: 36)),
+          isTrue,
+        );
       }
     });
   });
@@ -1023,7 +1156,10 @@ void main() {
       final List<String> order = <String>[
         for (final ReportPrimitive p
             in engine.layout(const <String, Object?>{}).pages.first.primitives)
-          if (p is ReportTextPrimitive) p.text else if (p is ReportRectPrimitive) 'rect',
+          if (p is ReportTextPrimitive)
+            p.text
+          else if (p is ReportRectPrimitive)
+            'rect',
       ];
       expect(order, <String>['label', 'rect', 'value', 'rect', 'more']);
     });
@@ -1239,6 +1375,123 @@ void main() {
         hasLength(1),
       );
     });
+
+    test('item aggregates sum the detail data set', () {
+      const String rows = r'''<QudsReport name="Rows">
+  <Variables>
+    <Var name="sumText" value="{{SUM(item.amount)}}"/>
+    <Var name="sumExpr" type="expression" value="SUM(item.amount)"/>
+    <Var name="count" type="expression" value="COUNT()"/>
+    <Var name="plain" type="expression" value="SUM(items.amount)"/>
+  </Variables>
+  <Bands>
+    <ReportHeader height="10mm">
+      <Text x="0" y="0" width="150mm" height="6mm">{{Variables.sumText}}|{{Variables.sumExpr}}|{{Variables.count}}|{{Variables.plain}}</Text>
+    </ReportHeader>
+    <Detail height="6mm" dataSet="items">
+      <Text x="0" y="0" width="40mm" height="6mm">{{item.amount}}</Text>
+    </Detail>
+  </Bands>
+</QudsReport>''';
+      final QudsReportEngine engine = QudsReportEngine.fromXml(
+        rows,
+        fonts: loadFonts(),
+      );
+      expect(
+        pageTexts(engine.layout(data).pages.first),
+        contains('400|400|2|400'),
+      );
+    });
+
+    test('dotted names group variables into folders', () {
+      const String grouped = r'''<QudsReport name="Groups">
+  <Variables>
+    <Var name="stats.sum" type="expression" value="SUM(item.amount)"/>
+    <Var name="stats.avg" type="expression" value="Variables.stats.sum / COUNT()"/>
+    <Var name="stats.label.title" value="Totals"/>
+    <Var name="company" value="Quds"/>
+  </Variables>
+  <Bands>
+    <ReportHeader height="10mm">
+      <Text x="0" y="0" width="150mm" height="6mm">{{Variables.stats.label.title}}|{{Variables.stats.sum}}|{{Variables.stats.avg}}|{{Variables.company}}</Text>
+    </ReportHeader>
+    <Detail height="6mm" dataSet="items">
+      <Text x="0" y="0" width="40mm" height="6mm">{{item.amount}}</Text>
+    </Detail>
+  </Bands>
+</QudsReport>''';
+      final QudsReportEngine engine = QudsReportEngine.fromXml(
+        grouped,
+        fonts: loadFonts(),
+      );
+      expect(engine.validate(), isEmpty);
+      expect(
+        pageTexts(engine.layout(data).pages.first),
+        contains('Totals|400|200|Quds'),
+      );
+      final ReportVariable avg = engine.template.variables[1];
+      expect(avg.folder, 'stats');
+      expect(avg.leaf, 'avg');
+      expect(ReportVariable.isValidName('stats.sum'), isTrue);
+      expect(ReportVariable.isValidName('stats..sum'), isFalse);
+      expect(ReportVariable.isValidName('.sum'), isFalse);
+
+      final ReportCompleter completer = ReportCompleter(
+        template: engine.template,
+      );
+      List<String> labels(String text) => <String>[
+        for (final ReportCompletionItem i
+            in completer.complete(text, text.length)!.items)
+          i.label,
+      ];
+      expect(labels('{{Variables.'), <String>['stats', 'company']);
+      expect(labels('{{Variables.stats.'), <String>['label', 'sum', 'avg']);
+      expect(labels('{{Variables.stats.label.'), <String>['title']);
+
+      final ReportParseResult clash = QudsReportXmlParser().parse(
+        '<QudsReport><Variables>'
+        '<Var name="stats" value="1"/><Var name="stats.sum" value="2"/>'
+        '</Variables><Bands><Detail height="5mm"/></Bands></QudsReport>',
+      );
+      expect(
+        clash.diagnostics.map((ReportDiagnostic d) => d.message),
+        contains(contains('clash')),
+      );
+    });
+
+    test('a broken expression still yields a readable template', () {
+      final ReportParseResult broken = QudsReportXmlParser().parse(
+        '<QudsReport><Variables>'
+        '<Var name="itemsSum" value="{{sum(item.calc1}}"/>'
+        '</Variables><Bands><Detail height="5mm"/></Bands></QudsReport>',
+      );
+      expect(broken.readable, isTrue);
+      expect(broken.diagnostics.where((ReportDiagnostic d) => d.isError), [
+        isA<ReportDiagnostic>().having(
+          (ReportDiagnostic d) => d.path,
+          'path',
+          contains('itemsSum'),
+        ),
+      ]);
+      expect(broken.template.variables.single.value, '{{sum(item.calc1}}');
+      expect(
+        () => broken.templateOrThrow,
+        throwsA(isA<ReportTemplateException>()),
+      );
+
+      for (final String bad in <String>[
+        '<QudsReport><Bands></QudsReport>',
+        '',
+        '<Other/>',
+      ]) {
+        final ReportParseResult r = QudsReportXmlParser().parse(bad);
+        expect(r.readable, isFalse, reason: bad);
+        expect(
+          r.diagnostics.where((ReportDiagnostic d) => d.isError),
+          isNotEmpty,
+        );
+      }
+    });
   });
 
   group('Report package', () {
@@ -1345,6 +1598,25 @@ void main() {
       expect(regular.family, 'Liberation Serif');
       expect(regular.weight, 400);
       expect(regular.bold || regular.italic, isFalse);
+      expect(
+        regular.scripts,
+        containsAll(<ReportScript>[ReportScript.latin, ReportScript.cyrillic]),
+      );
+      expect(regular.scripts, isNot(contains(ReportScript.arabic)));
+      expect(ReportScript.previewText(regular.scripts), 'The quick brown fox');
+      final ReportFontFileInfo naskh = ReportFontFile.inspect(
+        File('$dir/NotoNaskhArabic-Regular.ttf').readAsBytesSync(),
+      );
+      expect(naskh.scripts, contains(ReportScript.arabic));
+      expect(ReportScript.primary(naskh.scripts), ReportScript.arabic);
+      expect(ReportScript.previewText(naskh.scripts), 'أبجد هوز حطي كلمن');
+      expect(
+        ReportScript.previewText(<ReportScript>{
+          ReportScript.latin,
+          ReportScript.arabic,
+        }),
+        contains('أبجد'),
+      );
       final ReportFontFileInfo bold = ReportFontFile.inspect(
         File('$dir/LiberationSerif-Bold.ttf').readAsBytesSync(),
       );
@@ -1822,6 +2094,104 @@ void main() {
         ReportPackage.decode(ReportPackage(xml: xml).encode()).sampleData,
         isNull,
       );
+    });
+
+    test('template manifests travel in the package', () {
+      const ReportTemplateManifest manifest = ReportTemplateManifest(
+        id: 'branch_invoice',
+        title: 'Branch invoice',
+        titleAr: 'فاتورة الفرع',
+        description: 'Invoice for branches',
+        category: ReportTemplateCategory.finance,
+        language: ReportTemplateLanguage.arabic,
+        order: 5,
+      );
+      final Uint8List bytes = ReportPackage(
+        xml: xml,
+        sampleData: <String, Object?>{'n': 1},
+        template: manifest,
+      ).encode();
+      final ReportTemplateInfo info = ReportTemplateInfo.decode(bytes);
+      expect(info.id, 'branch_invoice');
+      expect(info.family, 'branch_invoice');
+      expect(info.titleAr, 'فاتورة الفرع');
+      expect(info.familyTitle, 'Branch invoice');
+      expect(info.descriptionAr, 'Invoice for branches');
+      expect(info.category, ReportTemplateCategory.finance);
+      expect(info.rtl, isTrue);
+      expect(info.order, 5);
+      expect(info.xml, xml);
+      expect(info.sampleData(), <String, Object?>{'n': 1});
+      expect(info.package().template!.title, 'Branch invoice');
+      expect(info.manifest.encode(), manifest.encode());
+      expect(
+        ReportPackage.decode(ReportPackage(xml: xml).encode()).template,
+        isNull,
+      );
+
+      for (final String bad in <String>[
+        '[]',
+        '{"title": "x"}',
+        '{"id": "a b", "title": "x"}',
+        '{"id": "a"}',
+        '{"id": "a", "title": "x", "category": "toys"}',
+        '{"id": "a", "title": "x", "language": "fr"}',
+        '{"id": "a", "title": "x", "order": "1"}',
+      ]) {
+        expect(
+          () => ReportTemplateManifest.decode(bad),
+          throwsFormatException,
+          reason: bad,
+        );
+      }
+      final ZipWriter zip = ZipWriter()
+        ..addFile('mimetype', ascii.encode(ReportPackage.mimeType), store: true)
+        ..addFile(ReportPackage.layoutEntry, utf8.encode(xml))
+        ..addFile(ReportTemplateManifest.entry, utf8.encode('{"id": "x"}'));
+      expect(
+        () => ReportPackage.decode(zip.close()),
+        throwsA(isA<ReportPackageException>()),
+      );
+      expect(
+        () => ReportTemplateInfo.decode(ReportPackage(xml: xml).encode()),
+        throwsA(isA<ReportPackageException>()),
+      );
+    });
+
+    test('templates sort by category, order, family, Arabic first', () {
+      ReportTemplateInfo t(
+        String id,
+        ReportTemplateCategory c, {
+        int order = 0,
+        bool ar = false,
+      }) => ReportTemplateInfo.fromPackage(
+        ReportPackage(
+          xml: xml,
+          template: ReportTemplateManifest(
+            id: id,
+            title: id.split('_').first,
+            category: c,
+            order: order,
+            language: ar
+                ? ReportTemplateLanguage.arabic
+                : ReportTemplateLanguage.english,
+          ),
+        ),
+      );
+      final List<ReportTemplateInfo> list = <ReportTemplateInfo>[
+        t('zeta_en', ReportTemplateCategory.hr),
+        t('beta_en', ReportTemplateCategory.sales, order: 20),
+        t('alpha_en', ReportTemplateCategory.sales, order: 20),
+        t('alpha_ar', ReportTemplateCategory.sales, order: 20, ar: true),
+        t('first_en', ReportTemplateCategory.sales, order: 10),
+      ]..sort(ReportTemplateInfo.compare);
+      expect(list.map((ReportTemplateInfo i) => i.id), <String>[
+        'first_en',
+        'alpha_ar',
+        'alpha_en',
+        'beta_en',
+        'zeta_en',
+      ]);
     });
   });
 }

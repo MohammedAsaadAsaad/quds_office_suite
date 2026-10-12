@@ -1,6 +1,7 @@
 /// TrueType files embedded in `.qrep` packages: inspection and face slots.
 library;
 
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'report_fonts.dart';
@@ -37,14 +38,102 @@ class ReportFontFiles {
   }
 }
 
-/// What a TrueType file declares in its `name`, `OS/2` and `head` tables.
+/// Writing systems a font preview can be shown in, each with sample text
+/// and the code points that show a font covers it.
+enum ReportScript {
+  /// Latin letters.
+  latin('The quick brown fox', <int>[0x41, 0x61, 0x7A]),
+
+  /// Arabic.
+  arabic('أبجد هوز حطي كلمن', <int>[0x627, 0x628, 0x644, 0x645]),
+
+  /// Hebrew.
+  hebrew('אבגד הוז חטי', <int>[0x5D0, 0x5D1, 0x5E9]),
+
+  /// Devanagari (Hindi, Marathi, Nepali).
+  devanagari('नमस्ते दुनिया', <int>[0x915, 0x92E, 0x938]),
+
+  /// Bengali.
+  bengali('নমস্কার বিশ্ব', <int>[0x995, 0x9AE, 0x9B8]),
+
+  /// Tamil.
+  tamil('வணக்கம் உலகம்', <int>[0xB95, 0xBAE, 0xBB5]),
+
+  /// Thai.
+  thai('สวัสดีชาวโลก', <int>[0xE01, 0xE19, 0xE2A]),
+
+  /// Ethiopic (Amharic, Tigrinya).
+  ethiopic('ሰላም ዓለም', <int>[0x1200, 0x1208, 0x1230]),
+
+  /// Armenian.
+  armenian('Բարեւ աշխարհ', <int>[0x531, 0x561, 0x562]),
+
+  /// Georgian.
+  georgian('გამარჯობა', <int>[0x10D0, 0x10D1, 0x10E1]),
+
+  /// Korean Hangul.
+  hangul('안녕하세요', <int>[0xAC00, 0xD55C, 0xAE00]),
+
+  /// Japanese kana.
+  kana('こんにちは', <int>[0x3042, 0x3093, 0x30A2]),
+
+  /// Chinese characters (Han).
+  han('永和九年 中文', <int>[0x4E2D, 0x6587, 0x6C38]),
+
+  /// Greek.
+  greek('Γειά σου κόσμε', <int>[0x391, 0x3A9, 0x3B1]),
+
+  /// Cyrillic.
+  cyrillic('Привет, мир', <int>[0x416, 0x431, 0x44F]);
+
+  const ReportScript(this.sample, this.probes);
+
+  /// Short sample text written in this script.
+  final String sample;
+
+  /// Code points a font must map to cover this script.
+  final List<int> probes;
+
+  /// Text that previews a font covering [scripts] in its own writing: Latin
+  /// fonts show a Latin sample (plus Arabic when they cover it too), other
+  /// fonts the sample of their first script.
+  static String previewText(Set<ReportScript> scripts) {
+    if (scripts.isEmpty) {
+      return latin.sample;
+    }
+    if (scripts.contains(latin)) {
+      return scripts.contains(arabic) ? 'Abc  أبجد هوز' : latin.sample;
+    }
+    for (final ReportScript s in values) {
+      if (scripts.contains(s)) {
+        return s.sample;
+      }
+    }
+    return latin.sample;
+  }
+
+  /// Primary script for [scripts]: Latin when covered, else the first one.
+  static ReportScript primary(Set<ReportScript> scripts) {
+    if (scripts.isEmpty || scripts.contains(latin)) {
+      return latin;
+    }
+    return values.firstWhere(scripts.contains);
+  }
+}
+
+/// What a TrueType file declares in its `name`, `OS/2`, `head` and `cmap`
+/// tables.
 class ReportFontFileInfo {
   /// ReportFontFileInfo API.
   const ReportFontFileInfo({
     required this.family,
     required this.weight,
     required this.italic,
+    this.scripts = const <ReportScript>{},
   });
+
+  /// Writing systems the font's character map covers.
+  final Set<ReportScript> scripts;
 
   /// Typographic family (name ID 16, else 1), English when available.
   final String family;
@@ -187,7 +276,132 @@ abstract final class ReportFontFile {
     if (family.isEmpty) {
       throw const ReportFontException('Font has no family name');
     }
-    return ReportFontFileInfo(family: family, weight: weight, italic: italic);
+    return ReportFontFileInfo(
+      family: family,
+      weight: weight,
+      italic: italic,
+      scripts: _scripts(table('cmap')),
+    );
+  }
+
+  /// Scripts whose probe code points all map to glyphs in [cmap]; empty
+  /// when no Unicode subtable can be read.
+  static Set<ReportScript> _scripts(ByteData cmap) {
+    final bool Function(int)? has = _cmapLookup(cmap);
+    if (has == null) {
+      return const <ReportScript>{};
+    }
+    return <ReportScript>{
+      for (final ReportScript s in ReportScript.values)
+        if (s.probes.every(has)) s,
+    };
+  }
+
+  /// Lookup over the best Unicode subtable (format 12, else format 4).
+  static bool Function(int)? _cmapLookup(ByteData cmap) {
+    if (cmap.lengthInBytes < 4) {
+      return null;
+    }
+    final int count = cmap.getUint16(2);
+    int? format4;
+    int? format12;
+    for (int i = 0; i < count; i++) {
+      final int at = 4 + i * 8;
+      if (at + 8 > cmap.lengthInBytes) {
+        break;
+      }
+      final int platform = cmap.getUint16(at);
+      final int encoding = cmap.getUint16(at + 2);
+      final int offset = cmap.getUint32(at + 4);
+      if (offset + 4 > cmap.lengthInBytes) {
+        continue;
+      }
+      final bool unicode =
+          platform == 0 || (platform == 3 && (encoding == 1 || encoding == 10));
+      if (!unicode) {
+        continue;
+      }
+      switch (cmap.getUint16(offset)) {
+        case 4:
+          format4 ??= offset;
+        case 12:
+          format12 ??= offset;
+      }
+    }
+    if (format12 != null) {
+      return _format12(cmap, format12);
+    }
+    if (format4 != null) {
+      return _format4(cmap, format4);
+    }
+    return null;
+  }
+
+  static bool Function(int)? _format12(ByteData d, int at) {
+    if (at + 16 > d.lengthInBytes) {
+      return null;
+    }
+    final int groups = d.getUint32(at + 12);
+    final int first = at + 16;
+    final int n = math.min(groups, (d.lengthInBytes - first) ~/ 12);
+    return (int c) {
+      var lo = 0;
+      var hi = n - 1;
+      while (lo <= hi) {
+        final int mid = (lo + hi) >> 1;
+        final int g = first + mid * 12;
+        final int start = d.getUint32(g);
+        final int end = d.getUint32(g + 4);
+        if (c < start) {
+          hi = mid - 1;
+        } else if (c > end) {
+          lo = mid + 1;
+        } else {
+          return d.getUint32(g + 8) + (c - start) != 0;
+        }
+      }
+      return false;
+    };
+  }
+
+  static bool Function(int)? _format4(ByteData d, int at) {
+    if (at + 14 > d.lengthInBytes) {
+      return null;
+    }
+    final int segs = d.getUint16(at + 6) ~/ 2;
+    final int ends = at + 14;
+    final int starts = ends + segs * 2 + 2;
+    final int deltas = starts + segs * 2;
+    final int ranges = deltas + segs * 2;
+    if (ranges + segs * 2 > d.lengthInBytes) {
+      return null;
+    }
+    return (int c) {
+      if (c > 0xFFFF) {
+        return false;
+      }
+      for (int i = 0; i < segs; i++) {
+        if (d.getUint16(ends + i * 2) < c) {
+          continue;
+        }
+        final int start = d.getUint16(starts + i * 2);
+        if (start > c) {
+          return false;
+        }
+        final int delta = d.getUint16(deltas + i * 2);
+        final int rangeAt = ranges + i * 2;
+        final int range = d.getUint16(rangeAt);
+        if (range == 0) {
+          return (c + delta) & 0xFFFF != 0;
+        }
+        final int glyphAt = rangeAt + range + (c - start) * 2;
+        if (glyphAt + 2 > d.lengthInBytes) {
+          return false;
+        }
+        return d.getUint16(glyphAt) != 0;
+      }
+      return false;
+    };
   }
 
   static String _family(ByteData name) {

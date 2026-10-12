@@ -10,6 +10,7 @@ import '../opc/zip/zip_writer.dart';
 import 'report_data.dart';
 import 'report_font_file.dart';
 import 'report_fonts.dart';
+import 'report_template_manifest.dart';
 
 /// Thrown when `.qrep` bytes are neither a valid package nor plain XML.
 class ReportPackageException implements Exception {
@@ -60,6 +61,7 @@ enum ReportImageFormat {
 /// fonts/Cairo/regular.ttf embedded TrueType faces, used as fontFamily="Cairo"
 /// fonts/Cairo/bold.ttf
 /// data/sample.json        design-time data shown by the designer (optional)
+/// template.json           catalog details when the file is a template
 /// ```
 ///
 /// Image keys are the file stems under `images/`; an `<Image>` element whose
@@ -74,6 +76,7 @@ class ReportPackage {
     Map<String, Uint8List>? images,
     Map<String, ReportFontFiles>? fonts,
     this.sampleData,
+    this.template,
   }) : images = images ?? <String, Uint8List>{},
        fonts = fonts ?? <String, ReportFontFiles>{};
 
@@ -100,6 +103,7 @@ class ReportPackage {
     }
     final Map<String, Uint8List> images = <String, Uint8List>{};
     Map<String, Object?>? sample;
+    ReportTemplateManifest? template;
     final Map<String, (Uint8List?, Uint8List?)> faces =
         <String, (Uint8List?, Uint8List?)>{};
     for (final ZipEntry entry in zip.entries) {
@@ -136,6 +140,18 @@ class ReportPackage {
         }
         continue;
       }
+      if (entry.fileName == ReportTemplateManifest.entry) {
+        try {
+          template = ReportTemplateManifest.decode(
+            _text(_read(zip, ReportTemplateManifest.entry)),
+          );
+        } on FormatException catch (e) {
+          throw ReportPackageException(
+            '${ReportTemplateManifest.entry}: ${e.message}',
+          );
+        }
+        continue;
+      }
       final String? key = _imageKey(entry.fileName);
       if (key == null) {
         continue;
@@ -161,6 +177,7 @@ class ReportPackage {
           f.key: ReportFontFiles(regular: f.value.$1, bold: f.value.$2),
       },
       sampleData: sample,
+      template: template,
     );
   }
 
@@ -194,6 +211,10 @@ class ReportPackage {
   /// Data the designer previews the report with (`data/sample.json`); null
   /// when the report has none. Hosts feed real data at export time.
   final Map<String, Object?>? sampleData;
+
+  /// Catalog details ([ReportTemplateManifest.entry]) when this file is a
+  /// template; null for an ordinary report.
+  final ReportTemplateManifest? template;
 
   /// Whether [bytes] start with a ZIP local-file header.
   static bool isPackage(Uint8List bytes) =>
@@ -322,6 +343,10 @@ class ReportPackage {
         sampleDataEntry,
         utf8.encode(ReportData.encodeJson(sample, pretty: true)),
       );
+    }
+    final ReportTemplateManifest? manifest = template;
+    if (manifest != null) {
+      zip.addFile(ReportTemplateManifest.entry, utf8.encode(manifest.encode()));
     }
     return zip.close();
   }

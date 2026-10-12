@@ -1,6 +1,6 @@
 // Renders README screenshots with the real fonts. Skipped unless
 // QUDS_SHOTS_DIR is set:
-//   QUDS_SHOTS_DIR=../../doc/screenshots flutter test test/shots_test.dart
+//   QUDS_SHOTS_DIR=screenshots flutter test test/shots_test.dart
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -13,6 +13,8 @@ import 'package:quds_report_studio/main.dart';
 import 'package:quds_report_studio/src/device_fonts.dart';
 import 'package:quds_report_studio/src/recent_files.dart';
 import 'package:quds_report_studio/src/report_studio_page.dart';
+import 'package:quds_report_studio/src/studio_settings.dart';
+import 'package:quds_report_studio/src/studio_templates.dart';
 
 final String? _outDir = Platform.environment['QUDS_SHOTS_DIR'];
 
@@ -69,7 +71,16 @@ Future<void> _save(GlobalKey key, String name) async {
   File('${dir.path}/$name').writeAsBytesSync(data!.buffer.asUint8List());
 }
 
+late List<ReportTemplateInfo> _bundled;
+
+ReportTemplateInfo _byId(String id) =>
+    _bundled.firstWhere((ReportTemplateInfo t) => t.id == id);
+
 void main() {
+  setUpAll(() async {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    _bundled = await ReportTemplateLibrary.bundled();
+  });
   testWidgets('report studio screenshots', (WidgetTester tester) async {
     await tester.runAsync(_loadFonts);
     debugDisableShadows = false;
@@ -79,12 +90,30 @@ void main() {
     final Directory temp = Directory.systemTemp.createTempSync('qrs_shots');
     addTearDown(() => temp.deleteSync(recursive: true));
     final RecentFiles recent = RecentFiles(store: File('${temp.path}/r.json'));
+    final StudioSettings settings = StudioSettings(persist: false);
+    final StudioTemplates catalog = StudioTemplates(
+      bundled: _bundled,
+      folder: Directory('${temp.path}/templates'),
+    );
+    await tester.runAsync(() async {
+      for (final String id in <String>['receipt_voucher_en', 'inventory_ar']) {
+        final ReportTemplateInfo info = _byId(id);
+        await catalog.save(
+          info.package(),
+          title: id == 'inventory_ar' ? 'جرد الفرع الرئيسي' : 'Branch receipt',
+          category: info.category,
+          rtl: info.rtl,
+        );
+      }
+    });
 
     await tester.pumpWidget(
       RepaintBoundary(
         key: boundary,
         child: ReportStudioApp(
+          templates: catalog,
           recent: recent,
+          settings: settings,
           deviceFonts: StudioDeviceFonts(),
         ),
       ),
@@ -108,6 +137,11 @@ void main() {
     c.setProperty('var.1.format', 'percent');
     await tester.pump();
     await tester.runAsync(() => _save(boundary, 'studio_report_settings.png'));
+    c.addVariable(name: 'stats.sum', type: ReportVariableType.number);
+    c.addVariable(name: 'stats.avg', type: ReportVariableType.number);
+    c.addVariable(name: 'stats.count', type: ReportVariableType.number);
+    c.addVariable(name: 'company.address', value: 'Ramallah');
+    c.selectedVariablePath = 'stats.avg';
     c.inspectorPage = ReportInspectorPage.variables;
     await tester.pump();
     await tester.runAsync(() => _save(boundary, 'studio_variables.png'));
@@ -131,7 +165,7 @@ void main() {
     await tester.runAsync(() => _save(boundary, 'studio_color_palette.png'));
     inspector.openPalette(null);
 
-    page.document.newFromTemplate(ReportTemplates.byId('sales_performance')!);
+    page.document.newFromTemplate(_byId('sales_performance'));
     await tester.pump();
     final ReportElement chart = c.template.allElements
         .map(((ReportBand, ReportElement) be) => be.$2)
@@ -150,7 +184,7 @@ void main() {
     c.togglePreview();
     await tester.pump();
 
-    page.document.newFromTemplate(ReportTemplates.byId('invoice_en')!);
+    page.document.newFromTemplate(_byId('invoice_en'));
     await tester.pump();
     final ReportTextElement bound = c.template.allElements
         .map(((ReportBand, ReportElement) be) => be.$2)
@@ -197,7 +231,7 @@ void main() {
     );
     c.cancelTextEdit();
     c.select(null);
-    page.document.newFromTemplate(ReportTemplates.byId('invoice_en')!);
+    page.document.newFromTemplate(_byId('invoice_en'));
     await tester.pump();
     c.addImage(
       'company_logo.png',
@@ -227,6 +261,12 @@ void main() {
       ),
     );
     c.inspectorPage = ReportInspectorPage.images;
+    for (int i = 0; i < 4; i++) {
+      await tester.pump();
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 150)),
+      );
+    }
     await tester.pump();
     await tester.runAsync(() => _save(boundary, 'studio_images.png'));
     c.insertImage('company_logo');
@@ -237,7 +277,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
     await tester.runAsync(() => _save(boundary, 'studio_image_element.png'));
 
-    page.document.newFromTemplate(ReportTemplates.byId('invoice_en')!);
+    page.document.newFromTemplate(_byId('invoice_en'));
     c.select(null);
     await tester.runAsync(c.loadDeviceFamilies);
     c.inspectorPage = ReportInspectorPage.fonts;
@@ -248,7 +288,6 @@ void main() {
             (String f) => f.contains('Sans'),
             orElse: () => 'Liberation Serif',
           );
-    c.setProperty('font.search', 'Sans');
     await tester.runAsync(() => c.embedDeviceFont(family));
     c.setProperty('font.0.default', 'true');
     for (int i = 0; i < 4; i++) {
@@ -259,8 +298,34 @@ void main() {
     }
     await tester.pump(const Duration(milliseconds: 300));
     await tester.runAsync(() => _save(boundary, 'studio_fonts.png'));
+    c.beginPropertyEdit('font.add');
+    final InlineCellEditor query = c.propertyEditor;
+    query.replaceRange(0, query.formulaBar.length, 'Noto');
+    // Widget tests paint unknown families as boxes; load what the picker shows.
+    await tester.runAsync(() async {
+      final StudioDeviceFonts device = StudioDeviceFonts();
+      for (final ReportCompletionItem item
+          in c.completion?.items.take(10) ?? const <ReportCompletionItem>[]) {
+        final ReportFontFiles? files = await device.load(item.insert);
+        final Uint8List? bytes = files?.regular ?? files?.bold;
+        if (bytes != null) {
+          await (FontLoader(item.insert)
+                ..addFont(Future<ByteData>.value(ByteData.sublistView(bytes))))
+              .load();
+        }
+      }
+    });
+    for (int i = 0; i < 4; i++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 150)),
+      );
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    await tester.runAsync(() => _save(boundary, 'studio_font_picker.png'));
+    c.cancelPropertyEdit();
+    await tester.pump();
 
-    page.document.newFromTemplate(ReportTemplates.byId('sales_invoice_ar')!);
+    page.document.newFromTemplate(_byId('sales_invoice_ar'));
     await tester.pump();
     await tester.runAsync(() => _save(boundary, 'studio_rtl_invoice.png'));
 
@@ -276,6 +341,16 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 200));
     await tester.runAsync(() => _save(boundary, 'studio_templates_menu.png'));
+    await tester.tap(find.text('My templates'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.runAsync(() => _save(boundary, 'studio_my_templates.png'));
+    await tester.tap(find.text('Sales  ·  المبيعات'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.tap(find.text('Product catalog'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
     await tester.tap(find.text('العربية'));
     await tester.pump();
     c.zoom = 1.1;
@@ -289,7 +364,7 @@ void main() {
     await tester.runAsync(() => _save(boundary, 'studio_template_catalog.png'));
     c.togglePreview();
 
-    page.document.newFromTemplate(ReportTemplates.byId('certificate_en')!);
+    page.document.newFromTemplate(_byId('certificate_en'));
     c.zoom = 0.95;
     c.togglePreview();
     await tester.pump();
@@ -302,6 +377,64 @@ void main() {
     );
     c.togglePreview();
     await tester.pump();
+
+    page.document.newFromTemplate(_byId('sales_invoice_ar'));
+    c.zoom = 0.9;
+    await settings.setLanguage(StudioLanguage.arabic);
+    await tester.pumpAndSettle();
+    c.addVariable(name: 'stats.sum', type: ReportVariableType.number);
+    c.addVariable(name: 'stats.avg', type: ReportVariableType.number);
+    c.selectedVariablePath = 'stats.sum';
+    c.inspectorPage = ReportInspectorPage.variables;
+    await tester.pump();
+    await tester.runAsync(() => _save(boundary, 'studio_arabic_ui.png'));
+
+    await settings.setTheme(StudioThemeChoice.dark);
+    await tester.pumpAndSettle();
+    await tester.runAsync(() => _save(boundary, 'studio_dark_arabic.png'));
+
+    await settings.setLanguage(StudioLanguage.english);
+    page.document.newFromTemplate(_byId('invoice_en'));
+    c.zoom = 0.9;
+    final ReportTextElement title = c.template.allElements
+        .map(((ReportBand, ReportElement) be) => be.$2)
+        .whereType<ReportTextElement>()
+        .firstWhere(
+          (ReportTextElement t) => (t.style.bold ?? false) && t.text.length > 6,
+        );
+    c.select(title.id);
+    await tester.pumpAndSettle();
+    await tester.runAsync(() => _save(boundary, 'studio_dark.png'));
+
+    await settings.setTheme(StudioThemeChoice.light);
+    page.document.newFromTemplate(_byId('invoice_en'));
+    c.zoom = 0.9;
+    final List<ReportTextElement> texts = c.template.allElements
+        .map(((ReportBand, ReportElement) be) => be.$2)
+        .whereType<ReportTextElement>()
+        .toList();
+    c.select(texts[3].id);
+    c.setProperty('text', '{{FORMATDATE(Data.invoice.date)}}');
+    c.select(texts[1].id);
+    c.setProperty('width', '260');
+    c.select(texts[5].id);
+    c.setProperty('visibleWhen', 'Data.total >');
+    c.addVariable(
+      name: 'discountRate',
+      type: ReportVariableType.number,
+      value: '5 percent',
+    );
+    c.select(null);
+    c.problemsOpen = true;
+    await tester.pumpAndSettle();
+    c.revealDiagnostic(c.problems.first);
+    await tester.pumpAndSettle();
+    await tester.runAsync(() => _save(boundary, 'studio_problems.png'));
+    await settings.setLanguage(StudioLanguage.arabic);
+    await tester.pumpAndSettle();
+    c.revealDiagnostic(c.problems[1]);
+    await tester.pumpAndSettle();
+    await tester.runAsync(() => _save(boundary, 'studio_problems_arabic.png'));
     await tester.pumpWidget(const SizedBox.shrink());
     debugDisableShadows = true;
   }, skip: _outDir == null);

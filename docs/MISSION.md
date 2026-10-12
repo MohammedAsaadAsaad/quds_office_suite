@@ -69,7 +69,7 @@ patterns. It is not a new phase.
   - Paginating generator to a primitive layout.
   - Charts (`report_chart.dart`): aggregation, vector rendering, DrawingML for DOCX/XLSX.
   - PDF / XLSX / DOCX writers.
-  - Ready-made templates with sample data (`ReportTemplates`): categorized families, each in Arabic and English, with pre-saved images.
+  - Ready-made templates with sample data: categorized families, each in Arabic and English, with pre-saved images. They ship as `.qrep` files with a `template.json` manifest (`ReportTemplateManifest`, `ReportTemplateLibrary` in the editor).
   - `.qrep` package (`report_package.dart`): a ZIP with `layout.xml`, pre-saved `images/`, and embedded TrueType `fonts/` (`report_font_file.dart` inspects them).
   - Data (`report_data.dart`): `<DataSchema>` with typed and calculated columns applied at export, `ReportData` / `ReportCsv`, and design-time `data/sample.json` in the package.
   - Facade: `QudsReportEngine.fromPackage(bytes).exportToPdf(data)` (or `fromXml`). Elements are filled by unique name (`setText`, `setTableRows`, …) and host data is held in `engine.data`.

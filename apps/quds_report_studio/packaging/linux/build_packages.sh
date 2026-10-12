@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# Packages a `flutter build linux --release` bundle as
+# Runs `flutter build linux --release` and packages the bundle as
 #   quds-report-studio_<version>_<arch>.deb   (apt install / apt remove)
 #   QudsReportStudio-<version>-linux-<arch>.tar.gz (install.sh / uninstall.sh)
 #
 # Usage: packaging/linux/build_packages.sh [out-dir]   (from apps/quds_report_studio)
+# Set SKIP_FLUTTER_BUILD=1 to package the existing bundle as is.
 set -euo pipefail
 
 APP="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -16,6 +17,9 @@ case "$(uname -m)" in
 esac
 BUNDLE="$APP/build/linux/$FLUTTER_ARCH/release/bundle"
 OUT="$(mkdir -p "${1:-$APP/build/dist}" && cd "${1:-$APP/build/dist}" && pwd)"
+if [ "${SKIP_FLUTTER_BUILD:-0}" != 1 ]; then
+  (cd "$APP" && flutter build linux --release)
+fi
 [ -x "$BUNDLE/quds_report_studio" ] || {
   echo "missing $BUNDLE; run: flutter build linux --release" >&2
   exit 1

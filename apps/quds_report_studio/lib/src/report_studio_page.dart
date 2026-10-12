@@ -11,16 +11,12 @@ import 'package:quds_office_editor/quds_office_editor.dart';
 import 'file_association.dart';
 import 'recent_files.dart';
 import 'report_document.dart';
+import 'studio_printing.dart';
 import 'studio_settings.dart';
+import 'studio_strings.dart';
+import 'studio_templates.dart';
+import 'studio_theme.dart';
 import 'studio_window.dart';
-
-/// Brand colors of the studio chrome.
-abstract final class StudioColors {
-  static const Color chrome = Color(0xFF1F3B63);
-  static const Color chromeLight = Color(0xFF2B5797);
-  static const Color accent = Color(0xFF4F9DFF);
-  static const Color status = Color(0xFFF3F5F8);
-}
 
 /// Main window: title bar with the File menu, the designer, and a status bar.
 class ReportStudioPage extends StatefulWidget {
@@ -29,8 +25,9 @@ class ReportStudioPage extends StatefulWidget {
     required this.recent,
     required this.settings,
     this.initialPath,
-    this.templates = ReportTemplates.all,
+    this.templates,
     this.deviceFonts,
+    this.printer = StudioPrinting.system,
   });
 
   /// Recently opened files.
@@ -42,11 +39,15 @@ class ReportStudioPage extends StatefulWidget {
   /// File to open on start (command-line argument).
   final String? initialPath;
 
-  /// Starter templates offered by File › New from template.
-  final List<ReportTemplateInfo> templates;
+  /// Starter templates offered by File › New from template: the bundled
+  /// ones and the user's own. None when null.
+  final StudioTemplates? templates;
 
   /// Installed fonts offered on the inspector's Fonts page.
   final ReportDeviceFonts? deviceFonts;
+
+  /// Shows the print dialog for the rendered report.
+  final StudioPrinter printer;
 
   @override
   State<ReportStudioPage> createState() => ReportStudioPageState();
@@ -61,15 +62,22 @@ class ReportStudioPageState extends State<ReportStudioPage> {
   /// The open document.
   ReportDocument get document => _doc;
 
+  StudioStrings get _s => StudioStrings.of(context);
+
+  StudioPalette get _p => StudioPalette.of(Theme.of(context).brightness);
+
+  late final StudioTemplates _catalog = widget.templates ?? StudioTemplates();
+
   @override
   void initState() {
     super.initState();
     _doc.addListener(_onDocument);
+    _catalog.addListener(_onDocument);
     final String? path = widget.initialPath;
     if (path != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _openPath(path));
-    } else if (widget.templates.isNotEmpty) {
-      _doc.newFromTemplate(widget.templates.first);
+    } else if (_catalog.bundled.isNotEmpty) {
+      _doc.newFromTemplate(_catalog.bundled.first);
     }
     _onDocument();
   }
@@ -77,6 +85,7 @@ class ReportStudioPageState extends State<ReportStudioPage> {
   @override
   void dispose() {
     _doc.removeListener(_onDocument);
+    _catalog.removeListener(_onDocument);
     _doc.dispose();
     super.dispose();
   }
@@ -91,7 +100,11 @@ class ReportStudioPageState extends State<ReportStudioPage> {
   String get _windowTitle =>
       '${_doc.dirty ? '• ' : ''}${_doc.fileName} — Quds Report Studio';
 
-  void _toast(String text, {bool error = false}) {
+  void _toast(
+    String text, {
+    bool error = false,
+    Duration duration = const Duration(seconds: 3),
+  }) {
     final ScaffoldMessengerState? messenger = ScaffoldMessenger.maybeOf(
       context,
     );
@@ -103,7 +116,8 @@ class ReportStudioPageState extends State<ReportStudioPage> {
           behavior: SnackBarBehavior.floating,
           width: 420,
           backgroundColor: error ? const Color(0xFFB3261E) : null,
-          duration: const Duration(seconds: 3),
+          showCloseIcon: duration.inSeconds > 4,
+          duration: duration,
         ),
       );
   }
@@ -116,9 +130,11 @@ class ReportStudioPageState extends State<ReportStudioPage> {
     }
     if (mounted) {
       _toast(
-        ok
-            ? '.qrep files now open with Report Studio'
-            : 'Could not register .qrep files',
+        _s.t(
+          ok
+              ? '.qrep files now open with Report Studio'
+              : 'Could not register .qrep files',
+        ),
         error: !ok,
       );
     }
@@ -146,20 +162,24 @@ class ReportStudioPageState extends State<ReportStudioPage> {
       context: context,
       builder: (BuildContext context) => AlertDialog(
         icon: const Icon(Icons.save_outlined),
-        title: Text('Save changes to ${_doc.fileName}?'),
-        content: const Text('Your changes will be lost if you don\'t save.'),
+        title: Text(
+          _s.f('Save changes to {name}?', <String, String>{
+            'name': _doc.fileName,
+          }),
+        ),
+        content: Text(_s.t("Your changes will be lost if you don't save.")),
         actions: <Widget>[
           TextButton(
             onPressed: () => Navigator.pop(context, _Discard.cancel),
-            child: const Text('Cancel'),
+            child: Text(_s.t('Cancel')),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, _Discard.discard),
-            child: const Text('Don\'t save'),
+            child: Text(_s.t("Don't save")),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, _Discard.save),
-            child: const Text('Save'),
+            child: Text(_s.t('Save')),
           ),
         ],
       ),
@@ -192,7 +212,7 @@ class ReportStudioPageState extends State<ReportStudioPage> {
       return;
     }
     final FilePickerResult? result = await FilePicker.platform.pickFiles(
-      dialogTitle: 'Open report template',
+      dialogTitle: _s.t('Open report template'),
       type: FileType.custom,
       allowedExtensions: const <String>['qrep', 'xml'],
       withData: kIsWeb,
@@ -213,10 +233,17 @@ class ReportStudioPageState extends State<ReportStudioPage> {
     try {
       _doc.loadBytes(bytes, name: file.name);
     } on ReportTemplateException catch (e) {
-      _toast('Cannot open ${file.name}: $e', error: true);
+      _cannot('Cannot open {name}: {error}', file.name, '$e');
     } on ReportPackageException catch (e) {
-      _toast('Cannot open ${file.name}: ${e.message}', error: true);
+      _cannot('Cannot open {name}: {error}', file.name, e.message);
     }
+  }
+
+  void _cannot(String message, String name, String error) {
+    _toast(
+      _s.f(message, <String, String>{'name': name, 'error': error}),
+      error: true,
+    );
   }
 
   Future<void> _openPath(String path, {bool confirmed = false}) async {
@@ -227,17 +254,23 @@ class ReportStudioPageState extends State<ReportStudioPage> {
       await _doc.open(path);
       await widget.recent.add(path);
     } on ReportTemplateException catch (e) {
-      _toast('Cannot open ${ReportDocument.baseName(path)}: $e', error: true);
+      _cannot(
+        'Cannot open {name}: {error}',
+        ReportDocument.baseName(path),
+        '$e',
+      );
     } on ReportPackageException catch (e) {
-      _toast(
-        'Cannot open ${ReportDocument.baseName(path)}: ${e.message}',
-        error: true,
+      _cannot(
+        'Cannot open {name}: {error}',
+        ReportDocument.baseName(path),
+        e.message,
       );
     } on FileSystemException catch (e) {
       await widget.recent.remove(path);
-      _toast(
-        'Cannot read ${ReportDocument.baseName(path)}: ${e.message}',
-        error: true,
+      _cannot(
+        'Cannot read {name}: {error}',
+        ReportDocument.baseName(path),
+        e.message,
       );
     }
   }
@@ -248,7 +281,7 @@ class ReportStudioPageState extends State<ReportStudioPage> {
     String? target = saveAs ? null : _doc.path;
     if (target == null) {
       target = await FilePicker.platform.saveFile(
-        dialogTitle: 'Save report template',
+        dialogTitle: _s.t('Save report template'),
         fileName: _doc.fileName,
         type: FileType.custom,
         allowedExtensions: const <String>['qrep'],
@@ -263,20 +296,25 @@ class ReportStudioPageState extends State<ReportStudioPage> {
     try {
       await _doc.saveTo(target);
       await widget.recent.add(target);
-      _toast('Saved ${ReportDocument.baseName(target)}');
+      _doc.controller.clearLoadDiagnostics();
+      _toast(
+        _s.f('Saved {name}', <String, String>{
+          'name': ReportDocument.baseName(target),
+        }),
+      );
       return true;
     } on FileSystemException catch (e) {
-      _toast('Cannot save: ${e.message}', error: true);
+      _cannot('Cannot save: {error}', '', e.message);
       return false;
     } on ReportPackageException catch (e) {
-      _toast('Cannot save: ${e.message}', error: true);
+      _cannot('Cannot save: {error}', '', e.message);
       return false;
     }
   }
 
   Future<({String name, Uint8List bytes})?> _pickImage() async {
     final FilePickerResult? result = await FilePicker.platform.pickFiles(
-      dialogTitle: 'Embed image in report',
+      dialogTitle: _s.t('Embed image in report'),
       type: FileType.custom,
       allowedExtensions: const <String>['png', 'jpg', 'jpeg'],
       withData: true,
@@ -291,7 +329,7 @@ class ReportStudioPageState extends State<ReportStudioPage> {
 
   Future<List<({String name, Uint8List bytes})>?> _pickFonts() async {
     final FilePickerResult? result = await FilePicker.platform.pickFiles(
-      dialogTitle: 'Embed TrueType fonts in report',
+      dialogTitle: _s.t('Embed TrueType fonts in report'),
       type: FileType.custom,
       allowedExtensions: const <String>['ttf'],
       allowMultiple: true,
@@ -306,7 +344,7 @@ class ReportStudioPageState extends State<ReportStudioPage> {
 
   Future<({String name, String text})?> _pickData() async {
     final FilePickerResult? result = await FilePicker.platform.pickFiles(
-      dialogTitle: 'Import sample data',
+      dialogTitle: _s.t('Import sample data'),
       type: FileType.custom,
       allowedExtensions: const <String>['csv', 'tsv', 'txt', 'json'],
       withData: true,
@@ -322,7 +360,9 @@ class ReportStudioPageState extends State<ReportStudioPage> {
   Future<void> _export(ReportExportFormat format, Uint8List bytes) async {
     final String name = '${_doc.name}.${format.name}';
     final String? path = await FilePicker.platform.saveFile(
-      dialogTitle: 'Export ${format.name.toUpperCase()}',
+      dialogTitle: _s.f('Export {format}', <String, String>{
+        'format': format.name.toUpperCase(),
+      }),
       fileName: name,
       type: FileType.custom,
       allowedExtensions: <String>[format.name],
@@ -333,9 +373,45 @@ class ReportStudioPageState extends State<ReportStudioPage> {
     }
     try {
       await File(path).writeAsBytes(bytes, flush: true);
-      _toast('Exported ${ReportDocument.baseName(path)}');
+      _toast(
+        _s.f('Exported {name}', <String, String>{
+          'name': ReportDocument.baseName(path),
+        }),
+      );
     } on FileSystemException catch (e) {
-      _toast('Cannot export: ${e.message}', error: true);
+      _cannot('Cannot export: {error}', '', e.message);
+    }
+  }
+
+  bool _printing = false;
+
+  /// Renders the report with the preview data and opens the print dialog.
+  Future<void> printReport() async {
+    _finishEdits();
+    try {
+      await _print(await _doc.controller.export(ReportExportFormat.pdf));
+    } on Object catch (e) {
+      _cannot('Cannot print: {error}', '', '$e');
+    }
+  }
+
+  Future<void> _print(Uint8List document) async {
+    if (_printing) {
+      return;
+    }
+    _printing = true;
+    try {
+      final ReportTemplate t = _doc.controller.template;
+      await widget.printer(
+        document,
+        name: _doc.name,
+        width: t.pageWidth,
+        height: t.pageHeight,
+      );
+    } on Object catch (e) {
+      _cannot('Cannot print: {error}', '', '$e');
+    } finally {
+      _printing = false;
     }
   }
 
@@ -358,6 +434,8 @@ class ReportStudioPageState extends State<ReportStudioPage> {
             shift: true,
           ): () =>
               save(saveAs: true),
+          const SingleActivator(LogicalKeyboardKey.keyP, control: true):
+              printReport,
         },
         child: Scaffold(
           body: Column(
@@ -367,11 +445,14 @@ class ReportStudioPageState extends State<ReportStudioPage> {
               Expanded(
                 child: QudsReportDesigner(
                   controller: _doc.controller,
-                  templates: widget.templates,
+                  theme: _p.office,
+                  strings: _s.designer,
+                  templates: _catalog.all,
                   inspectorWidth: StudioSettings.defaultInspectorWidth,
                   initialInspectorWidth: _startInspectorWidth,
                   onInspectorWidthChanged: widget.settings.setInspectorWidth,
                   onExport: _export,
+                  onPrint: _print,
                   onPickImage: _pickImage,
                   onPickFont: _pickFonts,
                   onPickData: _pickData,
@@ -387,9 +468,10 @@ class ReportStudioPageState extends State<ReportStudioPage> {
   }
 
   Widget _titleBar() {
-    const Color ink = Colors.white;
+    final StudioPalette p = _p;
+    final Color ink = p.titleInk;
     return Material(
-      color: StudioColors.chrome,
+      color: p.titleBar,
       child: SizedBox(
         height: 38,
         child: Stack(
@@ -405,18 +487,31 @@ class ReportStudioPageState extends State<ReportStudioPage> {
                 _fileMenuButton(),
                 _QuickButton(
                   icon: Icons.note_add_outlined,
-                  tooltip: 'New (Ctrl+N)',
+                  tooltip: _s.t('New (Ctrl+N)'),
+                  ink: ink,
+                  hover: p.titleHover,
                   onPressed: _newBlank,
                 ),
                 _QuickButton(
                   icon: Icons.folder_open_outlined,
-                  tooltip: 'Open (Ctrl+O)',
+                  tooltip: _s.t('Open (Ctrl+O)'),
+                  ink: ink,
+                  hover: p.titleHover,
                   onPressed: _open,
                 ),
                 _QuickButton(
                   icon: Icons.save_outlined,
-                  tooltip: 'Save (Ctrl+S)',
+                  tooltip: _s.t('Save (Ctrl+S)'),
+                  ink: ink,
+                  hover: p.titleHover,
                   onPressed: save,
+                ),
+                _QuickButton(
+                  icon: Icons.print_outlined,
+                  tooltip: _s.t('Print (Ctrl+P)'),
+                  ink: ink,
+                  hover: p.titleHover,
+                  onPressed: printReport,
                 ),
                 Expanded(
                   child: WindowDragArea(
@@ -425,7 +520,9 @@ class ReportStudioPageState extends State<ReportStudioPage> {
                     ),
                   ),
                 ),
-                const WindowCaptionButtons(foreground: ink),
+                _settingsMenuButton(),
+                const SizedBox(width: 4),
+                WindowCaptionButtons(foreground: ink),
               ],
             ),
           ],
@@ -442,8 +539,8 @@ class ReportStudioPageState extends State<ReportStudioPage> {
           child: Text(
             _doc.fileName,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: ink,
               fontSize: 13,
               fontWeight: FontWeight.w600,
             ),
@@ -454,17 +551,17 @@ class ReportStudioPageState extends State<ReportStudioPage> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.16),
+              color: ink.withValues(alpha: 0.16),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: const Text(
-              'Edited',
-              style: TextStyle(color: Colors.white, fontSize: 11),
+            child: Text(
+              _s.t('Edited'),
+              style: TextStyle(color: ink, fontSize: 11),
             ),
           ),
         ],
         Text(
-          '  —  Quds Report Studio',
+          '  —  ${_s.t('Quds Report Studio')}',
           style: TextStyle(color: ink.withValues(alpha: 0.65), fontSize: 12.5),
         ),
       ],
@@ -479,9 +576,10 @@ class ReportStudioPageState extends State<ReportStudioPage> {
     ReportTemplateCategory.hr => Icons.badge_outlined,
   };
 
-  /// Category › family › language submenus for [QudsReportStudioPage.templates].
+  /// Category › family › language submenus for the bundled templates, then
+  /// the user's own templates.
   List<Widget> _templateMenus() {
-    final List<ReportTemplateInfo> all = widget.templates;
+    final List<ReportTemplateInfo> all = _catalog.bundled;
     final List<ReportTemplateInfo> heads = <ReportTemplateInfo>[];
     final Set<String> seen = <String>{};
     for (final ReportTemplateInfo info in all) {
@@ -544,7 +642,86 @@ class ReportStudioPageState extends State<ReportStudioPage> {
             ],
             child: Text('${c.title}  ·  ${c.titleAr}'),
           ),
+      if (_catalog.folder != null) ...<Widget>[
+        const Divider(height: 8),
+        SubmenuButton(
+          leadingIcon: const Icon(Icons.bookmarks_outlined, size: 18),
+          menuChildren: <Widget>[
+            if (_catalog.user.isEmpty)
+              MenuItemButton(
+                child: Text(
+                  _s.t('No templates yet. Use File › Save as template.'),
+                ),
+              ),
+            for (final ReportTemplateInfo info in _catalog.user)
+              MenuItemButton(
+                leadingIcon: Icon(_categoryIcon(info.category), size: 18),
+                trailingIcon: Text(
+                  info.language.code.toUpperCase(),
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: Color(0xFF6B7280),
+                  ),
+                ),
+                onPressed: () => _newFrom(info),
+                child: Text(info.title),
+              ),
+          ],
+          child: Text(_s.t('My templates')),
+        ),
+        MenuItemButton(
+          leadingIcon: const Icon(Icons.folder_special_outlined, size: 18),
+          onPressed: _openTemplatesFolder,
+          child: Text(_s.t('Open templates folder')),
+        ),
+      ],
     ];
+  }
+
+  Future<void> _saveAsTemplate(ReportTemplateCategory category) async {
+    _finishEdits();
+    final ReportDesignerController c = _doc.controller;
+    final String title = c.template.name.trim().isEmpty
+        ? _doc.name
+        : c.template.name.trim();
+    try {
+      final ReportTemplateInfo info = await _catalog.save(
+        ReportPackage.decode(c.toPackage()),
+        title: title,
+        category: category,
+        rtl: c.template.isRtl,
+      );
+      _toast(
+        _s.f('Saved as template "{name}"', <String, String>{
+          'name': info.title,
+        }),
+      );
+    } on FileSystemException catch (e) {
+      _cannot('Cannot save the template: {error}', '', e.message);
+    } on ReportPackageException catch (e) {
+      _cannot('Cannot save the template: {error}', '', e.message);
+    }
+  }
+
+  Future<void> _openTemplatesFolder() async {
+    final Directory? dir = _catalog.folder;
+    if (dir == null) {
+      return;
+    }
+    try {
+      await dir.create(recursive: true);
+      final String opener = Platform.isWindows
+          ? 'explorer'
+          : Platform.isMacOS
+          ? 'open'
+          : 'xdg-open';
+      await Process.start(opener, <String>[dir.path], runInShell: false);
+      await _catalog.load();
+    } on FileSystemException catch (e) {
+      _cannot('Cannot open {name}: {error}', dir.path, e.message);
+    } on ProcessException catch (e) {
+      _cannot('Cannot open {name}: {error}', dir.path, e.message);
+    }
   }
 
   Widget _fileMenuButton() {
@@ -552,6 +729,7 @@ class ReportStudioPageState extends State<ReportStudioPage> {
     return MenuAnchor(
       controller: _fileMenu,
       alignmentOffset: const Offset(0, 2),
+      onOpen: () => unawaited(_catalog.load()),
       menuChildren: <Widget>[
         MenuItemButton(
           leadingIcon: const Icon(Icons.note_add_outlined, size: 18),
@@ -560,12 +738,12 @@ class ReportStudioPageState extends State<ReportStudioPage> {
             control: true,
           ),
           onPressed: _newBlank,
-          child: const Text('New blank report'),
+          child: Text(_s.t('New blank report')),
         ),
         SubmenuButton(
           leadingIcon: const Icon(Icons.dashboard_customize_outlined, size: 18),
           menuChildren: _templateMenus(),
-          child: const Text('New from template'),
+          child: Text(_s.t('New from template')),
         ),
         const Divider(height: 8),
         MenuItemButton(
@@ -575,13 +753,13 @@ class ReportStudioPageState extends State<ReportStudioPage> {
             control: true,
           ),
           onPressed: _open,
-          child: const Text('Open…'),
+          child: Text(_s.t('Open…')),
         ),
         SubmenuButton(
           leadingIcon: const Icon(Icons.history, size: 18),
           menuChildren: <Widget>[
             if (recent.isEmpty)
-              const MenuItemButton(child: Text('No recent files')),
+              MenuItemButton(child: Text(_s.t('No recent files'))),
             for (final String path in recent)
               MenuItemButton(
                 onPressed: () => _openPath(path),
@@ -609,11 +787,11 @@ class ReportStudioPageState extends State<ReportStudioPage> {
               const Divider(height: 8),
               MenuItemButton(
                 onPressed: widget.recent.clear,
-                child: const Text('Clear recent files'),
+                child: Text(_s.t('Clear recent files')),
               ),
             ],
           ],
-          child: const Text('Open recent'),
+          child: Text(_s.t('Open recent')),
         ),
         const Divider(height: 8),
         MenuItemButton(
@@ -623,7 +801,7 @@ class ReportStudioPageState extends State<ReportStudioPage> {
             control: true,
           ),
           onPressed: save,
-          child: const Text('Save'),
+          child: Text(_s.t('Save')),
         ),
         MenuItemButton(
           leadingIcon: const Icon(Icons.save_as_outlined, size: 18),
@@ -633,14 +811,38 @@ class ReportStudioPageState extends State<ReportStudioPage> {
             shift: true,
           ),
           onPressed: () => save(saveAs: true),
-          child: const Text('Save as…'),
+          child: Text(_s.t('Save as…')),
+        ),
+        if (_catalog.folder != null)
+          SubmenuButton(
+            leadingIcon: const Icon(Icons.bookmark_add_outlined, size: 18),
+            menuChildren: <Widget>[
+              for (final ReportTemplateCategory c
+                  in ReportTemplateCategory.values)
+                MenuItemButton(
+                  leadingIcon: Icon(_categoryIcon(c), size: 18),
+                  onPressed: () => _saveAsTemplate(c),
+                  child: Text(_s.isRtl ? c.titleAr : c.title),
+                ),
+            ],
+            child: Text(_s.t('Save as template')),
+          ),
+        const Divider(height: 8),
+        MenuItemButton(
+          leadingIcon: const Icon(Icons.print_outlined, size: 18),
+          shortcut: const SingleActivator(
+            LogicalKeyboardKey.keyP,
+            control: true,
+          ),
+          onPressed: printReport,
+          child: Text(_s.t('Print…')),
         ),
         if (!kIsWeb && (Platform.isLinux || Platform.isWindows)) ...<Widget>[
           const Divider(height: 8),
           MenuItemButton(
             leadingIcon: const Icon(Icons.link, size: 18),
             onPressed: _associateFiles,
-            child: const Text('Open .qrep files with Report Studio'),
+            child: Text(_s.t('Open .qrep files with Report Studio')),
           ),
         ],
         if (StudioWindow.supported) ...<Widget>[
@@ -648,16 +850,18 @@ class ReportStudioPageState extends State<ReportStudioPage> {
           MenuItemButton(
             leadingIcon: const Icon(Icons.logout, size: 18),
             onPressed: StudioWindow.close,
-            child: const Text('Exit'),
+            child: Text(_s.t('Exit')),
           ),
         ],
       ],
       builder:
           (BuildContext context, MenuController controller, Widget? child) {
             return _QuickButton(
-              label: 'File',
+              label: _s.t('File'),
               icon: Icons.menu,
-              tooltip: 'File menu',
+              tooltip: _s.t('File menu'),
+              ink: _p.titleInk,
+              hover: _p.titleHover,
               onPressed: () =>
                   controller.isOpen ? controller.close() : controller.open(),
             );
@@ -665,73 +869,118 @@ class ReportStudioPageState extends State<ReportStudioPage> {
     );
   }
 
-  int _diagnosticsRevision = -1;
-  List<ReportDiagnostic> _diagnostics = const <ReportDiagnostic>[];
-
-  List<ReportDiagnostic> get _currentDiagnostics {
-    final ReportDesignerController c = _doc.controller;
-    if (_diagnosticsRevision != c.revision) {
-      _diagnosticsRevision = c.revision;
-      try {
-        _diagnostics = c.validate();
-      } on Object catch (e) {
-        _diagnostics = <ReportDiagnostic>[
-          ReportDiagnostic(ReportDiagnosticSeverity.error, 'template', '$e'),
-        ];
-      }
-    }
-    return _diagnostics;
+  Widget _settingsMenuButton() {
+    final StudioSettings settings = widget.settings;
+    final StudioStrings s = _s;
+    Widget check(bool on) => Icon(on ? Icons.check : null, size: 18);
+    return MenuAnchor(
+      alignmentOffset: const Offset(0, 2),
+      menuChildren: <Widget>[
+        SubmenuButton(
+          leadingIcon: const Icon(Icons.contrast, size: 18),
+          menuChildren: <Widget>[
+            for (final (StudioThemeChoice choice, IconData icon, String label)
+                in <(StudioThemeChoice, IconData, String)>[
+                  (
+                    StudioThemeChoice.system,
+                    Icons.brightness_auto_outlined,
+                    'Same as the system',
+                  ),
+                  (StudioThemeChoice.light, Icons.light_mode_outlined, 'Light'),
+                  (StudioThemeChoice.dark, Icons.dark_mode_outlined, 'Dark'),
+                ])
+              MenuItemButton(
+                leadingIcon: Icon(icon, size: 18),
+                trailingIcon: check(settings.theme == choice),
+                onPressed: () => settings.setTheme(choice),
+                child: Text(s.t(label)),
+              ),
+          ],
+          child: Text(s.t('Theme')),
+        ),
+        SubmenuButton(
+          leadingIcon: const Icon(Icons.translate, size: 18),
+          menuChildren: <Widget>[
+            for (final (StudioLanguage choice, String label)
+                in <(StudioLanguage, String)>[
+                  (StudioLanguage.system, s.t('Same as the system')),
+                  (StudioLanguage.english, 'English'),
+                  (StudioLanguage.arabic, 'العربية'),
+                ])
+              MenuItemButton(
+                trailingIcon: check(settings.language == choice),
+                onPressed: () => settings.setLanguage(choice),
+                child: Text(label),
+              ),
+          ],
+          child: Text(s.t('Language')),
+        ),
+      ],
+      builder:
+          (BuildContext context, MenuController controller, Widget? child) {
+            return _QuickButton(
+              icon: Icons.settings_outlined,
+              tooltip: s.t('Settings'),
+              ink: _p.titleInk,
+              hover: _p.titleHover,
+              onPressed: () =>
+                  controller.isOpen ? controller.close() : controller.open(),
+            );
+          },
+    );
   }
 
   Widget _statusBar() {
     final ReportDesignerController c = _doc.controller;
-    const TextStyle style = TextStyle(fontSize: 11.5, color: Color(0xFF374151));
+    final StudioPalette p = _p;
+    final StudioStrings s = _s;
+    final TextStyle style = TextStyle(fontSize: 11.5, color: p.statusInk);
     return ListenableBuilder(
       listenable: c,
       builder: (BuildContext context, Widget? child) {
         final ReportTemplate t = c.template;
         final int elements = t.allElements.length;
-        final List<ReportDiagnostic> diagnostics = _currentDiagnostics;
-        final int errors = diagnostics
-            .where(
-              (ReportDiagnostic d) =>
-                  d.severity == ReportDiagnosticSeverity.error,
-            )
+        final List<ReportDiagnostic> problems = c.problems;
+        final int errors = problems
+            .where((ReportDiagnostic d) => d.isError)
             .length;
-        final int warnings = diagnostics.length - errors;
+        final int warnings = problems.length - errors;
         return Container(
           height: 26,
           padding: const EdgeInsets.symmetric(horizontal: 12),
-          decoration: const BoxDecoration(
-            color: StudioColors.status,
-            border: Border(top: BorderSide(color: Color(0xFFD9DEE5))),
+          decoration: BoxDecoration(
+            color: p.status,
+            border: Border(top: BorderSide(color: p.statusBorder)),
           ),
           child: Row(
             children: <Widget>[
               Icon(
                 _doc.dirty ? Icons.edit_note : Icons.check_circle_outline,
                 size: 15,
-                color: _doc.dirty
-                    ? const Color(0xFFB45309)
-                    : const Color(0xFF15803D),
+                color: _doc.dirty ? p.warning : p.ok,
               ),
               const SizedBox(width: 6),
-              Text(_doc.dirty ? 'Unsaved changes' : 'Saved', style: style),
+              Text(s.t(_doc.dirty ? 'Unsaved changes' : 'Saved'), style: style),
               const SizedBox(width: 16),
               Expanded(
                 child: Text(
-                  _doc.path ?? 'Not saved to disk yet',
+                  _doc.path ?? s.t('Not saved to disk yet'),
                   overflow: TextOverflow.ellipsis,
-                  style: style.copyWith(color: const Color(0xFF6B7280)),
+                  textDirection: _doc.path == null ? null : TextDirection.ltr,
+                  style: style.copyWith(color: p.statusMuted),
                 ),
               ),
               _StatusChip(
                 icon: Icons.layers_outlined,
-                text: '${t.bands.length} bands · $elements elements',
+                text:
+                    '${s.count(t.bands.length, 'band')} · '
+                    '${s.count(elements, 'element')}',
+                color: p.statusInk,
               ),
               _StatusChip(
                 icon: Icons.data_object,
-                text: '${t.variables.length} variables',
+                text: s.count(t.variables.length, 'variable'),
+                color: p.statusInk,
               ),
               _StatusChip(
                 icon: errors > 0
@@ -740,18 +989,28 @@ class ReportStudioPageState extends State<ReportStudioPage> {
                     ? Icons.warning_amber_rounded
                     : Icons.verified_outlined,
                 text: errors + warnings == 0
-                    ? 'No problems'
-                    : '$errors errors · $warnings warnings',
+                    ? s.t('No problems')
+                    : '${s.count(errors, 'error')} · '
+                          '${s.count(warnings, 'warning')}',
                 color: errors > 0
-                    ? const Color(0xFFB3261E)
+                    ? p.error
                     : warnings > 0
-                    ? const Color(0xFFB45309)
-                    : const Color(0xFF15803D),
+                    ? p.warning
+                    : p.ok,
+                tooltip: s.t(
+                  c.problemsOpen ? 'Hide problems' : 'Show problems',
+                ),
+                active: c.problemsOpen,
+                hover: p.statusInk.withValues(alpha: 0.08),
+                onPressed: () => c.problemsOpen = !c.problemsOpen,
               ),
               _StatusChip(
                 icon: Icons.straighten,
                 text:
-                    '${t.pageSize.name} · ${t.orientation.name} · ${t.unit.name}',
+                    '${s.designer.option(t.pageSize.name)} · '
+                    '${s.designer.option(t.orientation.name)} · '
+                    '${s.designer.option(t.unit.name)}',
+                color: p.statusInk,
               ),
             ],
           ),
@@ -784,6 +1043,8 @@ class _QuickButton extends StatelessWidget {
     required this.icon,
     required this.tooltip,
     required this.onPressed,
+    required this.ink,
+    required this.hover,
     this.label,
   });
 
@@ -791,6 +1052,8 @@ class _QuickButton extends StatelessWidget {
   final String tooltip;
   final VoidCallback onPressed;
   final String? label;
+  final Color ink;
+  final Color hover;
 
   @override
   Widget build(BuildContext context) {
@@ -800,18 +1063,15 @@ class _QuickButton extends StatelessWidget {
       waitDuration: const Duration(milliseconds: 500),
       child: InkWell(
         onTap: onPressed,
-        hoverColor: Colors.white.withValues(alpha: 0.12),
+        hoverColor: hover,
         child: Padding(
           padding: EdgeInsets.symmetric(horizontal: label == null ? 9 : 10),
           child: Row(
             children: <Widget>[
-              Icon(icon, size: 17, color: Colors.white),
+              Icon(icon, size: 17, color: ink),
               if (label != null) ...<Widget>[
                 const SizedBox(width: 6),
-                Text(
-                  label,
-                  style: const TextStyle(color: Colors.white, fontSize: 13),
-                ),
+                Text(label, style: TextStyle(color: ink, fontSize: 13)),
               ],
             ],
           ),
@@ -822,24 +1082,65 @@ class _QuickButton extends StatelessWidget {
 }
 
 class _StatusChip extends StatelessWidget {
-  const _StatusChip({required this.icon, required this.text, this.color});
+  const _StatusChip({
+    required this.icon,
+    required this.text,
+    this.color,
+    this.tooltip,
+    this.onPressed,
+    this.active = false,
+    this.hover,
+  });
 
   final IconData icon;
   final String text;
   final Color? color;
+  final String? tooltip;
+  final VoidCallback? onPressed;
+  final bool active;
+  final Color? hover;
 
   @override
   Widget build(BuildContext context) {
     final Color tone = color ?? const Color(0xFF4B5563);
-    return Padding(
-      padding: const EdgeInsets.only(left: 18),
-      child: Row(
-        children: <Widget>[
-          Icon(icon, size: 14, color: tone),
-          const SizedBox(width: 5),
-          Text(text, style: TextStyle(fontSize: 11.5, color: tone)),
-        ],
+    final Widget label = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        Icon(icon, size: 14, color: tone),
+        const SizedBox(width: 5),
+        Text(text, style: TextStyle(fontSize: 11.5, color: tone)),
+      ],
+    );
+    final VoidCallback? onPressed = this.onPressed;
+    final String? tooltip = this.tooltip;
+    if (onPressed == null) {
+      return Padding(
+        padding: const EdgeInsetsDirectional.only(start: 18),
+        child: label,
+      );
+    }
+    final Widget button = InkWell(
+      onTap: onPressed,
+      hoverColor: hover,
+      borderRadius: BorderRadius.circular(4),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6),
+        decoration: BoxDecoration(
+          color: active ? tone.withValues(alpha: 0.14) : null,
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: label,
       ),
+    );
+    return Padding(
+      padding: const EdgeInsetsDirectional.only(start: 12),
+      child: tooltip == null
+          ? button
+          : Tooltip(
+              message: tooltip,
+              waitDuration: const Duration(milliseconds: 500),
+              child: button,
+            ),
     );
   }
 }

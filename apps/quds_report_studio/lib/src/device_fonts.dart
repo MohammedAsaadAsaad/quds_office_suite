@@ -6,6 +6,12 @@ import 'package:quds_office_editor/quds_office_editor.dart';
 /// One upright TrueType face found on disk.
 typedef DeviceFontFace = ({String path, int weight});
 
+/// Faces per family and the writing systems each family covers.
+typedef DeviceFontIndex = ({
+  Map<String, List<DeviceFontFace>> faces,
+  Map<String, Set<ReportScript>> scripts,
+});
+
 /// TrueType fonts installed in the operating system's font folders, offered
 /// on the designer's Fonts page.
 ///
@@ -13,14 +19,14 @@ typedef DeviceFontFace = ({String path, int weight});
 /// file's table directory and `name` / `OS/2` / `head` tables. Collections,
 /// CFF (`.otf`), italic faces, and fonts whose license forbids embedding are
 /// left out.
-class StudioDeviceFonts implements ReportDeviceFonts {
+class StudioDeviceFonts implements ReportDeviceFonts, ReportDeviceFontScripts {
   StudioDeviceFonts({List<String>? folders})
     : folders = folders ?? defaultFolders();
 
   /// Folders searched recursively.
   final List<String> folders;
 
-  Future<Map<String, List<DeviceFontFace>>>? _index;
+  Future<DeviceFontIndex>? _index;
 
   /// The usual system and per-user font folders of the current platform.
   static List<String> defaultFolders() {
@@ -51,10 +57,17 @@ class StudioDeviceFonts implements ReportDeviceFonts {
     ];
   }
 
-  Future<Map<String, List<DeviceFontFace>>> _faces() {
+  Future<DeviceFontIndex> _scan() {
     final List<String> roots = folders;
-    return _index ??= Isolate.run(() => scan(roots));
+    return _index ??= Isolate.run(() => index(roots));
   }
+
+  Future<Map<String, List<DeviceFontFace>>> _faces() async =>
+      (await _scan()).faces;
+
+  @override
+  Future<Map<String, Set<ReportScript>>> scripts() async =>
+      (await _scan()).scripts;
 
   @override
   Future<List<String>> families() async => (await _faces()).keys.toList()
@@ -97,9 +110,16 @@ class StudioDeviceFonts implements ReportDeviceFonts {
 
   /// Upright embeddable faces under [roots], grouped by family. Unreadable
   /// folders and files are skipped.
-  static Map<String, List<DeviceFontFace>> scan(List<String> roots) {
+  static Map<String, List<DeviceFontFace>> scan(List<String> roots) =>
+      index(roots).faces;
+
+  /// [scan] plus the writing systems of each family (the union over its
+  /// faces).
+  static DeviceFontIndex index(List<String> roots) {
     final Map<String, List<DeviceFontFace>> out =
         <String, List<DeviceFontFace>>{};
+    final Map<String, Set<ReportScript>> scripts =
+        <String, Set<ReportScript>>{};
     final Set<String> seen = <String>{};
     void visit(Directory dir) {
       final String real;
@@ -117,7 +137,7 @@ class StudioDeviceFonts implements ReportDeviceFonts {
         if (e is Directory) {
           visit(e);
         } else if (e is File && e.path.toLowerCase().endsWith('.ttf')) {
-          _add(e, out);
+          _add(e, out, scripts);
         }
       }
     }
@@ -125,10 +145,14 @@ class StudioDeviceFonts implements ReportDeviceFonts {
     for (final String root in roots) {
       visit(Directory(root));
     }
-    return out;
+    return (faces: out, scripts: scripts);
   }
 
-  static void _add(File file, Map<String, List<DeviceFontFace>> out) {
+  static void _add(
+    File file,
+    Map<String, List<DeviceFontFace>> out,
+    Map<String, Set<ReportScript>> scripts,
+  ) {
     RandomAccessFile? raf;
     try {
       raf = file.openSync();
@@ -158,6 +182,9 @@ class StudioDeviceFonts implements ReportDeviceFonts {
       if (!faces.any((DeviceFontFace f) => f.weight == face.weight)) {
         faces.add(face);
       }
+      scripts
+          .putIfAbsent(info.family, () => <ReportScript>{})
+          .addAll(info.scripts);
     } on ReportFontException {
       return;
     } on FileSystemException {

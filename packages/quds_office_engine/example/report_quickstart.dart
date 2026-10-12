@@ -1,9 +1,11 @@
 // Band reports in pure Dart: a `.qrep` template + data → PDF, XLSX, DOCX.
 //
-//   dart run example/report_quickstart.dart [out-dir] [font-dir]
+//   dart run example/report_quickstart.dart [out-dir] [font-dir] [template]
 //
 // `font-dir` (optional) holds TrueType faces to embed, e.g. the editor
 // package's `fonts/` folder. Arabic templates need an Arabic face there.
+// `template` is a template `.qrep`; the default is one of the ready-made
+// files in the editor package's `templates/` folder.
 import 'dart:io';
 
 import 'package:quds_office_engine/quds_reports.dart';
@@ -82,12 +84,21 @@ Future<void> main(List<String> args) async {
     '${out.path}/order.docx',
   ).writeAsBytesSync(await engine.exportToWord(data));
 
-  // 2. A bundled template with its saved images and sample data.
-  final ReportTemplateInfo dashboard = ReportTemplates.byId(
-    'sales_performance',
-  )!;
+  // 2. A ready-made template file with its saved images and sample data.
+  final File file = File(
+    args.length > 2
+        ? args[2]
+        : '../quds_office_editor/templates/sales_performance.qrep',
+  );
+  if (!file.existsSync()) {
+    stdout.writeln('Wrote order.pdf/.xlsx/.docx to ${out.path}');
+    return;
+  }
+  final ReportTemplateInfo dashboard = ReportTemplateInfo.decode(
+    file.readAsBytesSync(),
+  );
   final QudsReportEngine sales = QudsReportEngine.fromPackage(
-    dashboard.package().encode(),
+    file.readAsBytesSync(),
     fonts: fonts,
   );
   File(

@@ -14,6 +14,7 @@ import 'report_design_layout.dart';
 import 'report_designer_controller.dart';
 import 'report_element_painter.dart';
 import 'report_layout_painter.dart';
+import 'report_pinch_zoom.dart';
 
 /// Right-click target on the band canvas.
 @immutable
@@ -119,6 +120,11 @@ class RenderReportDesigner extends RenderBox implements MouseTrackerAnnotation {
 
   Offset _scroll = Offset.zero;
   Offset? _hover;
+  late final ReportPinchZoom _pinch = ReportPinchZoom(
+    zoom: () => _controller.zoom,
+    onZoom: _zoomAround,
+    onPinchStart: () => _onUp(const PointerCancelEvent()),
+  );
 
   ReportDesignLayout? _layoutCache;
   int _layoutRevision = -1;
@@ -246,6 +252,42 @@ class RenderReportDesigner extends RenderBox implements MouseTrackerAnnotation {
       o.dx + r.right * s,
       o.dy + r.bottom * s,
     );
+  }
+
+  int _revealSeen = 0;
+
+  /// Scrolls the element or band picked by
+  /// [ReportDesignerController.revealDiagnostic] into view.
+  void _revealTarget() {
+    if (_revealSeen == _controller.revealSerial) {
+      return;
+    }
+    _revealSeen = _controller.revealSerial;
+    final ReportDesignLayout layout = _layout;
+    final String? id = _controller.revealElement;
+    final (ReportDesignSlot, ReportElement)? hit = id == null
+        ? null
+        : layout.find(id);
+    Rect? target = hit == null ? null : layout.elementRect(hit.$1, hit.$2);
+    if (target == null) {
+      for (final ReportDesignSlot slot in layout.slots) {
+        if (slot.band.kind == _controller.revealBand) {
+          target = slot.caption.expandToInclude(slot.body);
+          break;
+        }
+      }
+    }
+    if (target == null) {
+      return;
+    }
+    final Rect local = _toLocalRect(target);
+    final Rect view = Rect.fromLTRB(ruler, ruler, size.width, size.height);
+    if (view.deflate(16).contains(local.topLeft) &&
+        view.deflate(16).contains(local.bottomRight)) {
+      return;
+    }
+    _scroll += local.center - view.center;
+    _clampScroll();
   }
 
   void _clampScroll() {
@@ -390,10 +432,7 @@ class RenderReportDesigner extends RenderBox implements MouseTrackerAnnotation {
       GestureBinding.instance.pointerSignalResolver.register(event, _onSignal);
       return;
     }
-    if (event is PointerPanZoomUpdateEvent) {
-      _scroll -= event.localPanDelta;
-      _clampScroll();
-      markNeedsPaint();
+    if (_pinch.handle(event)) {
       return;
     }
     if (event is PointerDownEvent) {
@@ -403,6 +442,17 @@ class RenderReportDesigner extends RenderBox implements MouseTrackerAnnotation {
     } else if (event is PointerUpEvent || event is PointerCancelEvent) {
       _onUp(event);
     }
+  }
+
+  /// Sets [zoom] keeping the document point under [focal] in place, then
+  /// pans by [pan].
+  void _zoomAround(double zoom, Offset focal, Offset pan) {
+    final Offset before = _toDoc(focal);
+    _controller.zoom = zoom;
+    final Offset after = _origin + before * _scale;
+    _scroll += after - focal - pan;
+    _clampScroll();
+    markNeedsPaint();
   }
 
   void _onSignal(PointerSignalEvent event) {
@@ -882,6 +932,7 @@ class RenderReportDesigner extends RenderBox implements MouseTrackerAnnotation {
       Offset.zero & size,
       Paint()..color = _theme.canvasBackground,
     );
+    _revealTarget();
     final ReportDesignLayout layout = _layout;
     final double s = _scale;
     final Offset o = _originFor(layout);
@@ -925,7 +976,12 @@ class RenderReportDesigner extends RenderBox implements MouseTrackerAnnotation {
     final double h = math.max(layout.height, 40);
     if (_controller.showGrid && 5 * _mm * s >= 8) {
       final Paint grid = Paint()
-        ..color = _theme.gridLine.withValues(alpha: 0.45)
+        ..color =
+            (_theme.pageBackground.computeLuminance() > 0.5 &&
+                        _theme.gridLine.computeLuminance() < 0.3
+                    ? const Color(0xFFC4C8CE)
+                    : _theme.gridLine)
+                .withValues(alpha: 0.45)
         ..strokeWidth = 0.5 / s;
       for (double x = 5 * _mm; x < w; x += 5 * _mm) {
         canvas.drawLine(Offset(x, 0), Offset(x, h), grid);
@@ -1023,17 +1079,20 @@ class RenderReportDesigner extends RenderBox implements MouseTrackerAnnotation {
         ReportBandKind.reportSummary: Color(0xFFE6EDF7),
       };
 
+  /// English name of a band of [kind] (`Page Header`).
+  static String bandName(ReportBandKind kind) => switch (kind) {
+    ReportBandKind.reportHeader => 'Report Header',
+    ReportBandKind.pageHeader => 'Page Header',
+    ReportBandKind.groupHeader => 'Group Header',
+    ReportBandKind.detail => 'Detail',
+    ReportBandKind.groupFooter => 'Group Footer',
+    ReportBandKind.pageFooter => 'Page Footer',
+    ReportBandKind.reportSummary => 'Report Summary',
+  };
+
   /// Caption text for [band].
   static String captionOf(ReportBand band) {
-    final String name = switch (band.kind) {
-      ReportBandKind.reportHeader => 'Report Header',
-      ReportBandKind.pageHeader => 'Page Header',
-      ReportBandKind.groupHeader => 'Group Header',
-      ReportBandKind.detail => 'Detail',
-      ReportBandKind.groupFooter => 'Group Footer',
-      ReportBandKind.pageFooter => 'Page Footer',
-      ReportBandKind.reportSummary => 'Report Summary',
-    };
+    final String name = bandName(band.kind);
     final List<String> notes = <String>[
       if (band.dataSet != null) 'data: ${band.dataSet}',
       if (band.groupBy != null) 'group: ${band.groupBy}',

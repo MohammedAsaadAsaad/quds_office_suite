@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:quds_office_engine/quds_office_engine.dart';
 
 import '../editor_sheet/inline_cell_editor.dart';
+import 'report_designer_strings.dart';
 
 /// Pointer tool of the report designer canvas.
 enum ReportDesignTool {
@@ -345,6 +346,13 @@ abstract interface class ReportDeviceFonts {
   Future<ReportFontFiles?> load(String family);
 }
 
+/// A [ReportDeviceFonts] that also reports which writing systems each
+/// family covers, so font pickers preview it in its own script.
+abstract interface class ReportDeviceFontScripts {
+  /// Scripts per family (keys as in [ReportDeviceFonts.families]).
+  Future<Map<String, Set<ReportScript>>> scripts();
+}
+
 /// State of a report designer: template, selection, undo history, tools,
 /// inline editors, and the cached live preview.
 ///
@@ -378,7 +386,9 @@ class ReportDesignerController extends ChangeNotifier {
     _template.assignElementNames();
   }
 
-  /// Parses [xml]; throws [ReportTemplateException] when it has errors.
+  /// Parses [xml]. A template with errors still opens, and the errors are
+  /// in [loadDiagnostics]; throws [ReportTemplateException] only when the
+  /// XML cannot be read at all.
   factory ReportDesignerController.fromXml(
     String xml, {
     ReportFontRegistry? fonts,
@@ -387,15 +397,33 @@ class ReportDesignerController extends ChangeNotifier {
     Map<String, Object?>? mockData,
     Map<String, Object?>? sampleData,
     DateTime Function()? clock,
-  }) => ReportDesignerController(
-    template: QudsReportXmlParser().parse(xml).templateOrThrow,
-    fonts: fonts,
-    images: images,
-    embeddedFonts: embeddedFonts,
-    mockData: mockData,
-    sampleData: sampleData,
-    clock: clock,
-  );
+  }) {
+    final ReportParseResult parsed = _parseReadable(xml);
+    return ReportDesignerController(
+      template: parsed.template,
+      fonts: fonts,
+      images: images,
+      embeddedFonts: embeddedFonts,
+      mockData: mockData,
+      sampleData: sampleData,
+      clock: clock,
+    ).._loadDiagnostics = parsed.diagnostics;
+  }
+
+  static ReportParseResult _parseReadable(String xml) {
+    final ReportParseResult parsed = QudsReportXmlParser().parse(xml);
+    if (!parsed.readable) {
+      throw ReportTemplateException(parsed.diagnostics);
+    }
+    return parsed;
+  }
+
+  List<ReportDiagnostic> _loadDiagnostics = const <ReportDiagnostic>[];
+
+  /// What the parser reported when the current file was opened (errors and
+  /// warnings). A file with errors still opens, so a host can tell the user
+  /// what to fix; [validate] reports the template as it is now.
+  List<ReportDiagnostic> get loadDiagnostics => _loadDiagnostics;
 
   /// Opens `.qrep` bytes (package ZIP or legacy plain XML) with their
   /// embedded images and fonts.
@@ -571,13 +599,19 @@ class ReportDesignerController extends ChangeNotifier {
   /// Suggestions at the caret of [completionEditor], or null.
   ReportCompletionResult? get completion {
     final InlineCellEditor? ed = completionEditor;
-    if (ed == null || ed.hasSelection) {
+    final bool font =
+        ed != null &&
+        identical(ed, propertyEditor) &&
+        isFontKey(editingProperty ?? '');
+    if (ed == null || (ed.hasSelection && !font)) {
       return null;
     }
     final String text = ed.formulaBar;
     final String key =
         '${editingId ?? ''}|${editingProperty ?? ''}|${ed.caretIndex}|'
-        '$_completionForced|${_completionDismissedAt ?? -1}|$text';
+        '$_completionForced|${_completionDismissedAt ?? -1}|'
+        '${_deviceFamilies?.length ?? -1}|$_fontsRevision|${ed.hasSelection}|'
+        '$text';
     if (key == _completionKey) {
       return _completion;
     }
@@ -659,6 +693,13 @@ class ReportDesignerController extends ChangeNotifier {
     if (_formatKeys.contains(leaf)) {
       return completer.completeFormat(text, caret);
     }
+    if (isFontKey(key)) {
+      return _fontCompletion(
+        text,
+        query: ed.hasSelection ? '' : text,
+        installedOnly: key == 'font.add',
+      );
+    }
     return switch (kind) {
       ReportPropertyKind.expression => completer.complete(
         text,
@@ -700,6 +741,9 @@ class ReportDesignerController extends ChangeNotifier {
     ed.replaceRange(r.start, r.end, item.insert);
     if (item.caretBack > 0) {
       ed.setCaret(r.start + item.insert.length - item.caretBack);
+    }
+    if (identical(ed, propertyEditor) && isFontKey(editingProperty ?? '')) {
+      commitPropertyEdit();
     }
     return true;
   }
@@ -749,7 +793,8 @@ class ReportDesignerController extends ChangeNotifier {
   /// `.qrep` bytes (package ZIP or legacy plain XML); clears history and
   /// selection.
   ///
-  /// Throws [ReportPackageException] or [ReportTemplateException].
+  /// Throws [ReportPackageException], or [ReportTemplateException] when the
+  /// layout cannot be read at all. Template errors are in [loadDiagnostics].
   void loadPackage(Uint8List bytes) {
     final ReportPackage package = ReportPackage.decode(bytes);
     loadXml(
@@ -764,24 +809,36 @@ class ReportDesignerController extends ChangeNotifier {
   /// the embedded fonts with [fonts] and the sample data with [sampleData]
   /// (none by default); clears history and selection.
   ///
-  /// Throws [ReportTemplateException] when [xml] has errors.
+  /// A template with errors still opens, with the errors in
+  /// [loadDiagnostics]. Throws [ReportTemplateException] only when [xml]
+  /// cannot be read at all.
   void loadXml(
     String xml, {
     Map<String, Uint8List>? images,
     Map<String, ReportFontFiles>? fonts,
     Map<String, Object?>? sampleData,
   }) {
+    final ReportParseResult parsed = _parseReadable(xml);
     replaceTemplate(
-      QudsReportXmlParser().parse(xml).templateOrThrow,
+      parsed.template,
       images: images,
       fonts: fonts,
       sampleData: sampleData,
     );
+    _loadDiagnostics = parsed.diagnostics;
+    _problemsRevision = -1;
   }
 
-  /// Loads a ready-made template with its pre-saved images and sample data.
+  /// Loads a ready-made template with its pre-saved images, fonts, and
+  /// sample data.
   void loadTemplate(ReportTemplateInfo info) {
-    loadXml(info.xml, images: info.images(), sampleData: info.sampleData());
+    final ReportPackage package = info.package();
+    loadXml(
+      package.xml,
+      images: package.images,
+      fonts: package.fonts,
+      sampleData: package.sampleData,
+    );
   }
 
   /// Replaces the template, the embedded images with [images], the
@@ -797,6 +854,10 @@ class ReportDesignerController extends ChangeNotifier {
     _endEdits();
     _template = template;
     _template.assignElementNames();
+    _loadDiagnostics = const <ReportDiagnostic>[];
+    _problemsRevision = -1;
+    _activeProblem = null;
+    _highlightProperty = null;
     _sample = sampleData == null ? null : _revive(sampleData);
     _dataTable = null;
     _dataRow = -1;
@@ -885,6 +946,265 @@ class ReportDesignerController extends ChangeNotifier {
 
   /// Static template checks (unknown functions, bad expressions).
   List<ReportDiagnostic> validate() => engine.validate();
+
+  // ------------------------------------------------------------ problems
+
+  int _problemsRevision = -1;
+  List<ReportDiagnostic> _problems = const <ReportDiagnostic>[];
+  Set<ReportDiagnostic> _fromFile = const <ReportDiagnostic>{};
+  bool _problemsOpen = false;
+  ReportDiagnostic? _activeProblem;
+  int _revealSerial = 0;
+  String? _revealElement;
+  ReportBandKind? _revealBand;
+  String? _highlightProperty;
+
+  /// Every problem with the template as it is now: the parser's checks
+  /// (layout, structure, values) and [validate] (expressions, functions),
+  /// errors first. Findings from opening the file that no longer show up
+  /// in those checks (ignored markup, corrected values) stay listed until
+  /// [clearLoadDiagnostics] or the next load; [isFromFile] tells them
+  /// apart. Cached per [revision].
+  List<ReportDiagnostic> get problems {
+    if (_problemsRevision == _revision) {
+      return _problems;
+    }
+    _problemsRevision = _revision;
+    final List<ReportDiagnostic> live = <ReportDiagnostic>[];
+    try {
+      live.addAll(QudsReportXmlParser().parse(engine.toXml()).diagnostics);
+      live.addAll(validate());
+    } on Object catch (e) {
+      live.add(
+        ReportDiagnostic(ReportDiagnosticSeverity.error, 'template', '$e'),
+      );
+    }
+    final List<ReportDiagnostic> out = <ReportDiagnostic>[];
+    final Set<String> seen = <String>{};
+    final Set<String> expressions = <String>{};
+    bool add(ReportDiagnostic d) {
+      final String spot = '${d.target.key}|${d.severity.name}';
+      final String exact = '$spot|${d.summary}';
+      final bool expression = d.kind == ReportDiagnosticKind.expression;
+      if (seen.contains(exact) || (expression && expressions.contains(spot))) {
+        return false;
+      }
+      seen.add(exact);
+      if (expression) {
+        expressions.add(spot);
+      }
+      out.add(d);
+      return true;
+    }
+
+    for (final ReportDiagnostic d in live) {
+      add(d);
+    }
+    final Set<ReportDiagnostic> fromFile = <ReportDiagnostic>{};
+    for (final ReportDiagnostic d in _loadDiagnostics) {
+      final bool rechecked =
+          d.target.place == ReportDiagnosticPlace.variable ||
+          switch (d.kind) {
+            ReportDiagnosticKind.expression ||
+            ReportDiagnosticKind.unknownFunction ||
+            ReportDiagnosticKind.layout ||
+            ReportDiagnosticKind.structure => true,
+            _ => false,
+          };
+      if (!rechecked && add(d)) {
+        fromFile.add(d);
+      }
+    }
+    final List<ReportDiagnostic> errors = <ReportDiagnostic>[
+      for (final ReportDiagnostic d in out)
+        if (d.isError) d,
+    ];
+    _problems = List<ReportDiagnostic>.unmodifiable(<ReportDiagnostic>[
+      ...errors,
+      for (final ReportDiagnostic d in out)
+        if (!d.isError) d,
+    ]);
+    _fromFile = fromFile;
+    return _problems;
+  }
+
+  /// Whether [d] was found when the file was opened and is not in the
+  /// current checks (the parser ignored or corrected it).
+  bool isFromFile(ReportDiagnostic d) {
+    problems;
+    return _fromFile.contains(d);
+  }
+
+  /// Forgets [loadDiagnostics], for example after the file was saved and
+  /// no longer has the problems it was opened with.
+  void clearLoadDiagnostics() {
+    if (_loadDiagnostics.isEmpty) {
+      return;
+    }
+    _loadDiagnostics = const <ReportDiagnostic>[];
+    _problemsRevision = -1;
+    notifyListeners();
+  }
+
+  /// Whether the designer shows the problems panel under the canvas.
+  bool get problemsOpen => _problemsOpen;
+
+  set problemsOpen(bool value) {
+    if (value == _problemsOpen) {
+      return;
+    }
+    _problemsOpen = value;
+    notifyListeners();
+  }
+
+  /// Problem last picked with [revealDiagnostic].
+  ReportDiagnostic? get activeProblem => _activeProblem;
+
+  /// Bumped by [revealDiagnostic]; the canvas scrolls [revealElement] or
+  /// [revealBand] into view when it changes.
+  int get revealSerial => _revealSerial;
+
+  /// Element id to scroll into view (see [revealSerial]).
+  String? get revealElement => _revealElement;
+
+  /// Band to scroll into view when there is no [revealElement].
+  ReportBandKind? get revealBand => _revealBand;
+
+  /// Inspector property a problem points at; the inspector scrolls to it
+  /// and marks it until the selection changes or the property is set.
+  String? get highlightProperty => _highlightProperty;
+
+  /// Takes the user to the spot [d] points at: selects the element or band
+  /// and scrolls it into view, opens a variable, or shows a data table
+  /// column, and marks the inspector property to fix. Returns false when
+  /// the spot no longer exists (the report settings are shown instead).
+  bool revealDiagnostic(ReportDiagnostic d) {
+    _endEdits();
+    _activeProblem = d;
+    final ReportDiagnosticTarget t = d.target;
+    String? property;
+    bool found = true;
+    void selectNothing() {
+      _selection.clear();
+      _selectedBand = null;
+    }
+
+    switch (t.place) {
+      case ReportDiagnosticPlace.element || ReportDiagnosticPlace.band:
+        final ReportBandKind? kind = t.band;
+        final ReportBand? band = kind == null ? null : _template.band(kind);
+        final int? index = t.element;
+        _mode = ReportDesignMode.design;
+        if (band == null) {
+          selectNothing();
+          found = false;
+          break;
+        }
+        _selectedBand = band.kind;
+        _selection.clear();
+        _revealBand = band.kind;
+        _revealElement = null;
+        if (index != null && index < band.elements.length) {
+          final ReportElement e = band.elements[index];
+          _selection.add(e.id);
+          _revealElement = e.id;
+          property = _problemProperty(e, t);
+        } else if (index != null) {
+          found = false;
+        } else {
+          property = switch (t.attribute) {
+            'dataSet' ||
+            'groupBy' ||
+            'filter' ||
+            'visibleWhen' ||
+            'sortBy' => t.attribute,
+            _ => null,
+          };
+        }
+        _revealSerial++;
+        _inspectorPage = ReportInspectorPage.properties;
+      case ReportDiagnosticPlace.variable:
+        _mode = ReportDesignMode.design;
+        selectNothing();
+        final String? name = t.name;
+        final int i = name == null
+            ? -1
+            : _template.variables.indexWhere(
+                (ReportVariable v) => v.name == name,
+              );
+        found = name == null || i >= 0;
+        if (i >= 0) {
+          _variablePath = name;
+          property = 'var.$i.value';
+        }
+        _inspectorPage = ReportInspectorPage.variables;
+      case ReportDiagnosticPlace.dataTable || ReportDiagnosticPlace.dataColumn:
+        selectNothing();
+        _mode = ReportDesignMode.data;
+        _dataTable = ReportData.normalizePath(t.name ?? '');
+        _dataRow = -1;
+        _dataColumn = -1;
+        final String? column = t.column;
+        if (column != null) {
+          final ReportDataTableView view = dataTable;
+          final int c = view.columns.indexWhere(
+            (ReportDataColumnView v) => v.name == column,
+          );
+          found = c >= 0;
+          _dataColumn = c;
+          property = c >= 0 ? 'data.col.expression' : null;
+        }
+        _inspectorPage = ReportInspectorPage.properties;
+      case ReportDiagnosticPlace.settings ||
+          ReportDiagnosticPlace.bands ||
+          ReportDiagnosticPlace.file:
+        _mode = ReportDesignMode.design;
+        selectNothing();
+        _inspectorPage = ReportInspectorPage.properties;
+    }
+    notifyListeners();
+    _highlightProperty =
+        property != null &&
+            properties.any((ReportProperty p) => p.key == property)
+        ? property
+        : null;
+    super.notifyListeners();
+    return found;
+  }
+
+  static String? _problemProperty(ReportElement e, ReportDiagnosticTarget t) {
+    final int? i = t.partIndex;
+    final String? attribute = t.attribute;
+    switch (t.part) {
+      case 'Column' when i != null:
+        return 'col.$i.header';
+      case 'Cell' when i != null:
+        final bool field =
+            e is ReportTableElement &&
+            i < e.cells.length &&
+            e.cells[i].field != null;
+        return field ? 'cell.$i.field' : 'cell.$i.text';
+      case 'FooterCell' when i != null:
+        return 'foot.$i.text';
+      case 'Series' when i != null:
+        return attribute == 'value' ? 'series.$i.value' : 'series.$i.name';
+      case 'Point' when i != null:
+        return attribute == 'value' ? 'point.$i.value' : 'point.$i.label';
+    }
+    if (attribute != null) {
+      return switch (attribute) {
+        'visibleWhen' || 'dataSet' || 'title' || 'category' => attribute,
+        'source' || 'data' || 'text' => attribute,
+        _ => null,
+      };
+    }
+    return switch (e) {
+      ReportTextElement() => 'text',
+      ReportImageElement() => 'source',
+      ReportBarcodeElement() => 'data',
+      _ => null,
+    };
+  }
 
   /// Live preview of the current template with [mockData], cached per
   /// [revision]. Null when generation failed ([previewError]).
@@ -1818,6 +2138,7 @@ class ReportDesignerController extends ChangeNotifier {
     }
     commitPropertyEdit();
     _inspectorPage = page;
+    _highlightProperty = null;
     if (page == ReportInspectorPage.fonts) {
       _loadDeviceFamilies();
     }
@@ -1831,6 +2152,7 @@ class ReportDesignerController extends ChangeNotifier {
         '${_mode == ReportDesignMode.data ? '$_dataTable|$_dataRow|$_dataColumn' : ''}';
     if (key != _selectionKey) {
       _selectionKey = key;
+      _highlightProperty = null;
       if (_selection.isNotEmpty ||
           _selectedBand != null ||
           _mode == ReportDesignMode.data) {
@@ -1838,6 +2160,19 @@ class ReportDesignerController extends ChangeNotifier {
       }
     }
     super.notifyListeners();
+  }
+
+  ReportDesignerStrings _strings = ReportDesignerStrings.english;
+
+  /// Interface language of the inspector, toolbar, and menus.
+  ReportDesignerStrings get strings => _strings;
+
+  set strings(ReportDesignerStrings value) {
+    if (identical(value, _strings)) {
+      return;
+    }
+    _strings = value;
+    notifyListeners();
   }
 
   /// Heading for the inspector.
@@ -2110,6 +2445,9 @@ class ReportDesignerController extends ChangeNotifier {
   /// Sets [key] to [value] on every selected element that has it (else the
   /// selected band, else the report). Invalid values are ignored.
   void setProperty(String key, String value) {
+    if (key == _highlightProperty) {
+      _highlightProperty = null;
+    }
     if (_setDataProperty(key, value) ||
         _setImageProperty(key, value) ||
         _setFontProperty(key, value)) {
@@ -2123,7 +2461,7 @@ class ReportDesignerController extends ChangeNotifier {
       }
       return;
     }
-    if (key == 'var+' || key.startsWith('var.')) {
+    if (key == 'var+' || key.startsWith('var.') || key.startsWith('vfolder')) {
       _mutate(() => _applyReport(key, value));
       notifyListeners();
       return;
@@ -2246,6 +2584,14 @@ class ReportDesignerController extends ChangeNotifier {
               label: '',
               kind: ReportPropertyKind.action,
               value: 'Import image…',
+              group: g,
+            ),
+          if (imagePicker != null && images.containsKey(e.source.trim()))
+            ReportProperty(
+              key: 'source.replace',
+              label: '',
+              kind: ReportPropertyKind.action,
+              value: 'Replace image…',
               group: g,
             ),
           ReportProperty(
@@ -3183,8 +3529,80 @@ class ReportDesignerController extends ChangeNotifier {
     ReportVariableType.expression => '0',
   };
 
+  String? _variablePath;
+
+  /// Variable name or folder path selected on the Variables page; the first
+  /// variable when nothing valid is selected.
+  String? get selectedVariablePath {
+    final String? path = _variablePath;
+    if (path != null && _variablePathExists(path)) {
+      return path;
+    }
+    final List<ReportVariable> vars = _template.variables;
+    return vars.isEmpty ? null : vars.first.name;
+  }
+
+  set selectedVariablePath(String? path) {
+    if (path == _variablePath) {
+      return;
+    }
+    _variablePath = path;
+    _highlightProperty = null;
+    notifyListeners();
+  }
+
+  bool _variablePathExists(String path) {
+    final String lower = path.toLowerCase();
+    return _template.variables.any((ReportVariable v) {
+      final String n = v.name.toLowerCase();
+      return n == lower || n.startsWith('$lower.');
+    });
+  }
+
+  /// Variable named by [selectedVariablePath], or null for a folder.
+  ReportVariable? get selectedVariable {
+    final String? path = selectedVariablePath;
+    for (final ReportVariable v in _template.variables) {
+      if (v.name == path) {
+        return v;
+      }
+    }
+    return null;
+  }
+
+  /// Folder that new variables go to: the selected folder, else the folder
+  /// of the selected variable; empty at the top level.
+  String get currentVariableFolder {
+    final String? path = selectedVariablePath;
+    if (path == null) {
+      return '';
+    }
+    return selectedVariable?.folder ?? path;
+  }
+
+  /// Every folder path of the template's variables, parents first
+  /// (`stats`, `stats.label`).
+  List<String> get variableFolders {
+    final Set<String> out = <String>{};
+    for (final ReportVariable v in _template.variables) {
+      final List<String> parts = v.segments;
+      for (int i = 1; i < parts.length; i++) {
+        out.add(parts.sublist(0, i).join('.'));
+      }
+    }
+    return out.toList();
+  }
+
+  String _uniqueVariableName(ReportTemplate t, String base) {
+    var n = 1;
+    while (variableNameProblem(t, '$base$n') != null) {
+      n++;
+    }
+    return '$base$n';
+  }
+
   List<ReportProperty> _variableProps(ReportTemplate t) {
-    const String vars = 'Variables';
+    const String vars = 'Template variables';
     final List<ReportProperty> out = <ReportProperty>[
       const ReportProperty(
         key: 'var+',
@@ -3193,10 +3611,19 @@ class ReportDesignerController extends ChangeNotifier {
         value: 'Add variable',
         group: vars,
       ),
+      const ReportProperty(
+        key: 'vfolder+',
+        label: 'Template variables',
+        kind: ReportPropertyKind.action,
+        value: 'New folder',
+        group: vars,
+      ),
     ];
-    for (int i = 0; i < t.variables.length; i++) {
-      final ReportVariable v = t.variables[i];
-      final String g = 'Variable · ${v.name}';
+    final ReportVariable? v = selectedVariable;
+    final String? path = selectedVariablePath;
+    if (v != null) {
+      final int i = t.variables.indexOf(v);
+      const String g = 'Variable';
       out.addAll(<ReportProperty>[
         ReportProperty(
           key: 'var.$i.name',
@@ -3240,6 +3667,13 @@ class ReportDesignerController extends ChangeNotifier {
           group: g,
         ),
         ReportProperty(
+          key: 'var.$i.ref',
+          label: 'Reference',
+          kind: ReportPropertyKind.note,
+          value: v.placeholder,
+          group: g,
+        ),
+        ReportProperty(
           key: 'var.$i.insert',
           label: '',
           kind: ReportPropertyKind.action,
@@ -3250,7 +3684,32 @@ class ReportDesignerController extends ChangeNotifier {
           key: 'var.$i.remove',
           label: '',
           kind: ReportPropertyKind.action,
-          value: 'Remove',
+          value: 'Remove variable',
+          group: g,
+        ),
+      ]);
+    } else if (path != null) {
+      const String g = 'Folder';
+      out.addAll(<ReportProperty>[
+        ReportProperty(
+          key: 'vfolder.name',
+          label: 'Folder name',
+          kind: ReportPropertyKind.text,
+          value: path,
+          group: g,
+        ),
+        const ReportProperty(
+          key: 'vfolder.add',
+          label: '',
+          kind: ReportPropertyKind.action,
+          value: 'Add variable here',
+          group: g,
+        ),
+        const ReportProperty(
+          key: 'vfolder.remove',
+          label: '',
+          kind: ReportPropertyKind.action,
+          value: 'Delete folder',
           group: g,
         ),
       ]);
@@ -3258,9 +3717,129 @@ class ReportDesignerController extends ChangeNotifier {
     return out;
   }
 
-  static final RegExp _variableName = RegExp(
-    r'^[A-Za-z_\u0600-\u06FF][A-Za-z0-9_\u0600-\u06FF]*$',
-  );
+  /// Applies the folder keys of the Variables page; returns whether the
+  /// template changed.
+  bool _applyVariableFolder(ReportTemplate t, String key, String v) {
+    switch (key) {
+      case 'var+' || 'vfolder.add':
+        final String folder = key == 'vfolder.add'
+            ? (selectedVariablePath ?? '')
+            : currentVariableFolder;
+        final String name = _uniqueVariableName(
+          t,
+          folder.isEmpty ? 'variable' : '$folder.variable',
+        );
+        _newVariable(t, name: name);
+        _variablePath = name;
+        return true;
+      case 'vfolder+':
+        final String parent = currentVariableFolder;
+        var n = 1;
+        String folder() => parent.isEmpty ? 'folder$n' : '$parent.folder$n';
+        while (_variablePathExists(folder()) ||
+            variableNameProblem(t, '${folder()}.variable1') != null) {
+          n++;
+        }
+        final String name = '${folder()}.variable1';
+        _newVariable(t, name: name);
+        _variablePath = name;
+        return true;
+      case 'vfolder.name':
+        final String? old = selectedVariablePath;
+        final String now = v.trim();
+        if (old == null || selectedVariable != null || now == old) {
+          return false;
+        }
+        return renameVariableFolder(old, now, mutate: false);
+      case 'vfolder.remove':
+        final String? folder = selectedVariablePath;
+        if (folder == null || selectedVariable != null) {
+          return false;
+        }
+        final String prefix = '${folder.toLowerCase()}.';
+        t.variables.removeWhere(
+          (ReportVariable x) => x.name.toLowerCase().startsWith(prefix),
+        );
+        _variablePath = null;
+        return true;
+    }
+    return false;
+  }
+
+  /// Renames variable folder [from] to [to] (`stats` → `totals.stats`):
+  /// every variable under it moves and `{{Variables.…}}` references follow.
+  /// Returns whether it renamed; the reason for a refusal is in [notice].
+  /// Undoable.
+  bool renameVariableFolder(String from, String to, {bool mutate = true}) {
+    bool apply() {
+      final ReportTemplate t = _template;
+      final String prefix = '${from.toLowerCase()}.';
+      final List<ReportVariable> moving = <ReportVariable>[
+        for (final ReportVariable x in t.variables)
+          if (x.name.toLowerCase().startsWith(prefix)) x,
+      ];
+      if (moving.isEmpty || to.trim().isEmpty) {
+        return false;
+      }
+      final ReportTemplate probe = ReportTemplate()
+        ..variables.addAll(<ReportVariable>[
+          for (final ReportVariable x in t.variables)
+            if (!moving.contains(x)) x,
+        ]);
+      final Map<String, String> renames = <String, String>{};
+      for (final ReportVariable x in moving) {
+        final String next = '$to${x.name.substring(from.length)}';
+        final String? problem = variableNameProblem(probe, next);
+        if (problem != null) {
+          _notice = problem;
+          return false;
+        }
+        probe.variables.add(ReportVariable(name: next));
+        renames[x.name] = next;
+      }
+      for (final ReportVariable x in moving) {
+        x.name = renames[x.name]!;
+      }
+      _variablePath = to;
+      _renameVariableRefsMany(renames);
+      return true;
+    }
+
+    if (!mutate) {
+      return apply();
+    }
+    var done = false;
+    _mutate(() => done = apply());
+    notifyListeners();
+    return done;
+  }
+
+  /// Why [name] cannot name a variable other than [self] of [t], or null.
+  static String? variableNameProblem(
+    ReportTemplate t,
+    String name, {
+    ReportVariable? self,
+  }) {
+    if (!ReportVariable.isValidName(name)) {
+      return '"$name" is not a valid name: use letters, digits and _, and '
+          'dots for folders (stats.sum)';
+    }
+    final String lower = name.toLowerCase();
+    for (final ReportVariable o in t.variables) {
+      if (identical(o, self)) {
+        continue;
+      }
+      final String other = o.name.toLowerCase();
+      if (other == lower) {
+        return 'Another variable is already named "${o.name}"';
+      }
+      if (other.startsWith('$lower.') || lower.startsWith('$other.')) {
+        return '"$name" clashes with "${o.name}": a name cannot be both a '
+            'variable and a folder';
+      }
+    }
+    return null;
+  }
 
   ReportVariable _newVariable(
     ReportTemplate t, {
@@ -3296,16 +3875,19 @@ class ReportDesignerController extends ChangeNotifier {
     switch (parts[2]) {
       case 'name':
         final String n = v.trim();
-        if (n == x.name ||
-            !_variableName.hasMatch(n) ||
-            t.variables.any(
-              (ReportVariable o) =>
-                  !identical(o, x) && o.name.toLowerCase() == n.toLowerCase(),
-            )) {
+        if (n == x.name) {
+          return false;
+        }
+        final String? problem = variableNameProblem(t, n, self: x);
+        if (problem != null) {
+          _notice = problem;
           return false;
         }
         final String old = x.name;
         x.name = n;
+        if (_variablePath == old) {
+          _variablePath = n;
+        }
         _renameVariableRefs(old, n);
       case 'type':
         final ReportVariableType? type = reportEnumByName(
@@ -3339,21 +3921,28 @@ class ReportDesignerController extends ChangeNotifier {
   }
 
   /// Rewrites `Variables.old` references after a rename.
-  void _renameVariableRefs(String old, String now) {
+  void _renameVariableRefs(String old, String now) =>
+      _renameVariableRefsMany(<String, String>{old: now});
+
+  /// Rewrites `Variables.old` references for every old → new pair.
+  void _renameVariableRefsMany(Map<String, String> renames) {
     final String xml = toXml();
-    final RegExp ref = RegExp(
-      '(?<![A-Za-z0-9_.\u0600-\u06FF])((?:Variables|Vars|Var)\\.)'
-      '${RegExp.escape(old)}(?![A-Za-z0-9_\u0600-\u06FF])',
-      caseSensitive: false,
-      unicode: true,
-    );
-    if (!ref.hasMatch(xml)) {
+    var renamed = xml;
+    for (final MapEntry<String, String> r in renames.entries) {
+      final RegExp ref = RegExp(
+        '(?<![A-Za-z0-9_.\u0600-\u06FF])((?:Variables|Vars|Var)\\.)'
+        '${RegExp.escape(r.key)}(?![A-Za-z0-9_.\u0600-\u06FF])',
+        caseSensitive: false,
+        unicode: true,
+      );
+      renamed = renamed.replaceAllMapped(
+        ref,
+        (Match m) => '${m.group(1)}${r.value}',
+      );
+    }
+    if (renamed == xml) {
       return;
     }
-    final String renamed = xml.replaceAllMapped(
-      ref,
-      (Match m) => '${m.group(1)}$now',
-    );
     final ReportParseResult parsed = QudsReportXmlParser().parse(renamed);
     if (parsed.hasErrors) {
       return;
@@ -3528,6 +4117,40 @@ class ReportDesignerController extends ChangeNotifier {
     return true;
   }
 
+  /// Swaps the pixels of embedded image [name] for PNG / JPEG [bytes] and
+  /// keeps its key, so every element showing it updates at once. Returns
+  /// whether it replaced. Undoable.
+  bool replaceImage(String name, Uint8List bytes) {
+    if (!images.containsKey(name) || ReportImageFormat.sniff(bytes) == null) {
+      return false;
+    }
+    _mutate(() {
+      images[name] = bytes;
+      return true;
+    });
+    return true;
+  }
+
+  /// Asks [imagePicker] for a file and puts it in place of embedded image
+  /// [name] ([replaceImage]). Returns whether it replaced; a file that is
+  /// neither PNG nor JPEG leaves a [notice].
+  Future<bool> importReplacement(String name) async {
+    final ReportImagePicker? picker = imagePicker;
+    if (picker == null || !images.containsKey(name)) {
+      return false;
+    }
+    final ({String name, Uint8List bytes})? file = await picker();
+    if (file == null || _disposed) {
+      return false;
+    }
+    if (replaceImage(name, file.bytes)) {
+      return true;
+    }
+    _notice = 'The chosen file is not a PNG or JPEG image';
+    notifyListeners();
+    return false;
+  }
+
   /// Removes embedded image [name]; elements that use it draw nothing until
   /// it is re-added. Returns whether it existed. Undoable.
   bool removeImage(String name) {
@@ -3623,6 +4246,14 @@ class ReportDesignerController extends ChangeNotifier {
           hint: 'Letters, digits, _ and -; used as <Image source="…">',
           group: group,
         ),
+        if (imagePicker != null)
+          ReportProperty(
+            key: 'img.$i.replace',
+            label: '',
+            kind: ReportPropertyKind.action,
+            value: 'Replace image…',
+            group: group,
+          ),
         ReportProperty(
           key: 'img.$i.insert',
           label: '',
@@ -3648,8 +4279,15 @@ class ReportDesignerController extends ChangeNotifier {
       unawaited(importImage(assignToSelection: key == 'source.import'));
       return true;
     }
+    if (key == 'source.replace') {
+      final ReportElement? e = primary;
+      if (e is ReportImageElement) {
+        unawaited(importReplacement(e.source.trim()));
+      }
+      return true;
+    }
     final RegExpMatch? m = RegExp(
-      r'^img\.(\d+)\.(name|insert|remove)$',
+      r'^img\.(\d+)\.(name|replace|insert|remove)$',
     ).firstMatch(key);
     if (m == null) {
       return false;
@@ -3662,6 +4300,8 @@ class ReportDesignerController extends ChangeNotifier {
     switch (m.group(2)) {
       case 'name':
         renameImage(names[i], value);
+      case 'replace':
+        unawaited(importReplacement(names[i]));
       case 'insert':
         insertImage(names[i]);
       case 'remove':
@@ -5324,6 +5964,9 @@ class ReportDesignerController extends ChangeNotifier {
     Object? error;
     try {
       list = await source.families();
+      if (source is ReportDeviceFontScripts) {
+        _deviceScripts = await (source as ReportDeviceFontScripts).scripts();
+      }
     } on Object catch (e) {
       error = e;
     }
@@ -5553,43 +6196,53 @@ class ReportDesignerController extends ChangeNotifier {
   }
 
   List<ReportProperty> _fontProps() {
-    const String g = 'Embedded fonts';
+    const String add = 'Add a font';
     final List<String> names = embeddedFamilies;
     final List<ReportProperty> out = <ReportProperty>[
+      if (_deviceFonts != null)
+        const ReportProperty(
+          key: 'font.add',
+          label: 'Installed font…',
+          kind: ReportPropertyKind.text,
+          value: '',
+          hint: 'Search installed fonts',
+          group: add,
+        ),
       if (fontPicker != null)
-        ReportProperty(
+        const ReportProperty(
           key: 'font+',
-          label: g,
+          label: add,
           kind: ReportPropertyKind.action,
           value: 'Import font file…',
-          group: g,
+          group: add,
         ),
-      if (names.isEmpty)
-        ReportProperty(
+    ];
+    const String g = 'Embedded fonts';
+    if (names.isEmpty) {
+      out.add(
+        const ReportProperty(
           key: 'font.none',
           label: '',
           kind: ReportPropertyKind.note,
           value:
-              'None yet. Embedded fonts are saved inside the .qrep so the '
-              'report looks the same on every machine.',
+              'Embedded fonts are saved inside the .qrep so the report looks '
+              'the same on every machine.',
           group: g,
         ),
-    ];
+      );
+    }
     for (int i = 0; i < names.length; i++) {
       final String family = names[i];
       final ReportFontFiles files = embeddedFonts[family]!;
-      final String group =
-          '$family · ${_faceNames(files)}, ${_byteSize(files.byteLength)}';
       final int uses = _fontUses(family);
       final bool isDefault = _template.defaultFont == family;
-      final String count = '$uses ${uses == 1 ? 'element' : 'elements'}';
       out.addAll(<ReportProperty>[
         ReportProperty(
-          key: 'font.$i.default',
-          label: 'Report default',
-          kind: ReportPropertyKind.toggle,
-          value: _bool(isDefault),
-          group: group,
+          key: 'font.$i.card',
+          label: family,
+          kind: ReportPropertyKind.note,
+          value: '${_faceNames(files)} · ${_byteSize(files.byteLength)}',
+          group: g,
         ),
         ReportProperty(
           key: 'font.$i.uses',
@@ -5598,77 +6251,125 @@ class ReportDesignerController extends ChangeNotifier {
           value: isDefault
               ? (uses == 0
                     ? 'All text without its own font'
-                    : 'All text without its own font, +$count')
-              : (uses == 0 ? 'No elements' : count),
-          group: group,
+                    : 'All text without its own font, +$uses')
+              : (uses == 0 ? 'No elements' : '$uses'),
+          group: g,
+        ),
+        ReportProperty(
+          key: 'font.$i.default',
+          label: 'Report default',
+          kind: ReportPropertyKind.toggle,
+          value: _bool(isDefault),
+          group: g,
         ),
         ReportProperty(
           key: 'font.$i.remove',
           label: '',
           kind: ReportPropertyKind.action,
-          value: 'Remove',
-          group: group,
+          value: 'Remove font',
+          group: g,
         ),
       ]);
     }
-    if (_deviceFonts == null) {
-      return out;
-    }
-    const String d = 'On this device';
-    out.add(
-      ReportProperty(
-        key: 'font.search',
-        label: 'Search',
-        kind: ReportPropertyKind.text,
-        value: _fontSearch,
-        hint: 'Filter installed fonts',
-        group: d,
-      ),
-    );
-    final Object? error = _deviceError;
-    final List<String>? all = _deviceFamilies;
-    if (error != null || all == null) {
-      return out..add(
-        ReportProperty(
-          key: 'font.status',
-          label: '',
-          kind: ReportPropertyKind.note,
-          value: error == null
-              ? 'Looking for installed fonts…'
-              : 'Could not list installed fonts: $error',
-          group: d,
-        ),
-      );
-    }
-    final List<String> matches = _deviceMatches();
-    for (int i = 0; i < matches.length && i < maxDeviceRows; i++) {
-      out.add(
-        ReportProperty(
-          key: 'dev.$i',
-          label: matches[i],
-          kind: ReportPropertyKind.action,
-          value: _embedding.contains(matches[i]) ? 'Embedding…' : 'Embed',
-          group: d,
-        ),
-      );
-    }
-    if (matches.isEmpty || matches.length > maxDeviceRows) {
-      out.add(
-        ReportProperty(
-          key: 'font.status',
-          label: '',
-          kind: ReportPropertyKind.note,
-          value: matches.isEmpty
-              ? (all.isEmpty
-                    ? 'No embeddable TrueType fonts found'
-                    : 'No installed font matches "${_fontSearch.trim()}"')
-              : 'Showing $maxDeviceRows of ${matches.length}; search to '
-                    'narrow the list',
-          group: d,
-        ),
-      );
+    if (_deviceFonts != null &&
+        (_deviceFamilies == null || _deviceError != null)) {
+      _loadDeviceFamilies();
     }
     return out;
+  }
+
+  /// Whether property [key] names a font family (the inspector previews
+  /// each suggestion in its own face).
+  static bool isFontKey(String key) {
+    final String leaf = key.split('.').last;
+    return leaf == 'fontFamily' || leaf == 'defaultFont' || key == 'font.add';
+  }
+
+  Map<String, Set<ReportScript>> _deviceScripts =
+      const <String, Set<ReportScript>>{};
+  final Map<ReportFontFiles, Set<ReportScript>> _embeddedScripts =
+      Map<ReportFontFiles, Set<ReportScript>>.identity();
+
+  static final RegExp _arabicName = RegExp(
+    'arab|naskh|kufi|amiri|cairo|tajawal|almarai|lateef|harmattan|'
+    'scheherazade|changa|reem|markazi|mada|lalezar|rakkas|jomhuria|'
+    'mirza|katibeh|aref|ruqaa|thuluth|diwani|nastaliq|vazir|sahel|'
+    'shabnam|samim|tanha|droid arabic|kacst|hacen|ge ss|dubai|janna',
+    caseSensitive: false,
+  );
+
+  /// Writing systems [family] covers: read from embedded files and from
+  /// [ReportDeviceFontScripts] hosts, else guessed from the family name.
+  Set<ReportScript> fontScripts(String family) {
+    final ReportFontFiles? files = embeddedFonts[family];
+    if (files != null) {
+      return _embeddedScripts.putIfAbsent(files, () {
+        try {
+          return ReportFontFile.inspect(files.regular ?? files.bold!).scripts;
+        } on ReportFontException {
+          return const <ReportScript>{};
+        }
+      });
+    }
+    final Set<ReportScript>? device = _deviceScripts[family];
+    if (device != null && device.isNotEmpty) {
+      return device;
+    }
+    if (_arabicName.hasMatch(family)) {
+      return const <ReportScript>{ReportScript.arabic};
+    }
+    return const <ReportScript>{ReportScript.latin};
+  }
+
+  /// Sample text that shows [family] in its own script.
+  String fontPreviewText(String family) =>
+      ReportScript.previewText(fontScripts(family));
+
+  ReportCompletionResult _fontCompletion(
+    String text, {
+    required String query,
+    required bool installedOnly,
+  }) {
+    _loadDeviceFamilies();
+    final String q = query.trim().toLowerCase();
+    final Set<String> seen = <String>{};
+    final List<ReportCompletionItem> first = <ReportCompletionItem>[];
+    final List<ReportCompletionItem> rest = <ReportCompletionItem>[];
+    void offer(String family, String detail) {
+      if (!seen.add(family.toLowerCase())) {
+        return;
+      }
+      final String lower = family.toLowerCase();
+      if (q.isNotEmpty && !lower.contains(q)) {
+        return;
+      }
+      final ReportCompletionItem item = ReportCompletionItem(
+        label: family,
+        insert: family,
+        kind: ReportCompletionKind.field,
+        detail: detail,
+      );
+      (q.isNotEmpty && lower.startsWith(q) ? first : rest).add(item);
+    }
+
+    if (!installedOnly) {
+      for (final String f in embeddedFamilies) {
+        offer(f, 'In this report');
+      }
+      for (final String f in fontFamilies) {
+        offer(f, 'Built in');
+      }
+    } else {
+      seen.addAll(embeddedFonts.keys.map((String f) => f.toLowerCase()));
+    }
+    for (final String f in _deviceFamilies ?? const <String>[]) {
+      offer(f, 'Installed on this device');
+    }
+    return ReportCompletionResult(
+      start: 0,
+      end: text.length,
+      items: <ReportCompletionItem>[...first, ...rest],
+    );
   }
 
   /// Handles the font keys of [setProperty]; returns whether [key] was one.
@@ -5679,6 +6380,16 @@ class ReportDesignerController extends ChangeNotifier {
     }
     if (key == 'font.search') {
       fontSearch = value.trim();
+      return true;
+    }
+    if (key == 'font.add') {
+      final String family = value.trim();
+      if (family.isNotEmpty) {
+        unawaited(embedDeviceFont(family));
+      }
+      return true;
+    }
+    if (RegExp(r'^font\.\d+\.(card|uses)$').hasMatch(key)) {
       return true;
     }
     if (key.startsWith('dev.')) {
@@ -6321,9 +7032,8 @@ class ReportDesignerController extends ChangeNotifier {
       }
       return true;
     }
-    if (key == 'var+') {
-      _newVariable(t);
-      return true;
+    if (key == 'var+' || key.startsWith('vfolder')) {
+      return _applyVariableFolder(t, key, v);
     }
     if (key == 'color+') {
       final int eq = v.indexOf('=');

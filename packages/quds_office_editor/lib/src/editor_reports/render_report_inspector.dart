@@ -1,6 +1,9 @@
+import 'dart:async';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/gestures.dart';
+import 'package:flutter/material.dart' show Icons;
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
@@ -10,6 +13,7 @@ import '../embed/office_theme.dart';
 import 'render_report_toolbar.dart';
 import 'report_completion_popup.dart';
 import 'report_designer_controller.dart';
+import 'report_designer_strings.dart';
 import 'report_inspector_glyphs.dart';
 
 /// Choice-property click: hosts show the options and call
@@ -86,24 +90,75 @@ class ReportInspector extends LeafRenderObjectWidget {
   }
 }
 
-enum _RowKind { title, tabs, group, property, pair, glyphs, note }
+enum _RowKind {
+  title,
+  tabs,
+  group,
+  property,
+  pair,
+  glyphs,
+  note,
+  node,
+  empty,
+  search,
+  imageCard,
+  fontCard,
+}
 
 class _Row {
   _Row(
     this.kind,
     this.rect, {
     this.props = const <ReportProperty>[],
+    this.actions = const <ReportProperty>[],
     this.text = '',
+    this.detail = '',
     this.severity = 0,
+    this.node,
+    this.index = -1,
+    this.icon,
   });
 
   final _RowKind kind;
   final Rect rect;
   final List<ReportProperty> props;
+
+  /// Action properties shown as icon buttons in a section heading.
+  final List<ReportProperty> actions;
   final String text;
+  final String detail;
   final int severity;
+  final _VarNode? node;
+  final int index;
+  final IconData? icon;
 
   ReportProperty? get property => props.isEmpty ? null : props.first;
+
+  ReportProperty? prop(String suffix) {
+    for (final ReportProperty p in props) {
+      if (p.key.endsWith(suffix)) {
+        return p;
+      }
+    }
+    return null;
+  }
+}
+
+/// Folder or variable of the Variables explorer.
+class _VarNode {
+  _VarNode(this.path, this.name, this.depth, {this.variable, this.index = -1});
+
+  final String path;
+  final String name;
+  final int depth;
+  final ReportVariable? variable;
+
+  /// Index of [variable] in [ReportTemplate.variables].
+  final int index;
+  final List<_VarNode> children = <_VarNode>[];
+  int count = 0;
+
+  bool get isFolder => variable == null;
 }
 
 enum _HitKind {
@@ -119,15 +174,41 @@ enum _HitKind {
   action,
   glyph,
   tab,
+  node,
+  nodeToggle,
+  folderAction,
+  expandAll,
+  collapseAll,
 }
 
 class _Hit {
-  const _Hit(this.kind, this.rect, {this.property, this.value = ''});
+  const _Hit(
+    this.kind,
+    this.rect, {
+    this.property,
+    this.value = '',
+    this.tip,
+    this.icon,
+    this.danger = false,
+    this.active = false,
+  });
 
   final _HitKind kind;
   final Rect rect;
   final ReportProperty? property;
   final String value;
+
+  /// Tooltip shown after hovering.
+  final String? tip;
+
+  /// Glyph of an icon button.
+  final IconData? icon;
+  final bool danger;
+  final bool active;
+
+  String get id =>
+      '${kind.name}|${property?.key}|$value|'
+      '${rect.left.round()}|${rect.top.round()}';
 }
 
 /// Anatomy of a text field: box, editable text area, and adornments.
@@ -150,9 +231,23 @@ class _Swatch {
   final String label;
 }
 
-/// RenderBox behind [ReportInspector]: collapsible sections with switches,
-/// segmented buttons, steppers, preset combos, a color palette, paired
-/// position/size fields, and inline text editing.
+/// Decoded preview of an embedded image.
+class _Thumb {
+  _Thumb(this.bytes);
+
+  final Uint8List bytes;
+  ui.Image? image;
+  bool failed = false;
+}
+
+/// RenderBox behind [ReportInspector]: collapsible sections with icon
+/// actions, switches, segmented buttons, steppers, preset combos, a color
+/// palette, the variables explorer, image and font cards with previews, a
+/// font picker that renders each family, and inline text editing.
+///
+/// Rows are laid out in reading order: when [ReportDesignerStrings.isRtl]
+/// the canvas is mirrored once and text, icons, and edit fields are drawn
+/// un-mirrored in place.
 class RenderReportInspector extends RenderBox
     implements MouseTrackerAnnotation {
   /// RenderReportInspector API.
@@ -173,20 +268,26 @@ class RenderReportInspector extends RenderBox
   VoidCallback? onActivate;
 
   /// Title row height.
-  static const double titleHeight = 54;
+  static const double titleHeight = 56;
 
-  /// Page tabs height (Properties / Variables / Images).
-  static const double tabsHeight = 34;
+  /// Page tabs height (Properties / Variables / Images / Fonts).
+  static const double tabsHeight = 36;
 
   /// Section heading height.
-  static const double groupHeight = 30;
+  static const double groupHeight = 32;
 
   /// Property row height.
-  static const double rowHeight = 30;
+  static const double rowHeight = 32;
 
   static const double _pad = 12;
-  static const double _font = 11.5;
+  static const double _font = 12;
   static const double _sectionGap = 6;
+  static const double _nodeHeight = 28;
+  static const double _indent = 16;
+  static const double _iconButton = 26;
+  static const double _fontRowHeight = 48;
+  static const int _fontMaxRows = 7;
+  static const Duration _tipDelay = Duration(milliseconds: 450);
 
   double _scroll = 0;
   Offset? _hover;
@@ -194,17 +295,28 @@ class RenderReportInspector extends RenderBox
   final ReportCompletionPopup _popup = ReportCompletionPopup();
   Rect? _popupRect;
   (Offset, Offset)? _editCaret;
+  Offset? _editOrigin;
   final Map<String, TextPainter> _cache = <String, TextPainter>{};
   List<_Row> _rows = <_Row>[];
   double _contentHeight = 0;
-  int _diagRevision = -1;
-  List<ReportDiagnostic> _diagnostics = const <ReportDiagnostic>[];
   final Set<String> _collapsed = <String>{};
+  final Set<String> _closedFolders = <String>{};
 
   String? _paletteKey;
   Rect? _paletteAnchor;
   Rect? _paletteRect;
   List<_Swatch> _swatches = <_Swatch>[];
+
+  Rect? _fontPopupRect;
+  int _fontFirst = 0;
+  int _fontVisible = 0;
+  int _fontIndexSeen = -1;
+
+  final Map<String, _Thumb> _thumbs = <String, _Thumb>{};
+
+  Timer? _tipTimer;
+  String? _tipId;
+  bool _tipShown = false;
 
   /// controller API.
   ReportDesignerController get controller => _controller;
@@ -253,6 +365,18 @@ class RenderReportInspector extends RenderBox
     markNeedsPaint();
   }
 
+  /// Whether variable folder [path] is collapsed in the explorer.
+  bool isFolderClosed(String path) =>
+      _closedFolders.contains(path.toLowerCase());
+
+  /// Collapses or expands variable folder [path].
+  void setFolderClosed(String path, bool closed) {
+    final String k = path.toLowerCase();
+    if (closed ? _closedFolders.add(k) : _closedFolders.remove(k)) {
+      markNeedsPaint();
+    }
+  }
+
   @override
   void attach(PipelineOwner owner) {
     super.attach(owner);
@@ -262,6 +386,7 @@ class RenderReportInspector extends RenderBox
   @override
   void detach() {
     _controller.removeListener(markNeedsPaint);
+    _hideTip();
     super.detach();
   }
 
@@ -269,6 +394,8 @@ class RenderReportInspector extends RenderBox
   void dispose() {
     _popup.dispose();
     _clearCache();
+    _clearThumbs();
+    _hideTip();
     super.dispose();
   }
 
@@ -277,6 +404,13 @@ class RenderReportInspector extends RenderBox
       tp.dispose();
     }
     _cache.clear();
+  }
+
+  void _clearThumbs() {
+    for (final _Thumb t in _thumbs.values) {
+      t.image?.dispose();
+    }
+    _thumbs.clear();
   }
 
   @override
@@ -294,59 +428,382 @@ class RenderReportInspector extends RenderBox
     return true;
   }
 
+  // ------------------------------------------------------------ language
+
+  ReportDesignerStrings get _s => _controller.strings;
+
+  bool get _rtl => _s.isRtl;
+
+  static final RegExp _numbered = RegExp(r'^(.+?) (\d+)$');
+
+  /// Translation of an English label, also for `Column 2` and
+  /// `Table · name` shapes.
+  String _tr(String english) {
+    if (english.isEmpty) {
+      return english;
+    }
+    final String direct = _s.t(english);
+    if (direct != english) {
+      return direct;
+    }
+    final RegExpMatch? n = _numbered.firstMatch(english);
+    if (n != null) {
+      final String head = _s.t(n[1]!);
+      if (head != n[1]) {
+        return '$head ${n[2]}';
+      }
+    }
+    final int dot = english.indexOf(' · ');
+    if (dot > 0) {
+      return '${_s.t(english.substring(0, dot))} · '
+          '${english.substring(dot + 3)}';
+    }
+    return english;
+  }
+
+  /// Direction of the first strong character of [text]; the interface
+  /// direction when there is none.
+  TextDirection _dirOf(String text) {
+    for (final int c in text.runes) {
+      if ((c >= 0x0590 && c <= 0x08FF) || (c >= 0xFB1D && c <= 0xFEFC)) {
+        return TextDirection.rtl;
+      }
+      if ((c >= 0x41 && c <= 0x5A) ||
+          (c >= 0x61 && c <= 0x7A) ||
+          (c >= 0xC0 && c <= 0x024F) ||
+          (c >= 0x0370 && c <= 0x052F)) {
+        return TextDirection.ltr;
+      }
+    }
+    return _s.direction;
+  }
+
   // ------------------------------------------------------------ colors
+
+  bool get _dark => _theme.chromeFill.computeLuminance() < 0.35;
+
+  Color get _bg => _theme.chromeFill;
 
   Color get _ink => _theme.chromeText;
 
-  Color get _muted => _theme.chromeText.withValues(alpha: 0.55);
+  Color get _muted => _ink.withValues(alpha: 0.62);
+
+  Color get _faint => _ink.withValues(alpha: 0.38);
 
   Color get _accent => _theme.selectionStroke;
 
-  Color get _line => _theme.gridLine;
+  Color get _line => _ink.withValues(alpha: _dark ? 0.14 : 0.12);
 
-  Color get _fieldFill => _theme.pageBackground;
+  Color get _fieldFill => _dark
+      ? Color.alphaBlend(const Color(0x14FFFFFF), _bg)
+      : const Color(0xFFFFFFFF);
+
+  Color get _cardFill => _dark
+      ? Color.alphaBlend(const Color(0x0CFFFFFF), _bg)
+      : const Color(0xFFFFFFFF);
+
+  Color get _popupFill => _dark
+      ? Color.alphaBlend(const Color(0x1AFFFFFF), _bg)
+      : const Color(0xFFFFFFFF);
+
+  Color get _headerBand => _dark
+      ? Color.alphaBlend(const Color(0x08FFFFFF), _bg)
+      : Color.alphaBlend(const Color(0x07000000), _bg);
+
+  Color get _danger =>
+      _dark ? const Color(0xFFFF7A7A) : const Color(0xFFC62828);
+
+  Color get _editInk =>
+      _dark ? const Color(0xFFF3F4F6) : const Color(0xFF111111);
+
+  static const Color _folderTone = Color(0xFFD9A43A);
+  static const Color _starTone = Color(0xFFF5B301);
+
+  // ------------------------------------------------------------ drawing
+
+  Offset _logical(Offset p) => _rtl ? Offset(size.width - p.dx, p.dy) : p;
+
+  Rect _physical(Rect r) => _rtl
+      ? Rect.fromLTRB(
+          size.width - r.right,
+          r.top,
+          size.width - r.left,
+          r.bottom,
+        )
+      : r;
+
+  Offset? get _hoverL => _hover == null ? null : _logical(_hover!);
+
+  /// Paints [tp] with its reading-order start at logical [at].
+  void _draw(Canvas canvas, TextPainter tp, Offset at) {
+    if (!_rtl) {
+      tp.paint(canvas, at);
+      return;
+    }
+    canvas.save();
+    canvas.translate(at.dx + tp.width, at.dy);
+    canvas.scale(-1, 1);
+    tp.paint(canvas, Offset.zero);
+    canvas.restore();
+  }
+
+  void _drawCentered(Canvas canvas, TextPainter tp, Offset center) =>
+      _draw(canvas, tp, center - Offset(tp.width / 2, tp.height / 2));
+
+  /// Runs [body] in an un-mirrored space whose origin is the physical
+  /// top-left of logical [r].
+  void _local(Canvas canvas, Rect r, void Function(Canvas c, Size s) body) {
+    canvas.save();
+    if (_rtl) {
+      canvas.translate(r.right, r.top);
+      canvas.scale(-1, 1);
+    } else {
+      canvas.translate(r.left, r.top);
+    }
+    body(canvas, r.size);
+    canvas.restore();
+  }
+
+  TextPainter _text(
+    String text,
+    double fontSize,
+    Color color,
+    double maxWidth, {
+    bool bold = false,
+    bool italic = false,
+    int lines = 1,
+    String? family,
+    bool center = false,
+  }) {
+    final TextDirection dir = _dirOf(text);
+    final String key =
+        '$text|$fontSize|${color.toARGB32()}|$maxWidth|$bold|$italic|$lines|'
+        '$family|$center|${dir.index}';
+    final TextPainter? hit = _cache[key];
+    if (hit != null) {
+      return hit;
+    }
+    if (_cache.length > 900) {
+      _clearCache();
+    }
+    final String ui = _theme.fontFamily ?? 'Liberation Sans';
+    final TextPainter tp = TextPainter(
+      text: TextSpan(
+        text: text,
+        style: TextStyle(
+          fontFamily: family ?? ui,
+          fontFamilyFallback: <String>[
+            if (family != null) ui,
+            'Noto Naskh Arabic',
+          ],
+          fontSize: fontSize,
+          color: color,
+          fontWeight: bold ? FontWeight.w600 : FontWeight.normal,
+          fontStyle: italic ? FontStyle.italic : FontStyle.normal,
+        ),
+      ),
+      textDirection: dir,
+      textAlign: center ? TextAlign.center : TextAlign.start,
+      maxLines: lines,
+      ellipsis: '…',
+    )..layout(maxWidth: maxWidth < 10 ? 10 : maxWidth);
+    _cache[key] = tp;
+    return tp;
+  }
+
+  TextPainter _iconPainter(IconData icon, double size, Color color) {
+    final String key = 'icon|${icon.codePoint}|$size|${color.toARGB32()}';
+    final TextPainter? hit = _cache[key];
+    if (hit != null) {
+      return hit;
+    }
+    final TextPainter tp = TextPainter(
+      text: TextSpan(
+        text: String.fromCharCode(icon.codePoint),
+        style: TextStyle(
+          fontFamily: icon.fontFamily,
+          package: icon.fontPackage,
+          fontSize: size,
+          height: 1,
+          color: color,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    _cache[key] = tp;
+    return tp;
+  }
+
+  void _icon(
+    Canvas canvas,
+    IconData icon,
+    Offset center,
+    double size,
+    Color c,
+  ) => _drawCentered(canvas, _iconPainter(icon, size, c), center);
+
+  // ------------------------------------------------------------ icons
+
+  static IconData _actionIcon(String key) {
+    if (key.endsWith('.remove')) {
+      return Icons.delete_outline;
+    }
+    if (key.endsWith('.insert')) {
+      return Icons.post_add;
+    }
+    if (key.endsWith('.replace')) {
+      return Icons.find_replace;
+    }
+    return switch (key) {
+      'var+' || 'vfolder.add' => Icons.add,
+      'vfolder+' => Icons.create_new_folder_outlined,
+      'image+' || 'source.import' => Icons.add_photo_alternate_outlined,
+      'font+' => Icons.upload_file,
+      'data.row+' => Icons.playlist_add,
+      'data.col+' => Icons.view_column_outlined,
+      'data.calc+' => Icons.functions,
+      'data.import' => Icons.file_upload_outlined,
+      'data.reset' => Icons.restart_alt,
+      _ => key.endsWith('+') ? Icons.add : Icons.bolt_outlined,
+    };
+  }
+
+  static IconData _groupIcon(String group) {
+    switch (group) {
+      case 'Layout':
+        return Icons.straighten;
+      case 'Text':
+        return Icons.text_fields;
+      case 'Font':
+        return Icons.font_download_outlined;
+      case 'Box':
+        return Icons.crop_square;
+      case 'Style':
+        return Icons.brush_outlined;
+      case 'Image':
+        return Icons.image_outlined;
+      case 'Barcode':
+        return Icons.qr_code_2;
+      case 'Shape':
+        return Icons.category_outlined;
+      case 'Chart':
+        return Icons.bar_chart;
+      case 'Data' || 'Sample data':
+        return Icons.dataset_outlined;
+      case 'Table':
+        return Icons.table_chart_outlined;
+      case 'Band':
+        return Icons.view_day_outlined;
+      case 'Report':
+        return Icons.description_outlined;
+      case 'Page':
+        return Icons.insert_drive_file_outlined;
+      case 'Paging':
+        return Icons.auto_stories_outlined;
+      case 'Palette':
+        return Icons.palette_outlined;
+      case 'Fields':
+        return Icons.list_alt;
+      case 'Template variables' || 'Variable':
+        return Icons.data_object;
+      case 'Folder':
+        return Icons.folder_outlined;
+      case 'Embedded images':
+        return Icons.photo_library_outlined;
+      case 'Add a font':
+        return Icons.add_circle_outline;
+      case 'Embedded fonts':
+        return Icons.font_download_outlined;
+      case 'Diagnostics':
+        return Icons.health_and_safety_outlined;
+    }
+    if (group.startsWith('Series')) {
+      return Icons.stacked_line_chart;
+    }
+    if (group.startsWith('Point')) {
+      return Icons.scatter_plot_outlined;
+    }
+    if (group.startsWith('Column')) {
+      return Icons.view_column_outlined;
+    }
+    if (group.startsWith('Table')) {
+      return Icons.table_chart_outlined;
+    }
+    return Icons.tune;
+  }
+
+  static IconData _typeIcon(ReportVariableType type) => switch (type) {
+    ReportVariableType.text => Icons.text_fields,
+    ReportVariableType.number => Icons.tag,
+    ReportVariableType.boolean => Icons.toggle_on_outlined,
+    ReportVariableType.date => Icons.event,
+    ReportVariableType.list => Icons.format_list_bulleted,
+    ReportVariableType.expression => Icons.functions,
+  };
 
   // ------------------------------------------------------------ geometry
 
-  double get _labelWidth => math.max(88, size.width * 0.38);
+  double get _labelWidth => math.max(92, size.width * 0.38);
 
   Rect _valueRect(Rect row) => Rect.fromLTRB(
     _labelWidth,
-    row.top + 3,
+    row.top + 4,
     size.width - _pad,
-    row.bottom - 3,
+    row.bottom - 4,
   );
 
   (Rect, Rect) _pairRects(Rect row) {
     final double w = (size.width - 2 * _pad - 8) / 2;
     return (
-      Rect.fromLTWH(_pad, row.top + 3, w, row.height - 6),
-      Rect.fromLTWH(_pad + w + 8, row.top + 3, w, row.height - 6),
+      Rect.fromLTWH(_pad, row.top + 4, w, row.height - 8),
+      Rect.fromLTWH(_pad + w + 8, row.top + 4, w, row.height - 8),
     );
   }
 
+  Rect _searchRect(Rect row) =>
+      Rect.fromLTRB(_pad, row.top + 6, size.width - _pad, row.bottom - 6);
+
+  Rect _cardRect(Rect row) =>
+      Rect.fromLTRB(_pad, row.top + 4, size.width - _pad, row.bottom - 4);
+
+  /// Icon buttons ending at logical [end], first one leftmost.
+  List<Rect> _iconRects(double end, double centerY, int count) => <Rect>[
+    for (int i = 0; i < count; i++)
+      Rect.fromLTWH(
+        end - (count - i) * (_iconButton + 2) + 2,
+        centerY - _iconButton / 2,
+        _iconButton,
+        _iconButton,
+      ),
+  ];
+
   _Field _field(ReportProperty p, Rect f, {String prefix = ''}) {
-    var left = f.left + 6;
-    var right = f.right - 5;
+    var left = f.left + 8;
+    var right = f.right - 6;
     Rect? stepper;
     Rect? drop;
     Rect? swatch;
     if (p.isSteppable) {
       stepper = Rect.fromLTRB(
-        f.right - 16,
+        f.right - 18,
         f.top + 1,
         f.right - 1,
         f.bottom - 1,
       );
       right = stepper.left - 3;
     }
-    if (p.presets.isNotEmpty || p.kind == ReportPropertyKind.color) {
+    final bool font = ReportDesignerController.isFontKey(p.key);
+    if ((p.presets.isNotEmpty || p.kind == ReportPropertyKind.color || font) &&
+        p.key != 'font.add') {
       drop = Rect.fromLTRB(right - 16, f.top + 1, right + 2, f.bottom - 1);
       right = drop.left - 1;
     }
     if (p.kind == ReportPropertyKind.color) {
-      swatch = Rect.fromLTWH(f.left + 4, f.center.dy - 7, 14, 14);
-      left = swatch.right + 6;
+      swatch = Rect.fromLTWH(f.left + 5, f.center.dy - 7, 14, 14);
+      left = swatch.right + 7;
+    }
+    if (p.key == 'font.add') {
+      left = f.left + 30;
     }
     if (prefix.isNotEmpty) {
       left += _text(prefix, 10.5, _muted, 80, bold: true).width + 6;
@@ -360,32 +817,6 @@ class RenderReportInspector extends RenderBox
     );
   }
 
-  /// `ReportHeader` → `Report header`.
-  static String _spaced(String name) {
-    final String s = name.replaceAllMapped(
-      RegExp('([a-z])([A-Z])'),
-      (Match m) => '${m[1]} ${m[2]!.toLowerCase()}',
-    );
-    return s.isEmpty ? s : s[0].toUpperCase() + s.substring(1);
-  }
-
-  static String _optionLabel(String option) {
-    if (option.isEmpty) {
-      return 'None';
-    }
-    switch (option) {
-      case 'rtl' || 'ltr' || 'qr' || 'pt' || 'mm' || 'cm' || 'px':
-        return option.toUpperCase();
-      case 'inch':
-        return 'IN';
-    }
-    final String spaced = option.replaceAllMapped(
-      RegExp('([a-z])([A-Z0-9])'),
-      (Match m) => '${m[1]} ${m[2]!.toLowerCase()}',
-    );
-    return spaced[0].toUpperCase() + spaced.substring(1);
-  }
-
   List<(String, Rect)>? _segments(ReportProperty p, Rect v) {
     final List<String> options = p.options;
     if (options.length < 2 || options.length > 6) {
@@ -394,8 +825,9 @@ class RenderReportInspector extends RenderBox
     final List<(String, Rect)> out = <(String, Rect)>[];
     if (options.every(ReportInspectorGlyphs.has)) {
       final double w = math.min(32, v.width / options.length);
+      final List<String> ordered = _rtl ? options.reversed.toList() : options;
       var x = v.left;
-      for (final String o in options) {
+      for (final String o in ordered) {
         out.add((o, Rect.fromLTWH(x, v.top, w, v.height)));
         x += w;
       }
@@ -406,7 +838,7 @@ class RenderReportInspector extends RenderBox
     }
     final List<double> widths = <double>[
       for (final String o in options)
-        _text(_optionLabel(o), 10.5, _ink, 200).width + 14,
+        _text(_s.option(o), 10.5, _ink, 200).width + 14,
     ];
     final double total = widths.fold(0, (double a, double b) => a + b);
     if (total > v.width) {
@@ -422,28 +854,7 @@ class RenderReportInspector extends RenderBox
     return out;
   }
 
-  Rect _switchRect(Rect v) => Rect.fromLTWH(v.left, v.center.dy - 8, 30, 16);
-
-  bool _wideAction(ReportProperty p) => p.label.isEmpty || p.key.endsWith('+');
-
-  Rect _actionRect(ReportProperty p, Rect row) {
-    if (_wideAction(p)) {
-      return Rect.fromLTRB(
-        _pad,
-        row.top + 3,
-        size.width - _pad,
-        row.bottom - 3,
-      );
-    }
-    final Rect v = _valueRect(row);
-    final double w = _text(p.value, _font, _accent, v.width).width + 28;
-    return Rect.fromLTWH(
-      v.left,
-      v.top,
-      math.min(v.width, math.max(64, w)),
-      v.height,
-    );
-  }
+  Rect _switchRect(Rect v) => Rect.fromLTWH(v.left, v.center.dy - 9, 32, 18);
 
   List<Rect> _glyphRects(Rect row, int count) {
     final Rect v = _valueRect(row);
@@ -455,43 +866,62 @@ class RenderReportInspector extends RenderBox
 
   // ------------------------------------------------------------ rows
 
-  List<ReportDiagnostic> get _diag {
-    if (_diagRevision != _controller.revision) {
-      _diagRevision = _controller.revision;
-      try {
-        _diagnostics = _controller.validate();
-      } on Object catch (e) {
-        _diagnostics = <ReportDiagnostic>[
-          ReportDiagnostic(ReportDiagnosticSeverity.error, 'template', '$e'),
-        ];
-      }
-    }
-    return _diagnostics;
-  }
+  List<ReportDiagnostic> get _diag => _controller.problems;
 
   void _buildRows() {
     final List<_Row> rows = <_Row>[];
     var y = -_scroll;
     rows.add(
-      _Row(
-        _RowKind.title,
-        Rect.fromLTWH(0, y, size.width, titleHeight),
-        text: _controller.inspectorTitle,
-      ),
+      _Row(_RowKind.title, Rect.fromLTWH(0, y, size.width, titleHeight)),
     );
     y += titleHeight;
     rows.add(_Row(_RowKind.tabs, Rect.fromLTWH(0, y, size.width, tabsHeight)));
-    y += tabsHeight + 4;
+    y += tabsHeight + 6;
     final List<ReportProperty> props = _controller.properties;
-    final ReportInspectorPage page = _controller.inspectorPage;
-    if (props.isEmpty && page != ReportInspectorPage.properties) {
-      final String note = page == ReportInspectorPage.images
-          ? 'No embedded images. The host app has not enabled image import.'
-          : 'No template variables.';
-      rows.add(
-        _Row(_RowKind.note, Rect.fromLTWH(0, y, size.width, 30), text: note),
-      );
-      y += 30;
+    switch (_controller.inspectorPage) {
+      case ReportInspectorPage.variables:
+        y = _variableRows(rows, y, props);
+      case ReportInspectorPage.images:
+        y = _imageRows(rows, y, props);
+      case ReportInspectorPage.fonts:
+        y = _fontRows(rows, y, props);
+      case ReportInspectorPage.properties:
+        y = _propertyRows(rows, y, props);
+        if (_controller.selection.isEmpty &&
+            _controller.selectedBand == null &&
+            _controller.mode != ReportDesignMode.data) {
+          y = _diagnosticRows(rows, y);
+        }
+    }
+    y += 16;
+    _rows = rows;
+    _contentHeight = y + _scroll;
+  }
+
+  double _group(
+    List<_Row> rows,
+    double y,
+    String group, {
+    List<ReportProperty> actions = const <ReportProperty>[],
+  }) {
+    rows.add(
+      _Row(
+        _RowKind.group,
+        Rect.fromLTWH(0, y, size.width, groupHeight),
+        text: group,
+        actions: actions,
+      ),
+    );
+    return y + groupHeight;
+  }
+
+  double _propertyRows(List<_Row> rows, double y, List<ReportProperty> props) {
+    final Map<String, List<ReportProperty>> actions =
+        <String, List<ReportProperty>>{};
+    for (final ReportProperty p in props) {
+      if (p.kind == ReportPropertyKind.action) {
+        (actions[p.group] ??= <ReportProperty>[]).add(p);
+      }
     }
     String? group;
     var i = 0;
@@ -502,16 +932,14 @@ class RenderReportInspector extends RenderBox
           y += _sectionGap;
         }
         group = p.group;
-        rows.add(
-          _Row(
-            _RowKind.group,
-            Rect.fromLTWH(0, y, size.width, groupHeight),
-            text: group,
-          ),
+        y = _group(
+          rows,
+          y,
+          group,
+          actions: actions[group] ?? const <ReportProperty>[],
         );
-        y += groupHeight;
       }
-      if (_collapsed.contains(group)) {
+      if (_collapsed.contains(group) || p.kind == ReportPropertyKind.action) {
         i++;
         continue;
       }
@@ -560,55 +988,286 @@ class RenderReportInspector extends RenderBox
       y += h;
       i++;
     }
-    if (page == ReportInspectorPage.properties &&
-        _controller.selection.isEmpty &&
-        _controller.selectedBand == null) {
-      const String title = 'Diagnostics';
-      y += _sectionGap;
+    return y;
+  }
+
+  double _diagnosticRows(List<_Row> rows, double y) {
+    const String title = 'Diagnostics';
+    y = _group(rows, y + _sectionGap, title);
+    if (_collapsed.contains(title)) {
+      return y;
+    }
+    final List<ReportDiagnostic> diag = _diag;
+    final List<(int, String)> notes = diag.isEmpty
+        ? <(int, String)>[(0, _s.t('No problems found.'))]
+        : <(int, String)>[
+            for (final ReportDiagnostic d in diag)
+              (d.isError ? 2 : 1, '${_s.diagnostic(d.summary)}\n${d.path}'),
+          ];
+    for (final (int severity, String note) in notes) {
+      final TextPainter tp = _noteText(note);
+      final double h = math.max(28, tp.height + 12);
       rows.add(
         _Row(
-          _RowKind.group,
-          Rect.fromLTWH(0, y, size.width, groupHeight),
-          text: title,
+          _RowKind.note,
+          Rect.fromLTWH(0, y, size.width, h),
+          text: note,
+          severity: severity,
         ),
       );
-      y += groupHeight;
-      if (!_collapsed.contains(title)) {
-        final List<ReportDiagnostic> diag = _diag;
-        final List<(int, String)> notes = diag.isEmpty
-            ? const <(int, String)>[(0, 'No problems found.')]
-            : <(int, String)>[
-                for (final ReportDiagnostic d in diag)
-                  (d.isError ? 2 : 1, '${d.message}\n${d.path}'),
-              ];
-        for (final (int severity, String note) in notes) {
-          final TextPainter tp = _text(
-            note,
-            _font - 0.5,
-            _ink,
-            size.width - 2 * _pad - 22,
-            lines: 5,
-          );
-          final double h = math.max(26, tp.height + 10);
+      y += h;
+    }
+    return y;
+  }
+
+  TextPainter _noteText(String note) =>
+      _text(note, _font - 0.5, _ink, size.width - 2 * _pad - 24, lines: 5);
+
+  double _emptyRow(
+    List<_Row> rows,
+    double y, {
+    required IconData icon,
+    required String title,
+    required String detail,
+    ReportProperty? action,
+  }) {
+    final double w = size.width - 2 * _pad - 32;
+    final TextPainter t = _text(_s.t(title), 12.5, _ink, w, bold: true);
+    final TextPainter d = _text(
+      _s.t(detail),
+      11,
+      _muted,
+      w,
+      lines: 5,
+      center: true,
+    );
+    final double h =
+        12 + 66 + t.height + 6 + d.height + (action == null ? 16 : 54) + 6;
+    rows.add(
+      _Row(
+        _RowKind.empty,
+        Rect.fromLTWH(0, y, size.width, h),
+        text: title,
+        detail: detail,
+        icon: icon,
+        props: <ReportProperty>[?action],
+      ),
+    );
+    return y + h;
+  }
+
+  double _variableRows(List<_Row> rows, double y, List<ReportProperty> props) {
+    const String vars = 'Template variables';
+    final List<ReportProperty> head = <ReportProperty>[
+      for (final ReportProperty p in props)
+        if (p.group == vars) p,
+    ];
+    y = _group(rows, y, vars, actions: head);
+    if (!_collapsed.contains(vars)) {
+      final List<_VarNode> nodes = _visibleNodes();
+      if (nodes.isEmpty) {
+        ReportProperty? add;
+        for (final ReportProperty p in head) {
+          if (p.key == 'var+') {
+            add = p;
+          }
+        }
+        y = _emptyRow(
+          rows,
+          y,
+          icon: Icons.data_object,
+          title: 'No template variables yet',
+          detail:
+              'Variables hold values you reuse across the report, such as a '
+              'company name or a tax rate. Use dots to group them: stats.sum.',
+          action: add,
+        );
+      } else {
+        y += 4;
+        for (final _VarNode n in nodes) {
           rows.add(
             _Row(
-              _RowKind.note,
-              Rect.fromLTWH(0, y, size.width, h),
-              text: note,
-              severity: severity,
+              _RowKind.node,
+              Rect.fromLTWH(0, y, size.width, _nodeHeight),
+              node: n,
             ),
           );
-          y += h;
+          y += _nodeHeight;
+        }
+        y += 4;
+      }
+    }
+    final List<ReportProperty> rest = <ReportProperty>[
+      for (final ReportProperty p in props)
+        if (p.group != vars) p,
+    ];
+    if (rest.isNotEmpty) {
+      y = _propertyRows(rows, y + _sectionGap, rest);
+    }
+    return y;
+  }
+
+  List<_VarNode> _variableTree() {
+    final List<ReportVariable> vars = _controller.template.variables;
+    final _VarNode root = _VarNode('', '', -1);
+    final Map<String, _VarNode> folders = <String, _VarNode>{};
+    for (int i = 0; i < vars.length; i++) {
+      final ReportVariable v = vars[i];
+      final List<String> parts = v.segments;
+      var at = root;
+      for (int d = 0; d < parts.length - 1; d++) {
+        final String path = parts.sublist(0, d + 1).join('.');
+        final _VarNode folder = folders.putIfAbsent(path.toLowerCase(), () {
+          final _VarNode f = _VarNode(path, parts[d], d);
+          at.children.add(f);
+          return f;
+        });
+        folder.count++;
+        at = folder;
+      }
+      at.children.add(
+        _VarNode(v.name, parts.last, parts.length - 1, variable: v, index: i),
+      );
+    }
+    void order(_VarNode n) {
+      final List<_VarNode> sorted = <_VarNode>[
+        ...n.children.where((_VarNode c) => c.isFolder),
+        ...n.children.where((_VarNode c) => !c.isFolder),
+      ];
+      n.children
+        ..clear()
+        ..addAll(sorted);
+      n.children.forEach(order);
+    }
+
+    order(root);
+    return root.children;
+  }
+
+  List<_VarNode> _visibleNodes() {
+    final List<_VarNode> out = <_VarNode>[];
+    void walk(List<_VarNode> nodes) {
+      for (final _VarNode n in nodes) {
+        out.add(n);
+        if (n.isFolder && !isFolderClosed(n.path)) {
+          walk(n.children);
         }
       }
     }
-    y += 12;
-    _rows = rows;
-    _contentHeight = y + _scroll;
+
+    walk(_variableTree());
+    return out;
+  }
+
+  double _imageRows(List<_Row> rows, double y, List<ReportProperty> props) {
+    const String g = 'Embedded images';
+    ReportProperty? add;
+    for (final ReportProperty p in props) {
+      if (p.key == 'image+') {
+        add = p;
+      }
+    }
+    y = _group(rows, y, g, actions: <ReportProperty>[?add]);
+    if (_collapsed.contains(g)) {
+      return y;
+    }
+    final List<String> names = _controller.imageNames;
+    if (names.isEmpty) {
+      return _emptyRow(
+        rows,
+        y,
+        icon: Icons.photo_library_outlined,
+        title: 'No embedded images yet',
+        detail: add == null
+            ? 'No embedded images. The host app has not enabled image import.'
+            : 'Imported images are saved inside the .qrep.',
+        action: add,
+      );
+    }
+    y += 2;
+    for (int i = 0; i < names.length; i++) {
+      final String prefix = 'img.$i.';
+      rows.add(
+        _Row(
+          _RowKind.imageCard,
+          Rect.fromLTWH(0, y, size.width, 92),
+          index: i,
+          text: names[i],
+          props: <ReportProperty>[
+            for (final ReportProperty p in props)
+              if (p.key.startsWith(prefix)) p,
+          ],
+        ),
+      );
+      y += 92;
+    }
+    return y;
+  }
+
+  double _fontRows(List<_Row> rows, double y, List<ReportProperty> props) {
+    const String add = 'Add a font';
+    ReportProperty? search;
+    ReportProperty? import;
+    for (final ReportProperty p in props) {
+      if (p.key == 'font.add') {
+        search = p;
+      } else if (p.key == 'font+') {
+        import = p;
+      }
+    }
+    if (search != null || import != null) {
+      y = _group(rows, y, add, actions: <ReportProperty>[?import]);
+      if (search != null && !_collapsed.contains(add)) {
+        rows.add(
+          _Row(
+            _RowKind.search,
+            Rect.fromLTWH(0, y, size.width, 44),
+            props: <ReportProperty>[search],
+          ),
+        );
+        y += 44;
+      }
+      y += _sectionGap;
+    }
+    const String g = 'Embedded fonts';
+    y = _group(rows, y, g);
+    if (_collapsed.contains(g)) {
+      return y;
+    }
+    final List<String> names = _controller.embeddedFamilies;
+    if (names.isEmpty) {
+      return _emptyRow(
+        rows,
+        y,
+        icon: Icons.font_download_outlined,
+        title: 'No embedded fonts yet',
+        detail:
+            'Embedded fonts are saved inside the .qrep so the report looks '
+            'the same on every machine.',
+      );
+    }
+    y += 2;
+    for (int i = 0; i < names.length; i++) {
+      final String prefix = 'font.$i.';
+      rows.add(
+        _Row(
+          _RowKind.fontCard,
+          Rect.fromLTWH(0, y, size.width, 104),
+          index: i,
+          text: names[i],
+          props: <ReportProperty>[
+            for (final ReportProperty p in props)
+              if (p.key.startsWith(prefix)) p,
+          ],
+        ),
+      );
+      y += 104;
+    }
+    return y;
   }
 
   TextPainter _wideNote(ReportProperty p) => _text(
-    p.value,
+    _tr(p.value),
     _font - 0.5,
     _muted,
     size.width - 2 * _pad,
@@ -635,57 +1294,20 @@ class RenderReportInspector extends RenderBox
 
   double get _multilineWidth => size.width - _pad - _labelWidth - 14;
 
-  TextPainter _text(
-    String text,
-    double fontSize,
-    Color color,
-    double maxWidth, {
-    bool bold = false,
-    bool italic = false,
-    int lines = 1,
-  }) {
-    final String key =
-        '$text|$fontSize|${color.toARGB32()}|$maxWidth|$bold|$italic|$lines';
-    final TextPainter? hit = _cache[key];
-    if (hit != null) {
-      return hit;
-    }
-    if (_cache.length > 800) {
-      _clearCache();
-    }
+  TextPainter _editPainter(ReportProperty p, double width) {
+    final bool multi = p.kind == ReportPropertyKind.multiline;
+    final String text = _controller.propertyEditor.formulaBar;
     final TextPainter tp = TextPainter(
       text: TextSpan(
         text: text,
         style: TextStyle(
           fontFamily: _theme.fontFamily ?? 'Liberation Sans',
           fontFamilyFallback: const <String>['Noto Naskh Arabic'],
-          fontSize: fontSize,
-          color: color,
-          fontWeight: bold ? FontWeight.w600 : FontWeight.normal,
-          fontStyle: italic ? FontStyle.italic : FontStyle.normal,
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-      maxLines: lines,
-      ellipsis: '…',
-    )..layout(maxWidth: maxWidth < 10 ? 10 : maxWidth);
-    _cache[key] = tp;
-    return tp;
-  }
-
-  TextPainter _editPainter(ReportProperty p, double width) {
-    final bool multi = p.kind == ReportPropertyKind.multiline;
-    final TextPainter tp = TextPainter(
-      text: TextSpan(
-        text: _controller.propertyEditor.formulaBar,
-        style: TextStyle(
-          fontFamily: _theme.fontFamily ?? 'Liberation Sans',
-          fontFamilyFallback: const <String>['Noto Naskh Arabic'],
           fontSize: _font,
-          color: const Color(0xFF111111),
+          color: _editInk,
         ),
       ),
-      textDirection: TextDirection.ltr,
+      textDirection: _dirOf(text),
     );
     if (multi) {
       tp.layout(maxWidth: width < 10 ? 10 : width);
@@ -706,39 +1328,262 @@ class RenderReportInspector extends RenderBox
 
   // ------------------------------------------------------------ hits
 
+  ReportProperty _synthetic(String key) => ReportProperty(
+    key: key,
+    label: '',
+    kind: ReportPropertyKind.action,
+    value: '',
+    group: '',
+  );
+
+  _Hit _actionHit(ReportProperty p, Rect r) => _Hit(
+    _HitKind.action,
+    r,
+    property: p,
+    tip: _tr(p.value.isEmpty ? p.label : p.value),
+    icon: _actionIcon(p.key),
+    danger: p.key.endsWith('.remove'),
+  );
+
   List<_Hit> _hitsFor(_Row row) {
     switch (row.kind) {
       case _RowKind.group:
-        return <_Hit>[_Hit(_HitKind.group, row.rect)];
+        return _groupHits(row);
       case _RowKind.property:
-        final ReportProperty p = row.property!;
-        if (p.kind == ReportPropertyKind.action) {
-          return <_Hit>[
-            _Hit(_HitKind.action, _actionRect(p, row.rect), property: p),
-          ];
-        }
-        return _fieldHits(p, _valueRect(row.rect));
+        return _fieldHits(row.property!, _valueRect(row.rect));
       case _RowKind.pair:
         final (Rect a, Rect b) = _pairRects(row.rect);
         return <_Hit>[
-          ..._fieldHits(row.props[0], a, prefix: row.props[0].label),
-          ..._fieldHits(row.props[1], b, prefix: row.props[1].label),
+          ..._fieldHits(row.props[0], a, prefix: _tr(row.props[0].label)),
+          ..._fieldHits(row.props[1], b, prefix: _tr(row.props[1].label)),
         ];
       case _RowKind.glyphs:
         final List<Rect> rects = _glyphRects(row.rect, row.props.length);
         return <_Hit>[
           for (int i = 0; i < rects.length; i++)
-            _Hit(_HitKind.glyph, rects[i], property: row.props[i]),
+            _Hit(
+              _HitKind.glyph,
+              rects[i],
+              property: row.props[i],
+              tip: _tr(row.props[i].label),
+            ),
         ];
       case _RowKind.tabs:
         return <_Hit>[
           for (final (ReportInspectorPage page, Rect r) in _tabRects(row.rect))
-            _Hit(_HitKind.tab, r, value: page.name),
+            _Hit(_HitKind.tab, r, value: page.name, tip: _s.t(_tabLabel(page))),
         ];
+      case _RowKind.node:
+        return _nodeHits(row);
+      case _RowKind.empty:
+        final ReportProperty? p = row.property;
+        if (p == null) {
+          return const <_Hit>[];
+        }
+        return <_Hit>[_Hit(_HitKind.action, _emptyButton(row), property: p)];
+      case _RowKind.search:
+        return _fieldHits(row.property!, _searchRect(row.rect));
+      case _RowKind.imageCard:
+        return _imageHits(row);
+      case _RowKind.fontCard:
+        return _fontHits(row);
       case _RowKind.title:
       case _RowKind.note:
         return const <_Hit>[];
     }
+  }
+
+  List<_Hit> _groupHits(_Row row) {
+    final bool explorer =
+        row.text == 'Template variables' &&
+        _controller.variableFolders.isNotEmpty;
+    final int n = row.actions.length + (explorer ? 2 : 0);
+    final List<Rect> rects = _iconRects(
+      size.width - _pad,
+      row.rect.center.dy,
+      n,
+    );
+    final List<_Hit> out = <_Hit>[
+      for (int i = 0; i < row.actions.length; i++)
+        _actionHit(row.actions[i], rects[i]),
+      if (explorer) ...<_Hit>[
+        _Hit(
+          _HitKind.expandAll,
+          rects[n - 2],
+          tip: _s.t('Expand all'),
+          icon: Icons.unfold_more,
+        ),
+        _Hit(
+          _HitKind.collapseAll,
+          rects[n - 1],
+          tip: _s.t('Collapse all'),
+          icon: Icons.unfold_less,
+        ),
+      ],
+      _Hit(_HitKind.group, row.rect, value: row.text),
+    ];
+    return out;
+  }
+
+  double _nodeStart(_VarNode n) => _pad + n.depth * _indent;
+
+  bool _nodeSelected(_VarNode n) =>
+      _controller.selectedVariablePath?.toLowerCase() == n.path.toLowerCase();
+
+  bool _nodeIconsVisible(_Row row) {
+    final Offset? h = _hoverL;
+    return _nodeSelected(row.node!) || (h != null && row.rect.contains(h));
+  }
+
+  List<_Hit> _nodeHits(_Row row) {
+    final _VarNode n = row.node!;
+    final Rect r = row.rect;
+    final double x = _nodeStart(n);
+    final List<_Hit> out = <_Hit>[];
+    if (_nodeIconsVisible(row)) {
+      final List<Rect> icons = _iconRects(size.width - _pad, r.center.dy, 2);
+      if (n.isFolder) {
+        out
+          ..add(
+            _Hit(
+              _HitKind.folderAction,
+              icons[0],
+              property: _synthetic('vfolder.add'),
+              value: n.path,
+              tip: _s.t('Add variable here'),
+              icon: Icons.add,
+            ),
+          )
+          ..add(
+            _Hit(
+              _HitKind.folderAction,
+              icons[1],
+              property: _synthetic('vfolder.remove'),
+              value: n.path,
+              tip: _s.t('Delete folder'),
+              icon: Icons.delete_outline,
+              danger: true,
+            ),
+          );
+      } else {
+        out
+          ..add(
+            _actionHit(
+              ReportProperty(
+                key: 'var.${n.index}.insert',
+                label: '',
+                kind: ReportPropertyKind.action,
+                value: 'Insert into report',
+                group: '',
+              ),
+              icons[0],
+            ),
+          )
+          ..add(
+            _actionHit(
+              ReportProperty(
+                key: 'var.${n.index}.remove',
+                label: '',
+                kind: ReportPropertyKind.action,
+                value: 'Remove variable',
+                group: '',
+              ),
+              icons[1],
+            ),
+          );
+      }
+    }
+    if (n.isFolder) {
+      out.add(
+        _Hit(
+          _HitKind.nodeToggle,
+          Rect.fromLTWH(x - 4, r.top, 22, r.height),
+          value: n.path,
+        ),
+      );
+    }
+    out.add(_Hit(_HitKind.node, r, value: n.path));
+    return out;
+  }
+
+  ({Rect card, Rect thumb, Rect name, List<Rect> icons}) _imageParts(Rect row) {
+    final Rect card = _cardRect(row);
+    final Rect thumb = Rect.fromLTWH(card.left + 8, card.top + 8, 68, 68);
+    final List<Rect> icons = _iconRects(card.right - 6, card.top + 22, 2);
+    final Rect name = Rect.fromLTRB(
+      thumb.right + 10,
+      card.top + 8,
+      icons.first.left - 6,
+      card.top + 36,
+    );
+    return (card: card, thumb: thumb, name: name, icons: icons);
+  }
+
+  List<_Hit> _imageHits(_Row row) {
+    final parts = _imageParts(row.rect);
+    final ReportProperty? name = row.prop('.name');
+    final ReportProperty? replace = row.prop('.replace');
+    final ReportProperty? insert = row.prop('.insert');
+    final ReportProperty? remove = row.prop('.remove');
+    return <_Hit>[
+      if (replace != null)
+        _Hit(
+          _HitKind.action,
+          parts.thumb,
+          property: replace,
+          tip: _tr(replace.value),
+        ),
+      if (insert != null) _actionHit(insert, parts.icons[0]),
+      if (remove != null) _actionHit(remove, parts.icons[1]),
+      if (name != null) ..._fieldHits(name, parts.name),
+    ];
+  }
+
+  ({Rect card, Rect preview, List<Rect> icons}) _fontParts(Rect row) {
+    final Rect card = _cardRect(row);
+    final List<Rect> icons = _iconRects(card.right - 6, card.top + 20, 2);
+    final Rect preview = Rect.fromLTRB(
+      card.left + 12,
+      card.top + 8,
+      icons.first.left - 6,
+      card.top + 40,
+    );
+    return (card: card, preview: preview, icons: icons);
+  }
+
+  List<_Hit> _fontHits(_Row row) {
+    final parts = _fontParts(row.rect);
+    final ReportProperty? star = row.prop('.default');
+    final ReportProperty? remove = row.prop('.remove');
+    final bool on = star?.value == 'true';
+    return <_Hit>[
+      if (star != null)
+        _Hit(
+          _HitKind.toggle,
+          parts.icons[0],
+          property: star,
+          tip: _s.t(on ? 'Report default' : 'Make report default'),
+          icon: on ? Icons.star : Icons.star_border,
+          active: on,
+        ),
+      if (remove != null) _actionHit(remove, parts.icons[1]),
+    ];
+  }
+
+  Rect _emptyButton(_Row row) {
+    final ReportProperty p = row.property!;
+    final TextPainter tp = _text(
+      _tr(p.value),
+      _font,
+      const Color(0xFFFFFFFF),
+      220,
+    );
+    final double w = tp.width + 44;
+    return Rect.fromCenter(
+      center: Offset(size.width / 2, row.rect.bottom - 30),
+      width: w,
+      height: 30,
+    );
   }
 
   List<_Hit> _fieldHits(ReportProperty p, Rect v, {String prefix = ''}) {
@@ -750,12 +1595,20 @@ class RenderReportInspector extends RenderBox
         if (segments != null) {
           return <_Hit>[
             for (final (String option, Rect r) in segments)
-              _Hit(_HitKind.segment, r, property: p, value: option),
+              _Hit(
+                _HitKind.segment,
+                r,
+                property: p,
+                value: option,
+                tip: ReportInspectorGlyphs.has(option)
+                    ? _s.option(option)
+                    : null,
+              ),
           ];
         }
         return <_Hit>[_Hit(_HitKind.menu, v, property: p)];
       case ReportPropertyKind.action:
-        return <_Hit>[_Hit(_HitKind.action, v, property: p)];
+        return <_Hit>[_actionHit(p, v)];
       case ReportPropertyKind.note:
         return const <_Hit>[];
       case ReportPropertyKind.text:
@@ -780,6 +1633,7 @@ class RenderReportInspector extends RenderBox
                 stepper.center.dy,
               ),
               property: p,
+              tip: _s.t('Increase'),
             ),
             _Hit(
               _HitKind.stepDown,
@@ -790,6 +1644,7 @@ class RenderReportInspector extends RenderBox
                 stepper.bottom,
               ),
               property: p,
+              tip: _s.t('Decrease'),
             ),
           ],
           if (drop != null)
@@ -797,9 +1652,15 @@ class RenderReportInspector extends RenderBox
               color ? _HitKind.palette : _HitKind.presets,
               drop,
               property: p,
+              tip: _s.t(color ? 'Pick a color' : 'Suggestions'),
             ),
           if (swatch != null)
-            _Hit(_HitKind.palette, swatch.inflate(3), property: p),
+            _Hit(
+              _HitKind.palette,
+              swatch.inflate(3),
+              property: p,
+              tip: _s.t('Pick a color'),
+            ),
           _Hit(_HitKind.edit, v, property: p),
         ];
     }
@@ -818,49 +1679,89 @@ class RenderReportInspector extends RenderBox
     return null;
   }
 
-  /// Text area of the field editing [key], in local coordinates.
-  Rect? _textRectFor(String key) {
+  _Hit? _hoverHit() {
+    final Offset? l = _hoverL;
+    final Offset? p = _hover;
+    if (l == null || p == null) {
+      return null;
+    }
+    if ((_fontPopupRect?.contains(l) ?? false) ||
+        (_paletteRect?.contains(l) ?? false) ||
+        (_popupRect?.contains(p) ?? false)) {
+      return null;
+    }
+    return _hitAt(l);
+  }
+
+  /// Field box, property, and prefix of the field editing [key].
+  (ReportProperty, Rect, String)? _fieldFor(String key) {
     for (final _Row row in _rows) {
       switch (row.kind) {
         case _RowKind.property:
           final ReportProperty p = row.property!;
           if (p.key == key) {
-            return _field(p, _valueRect(row.rect)).text;
+            return (p, _valueRect(row.rect), '');
           }
         case _RowKind.pair:
           final (Rect a, Rect b) = _pairRects(row.rect);
-          if (row.props[0].key == key) {
-            return _field(row.props[0], a, prefix: row.props[0].label).text;
+          for (int i = 0; i < 2; i++) {
+            final ReportProperty p = row.props[i];
+            if (p.key == key) {
+              return (p, i == 0 ? a : b, _tr(p.label));
+            }
           }
-          if (row.props[1].key == key) {
-            return _field(row.props[1], b, prefix: row.props[1].label).text;
+        case _RowKind.search:
+          final ReportProperty p = row.property!;
+          if (p.key == key) {
+            return (p, _searchRect(row.rect), '');
+          }
+        case _RowKind.imageCard:
+          final ReportProperty? p = row.prop('.name');
+          if (p != null && p.key == key) {
+            return (p, _imageParts(row.rect).name, '');
           }
         case _RowKind.title:
         case _RowKind.tabs:
         case _RowKind.group:
         case _RowKind.glyphs:
         case _RowKind.note:
+        case _RowKind.node:
+        case _RowKind.empty:
+        case _RowKind.fontCard:
           break;
       }
     }
     return null;
   }
 
+  /// Text area of the field editing [key], in logical coordinates.
+  Rect? _textRectFor(String key) {
+    final (ReportProperty, Rect, String)? f = _fieldFor(key);
+    if (f == null) {
+      return null;
+    }
+    return _field(f.$1, f.$2, prefix: f.$3).text;
+  }
+
   // ------------------------------------------------------------ events
 
   @override
   MouseCursor get cursor {
-    final Offset? local = _hover;
-    if (local == null) {
+    final Offset? l = _hoverL;
+    if (l == null) {
       return SystemMouseCursors.basic;
     }
     final Rect? palette = _paletteRect;
-    if (palette != null && palette.contains(local)) {
-      return _swatches.any((_Swatch s) => s.rect.contains(local))
+    if (palette != null && palette.contains(l)) {
+      return _swatches.any((_Swatch s) => s.rect.contains(l))
           ? SystemMouseCursors.click
           : SystemMouseCursors.basic;
     }
-    final _Hit? hit = _hitAt(local);
+    final Rect? fonts = _fontPopupRect;
+    if (fonts != null && fonts.contains(l)) {
+      return SystemMouseCursors.click;
+    }
+    final _Hit? hit = _hitAt(l);
     if (hit == null) {
       return SystemMouseCursors.basic;
     }
@@ -875,6 +1776,7 @@ class RenderReportInspector extends RenderBox
   @override
   PointerExitEventListener? get onExit => (_) {
     _hover = null;
+    _hideTip();
     markNeedsPaint();
   };
 
@@ -885,6 +1787,7 @@ class RenderReportInspector extends RenderBox
   void handleEvent(PointerEvent event, covariant BoxHitTestEntry entry) {
     if (event is PointerHoverEvent) {
       _hover = event.localPosition;
+      _updateTip();
       markNeedsPaint();
       return;
     }
@@ -893,7 +1796,7 @@ class RenderReportInspector extends RenderBox
         PointerSignalEvent e,
       ) {
         if (e is PointerScrollEvent) {
-          _scrollBy(e.scrollDelta.dy);
+          _wheel(e.localPosition, e.scrollDelta.dy);
         }
       });
       return;
@@ -908,8 +1811,22 @@ class RenderReportInspector extends RenderBox
     }
   }
 
+  void _wheel(Offset position, double dy) {
+    final Rect? fonts = _fontPopupRect;
+    final ReportCompletionResult? r = _controller.completion;
+    if (fonts != null && r != null && fonts.contains(_logical(position))) {
+      final int max = math.max(0, r.items.length - _fontVisible);
+      final int step = dy.abs() > 60 ? 3 : 1;
+      _fontFirst = (_fontFirst + (dy > 0 ? step : -step)).clamp(0, max);
+      markNeedsPaint();
+      return;
+    }
+    _scrollBy(dy);
+  }
+
   void _scrollBy(double dy) {
     _closePalette();
+    _hideTip();
     final double max = math.max(0, _contentHeight - size.height);
     _scroll = (_scroll + dy).clamp(0, max).toDouble();
     markNeedsPaint();
@@ -923,17 +1840,67 @@ class RenderReportInspector extends RenderBox
     }
   }
 
-  void _onTap(Offset local) {
+  void _updateTip() {
+    final _Hit? h = _hoverHit();
+    final String? id = h?.tip == null ? null : h!.id;
+    if (id == _tipId) {
+      return;
+    }
+    _tipTimer?.cancel();
+    _tipTimer = null;
+    _tipShown = false;
+    _tipId = id;
+    if (id != null) {
+      _tipTimer = Timer(_tipDelay, () {
+        _tipTimer = null;
+        _tipShown = true;
+        markNeedsPaint();
+      });
+    }
+  }
+
+  void _hideTip() {
+    _tipTimer?.cancel();
+    _tipTimer = null;
+    _tipShown = false;
+    _tipId = null;
+  }
+
+  int? _fontItemAt(Offset l) {
+    final Rect? rect = _fontPopupRect;
+    final ReportCompletionResult? r = _controller.completion;
+    if (rect == null || r == null || r.items.isEmpty) {
+      return null;
+    }
+    final int k = ((l.dy - rect.top - 4) / _fontRowHeight).floor();
+    if (k < 0 || k >= _fontVisible) {
+      return null;
+    }
+    final int i = _fontFirst + k;
+    return i < r.items.length ? i : null;
+  }
+
+  void _onTap(Offset position) {
+    _hideTip();
     _buildRows();
+    final Offset local = _logical(position);
     final Rect? popup = _popupRect;
     final ReportCompletionResult? suggestions = _controller.completion;
-    if (popup != null && suggestions != null && popup.contains(local)) {
+    if (popup != null && suggestions != null && popup.contains(position)) {
       final int? i = ReportCompletionPopup.hitIndex(
         popup,
-        local,
+        position,
         suggestions.items.length,
         _controller.completionIndex,
       );
+      if (i != null) {
+        _controller.acceptCompletion(i);
+      }
+      return;
+    }
+    final Rect? fonts = _fontPopupRect;
+    if (fonts != null && fonts.contains(local)) {
+      final int? i = _fontItemAt(local);
       if (i != null) {
         _controller.acceptCompletion(i);
       }
@@ -965,18 +1932,11 @@ class RenderReportInspector extends RenderBox
       return;
     }
     if (hit.kind == _HitKind.edit && p != null && editing == p.key) {
-      final Rect? text = _textRectFor(p.key);
-      if (text != null) {
+      final Offset? origin = _editOrigin;
+      if (origin != null) {
         final TextPainter tp = _editPainter(p, _multilineWidth);
-        final bool multi = p.kind == ReportPropertyKind.multiline;
-        final Offset inBox =
-            local -
-            Offset(
-              text.left + 2 - _editScrollX,
-              multi ? text.top + 4 : text.center.dy - tp.height / 2,
-            );
         _controller.propertyEditor.setCaret(
-          tp.getPositionForOffset(inBox).offset,
+          tp.getPositionForOffset(position - origin).offset,
           extend: HardwareKeyboard.instance.isShiftPressed,
         );
         tp.dispose();
@@ -989,10 +1949,7 @@ class RenderReportInspector extends RenderBox
     final bool shift = HardwareKeyboard.instance.isShiftPressed;
     switch (hit.kind) {
       case _HitKind.group:
-        final _Row? row = _rowAt(local);
-        if (row != null) {
-          setCollapsed(row.text, !_collapsed.contains(row.text));
-        }
+        setCollapsed(hit.value, !_collapsed.contains(hit.value));
       case _HitKind.edit:
         _controller.beginPropertyEdit(p!.key);
       case _HitKind.toggle:
@@ -1002,7 +1959,7 @@ class RenderReportInspector extends RenderBox
         onChoose?.call(
           ReportInspectorChoice(
             property: p!,
-            globalPosition: localToGlobal(hit.rect.bottomLeft),
+            globalPosition: localToGlobal(_physical(hit.rect).bottomLeft),
           ),
         );
       case _HitKind.segment:
@@ -1012,12 +1969,16 @@ class RenderReportInspector extends RenderBox
       case _HitKind.stepDown:
         _controller.stepProperty(p!.key, -1, large: shift);
       case _HitKind.presets:
-        final Rect? text = _textRectFor(p!.key);
+        if (ReportDesignerController.isFontKey(p!.key)) {
+          _controller.beginPropertyEdit(p.key);
+          return;
+        }
+        final Rect text = _physical(_textRectFor(p.key) ?? hit.rect);
         onChoose?.call(
           ReportInspectorChoice(
             property: p,
             globalPosition: localToGlobal(
-              Offset((text ?? hit.rect).left - 6, hit.rect.bottom + 2),
+              Offset(text.left - 6, hit.rect.bottom + 2),
             ),
             options: p.presets,
             details: _presetDetails(p),
@@ -1032,6 +1993,21 @@ class RenderReportInspector extends RenderBox
         markNeedsPaint();
       case _HitKind.action:
         _controller.setProperty(p!.key, p.value);
+      case _HitKind.folderAction:
+        _controller.selectedVariablePath = hit.value;
+        _controller.setProperty(p!.key, p.value);
+      case _HitKind.node:
+        _controller.selectedVariablePath = hit.value;
+      case _HitKind.nodeToggle:
+        setFolderClosed(hit.value, !isFolderClosed(hit.value));
+      case _HitKind.expandAll:
+        _closedFolders.clear();
+        markNeedsPaint();
+      case _HitKind.collapseAll:
+        _closedFolders.addAll(
+          _controller.variableFolders.map((String f) => f.toLowerCase()),
+        );
+        markNeedsPaint();
       case _HitKind.tab:
         final ReportInspectorPage page = ReportInspectorPage.values.byName(
           hit.value,
@@ -1078,6 +2054,33 @@ class RenderReportInspector extends RenderBox
     _controller.beginPropertyEdit(props[i].key);
   }
 
+  String? _markSeen;
+
+  static bool _marks(_Row row, String key) =>
+      row.props.any((ReportProperty p) => p.key == key);
+
+  /// Scrolls the row of property [key] into view.
+  void _scrollToMark(String? key) {
+    if (key == null) {
+      return;
+    }
+    for (final _Row row in _rows) {
+      if (!_marks(row, key)) {
+        continue;
+      }
+      final double top = titleHeight + tabsHeight;
+      if (row.rect.top >= top && row.rect.bottom <= size.height) {
+        return;
+      }
+      final double max = math.max(0, _contentHeight - size.height);
+      _scroll = (_scroll + row.rect.top - top - size.height / 4)
+          .clamp(0, max)
+          .toDouble();
+      _buildRows();
+      return;
+    }
+  }
+
   // ------------------------------------------------------------ paint
 
   @override
@@ -1086,18 +2089,39 @@ class RenderReportInspector extends RenderBox
     canvas.save();
     canvas.translate(offset.dx, offset.dy);
     canvas.clipRect(Offset.zero & size);
-    canvas.drawRect(Offset.zero & size, Paint()..color = _theme.chromeFill);
+    canvas.drawRect(Offset.zero & size, Paint()..color = _bg);
     _buildRows();
     final double max = math.max(0, _contentHeight - size.height);
     if (_scroll > max) {
       _scroll = max.toDouble();
       _buildRows();
     }
+    final String? mark = _controller.highlightProperty;
+    if (mark != _markSeen) {
+      _markSeen = mark;
+      _scrollToMark(mark);
+    }
     _editCaret = null;
-    final _Hit? hot = _hover == null ? null : _hitAt(_hover!);
+    _editOrigin = null;
+    canvas.save();
+    if (_rtl) {
+      canvas.translate(size.width, 0);
+      canvas.scale(-1, 1);
+    }
+    final _Hit? hot = _hoverHit();
     for (final _Row row in _rows) {
       if (row.rect.bottom < 0 || row.rect.top > size.height) {
         continue;
+      }
+      if (mark != null && _marks(row, mark)) {
+        canvas.drawRect(
+          row.rect,
+          Paint()..color = _danger.withValues(alpha: _dark ? 0.16 : 0.08),
+        );
+        canvas.drawRect(
+          Rect.fromLTWH(0, row.rect.top, 3, row.rect.height),
+          Paint()..color = _danger,
+        );
       }
       switch (row.kind) {
         case _RowKind.title:
@@ -1109,16 +2133,14 @@ class RenderReportInspector extends RenderBox
         case _RowKind.note:
           ReportInspectorGlyphs.status(
             canvas,
-            Offset(_pad + 6, row.rect.top + 12),
+            Offset(_pad + 7, row.rect.top + 13),
             row.severity,
           );
-          _text(
-            row.text,
-            _font - 0.5,
-            _ink,
-            size.width - 2 * _pad - 22,
-            lines: 5,
-          ).paint(canvas, Offset(_pad + 20, row.rect.top + 5));
+          _draw(
+            canvas,
+            _noteText(row.text),
+            Offset(_pad + 22, row.rect.top + 6),
+          );
         case _RowKind.property:
           _paintProperty(canvas, row, hot);
         case _RowKind.pair:
@@ -1128,14 +2150,14 @@ class RenderReportInspector extends RenderBox
             row.props[0],
             a,
             hot,
-            prefix: row.props[0].label,
+            prefix: _tr(row.props[0].label),
           );
           _paintControl(
             canvas,
             row.props[1],
             b,
             hot,
-            prefix: row.props[1].label,
+            prefix: _tr(row.props[1].label),
           );
         case _RowKind.glyphs:
           _paintLabel(canvas, row.text, row.rect);
@@ -1143,6 +2165,16 @@ class RenderReportInspector extends RenderBox
           for (int i = 0; i < rects.length; i++) {
             _paintGlyphButton(canvas, row.props[i], rects[i], hot);
           }
+        case _RowKind.node:
+          _paintNode(canvas, row, hot);
+        case _RowKind.empty:
+          _paintEmpty(canvas, row, hot);
+        case _RowKind.search:
+          _paintField(canvas, row.property!, _searchRect(row.rect), hot);
+        case _RowKind.imageCard:
+          _paintImageCard(canvas, row, hot);
+        case _RowKind.fontCard:
+          _paintFontCard(canvas, row, hot);
       }
     }
     if (_contentHeight > size.height) {
@@ -1154,7 +2186,7 @@ class RenderReportInspector extends RenderBox
           Rect.fromLTWH(size.width - 5, top, 3, h),
           const Radius.circular(2),
         ),
-        Paint()..color = _ink.withValues(alpha: 0.25),
+        Paint()..color = _ink.withValues(alpha: 0.22),
       );
     }
     canvas.drawLine(
@@ -1162,10 +2194,17 @@ class RenderReportInspector extends RenderBox
       Offset(0, size.height),
       Paint()..color = _theme.pageBorder,
     );
+    _paintFontPopup(canvas);
     _paintPalette(canvas);
+    _paintTooltip(canvas, hot);
+    canvas.restore();
     _popupRect = null;
     final (Offset, Offset)? caret = _editCaret;
-    final ReportCompletionResult? r = caret == null
+    final String? editing = _controller.editingProperty;
+    final ReportCompletionResult? r =
+        caret == null ||
+            editing == null ||
+            ReportDesignerController.isFontKey(editing)
         ? null
         : _controller.completion;
     if (caret != null && r != null) {
@@ -1181,35 +2220,64 @@ class RenderReportInspector extends RenderBox
     canvas.restore();
   }
 
+  // ------------------------------------------------------------ title
+
+  static String _spaced(String name) {
+    final String s = name.replaceAllMapped(
+      RegExp('([a-z])([A-Z])'),
+      (Match m) => '${m[1]} ${m[2]!.toLowerCase()}',
+    );
+    return s.isEmpty ? s : s[0].toUpperCase() + s.substring(1);
+  }
+
+  static final RegExp _elementsTitle = RegExp(r'^(\d+) elements$');
+
+  String get _titleText {
+    final String raw = _controller.inspectorTitle;
+    final RegExpMatch? many = _elementsTitle.firstMatch(raw);
+    if (many != null) {
+      return _s.count(int.parse(many[1]!), 'element');
+    }
+    final int colon = raw.indexOf(': ');
+    if (colon > 0 && _controller.selectedElements.length != 1) {
+      final String head = raw.substring(0, colon);
+      final String tail = raw.substring(colon + 2);
+      return '${_s.t(head)}: ${head == 'Band' ? _s.t(_spaced(tail)) : tail}';
+    }
+    return _s.t(raw);
+  }
+
   (ReportToolbarIcon, String) get _titleBadge {
     switch (_controller.inspectorPage) {
       case ReportInspectorPage.variables:
         final int n = _controller.template.variables.length;
         return (
           ReportToolbarIcon.variables,
-          '$n template ${n == 1 ? 'variable' : 'variables'} · '
-              '{{Variables.name}}',
+          '${_s.count(n, 'variable')} · {{Variables.name}}',
         );
       case ReportInspectorPage.images:
         final int n = _controller.images.length;
         return (
           ReportToolbarIcon.image,
-          '$n embedded ${n == 1 ? 'image' : 'images'} · saved in the .qrep',
+          '${_s.count(n, 'image')} · ${_s.t('saved in the .qrep')}',
         );
       case ReportInspectorPage.fonts:
         final int n = _controller.embeddedFonts.length;
         return (
           ReportToolbarIcon.font,
-          '$n embedded ${n == 1 ? 'family' : 'families'} · saved in the .qrep',
+          '${_s.count(n, 'family')} · ${_s.t('saved in the .qrep')}',
         );
       case ReportInspectorPage.properties:
         break;
+    }
+    if (_controller.mode == ReportDesignMode.data) {
+      return (ReportToolbarIcon.table, _s.t('Sample data'));
     }
     final List<ReportElement> sel = _controller.selectedElements;
     if (sel.length > 1) {
       return (
         ReportToolbarIcon.duplicate,
-        'Shared properties of the selection',
+        _s.t('Shared properties of the selection'),
       );
     }
     if (sel.length == 1) {
@@ -1235,20 +2303,24 @@ class RenderReportInspector extends RenderBox
         },
         ReportChartElement() => (ReportToolbarIcon.chart, 'Chart'),
       };
-      return (icon, band.isEmpty ? kind : '$kind · ${band.toLowerCase()} band');
+      return (
+        icon,
+        band.isEmpty ? _s.t(kind) : '${_s.t(kind)} · ${_s.t(band)}',
+      );
     }
     final ReportBandKind? band = _controller.selectedBand;
     if (band != null && _controller.template.band(band) != null) {
       final int n = _controller.template.band(band)!.elements.length;
       return (
         ReportToolbarIcon.sameHeight,
-        '${_spaced(band.xmlName)} band · $n elements',
+        '${_s.t(_spaced(band.xmlName))} · ${_s.count(n, 'element')}',
       );
     }
     final ReportTemplate t = _controller.template;
     return (
       ReportToolbarIcon.templates,
-      'Report settings · ${t.pageSize.name} ${t.orientation.name}',
+      '${_s.t('Report settings')} · ${_s.option(t.pageSize.name)} '
+          '${_s.option(t.orientation.name)}',
     );
   }
 
@@ -1256,38 +2328,53 @@ class RenderReportInspector extends RenderBox
     final Rect r = row.rect;
     canvas.drawRect(r, Paint()..color = _theme.headerFill);
     final (ReportToolbarIcon icon, String subtitle) = _titleBadge;
-    final Rect badge = Rect.fromLTWH(_pad, r.center.dy - 16, 32, 32);
+    final Rect badge = Rect.fromLTWH(_pad, r.center.dy - 17, 34, 34);
+    final RRect rr = RRect.fromRectAndRadius(badge, const Radius.circular(9));
     canvas.drawRRect(
-      RRect.fromRectAndRadius(badge, const Radius.circular(8)),
-      Paint()..color = _accent,
+      rr,
+      Paint()
+        ..shader = ui.Gradient.linear(badge.topLeft, badge.bottomRight, <Color>[
+          Color.lerp(_accent, const Color(0xFFFFFFFF), 0.18)!,
+          _accent,
+        ]),
     );
-    RenderReportToolbar.paintIcon(
-      canvas,
-      icon,
-      Rect.fromCenter(center: badge.center, width: 16, height: 16),
-      const Color(0xFFFFFFFF),
-    );
-    final double textLeft = badge.right + 10;
+    _local(canvas, badge, (Canvas c, Size s) {
+      RenderReportToolbar.paintIcon(
+        c,
+        icon,
+        Rect.fromCenter(
+          center: Offset(s.width / 2, s.height / 2),
+          width: 17,
+          height: 17,
+        ),
+        const Color(0xFFFFFFFF),
+      );
+    });
+    final double textLeft = badge.right + 11;
     final double width = size.width - textLeft - _pad;
-    final TextPainter title = _text(row.text, 13.5, _ink, width, bold: true);
+    final TextPainter title = _text(_titleText, 14, _ink, width, bold: true);
     final TextPainter sub = _text(subtitle, 11, _muted, width);
     final double top = r.center.dy - (title.height + sub.height + 2) / 2;
-    title.paint(canvas, Offset(textLeft, top));
-    sub.paint(canvas, Offset(textLeft, top + title.height + 2));
-    canvas.drawLine(
-      r.bottomLeft,
-      r.bottomRight,
-      Paint()..color = _theme.pageBorder,
-    );
+    _draw(canvas, title, Offset(textLeft, top));
+    _draw(canvas, sub, Offset(textLeft, top + title.height + 2));
   }
 
-  static const List<(ReportInspectorPage, ReportToolbarIcon, String)>
-  _tabs = <(ReportInspectorPage, ReportToolbarIcon, String)>[
-    (ReportInspectorPage.properties, ReportToolbarIcon.select, 'Properties'),
-    (ReportInspectorPage.variables, ReportToolbarIcon.variables, 'Variables'),
-    (ReportInspectorPage.images, ReportToolbarIcon.image, 'Images'),
-    (ReportInspectorPage.fonts, ReportToolbarIcon.font, 'Fonts'),
-  ];
+  // ------------------------------------------------------------ tabs
+
+  static const List<(ReportInspectorPage, ReportToolbarIcon)> _tabs =
+      <(ReportInspectorPage, ReportToolbarIcon)>[
+        (ReportInspectorPage.properties, ReportToolbarIcon.select),
+        (ReportInspectorPage.variables, ReportToolbarIcon.variables),
+        (ReportInspectorPage.images, ReportToolbarIcon.image),
+        (ReportInspectorPage.fonts, ReportToolbarIcon.font),
+      ];
+
+  static String _tabLabel(ReportInspectorPage page) => switch (page) {
+    ReportInspectorPage.properties => 'Properties',
+    ReportInspectorPage.variables => 'Variables',
+    ReportInspectorPage.images => 'Images',
+    ReportInspectorPage.fonts => 'Fonts',
+  };
 
   List<(ReportInspectorPage, Rect)> _tabRects(Rect row) {
     final double w = (size.width - 2 * _pad) / _tabs.length;
@@ -1310,13 +2397,9 @@ class RenderReportInspector extends RenderBox
   void _paintTabs(Canvas canvas, _Row row, _Hit? hot) {
     final Rect r = row.rect;
     canvas.drawRect(r, Paint()..color = _theme.headerFill);
-    canvas.drawLine(
-      r.bottomLeft,
-      r.bottomRight,
-      Paint()..color = _theme.pageBorder,
-    );
+    canvas.drawLine(r.bottomLeft, r.bottomRight, Paint()..color = _line);
     final List<(ReportInspectorPage, Rect)> rects = _tabRects(r);
-    const double icon = 13;
+    const double icon = 14;
     var showIcon = true;
     var showLabel = true;
     for (int i = 0; i < rects.length; i++) {
@@ -1326,8 +2409,8 @@ class RenderReportInspector extends RenderBox
           : math.max(16, _text('$count', 9.5, _ink, 40, bold: true).width + 8) +
                 4;
       final double widest = _text(
-        _tabs[i].$3,
-        11,
+        _s.t(_tabLabel(rects[i].$1)),
+        11.5,
         _ink,
         rects[i].$2.width,
         bold: true,
@@ -1349,18 +2432,14 @@ class RenderReportInspector extends RenderBox
           hot != null && hot.kind == _HitKind.tab && hot.value == page.name;
       if (h && !active) {
         canvas.drawRRect(
-          RRect.fromRectAndCorners(
-            t.deflate(1),
-            topLeft: const Radius.circular(5),
-            topRight: const Radius.circular(5),
-          ),
-          Paint()..color = _accent.withValues(alpha: 0.08),
+          RRect.fromRectAndRadius(t.deflate(2), const Radius.circular(6)),
+          Paint()..color = _ink.withValues(alpha: 0.06),
         );
       }
       final Color ink = active ? _accent : _muted;
       final TextPainter label = _text(
-        _tabs[i].$3,
-        11,
+        _s.t(_tabLabel(page)),
+        11.5,
         active ? _ink : _muted,
         t.width,
         bold: active,
@@ -1383,16 +2462,14 @@ class RenderReportInspector extends RenderBox
       var x = t.center.dx - contentW / 2;
       final double cy = t.center.dy - 1;
       if (showIcon) {
-        RenderReportToolbar.paintIcon(
-          canvas,
-          _tabs[i].$2,
-          Rect.fromLTWH(x, cy - icon / 2, icon, icon),
-          ink,
-        );
+        final Rect ir = Rect.fromLTWH(x, cy - icon / 2, icon, icon);
+        _local(canvas, ir, (Canvas c, Size s) {
+          RenderReportToolbar.paintIcon(c, _tabs[i].$2, Offset.zero & s, ink);
+        });
         x += icon + (showLabel ? 5 : 4);
       }
       if (showLabel) {
-        label.paint(canvas, Offset(x, cy - label.height / 2));
+        _draw(canvas, label, Offset(x, cy - label.height / 2));
         x += label.width + 4;
       }
       if (badge != null) {
@@ -1401,15 +2478,12 @@ class RenderReportInspector extends RenderBox
           RRect.fromRectAndRadius(b, const Radius.circular(8)),
           Paint()..color = active ? _accent : _ink.withValues(alpha: 0.1),
         );
-        badge.paint(
-          canvas,
-          Offset(b.center.dx - badge.width / 2, b.center.dy - badge.height / 2),
-        );
+        _drawCentered(canvas, badge, b.center);
       }
       if (active) {
         canvas.drawRRect(
           RRect.fromRectAndRadius(
-            Rect.fromLTWH(t.left + 6, t.bottom - 2.5, t.width - 12, 2.5),
+            Rect.fromLTWH(t.left + 8, t.bottom - 2.5, t.width - 16, 2.5),
             const Radius.circular(1.5),
           ),
           Paint()..color = _accent,
@@ -1418,18 +2492,37 @@ class RenderReportInspector extends RenderBox
     }
   }
 
+  // ------------------------------------------------------------ sections
+
+  void _paintIconButton(Canvas canvas, _Hit h, _Hit? hot) {
+    final bool on = hot != null && hot.id == h.id;
+    if (on) {
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(h.rect, const Radius.circular(6)),
+        Paint()
+          ..color = h.danger
+              ? _danger.withValues(alpha: 0.13)
+              : _ink.withValues(alpha: 0.08),
+      );
+    }
+    final Color tone = h.active
+        ? _starTone
+        : on
+        ? (h.danger ? _danger : _ink)
+        : _muted;
+    _icon(canvas, h.icon!, h.rect.center, 18, tone);
+  }
+
   void _paintGroup(Canvas canvas, _Row row, _Hit? hot) {
     final Rect r = row.rect;
-    final bool hover = hot?.kind == _HitKind.group && hot!.rect == r;
+    final List<_Hit> hits = _groupHits(row);
+    final bool hover =
+        hot != null && hot.kind == _HitKind.group && hot.value == row.text;
     canvas.drawRect(
       r,
-      Paint()..color = _ink.withValues(alpha: hover ? 0.07 : 0.035),
+      Paint()..color = hover ? _ink.withValues(alpha: 0.05) : _headerBand,
     );
-    canvas.drawLine(
-      r.topLeft,
-      r.topRight,
-      Paint()..color = _theme.pageBorder.withValues(alpha: 0.6),
-    );
+    canvas.drawLine(r.topLeft, r.topRight, Paint()..color = _line);
     final bool open = !_collapsed.contains(row.text);
     ReportInspectorGlyphs.chevron(
       canvas,
@@ -1437,37 +2530,50 @@ class RenderReportInspector extends RenderBox
       _muted,
       open: open,
     );
+    _icon(
+      canvas,
+      _groupIcon(row.text),
+      Offset(_pad + 22, r.center.dy),
+      15,
+      _accent,
+    );
+    final double end = hits.length > 1
+        ? hits.first.rect.left - 6
+        : size.width - _pad;
     final TextPainter tp = _text(
-      row.text,
-      11.5,
+      _tr(row.text),
+      12,
       _ink,
-      size.width - 2 * _pad - 16,
+      end - (_pad + 34),
       bold: true,
     );
-    tp.paint(canvas, Offset(_pad + 16, r.center.dy - tp.height / 2));
+    _draw(canvas, tp, Offset(_pad + 34, r.center.dy - tp.height / 2));
+    for (final _Hit h in hits) {
+      if (h.icon != null) {
+        _paintIconButton(canvas, h, hot);
+      }
+    }
   }
 
   void _paintLabel(Canvas canvas, String label, Rect row) {
-    final TextPainter tp = _text(label, _font, _ink, _labelWidth - _pad - 6);
-    tp.paint(canvas, Offset(_pad, row.top + (rowHeight - tp.height) / 2));
+    final TextPainter tp = _text(
+      _tr(label),
+      _font,
+      _ink,
+      _labelWidth - _pad - 6,
+    );
+    _draw(canvas, tp, Offset(_pad, row.top + (rowHeight - tp.height) / 2));
   }
 
   void _paintProperty(Canvas canvas, _Row row, _Hit? hot) {
     final ReportProperty p = row.property!;
     final Rect r = row.rect;
-    final Offset? hover = _hover;
+    final Offset? hover = _hoverL;
     if (hover != null && r.contains(hover) && _paletteKey == null) {
-      canvas.drawRect(r, Paint()..color = _accent.withValues(alpha: 0.05));
-    }
-    if (p.kind == ReportPropertyKind.action) {
-      _paintAction(canvas, p, _actionRect(p, r), hot);
-      if (!_wideAction(p)) {
-        _paintLabel(canvas, p.label, r);
-      }
-      return;
+      canvas.drawRect(r, Paint()..color = _ink.withValues(alpha: 0.03));
     }
     if (p.kind == ReportPropertyKind.note && p.label.isEmpty) {
-      _wideNote(p).paint(canvas, Offset(_pad, r.top + 6));
+      _draw(canvas, _wideNote(p), Offset(_pad, r.top + 6));
       return;
     }
     _paintLabel(canvas, p.label, r);
@@ -1489,10 +2595,10 @@ class RenderReportInspector extends RenderBox
   }) {
     switch (p.kind) {
       case ReportPropertyKind.action:
-        _paintAction(canvas, p, v, hot);
+        _paintIconButton(canvas, _actionHit(p, v), hot);
       case ReportPropertyKind.note:
-        final TextPainter tp = _text(p.value, _font, _muted, v.width);
-        tp.paint(canvas, Offset(v.left, v.center.dy - tp.height / 2));
+        final TextPainter tp = _text(_tr(p.value), _font, _muted, v.width);
+        _draw(canvas, tp, Offset(v.left, v.center.dy - tp.height / 2));
       case ReportPropertyKind.toggle:
         _paintSwitch(
           canvas,
@@ -1507,15 +2613,15 @@ class RenderReportInspector extends RenderBox
         } else {
           _paintBox(canvas, v, hover: _isHot(hot, _HitKind.menu, p));
           final TextPainter tp = _text(
-            _optionLabel(p.value),
+            _s.option(p.value),
             _font,
             _ink,
             v.width - 30,
           );
-          tp.paint(canvas, Offset(v.left + 8, v.center.dy - tp.height / 2));
+          _draw(canvas, tp, Offset(v.left + 9, v.center.dy - tp.height / 2));
           ReportInspectorGlyphs.chevron(
             canvas,
-            Offset(v.right - 11, v.center.dy),
+            Offset(v.right - 12, v.center.dy),
             _muted,
           );
         }
@@ -1535,11 +2641,14 @@ class RenderReportInspector extends RenderBox
     bool hover = false,
     bool focus = false,
   }) {
-    final RRect rr = RRect.fromRectAndRadius(v, const Radius.circular(4));
-    canvas.drawRRect(
-      rr,
-      Paint()..color = focus ? const Color(0xFFFFFFFF) : _fieldFill,
-    );
+    final RRect rr = RRect.fromRectAndRadius(v, const Radius.circular(6));
+    if (focus) {
+      canvas.drawRRect(
+        rr.inflate(2.5),
+        Paint()..color = _theme.focusRing.withValues(alpha: 0.18),
+      );
+    }
+    canvas.drawRRect(rr, Paint()..color = _fieldFill);
     canvas.drawRRect(
       rr,
       Paint()
@@ -1567,9 +2676,12 @@ class RenderReportInspector extends RenderBox
         hot.property?.key == p.key &&
         v.contains(hot.rect.center);
     _paintBox(canvas, v, hover: hover, focus: editing);
+    if (p.key == 'font.add') {
+      _icon(canvas, Icons.search, Offset(v.left + 15, v.center.dy), 17, _muted);
+    }
     if (prefix.isNotEmpty) {
       final TextPainter tp = _text(prefix, 10.5, _muted, 80, bold: true);
-      tp.paint(canvas, Offset(v.left + 6, v.center.dy - tp.height / 2));
+      _draw(canvas, tp, Offset(v.left + 8, v.center.dy - tp.height / 2));
     }
     final Rect? swatch = f.swatch;
     if (swatch != null) {
@@ -1599,8 +2711,8 @@ class RenderReportInspector extends RenderBox
     final Rect? stepper = f.stepper;
     if (stepper != null) {
       canvas.drawLine(
-        Offset(stepper.left, stepper.top + 3),
-        Offset(stepper.left, stepper.bottom - 3),
+        Offset(stepper.left, stepper.top + 4),
+        Offset(stepper.left, stepper.bottom - 4),
         Paint()..color = _line,
       );
       final Rect up = Rect.fromLTRB(
@@ -1641,7 +2753,7 @@ class RenderReportInspector extends RenderBox
           (_isHot(hot, _HitKind.palette, p) && hot!.rect == drop);
       if (h) {
         canvas.drawRRect(
-          RRect.fromRectAndRadius(drop.deflate(2), const Radius.circular(3)),
+          RRect.fromRectAndRadius(drop.deflate(2), const Radius.circular(4)),
           Paint()..color = _accent.withValues(alpha: 0.15),
         );
       }
@@ -1659,13 +2771,13 @@ class RenderReportInspector extends RenderBox
       return;
     }
     final TextPainter tp = _text(
-      empty ? p.hint : raw,
+      empty ? _tr(p.hint) : raw,
       _font,
-      empty ? _muted : _ink,
+      empty ? _faint : _ink,
       f.text.width - 2,
-      italic: empty,
+      italic: empty && p.key != 'font.add',
     );
-    tp.paint(canvas, Offset(f.text.left, f.text.center.dy - tp.height / 2));
+    _draw(canvas, tp, Offset(f.text.left, f.text.center.dy - tp.height / 2));
   }
 
   void _paintSwitch(Canvas canvas, Rect r, bool on, bool hover) {
@@ -1675,8 +2787,7 @@ class RenderReportInspector extends RenderBox
     );
     canvas.drawRRect(
       track,
-      Paint()
-        ..color = on ? _accent : _ink.withValues(alpha: hover ? 0.32 : 0.22),
+      Paint()..color = on ? _accent : _ink.withValues(alpha: hover ? 0.3 : 0.2),
     );
     final double knob = r.height - 4;
     final Offset c = Offset(
@@ -1698,13 +2809,12 @@ class RenderReportInspector extends RenderBox
     List<(String, Rect)> segments,
     _Hit? hot,
   ) {
-    final Rect outer = Rect.fromLTRB(
-      v.left,
-      v.top,
-      segments.last.$2.right,
-      v.bottom,
-    );
-    final RRect rr = RRect.fromRectAndRadius(outer, const Radius.circular(4));
+    double right = v.left;
+    for (final (String _, Rect r) in segments) {
+      right = math.max(right, r.right);
+    }
+    final Rect outer = Rect.fromLTRB(v.left, v.top, right, v.bottom);
+    final RRect rr = RRect.fromRectAndRadius(outer, const Radius.circular(6));
     canvas.drawRRect(rr, Paint()..color = _fieldFill);
     canvas.save();
     canvas.clipRRect(rr);
@@ -1719,26 +2829,25 @@ class RenderReportInspector extends RenderBox
       }
       if (i > 0 && !selected && segments[i - 1].$1 != p.value) {
         canvas.drawLine(
-          Offset(r.left, r.top + 4),
-          Offset(r.left, r.bottom - 4),
+          Offset(r.left, r.top + 5),
+          Offset(r.left, r.bottom - 5),
           Paint()..color = _line,
         );
       }
       final Color ink = selected ? const Color(0xFFFFFFFF) : _ink;
       if (ReportInspectorGlyphs.has(option)) {
-        ReportInspectorGlyphs.paint(canvas, option, r, ink);
+        _local(canvas, r, (Canvas c, Size s) {
+          ReportInspectorGlyphs.paint(c, option, Offset.zero & s, ink);
+        });
       } else {
         final TextPainter tp = _text(
-          _optionLabel(option),
+          _s.option(option),
           10.5,
           ink,
           r.width - 4,
           bold: selected,
         );
-        tp.paint(
-          canvas,
-          Offset(r.center.dx - tp.width / 2, r.center.dy - tp.height / 2),
-        );
+        _drawCentered(canvas, tp, r.center);
       }
     }
     canvas.restore();
@@ -1753,7 +2862,7 @@ class RenderReportInspector extends RenderBox
   void _paintGlyphButton(Canvas canvas, ReportProperty p, Rect r, _Hit? hot) {
     final bool on = p.value == 'true';
     final bool h = _isHot(hot, _HitKind.glyph, p);
-    final RRect rr = RRect.fromRectAndRadius(r, const Radius.circular(4));
+    final RRect rr = RRect.fromRectAndRadius(r, const Radius.circular(6));
     canvas.drawRRect(
       rr,
       Paint()
@@ -1769,47 +2878,14 @@ class RenderReportInspector extends RenderBox
         ..color = on ? _accent : _line
         ..style = PaintingStyle.stroke,
     );
-    ReportInspectorGlyphs.paint(canvas, p.glyph ?? '', r, on ? _accent : _ink);
-  }
-
-  void _paintAction(Canvas canvas, ReportProperty p, Rect button, _Hit? hot) {
-    final bool danger = p.key.endsWith('.remove');
-    final bool add = p.key.endsWith('+');
-    final Color tone = danger ? const Color(0xFFC62828) : _accent;
-    final bool h = _isHot(hot, _HitKind.action, p);
-    final RRect rr = RRect.fromRectAndRadius(button, const Radius.circular(4));
-    canvas.drawRRect(
-      rr,
-      Paint()..color = tone.withValues(alpha: h ? 0.16 : (add ? 0.08 : 0.04)),
-    );
-    canvas.drawRRect(
-      rr,
-      Paint()
-        ..color = tone.withValues(alpha: h ? 0.8 : 0.45)
-        ..style = PaintingStyle.stroke,
-    );
-    final TextPainter tp = _text(
-      p.value,
-      _font,
-      tone,
-      button.width - (_wideAction(p) ? 30 : 24),
-      bold: add,
-    );
-    final double contentWidth = tp.width + (add ? 16 : 0);
-    final double left = _wideAction(p)
-        ? button.center.dx - contentWidth / 2
-        : button.left + 12;
-    if (add) {
-      ReportInspectorGlyphs.plus(
-        canvas,
-        Offset(left + 5, button.center.dy),
-        tone,
+    _local(canvas, r, (Canvas c, Size s) {
+      ReportInspectorGlyphs.paint(
+        c,
+        p.glyph ?? '',
+        Offset.zero & s,
+        on ? _accent : _ink,
       );
-    }
-    tp.paint(
-      canvas,
-      Offset(left + (add ? 16 : 0), button.center.dy - tp.height / 2),
-    );
+    });
   }
 
   void _paintEditing(Canvas canvas, ReportProperty p, Rect text) {
@@ -1821,47 +2897,687 @@ class RenderReportInspector extends RenderBox
       Rect.zero,
     );
     final double inner = text.width - 4;
-    if (!multi) {
+    final bool rtlText = tp.textDirection == TextDirection.rtl;
+    final double dx;
+    if (multi || tp.width <= inner) {
+      _editScrollX = 0;
+      dx = rtlText ? 2 + math.max(0, inner - tp.width) : 2;
+    } else {
       if (caret.dx - _editScrollX > inner) {
         _editScrollX = caret.dx - inner + 2;
       } else if (caret.dx < _editScrollX) {
         _editScrollX = caret.dx;
       }
-    } else {
-      _editScrollX = 0;
+      dx = 2 - _editScrollX;
     }
-    final Offset origin = Offset(
-      text.left + 2 - _editScrollX,
-      multi ? text.top + 4 : text.center.dy - tp.height / 2,
-    );
-    canvas.save();
-    canvas.clipRect(text.deflate(1));
+    final double dy = multi ? 4 : (text.height - tp.height) / 2;
+    final Rect phys = _physical(text);
+    final Offset origin = Offset(phys.left + dx, phys.top + dy);
+    _editOrigin = origin;
     final int start = _controller.propertyEditor.selectionStart;
     final int end = _controller.propertyEditor.selectionEnd;
-    if (end > start) {
-      for (final TextBox b in tp.getBoxesForSelection(
-        TextSelection(baseOffset: start, extentOffset: end),
-      )) {
-        canvas.drawRect(
-          b.toRect().shift(origin),
-          Paint()..color = _accent.withValues(alpha: 0.28),
+    _local(canvas, text, (Canvas c, Size s) {
+      c.save();
+      c.clipRect(Rect.fromLTWH(1, 1, s.width - 2, s.height - 2));
+      final Offset o = Offset(dx, dy);
+      if (end > start) {
+        for (final TextBox b in tp.getBoxesForSelection(
+          TextSelection(baseOffset: start, extentOffset: end),
+        )) {
+          c.drawRect(
+            b.toRect().shift(o),
+            Paint()..color = _accent.withValues(alpha: 0.3),
+          );
+        }
+      }
+      tp.paint(c, o);
+      c.drawRect(
+        Rect.fromLTWH(
+          o.dx + caret.dx,
+          o.dy + caret.dy,
+          1.2,
+          tp.preferredLineHeight,
+        ),
+        Paint()..color = _editInk,
+      );
+      c.restore();
+    });
+    final double cx = (origin.dx + caret.dx - 24).clamp(
+      phys.left,
+      math.max(phys.left, phys.right - 24),
+    );
+    _editCaret = (
+      Offset(cx, origin.dy + caret.dy),
+      Offset(cx, phys.bottom + 3),
+    );
+    tp.dispose();
+  }
+
+  // ------------------------------------------------------------ explorer
+
+  void _paintNode(Canvas canvas, _Row row, _Hit? hot) {
+    final _VarNode n = row.node!;
+    final Rect r = row.rect;
+    final bool selected = _nodeSelected(n);
+    final Offset? hover = _hoverL;
+    final bool hovered = hover != null && r.contains(hover);
+    final Rect band = Rect.fromLTRB(
+      _pad / 2,
+      r.top + 1,
+      size.width - _pad / 2,
+      r.bottom - 1,
+    );
+    if (selected) {
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(band, const Radius.circular(6)),
+        Paint()..color = _accent.withValues(alpha: _dark ? 0.24 : 0.13),
+      );
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(band.left, band.top + 5, 3, band.height - 10),
+          const Radius.circular(1.5),
+        ),
+        Paint()..color = _accent,
+      );
+    } else if (hovered) {
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(band, const Radius.circular(6)),
+        Paint()..color = _ink.withValues(alpha: 0.05),
+      );
+    }
+    for (int d = 0; d < n.depth; d++) {
+      final double gx = _pad + d * _indent + 6;
+      canvas.drawLine(
+        Offset(gx, r.top),
+        Offset(gx, r.bottom),
+        Paint()..color = _line,
+      );
+    }
+    final double x = _nodeStart(n);
+    final bool icons = _nodeIconsVisible(row);
+    final double end = icons
+        ? size.width - _pad - 2 * (_iconButton + 2) - 4
+        : size.width - _pad - 4;
+    double nameX;
+    if (n.isFolder) {
+      final bool open = !isFolderClosed(n.path);
+      ReportInspectorGlyphs.chevron(
+        canvas,
+        Offset(x + 6, r.center.dy),
+        _muted,
+        open: open,
+      );
+      _icon(
+        canvas,
+        open ? Icons.folder_open : Icons.folder,
+        Offset(x + 24, r.center.dy),
+        17,
+        _folderTone,
+      );
+      nameX = x + 36;
+    } else {
+      _icon(
+        canvas,
+        _typeIcon(n.variable!.type),
+        Offset(x + 24, r.center.dy),
+        15,
+        _accent,
+      );
+      nameX = x + 36;
+    }
+    final TextPainter name = _text(
+      n.name,
+      _font,
+      _ink,
+      math.max(20, end - nameX),
+      bold: n.isFolder || selected,
+    );
+    _draw(canvas, name, Offset(nameX, r.center.dy - name.height / 2));
+    final double tailStart = nameX + name.width + 10;
+    if (!icons && end - tailStart > 24) {
+      final String tail = n.isFolder
+          ? '${n.count}'
+          : n.variable!.value.replaceAll('\n', ' ');
+      if (tail.isNotEmpty) {
+        final TextPainter tp = _text(
+          tail,
+          n.isFolder ? 10 : 11,
+          n.isFolder ? _muted : _faint,
+          end - tailStart,
+          bold: n.isFolder,
         );
+        if (n.isFolder) {
+          final Rect chip = Rect.fromLTWH(
+            end - tp.width - 10,
+            r.center.dy - 8,
+            tp.width + 10,
+            16,
+          );
+          canvas.drawRRect(
+            RRect.fromRectAndRadius(chip, const Radius.circular(8)),
+            Paint()..color = _ink.withValues(alpha: 0.08),
+          );
+          _drawCentered(canvas, tp, chip.center);
+        } else {
+          _draw(
+            canvas,
+            tp,
+            Offset(end - tp.width, r.center.dy - tp.height / 2),
+          );
+        }
       }
     }
-    tp.paint(canvas, origin);
-    final Rect caretRect = Rect.fromLTWH(
-      origin.dx + caret.dx,
-      origin.dy + caret.dy,
-      1.2,
-      tp.preferredLineHeight,
+    if (icons) {
+      for (final _Hit h in _nodeHits(row)) {
+        if (h.icon != null) {
+          _paintIconButton(canvas, h, hot);
+        }
+      }
+    }
+  }
+
+  void _paintEmpty(Canvas canvas, _Row row, _Hit? hot) {
+    final Rect card = Rect.fromLTRB(
+      _pad,
+      row.rect.top + 8,
+      size.width - _pad,
+      row.rect.bottom - 4,
     );
-    canvas.drawRect(caretRect, Paint()..color = const Color(0xFF111111));
-    _editCaret = (
-      Offset(math.max(text.left, caretRect.left - 24), caretRect.top),
-      Offset(math.max(text.left, caretRect.left - 24), text.bottom + 3),
+    final RRect rr = RRect.fromRectAndRadius(card, const Radius.circular(10));
+    canvas.drawRRect(rr, Paint()..color = _cardFill.withValues(alpha: 0.6));
+    canvas.drawRRect(
+      rr,
+      Paint()
+        ..color = _line
+        ..style = PaintingStyle.stroke,
+    );
+    final Offset c = Offset(card.center.dx, card.top + 34);
+    canvas.drawCircle(c, 22, Paint()..color = _accent.withValues(alpha: 0.12));
+    _icon(canvas, row.icon ?? Icons.info_outline, c, 24, _accent);
+    final double w = size.width - 2 * _pad - 32;
+    final TextPainter t = _text(_s.t(row.text), 12.5, _ink, w, bold: true);
+    final double ty = card.top + 66;
+    _drawCentered(canvas, t, Offset(card.center.dx, ty + t.height / 2));
+    final TextPainter d = _text(
+      _s.t(row.detail),
+      11,
+      _muted,
+      w,
+      lines: 5,
+      center: true,
+    );
+    _drawCentered(
+      canvas,
+      d,
+      Offset(card.center.dx, ty + t.height + 6 + d.height / 2),
+    );
+    final ReportProperty? p = row.property;
+    if (p == null) {
+      return;
+    }
+    final Rect b = _emptyButton(row);
+    final bool h = _isHot(hot, _HitKind.action, p);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(b, const Radius.circular(8)),
+      Paint()
+        ..color = h
+            ? Color.lerp(_accent, const Color(0xFF000000), 0.12)!
+            : _accent,
+    );
+    _icon(
+      canvas,
+      _actionIcon(p.key),
+      Offset(b.left + 17, b.center.dy),
+      17,
+      const Color(0xFFFFFFFF),
+    );
+    final TextPainter label = _text(
+      _tr(p.value),
+      _font,
+      const Color(0xFFFFFFFF),
+      220,
+      bold: true,
+    );
+    _draw(canvas, label, Offset(b.left + 30, b.center.dy - label.height / 2));
+  }
+
+  // ------------------------------------------------------------ cards
+
+  void _paintCard(Canvas canvas, Rect card, bool hover) {
+    final RRect rr = RRect.fromRectAndRadius(card, const Radius.circular(10));
+    if (!_dark) {
+      canvas.drawRRect(
+        rr.shift(const Offset(0, 1)),
+        Paint()..color = const Color(0x0F000000),
+      );
+    }
+    canvas.drawRRect(rr, Paint()..color = _cardFill);
+    canvas.drawRRect(
+      rr,
+      Paint()
+        ..color = hover ? _accent.withValues(alpha: 0.5) : _line
+        ..style = PaintingStyle.stroke,
+    );
+  }
+
+  ui.Image? _thumb(String name) {
+    final Uint8List? bytes = _controller.images[name];
+    if (bytes == null) {
+      return null;
+    }
+    final _Thumb? have = _thumbs[name];
+    if (have != null && identical(have.bytes, bytes)) {
+      return have.image;
+    }
+    have?.image?.dispose();
+    final _Thumb t = _Thumb(bytes);
+    _thumbs[name] = t;
+    if (_thumbs.length > 64) {
+      final String first = _thumbs.keys.first;
+      _thumbs.remove(first)?.image?.dispose();
+    }
+    unawaited(_decode(name, t));
+    return null;
+  }
+
+  Future<void> _decode(String name, _Thumb t) async {
+    try {
+      final ui.Codec codec = await ui.instantiateImageCodec(
+        t.bytes,
+        targetWidth: 160,
+      );
+      final ui.FrameInfo frame = await codec.getNextFrame();
+      codec.dispose();
+      if (!identical(_thumbs[name], t)) {
+        frame.image.dispose();
+        return;
+      }
+      t.image = frame.image;
+    } on Object {
+      t.failed = true;
+    }
+    if (attached) {
+      markNeedsPaint();
+    }
+  }
+
+  void _paintChecker(Canvas canvas, Rect r) {
+    canvas.drawRect(
+      r,
+      Paint()
+        ..color = _dark ? const Color(0xFF3A3D42) : const Color(0xFFFFFFFF),
+    );
+    final Paint dark = Paint()
+      ..color = _dark ? const Color(0xFF2E3135) : const Color(0xFFE9ECEF);
+    const double cell = 8;
+    for (double y = r.top; y < r.bottom; y += cell) {
+      for (double x = r.left; x < r.right; x += cell) {
+        if ((((x - r.left) / cell).round() + ((y - r.top) / cell).round())
+            .isOdd) {
+          canvas.drawRect(Rect.fromLTWH(x, y, cell, cell), dark);
+        }
+      }
+    }
+  }
+
+  void _paintImageCard(Canvas canvas, _Row row, _Hit? hot) {
+    final parts = _imageParts(row.rect);
+    final Offset? hover = _hoverL;
+    _paintCard(canvas, parts.card, hover != null && parts.card.contains(hover));
+    final String name = row.text;
+    final RRect thumbR = RRect.fromRectAndRadius(
+      parts.thumb,
+      const Radius.circular(7),
+    );
+    canvas.save();
+    canvas.clipRRect(thumbR);
+    _paintChecker(canvas, parts.thumb);
+    final ui.Image? image = _thumb(name);
+    if (image != null) {
+      _local(canvas, parts.thumb, (Canvas c, Size s) {
+        final double k = math.min(
+          s.width / image.width,
+          s.height / image.height,
+        );
+        final Size fit = Size(image.width * k, image.height * k);
+        c.drawImageRect(
+          image,
+          Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
+          Rect.fromCenter(
+            center: Offset(s.width / 2, s.height / 2),
+            width: fit.width,
+            height: fit.height,
+          ),
+          Paint()..filterQuality = FilterQuality.medium,
+        );
+      });
+    } else {
+      final bool failed = _thumbs[name]?.failed ?? false;
+      _icon(
+        canvas,
+        failed ? Icons.insert_photo_outlined : Icons.hourglass_empty,
+        parts.thumb.center,
+        22,
+        _faint,
+      );
+    }
+    if (row.prop('.replace') != null &&
+        hover != null &&
+        parts.thumb.contains(hover)) {
+      canvas.drawRect(parts.thumb, Paint()..color = const Color(0x8C000000));
+      _icon(
+        canvas,
+        Icons.find_replace,
+        parts.thumb.center.translate(0, -7),
+        20,
+        const Color(0xFFFFFFFF),
+      );
+      final TextPainter tp = _text(
+        _s.t('Replace'),
+        10,
+        const Color(0xFFFFFFFF),
+        parts.thumb.width - 6,
+        bold: true,
+      );
+      _draw(
+        canvas,
+        tp,
+        Offset(parts.thumb.center.dx - tp.width / 2, parts.thumb.center.dy + 6),
+      );
+    }
+    canvas.restore();
+    canvas.drawRRect(
+      thumbR,
+      Paint()
+        ..color = _line
+        ..style = PaintingStyle.stroke,
+    );
+    final ReportProperty? nameProp = row.prop('.name');
+    if (nameProp != null) {
+      _paintField(canvas, nameProp, parts.name, hot);
+    }
+    final String group = nameProp?.group ?? '';
+    final String info = group.startsWith('$name · ')
+        ? group.substring(name.length + 3)
+        : '';
+    final double x = parts.name.left + 2;
+    final double w = parts.card.right - 10 - x;
+    if (info.isNotEmpty) {
+      final TextPainter tp = _text(info, 11, _muted, w);
+      _draw(canvas, tp, Offset(x, parts.name.bottom + 7));
+    }
+    final TextPainter ref = _text('source="$name"', 10.5, _faint, w);
+    _draw(canvas, ref, Offset(x, parts.name.bottom + 24));
+    for (final _Hit h in _imageHits(row)) {
+      if (h.icon != null) {
+        _paintIconButton(canvas, h, hot);
+      }
+    }
+  }
+
+  void _paintFontCard(Canvas canvas, _Row row, _Hit? hot) {
+    final parts = _fontParts(row.rect);
+    final Offset? hover = _hoverL;
+    _paintCard(canvas, parts.card, hover != null && parts.card.contains(hover));
+    final String family = row.text;
+    final TextPainter preview = _text(
+      _controller.fontPreviewText(family),
+      22,
+      _ink,
+      parts.preview.width,
+      family: family,
+    );
+    canvas.save();
+    canvas.clipRect(parts.preview);
+    _draw(
+      canvas,
+      preview,
+      Offset(parts.preview.left, parts.preview.center.dy - preview.height / 2),
     );
     canvas.restore();
-    tp.dispose();
+    final double x = parts.card.left + 12;
+    final double w = parts.card.right - 12 - x;
+    final bool isDefault = row.prop('.default')?.value == 'true';
+    final TextPainter name = _text(family, 12.5, _ink, w - 90, bold: true);
+    final double ny = parts.card.top + 46;
+    _draw(canvas, name, Offset(x, ny));
+    if (isDefault) {
+      final TextPainter chip = _text(
+        _s.t('Report default'),
+        9.5,
+        _accent,
+        120,
+        bold: true,
+      );
+      final Rect cr = Rect.fromLTWH(
+        x + name.width + 8,
+        ny + name.height / 2 - 8,
+        chip.width + 12,
+        16,
+      );
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(cr, const Radius.circular(8)),
+        Paint()..color = _accent.withValues(alpha: 0.14),
+      );
+      _drawCentered(canvas, chip, cr.center);
+    }
+    final String card = row.prop('.card')?.value ?? '';
+    final int dot = card.indexOf(' · ');
+    final String faces = dot < 0 ? card : card.substring(0, dot);
+    final String bytes = dot < 0 ? '' : card.substring(dot + 3);
+    final TextPainter info = _text(
+      bytes.isEmpty ? _tr(faces) : '${_tr(faces)} · $bytes',
+      11,
+      _muted,
+      w,
+    );
+    _draw(canvas, info, Offset(x, ny + 19));
+    final TextPainter uses = _text(
+      '${_s.t('Used by')}: ${_usesText(row.prop('.uses')?.value ?? '')}',
+      11,
+      _muted,
+      w,
+    );
+    _draw(canvas, uses, Offset(x, ny + 36));
+    for (final _Hit h in _fontHits(row)) {
+      _paintIconButton(canvas, h, hot);
+    }
+  }
+
+  String _usesText(String raw) {
+    final int? n = int.tryParse(raw);
+    if (n != null) {
+      return _s.count(n, 'element');
+    }
+    final int plus = raw.indexOf(', +');
+    if (plus > 0) {
+      final int? more = int.tryParse(raw.substring(plus + 3));
+      return '${_s.t(raw.substring(0, plus))} + '
+          '${more == null ? raw.substring(plus + 3) : _s.count(more, 'element')}';
+    }
+    return _s.t(raw);
+  }
+
+  // ------------------------------------------------------------ font picker
+
+  void _paintFontPopup(Canvas canvas) {
+    _fontPopupRect = null;
+    final String? key = _controller.editingProperty;
+    if (key == null || !ReportDesignerController.isFontKey(key)) {
+      return;
+    }
+    final (ReportProperty, Rect, String)? field = _fieldFor(key);
+    if (field == null) {
+      return;
+    }
+    final Rect box = field.$2;
+    final List<ReportCompletionItem> items =
+        _controller.completion?.items ?? const <ReportCompletionItem>[];
+    final double w = math.min(size.width - 16, math.max(box.width, 270));
+    final double left = math.max(8, math.min(box.left, size.width - 8 - w));
+    final int want = items.isEmpty ? 1 : math.min(items.length, _fontMaxRows);
+    final double rowH = items.isEmpty ? 36 : _fontRowHeight;
+    final double below = size.height - 6 - (box.bottom + 4);
+    final double above = box.top - 10;
+    final bool down = want * rowH + 8 <= below || below >= above;
+    final double room = down ? below : above;
+    final int rows = ((room - 8) / rowH).floor().clamp(1, want);
+    final double h = rows * rowH + 8;
+    final Rect rect = Rect.fromLTWH(
+      left,
+      down ? box.bottom + 4 : box.top - 4 - h,
+      w,
+      h,
+    );
+    _fontPopupRect = rect;
+    _fontVisible = items.isEmpty ? 0 : rows;
+    final int index = _controller.completionIndex;
+    if (index != _fontIndexSeen) {
+      _fontIndexSeen = index;
+      if (index < _fontFirst) {
+        _fontFirst = index;
+      } else if (index >= _fontFirst + rows) {
+        _fontFirst = index - rows + 1;
+      }
+    }
+    _fontFirst = _fontFirst.clamp(0, math.max(0, items.length - rows));
+    final RRect rr = RRect.fromRectAndRadius(rect, const Radius.circular(10));
+    canvas.drawRRect(
+      rr.shift(const Offset(0, 4)),
+      Paint()
+        ..color = const Color(0x40000000)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10),
+    );
+    canvas.drawRRect(rr, Paint()..color = _popupFill);
+    canvas.drawRRect(
+      rr,
+      Paint()
+        ..color = _line
+        ..style = PaintingStyle.stroke,
+    );
+    if (items.isEmpty) {
+      final bool loading =
+          _controller.deviceFonts != null && _controller.deviceFamilies == null;
+      final TextPainter tp = _text(
+        _s.t(loading ? 'Looking for installed fonts…' : 'No matching fonts'),
+        11.5,
+        _muted,
+        w - 24,
+        italic: true,
+      );
+      _draw(canvas, tp, Offset(rect.left + 12, rect.center.dy - tp.height / 2));
+      return;
+    }
+    canvas.save();
+    canvas.clipRRect(rr);
+    final Offset? hover = _hoverL;
+    for (int k = 0; k < rows; k++) {
+      final int i = _fontFirst + k;
+      if (i >= items.length) {
+        break;
+      }
+      final ReportCompletionItem item = items[i];
+      final Rect r = Rect.fromLTWH(
+        rect.left + 4,
+        rect.top + 4 + k * _fontRowHeight,
+        w - 8,
+        _fontRowHeight,
+      );
+      final bool selected = i == index;
+      if (selected) {
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(r, const Radius.circular(7)),
+          Paint()..color = _accent.withValues(alpha: _dark ? 0.28 : 0.14),
+        );
+      } else if (hover != null && r.contains(hover)) {
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(r, const Radius.circular(7)),
+          Paint()..color = _ink.withValues(alpha: 0.06),
+        );
+      }
+      final TextPainter detail = _text(_tr(item.detail), 9.5, _faint, w * 0.45);
+      final TextPainter name = _text(
+        item.label,
+        11,
+        selected ? _ink : _muted,
+        r.width - detail.width - 30,
+        bold: selected,
+      );
+      _draw(canvas, name, Offset(r.left + 10, r.top + 5));
+      _draw(
+        canvas,
+        detail,
+        Offset(
+          r.right - 10 - detail.width,
+          r.top + 5 + (name.height - detail.height) / 2,
+        ),
+      );
+      final TextPainter preview = _text(
+        _controller.fontPreviewText(item.insert),
+        17,
+        _ink,
+        r.width - 20,
+        family: item.insert,
+      );
+      canvas.save();
+      canvas.clipRect(
+        Rect.fromLTRB(r.left, r.top + 5 + name.height, r.right, r.bottom),
+      );
+      _draw(canvas, preview, Offset(r.left + 10, r.top + 6 + name.height));
+      canvas.restore();
+    }
+    if (items.length > rows) {
+      final double track = h - 12;
+      final double thumb = math.max(18, track * rows / items.length);
+      final double top =
+          rect.top +
+          6 +
+          (track - thumb) * (_fontFirst / math.max(1, items.length - rows));
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(rect.right - 5, top, 3, thumb),
+          const Radius.circular(2),
+        ),
+        Paint()..color = _ink.withValues(alpha: 0.25),
+      );
+    }
+    canvas.restore();
+  }
+
+  // ------------------------------------------------------------ tooltip
+
+  void _paintTooltip(Canvas canvas, _Hit? hot) {
+    final String? tip = hot?.tip;
+    if (!_tipShown || hot == null || tip == null || hot.id != _tipId) {
+      return;
+    }
+    final Color fill = _dark
+        ? const Color(0xFFE8EAED)
+        : const Color(0xF2202428);
+    final Color ink = _dark ? const Color(0xFF1F2328) : const Color(0xFFFFFFFF);
+    final TextPainter tp = _text(tip, 11, ink, 240, lines: 3);
+    final double w = tp.width + 16;
+    final double h = tp.height + 10;
+    final double x = (hot.rect.center.dx - w / 2).clamp(
+      4,
+      math.max(4, size.width - 4 - w),
+    );
+    var y = hot.rect.bottom + 6;
+    if (y + h > size.height - 4) {
+      y = hot.rect.top - 6 - h;
+    }
+    final RRect rr = RRect.fromRectAndRadius(
+      Rect.fromLTWH(x, y, w, h),
+      const Radius.circular(6),
+    );
+    canvas.drawRRect(
+      rr.shift(const Offset(0, 2)),
+      Paint()
+        ..color = const Color(0x30000000)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
+    );
+    canvas.drawRRect(rr, Paint()..color = fill);
+    _draw(canvas, tp, Offset(x + 8, y + 5));
   }
 
   // ------------------------------------------------------------ palette
@@ -1959,7 +3675,7 @@ class RenderReportInspector extends RenderBox
         Rect.fromLTWH(rect.left + pad, top, w - 2 * pad, 24),
         '',
         null,
-        'No color',
+        _s.t('No color'),
       ),
     );
     top += 24 + 8;
@@ -2023,32 +3739,30 @@ class RenderReportInspector extends RenderBox
         current = p.value.trim().toLowerCase();
       }
     }
-    final RRect rr = RRect.fromRectAndRadius(rect, const Radius.circular(8));
+    final RRect rr = RRect.fromRectAndRadius(rect, const Radius.circular(10));
     canvas.drawRRect(
       rr.shift(const Offset(0, 3)),
       Paint()
-        ..color = const Color(0x33000000)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
+        ..color = const Color(0x40000000)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
     );
-    canvas.drawRRect(rr, Paint()..color = const Color(0xFFFFFFFF));
+    canvas.drawRRect(rr, Paint()..color = _popupFill);
     canvas.drawRRect(
       rr,
       Paint()
-        ..color = _theme.pageBorder
+        ..color = _line
         ..style = PaintingStyle.stroke,
     );
-    const Color ink = Color(0xFF1F2937);
-    const Color soft = Color(0xFF6B7280);
-    final Offset? hover = _hover;
-    String footer = current.isEmpty ? 'No color' : current;
+    final Color ink = _ink;
+    final Color soft = _muted;
+    final Offset? hover = _hoverL;
+    String footer = current.isEmpty ? _s.t('No color') : current;
     void caption(String text, double y) {
-      _text(
-        text,
-        10,
-        soft,
-        rect.width - 20,
-        bold: true,
-      ).paint(canvas, Offset(rect.left + 10, y));
+      _draw(
+        canvas,
+        _text(_s.t(text), 10, soft, rect.width - 20, bold: true),
+        Offset(rect.left + 10, y),
+      );
     }
 
     final List<_Swatch> swatches = _swatches;
@@ -2074,17 +3788,16 @@ class RenderReportInspector extends RenderBox
       if (color == null) {
         final RRect b = RRect.fromRectAndRadius(
           s.rect,
-          const Radius.circular(4),
+          const Radius.circular(5),
+        );
+        canvas.drawRRect(
+          b,
+          Paint()..color = _ink.withValues(alpha: hot ? 0.08 : 0.04),
         );
         canvas.drawRRect(
           b,
           Paint()
-            ..color = hot ? const Color(0xFFF1F5F9) : const Color(0xFFF8FAFC),
-        );
-        canvas.drawRRect(
-          b,
-          Paint()
-            ..color = selected ? _accent : const Color(0xFFD1D5DB)
+            ..color = selected ? _accent : _line
             ..style = PaintingStyle.stroke,
         );
         final Rect icon = Rect.fromLTWH(
@@ -2100,9 +3813,10 @@ class RenderReportInspector extends RenderBox
             ..color = const Color(0xFF9CA3AF)
             ..style = PaintingStyle.stroke,
         );
-        final TextPainter tp = _text('No color', _font, ink, 120);
-        tp.paint(
+        final TextPainter tp = _text(_s.t('No color'), _font, ink, 120);
+        _draw(
           canvas,
+          tp,
           Offset(icon.right + 8, s.rect.center.dy - tp.height / 2),
         );
         continue;
@@ -2118,18 +3832,17 @@ class RenderReportInspector extends RenderBox
         canvas.drawRect(
           s.rect.inflate(1.5),
           Paint()
-            ..color = selected ? _accent : const Color(0xFF374151)
+            ..color = selected ? _accent : ink
             ..style = PaintingStyle.stroke
             ..strokeWidth = 1.6,
         );
       }
     }
-    _text(
-      footer,
-      10.5,
-      soft,
-      rect.width - 20,
-    ).paint(canvas, Offset(rect.left + 10, rect.bottom - 18));
+    _draw(
+      canvas,
+      _text(footer, 10.5, soft, rect.width - 20),
+      Offset(rect.left + 10, rect.bottom - 18),
+    );
   }
 
   @override
@@ -2137,8 +3850,8 @@ class RenderReportInspector extends RenderBox
     super.describeSemanticsConfiguration(config);
     config
       ..isSemanticBoundary = true
-      ..textDirection = TextDirection.ltr
-      ..label = 'Report properties'
-      ..value = _controller.inspectorTitle;
+      ..textDirection = _s.direction
+      ..label = _s.t('Report properties')
+      ..value = _titleText;
   }
 }

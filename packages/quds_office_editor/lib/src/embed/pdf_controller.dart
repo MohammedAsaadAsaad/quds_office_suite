@@ -311,10 +311,7 @@ class PdfViewerController extends ChangeNotifier {
       return;
     }
     final Duration start = _zoomStart ??= timestamp;
-    final int elapsedMs = (timestamp - start).inMilliseconds.clamp(
-      0,
-      1 << 30,
-    );
+    final int elapsedMs = (timestamp - start).inMilliseconds.clamp(0, 1 << 30);
     final double t = (elapsedMs / _zoomAnimDuration.inMilliseconds).clamp(
       0.0,
       1.0,

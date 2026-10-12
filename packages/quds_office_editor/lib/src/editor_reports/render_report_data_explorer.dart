@@ -8,6 +8,7 @@ import 'package:quds_office_engine/quds_reports.dart';
 
 import '../embed/office_theme.dart';
 import 'report_designer_controller.dart';
+import 'report_designer_strings.dart';
 
 /// Part of the data explorer under a context click.
 enum ReportDataArea {
@@ -229,6 +230,12 @@ class RenderReportDataExplorer extends RenderBox {
   Color get _accent => _theme.selectionStroke;
 
   Color get _line => _theme.gridLine;
+
+  /// Grid and button face: the paper color on light chrome, a lifted chrome
+  /// tone on dark chrome (the paper stays white for the report canvas).
+  Color get _cellFill => _theme.chromeFill.computeLuminance() < 0.35
+      ? Color.alphaBlend(const Color(0x0FFFFFFF), _theme.chromeFill)
+      : _theme.pageBackground;
 
   // ------------------------------------------------------------ geometry
 
@@ -703,7 +710,7 @@ class RenderReportDataExplorer extends RenderBox {
     canvas.drawRect(side, Paint()..color = _theme.headerFill);
     canvas.drawLine(side.topRight, side.bottomRight, Paint()..color = _line);
     _text(
-      'DATA',
+      _controller.strings.t('DATA'),
       10.5,
       _muted,
       side.width - 24,
@@ -798,8 +805,7 @@ class RenderReportDataExplorer extends RenderBox {
   void _buttonFace(Canvas canvas, Rect r, String label, bool hot) {
     canvas.drawRRect(
       RRect.fromRectAndRadius(r, const Radius.circular(5)),
-      Paint()
-        ..color = hot ? _accent.withValues(alpha: 0.12) : _theme.pageBackground,
+      Paint()..color = hot ? _accent.withValues(alpha: 0.12) : _cellFill,
     );
     canvas.drawRRect(
       RRect.fromRectAndRadius(r.deflate(0.5), const Radius.circular(5)),
@@ -821,15 +827,16 @@ class RenderReportDataExplorer extends RenderBox {
       }
     }
     final bool host = _controller.hasHostData;
+    final ReportDesignerStrings s = _controller.strings;
     final List<(String, String)> actions = <(String, String)>[
       if (t.isFields)
-        ('field+', '+ Field')
+        ('field+', s.t('+ Field'))
       else ...<(String, String)>[
-        if (!host) ('row+', '+ Row'),
-        ('col+', '+ Column'),
-        ('calc+', 'ƒx Column'),
+        if (!host) ('row+', s.t('+ Row')),
+        ('col+', s.t('+ Column')),
+        ('calc+', s.t('ƒx Column')),
       ],
-      if (_controller.dataPicker != null && !host) ('import', 'Import…'),
+      if (_controller.dataPicker != null && !host) ('import', s.t('Import…')),
     ];
     var right = h.right - 10;
     for (final (String id, String label) in actions.reversed) {
@@ -853,14 +860,16 @@ class RenderReportDataExplorer extends RenderBox {
     title.paint(canvas, Offset(x, h.center.dy - title.height / 2));
     x += title.width + 10;
     final String info = t.isFields
-        ? '${t.rows.length} value${t.rows.length == 1 ? '' : 's'}'
-        : '${t.rows.length} row${t.rows.length == 1 ? '' : 's'} · '
-              '${t.columns.length} column${t.columns.length == 1 ? '' : 's'}';
-    final String source = host
-        ? 'host data · read-only'
-        : _controller.hasSampleData
-        ? 'sample data'
-        : 'generated';
+        ? s.count(t.rows.length, 'value')
+        : '${s.count(t.rows.length, 'row')} · '
+              '${s.count(t.columns.length, 'column')}';
+    final String source = s.t(
+      host
+          ? 'host data · read-only'
+          : _controller.hasSampleData
+          ? 'sample data'
+          : 'generated',
+    );
     final TextPainter sub = _text(
       '$info  ·  $source',
       11.5,
@@ -873,13 +882,15 @@ class RenderReportDataExplorer extends RenderBox {
   void _paintGrid(Canvas canvas, ReportDataTableView t) {
     final Rect g = _grid;
     final Rect body = _body(t);
-    canvas.drawRect(g, Paint()..color = _theme.pageBackground);
+    canvas.drawRect(g, Paint()..color = _cellFill);
     if (t.columns.isEmpty) {
       final TextPainter tp = _text(
-        t.isFields
-            ? 'No single-value fields. Add one with "+ Field".'
-            : 'This table has no columns yet. Add a column or import a CSV '
-                  'or JSON file.',
+        _controller.strings.t(
+          t.isFields
+              ? 'No single-value fields. Add one with "+ Field".'
+              : 'This table has no columns yet. Add a column or import a CSV '
+                    'or JSON file.',
+        ),
         12.5,
         _muted,
         g.width - 40,
@@ -988,10 +999,12 @@ class RenderReportDataExplorer extends RenderBox {
 
     if (t.rows.isEmpty) {
       final TextPainter tp = _text(
-        _controller.hasHostData
-            ? 'The host data has no rows for this table.'
-            : 'No rows yet. Add a row with "+ Row" or import a CSV / JSON '
-                  'file.',
+        _controller.strings.t(
+          _controller.hasHostData
+              ? 'The host data has no rows for this table.'
+              : 'No rows yet. Add a row with "+ Row" or import a CSV / JSON '
+                    'file.',
+        ),
         12.5,
         _muted,
         body.width - 32,
@@ -1294,7 +1307,7 @@ class RenderReportDataExplorer extends RenderBox {
         text: text.replaceAll('\n', ' '),
         style: _style(fontSize, color, bold: bold, italic: italic),
       ),
-      textDirection: TextDirection.ltr,
+      textDirection: _controller.strings.direction,
       maxLines: 1,
       ellipsis: '…',
     )..layout(maxWidth: w);

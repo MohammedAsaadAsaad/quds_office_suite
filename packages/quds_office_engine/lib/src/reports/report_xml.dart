@@ -4,6 +4,7 @@ library;
 import '../xml/xml_node.dart';
 import '../xml/xml_reader.dart';
 import 'report_data.dart';
+import 'report_diagnostic_target.dart';
 import 'report_expression.dart';
 import 'report_format.dart';
 import 'report_template.dart';
@@ -29,6 +30,20 @@ class ReportDiagnostic {
   /// isError API.
   bool get isError => severity == ReportDiagnosticSeverity.error;
 
+  /// Where in the template [path] points.
+  ReportDiagnosticTarget get target => ReportDiagnosticTarget.parse(path);
+
+  /// The nature of the finding.
+  ReportDiagnosticKind get kind => ReportDiagnosticTarget.kindOf(path, message);
+
+  /// [message] without the exception class name parser messages start with.
+  String get summary {
+    const String prefix = 'ReportExpressionException: ';
+    return message.startsWith(prefix)
+        ? message.substring(prefix.length)
+        : message;
+  }
+
   @override
   String toString() => '${isError ? 'error' : 'warning'}: $path: $message';
 }
@@ -53,13 +68,23 @@ class ReportTemplateException implements Exception {
 /// Parse output: the template (best effort) plus diagnostics.
 class ReportParseResult {
   /// ReportParseResult API.
-  const ReportParseResult(this.template, this.diagnostics);
+  const ReportParseResult(
+    this.template,
+    this.diagnostics, {
+    this.readable = true,
+  });
 
   /// template API.
   final ReportTemplate template;
 
   /// diagnostics API.
   final List<ReportDiagnostic> diagnostics;
+
+  /// False when the XML could not be read at all (malformed, empty, or not
+  /// `<QudsReport>`), so [template] is empty. When true, [template] holds
+  /// everything that parsed, even if [diagnostics] has errors, and a
+  /// designer can open it and show those errors.
+  final bool readable;
 
   /// hasErrors API.
   bool get hasErrors => diagnostics.any((ReportDiagnostic d) => d.isError);
@@ -96,23 +121,29 @@ class QudsReportXmlParser {
       root = XmlDocument.parse(xml).root;
     } on XmlParseException catch (e) {
       _error('', 'Malformed XML: ${e.message} (${_lineCol(xml, e.position)})');
-      return ReportParseResult(_template, List<ReportDiagnostic>.of(_diag));
+      return _unreadable();
     } on FormatException catch (e) {
       _error('', 'Malformed XML: ${e.message}');
-      return ReportParseResult(_template, List<ReportDiagnostic>.of(_diag));
+      return _unreadable();
     }
     if (root == null) {
       _error('', 'Empty document');
-      return ReportParseResult(_template, List<ReportDiagnostic>.of(_diag));
+      return _unreadable();
     }
     if (root.localName != 'QudsReport') {
       _error(root.localName, 'Root element must be <QudsReport>');
-      return ReportParseResult(_template, List<ReportDiagnostic>.of(_diag));
+      return _unreadable();
     }
     _readRoot(root);
     _validate();
     return ReportParseResult(_template, List<ReportDiagnostic>.of(_diag));
   }
+
+  ReportParseResult _unreadable() => ReportParseResult(
+    _template,
+    List<ReportDiagnostic>.of(_diag),
+    readable: false,
+  );
 
   static String _lineCol(String text, int offset) {
     var line = 1;
@@ -548,10 +579,25 @@ class QudsReportXmlParser {
             _error('$path[$name]', err);
           }
       }
-      if (_template.variables.any(
-        (ReportVariable o) => o.name.toLowerCase() == name.trim().toLowerCase(),
-      )) {
-        _warn('$path[$name]', 'Duplicate variable name');
+      final String lower = name.trim().toLowerCase();
+      if (!ReportVariable.isValidName(name.trim())) {
+        _warn(
+          '$path[$name]',
+          'Variable names are letters, digits and _, optionally grouped '
+              'with dots (stats.sum)',
+        );
+      }
+      for (final ReportVariable o in _template.variables) {
+        final String other = o.name.toLowerCase();
+        if (other == lower) {
+          _warn('$path[$name]', 'Duplicate variable name');
+        } else if (other.startsWith('$lower.') || lower.startsWith('$other.')) {
+          _warn(
+            '$path[$name]',
+            '"${o.name}" and "${name.trim()}" clash: a name cannot be both '
+                'a variable and a folder',
+          );
+        }
       }
       _template.variables.add(variable);
     }
@@ -1538,7 +1584,7 @@ class QudsReportXmlParser {
       _error('Settings/Margins', 'Margins leave no printable area');
     }
     final ReportBand? detail = t.detail;
-    if (detail == null) {
+    if (detail == null && t.dataSchema.tables.isNotEmpty) {
       _warn('Bands', 'No Detail band; data rows will not print');
     }
     if (t.band(ReportBandKind.groupFooter) != null ||

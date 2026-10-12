@@ -70,6 +70,18 @@ Future<void> settle() async {
   }
 }
 
+/// The ready-made `.qrep` files of `templates/`, in menu order.
+List<ReportTemplateInfo> fileTemplates() => ReportTemplateLibrary.sorted(
+  Directory('templates')
+      .listSync()
+      .whereType<File>()
+      .where((File f) => f.path.endsWith('.qrep'))
+      .map((File f) => ReportTemplateInfo.decode(f.readAsBytesSync())),
+);
+
+ReportTemplateInfo fileTemplate(String id) =>
+    fileTemplates().firstWhere((ReportTemplateInfo t) => t.id == id);
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -89,6 +101,181 @@ void main() {
       expect(byName(c, 'title').x, closeTo(x0 + 5 * mm, 0.01));
       expect(c.selection, <String>[title.id]);
       c.dispose();
+    });
+
+    test('a saved template with a broken variable opens with diagnostics', () {
+      final String broken = sampleXml.replaceFirst(
+        '<Bands>',
+        '<Variables><Var name="itemsSum" value="{{sum(item.qty}}"/></Variables>'
+            '<Bands>',
+      );
+      final ReportDesignerController c = ReportDesignerController.fromXml(
+        broken,
+      );
+      expect(c.template.variables.single.value, '{{sum(item.qty}}');
+      expect(
+        c.loadDiagnostics
+            .where((ReportDiagnostic d) => d.isError)
+            .map((ReportDiagnostic d) => d.path),
+        <Matcher>[contains('itemsSum')],
+      );
+      expect(c.toXml(), contains('{{sum(item.qty}}'));
+      expect(c.validate().where((ReportDiagnostic d) => d.isError), isNotEmpty);
+
+      c.loadXml(sampleXml);
+      expect(
+        c.loadDiagnostics.where((ReportDiagnostic d) => d.isError),
+        isEmpty,
+      );
+      c.loadXml(broken);
+      expect(c.loadDiagnostics, isNotEmpty);
+      c.replaceTemplate(ReportTemplate());
+      expect(c.loadDiagnostics, isEmpty);
+
+      expect(
+        () => c.loadXml('<QudsReport><Bands></QudsReport>'),
+        throwsA(isA<ReportTemplateException>()),
+      );
+      expect(
+        () => ReportDesignerController.fromXml('<Other/>'),
+        throwsA(isA<ReportTemplateException>()),
+      );
+      c.dispose();
+    });
+
+    test('problems are live and reveal takes the user to each one', () {
+      final String broken = sampleXml
+          .replaceFirst(
+            '<Bands>',
+            '<Variables><Var name="itemsSum" value="{{sum(item.qty}}"/>'
+                '</Variables>'
+                '<DataSchema><Table name="items">'
+                '<Column name="net" expression="qty *"/></Table></DataSchema>'
+                '<Bands>',
+          )
+          .replaceFirst(
+            'name="sub" x="100mm" y="12mm" width="40mm" height="8mm">Sub<',
+            'name="sub" x="100mm" y="12mm" width="140mm" height="8mm">'
+                '{{BOGUS(1)}}<',
+          )
+          .replaceFirst('</ReportHeader>', '<Foo/></ReportHeader>');
+      final ReportDesignerController c = ReportDesignerController.fromXml(
+        broken,
+      );
+      final List<ReportDiagnostic> problems = c.problems;
+      expect(problems.first.isError, isTrue);
+      expect(
+        problems.skipWhile((ReportDiagnostic d) => d.isError),
+        everyElement(
+          isA<ReportDiagnostic>().having(
+            (ReportDiagnostic d) => d.isError,
+            'error',
+            false,
+          ),
+        ),
+      );
+      ReportDiagnostic find(bool Function(ReportDiagnostic d) test) =>
+          c.problems.firstWhere(test);
+
+      final ReportDiagnostic edge = find(
+        (ReportDiagnostic d) => d.message == 'Extends past the page edge',
+      );
+      expect(edge.kind, ReportDiagnosticKind.layout);
+      final ReportDiagnostic foo = find(
+        (ReportDiagnostic d) => d.message.contains('<Foo>'),
+      );
+      expect(c.isFromFile(foo), isTrue);
+      expect(c.isFromFile(edge), isFalse);
+      expect(
+        problems.where(
+          (ReportDiagnostic d) =>
+              d.target.place == ReportDiagnosticPlace.variable && d.isError,
+        ),
+        hasLength(1),
+      );
+
+      final ReportElement sub = byName(c, 'sub');
+      final int serial = c.revealSerial;
+      expect(
+        c.revealDiagnostic(
+          find((ReportDiagnostic d) => d.message.contains('BOGUS')),
+        ),
+        isTrue,
+      );
+      expect(c.selection, <String>[sub.id]);
+      expect(c.revealSerial, serial + 1);
+      expect(c.revealElement, sub.id);
+      expect(c.highlightProperty, 'text');
+      expect(c.activeProblem?.message, contains('BOGUS'));
+
+      c.revealDiagnostic(
+        find(
+          (ReportDiagnostic d) =>
+              d.target.place == ReportDiagnosticPlace.variable,
+        ),
+      );
+      expect(c.selection, isEmpty);
+      expect(c.inspectorPage, ReportInspectorPage.variables);
+      expect(c.selectedVariablePath, 'itemsSum');
+      expect(c.highlightProperty, 'var.0.value');
+      c.addVariable(
+        name: 'rate',
+        type: ReportVariableType.number,
+        value: '5 percent',
+      );
+      expect(
+        c.problems.where(
+          (ReportDiagnostic d) => d.message.contains('is not a number'),
+        ),
+        hasLength(1),
+      );
+      c.undo();
+      c.setProperty('var.0.value', '{{SUM(items.qty)}}');
+      expect(c.highlightProperty, isNull);
+      expect(
+        c.problems.where(
+          (ReportDiagnostic d) =>
+              d.target.place == ReportDiagnosticPlace.variable,
+        ),
+        isEmpty,
+      );
+
+      c.revealDiagnostic(
+        find(
+          (ReportDiagnostic d) =>
+              d.target.place == ReportDiagnosticPlace.dataColumn,
+        ),
+      );
+      expect(c.mode, ReportDesignMode.data);
+      expect(c.dataTable.name, 'items');
+      expect(c.dataTable.columns[c.dataColumn].name, 'net');
+      expect(c.highlightProperty, 'data.col.expression');
+
+      c.revealDiagnostic(edge);
+      expect(c.mode, ReportDesignMode.design);
+      expect(c.selection, <String>[sub.id]);
+      c.setProperty('width', '40');
+      expect(
+        c.problems.any(
+          (ReportDiagnostic d) => d.message == 'Extends past the page edge',
+        ),
+        isFalse,
+      );
+      c.clearLoadDiagnostics();
+      expect(
+        c.problems.any((ReportDiagnostic d) => d.message.contains('<Foo>')),
+        isFalse,
+      );
+      c.dispose();
+    });
+
+    test('the ready-made templates have no problems', () {
+      for (final ReportTemplateInfo t in fileTemplates()) {
+        final ReportDesignerController c = ReportDesignerController()
+          ..loadTemplate(t);
+        expect(c.problems, isEmpty, reason: t.id);
+        c.dispose();
+      }
     });
 
     test('align and size tools use the primary element', () {
@@ -284,7 +471,7 @@ void main() {
     });
 
     test('ready-made templates load with their sample data', () {
-      for (final ReportTemplateInfo info in ReportTemplates.all) {
+      for (final ReportTemplateInfo info in fileTemplates()) {
         final ReportDesignerController c = ReportDesignerController(
           clock: () => DateTime(2026, 10, 10, 9, 30),
         );
@@ -299,6 +486,44 @@ void main() {
         expect(layout!.pages, isNotEmpty, reason: info.id);
         c.dispose();
       }
+    });
+
+    test('template files match the built-in catalog they replace', () {
+      final List<ReportTemplateInfo> files = fileTemplates();
+      // ignore: deprecated_member_use
+      final List<ReportTemplateInfo> catalog = ReportTemplates.all;
+      expect(
+        files.map((ReportTemplateInfo t) => t.id),
+        catalog.map((ReportTemplateInfo t) => t.id),
+      );
+      for (int i = 0; i < files.length; i++) {
+        final ReportTemplateInfo f = files[i];
+        final ReportTemplateInfo c = catalog[i];
+        expect(f.xml, c.xml, reason: f.id);
+        expect(f.family, c.family, reason: f.id);
+        expect(f.familyTitleAr, c.familyTitleAr, reason: f.id);
+        expect(f.descriptionAr, c.descriptionAr, reason: f.id);
+        expect(f.category, c.category, reason: f.id);
+        expect(f.language, c.language, reason: f.id);
+        expect(f.images().keys.toSet(), c.images().keys.toSet());
+        for (final MapEntry<String, Uint8List> image in c.images().entries) {
+          expect(f.images()[image.key], image.value, reason: f.id);
+        }
+        expect(f.package().template!.id, f.id);
+      }
+    });
+
+    test('the library reads templates from an asset bundle', () async {
+      final List<ReportTemplateInfo> all = await ReportTemplateLibrary.bundled(
+        bundle: _DirectoryBundle('templates', ReportTemplateLibrary.folder),
+      );
+      expect(all, hasLength(16));
+      expect(all.first.id, 'sales_invoice_ar');
+      expect(all.last.category, ReportTemplateCategory.hr);
+      expect(
+        () => ReportTemplateInfo.fromPackage(ReportPackage(xml: sampleXml)),
+        throwsA(isA<ReportPackageException>()),
+      );
     });
 
     test('calculated columns complete with their computed values', () {
@@ -671,10 +896,13 @@ void main() {
       await tester.runAsync(settle);
       await tester.pump();
       expect(device.listed, 1);
+      c.beginPropertyEdit('font.add');
+      await tester.pump();
       expect(
-        c.properties.map((ReportProperty p) => p.label),
+        c.completion!.items.map((ReportCompletionItem i) => i.label),
         contains('Liberation Serif'),
       );
+      c.cancelPropertyEdit();
       await tester.tapAt(tab(0));
       await tester.pump();
       expect(c.inspectorPage, ReportInspectorPage.properties);
@@ -696,6 +924,106 @@ void main() {
       await tester.pump();
       expect(c.inspectorPage, ReportInspectorPage.fonts, reason: 'icon tabs');
       await tester.pump(const Duration(milliseconds: 400));
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('variables explorer, cards, font picker, and Arabic layout', (
+      WidgetTester tester,
+    ) async {
+      final FakeDeviceFonts device = FakeDeviceFonts(<String, ReportFontFiles>{
+        'Liberation Mono': ReportFontFiles(
+          regular: fontFile('LiberationMono-Regular.ttf'),
+        ),
+      });
+      final ReportDesignerController c = await pumpDesigner(
+        tester,
+        deviceFonts: device,
+      );
+      c
+        ..addVariable(name: 'stats.sum', value: '1')
+        ..addVariable(name: 'stats.avg', value: '2')
+        ..addVariable(name: 'company', value: 'Quds');
+      c.inspectorPage = ReportInspectorPage.variables;
+      await tester.pump();
+      final Finder inspector = find.byType(ReportInspector);
+      final RenderReportInspector ro = tester.renderObject(inspector);
+      Offset node(int i) =>
+          tester.getTopLeft(inspector) +
+          Offset(
+            tester.getSize(inspector).width / 2,
+            RenderReportInspector.titleHeight +
+                RenderReportInspector.tabsHeight +
+                6 +
+                RenderReportInspector.groupHeight +
+                4 +
+                28 * (i + 0.5),
+          );
+
+      await tester.tapAt(node(3));
+      await tester.pump();
+      expect(c.selectedVariablePath, 'company', reason: 'folders list first');
+      await tester.tapAt(node(0));
+      await tester.pump();
+      expect(c.selectedVariablePath, 'stats');
+      expect(
+        c.properties.map((ReportProperty p) => p.key),
+        containsAll(<String>['vfolder.name', 'vfolder.add', 'vfolder.remove']),
+      );
+      ro.setFolderClosed('stats', true);
+      await tester.pump();
+      await tester.tapAt(node(1));
+      await tester.pump();
+      expect(c.selectedVariablePath, 'company', reason: 'stats is collapsed');
+
+      c.strings = ReportDesignerStrings.arabic;
+      await tester.pump();
+      expect(c.strings.isRtl, isTrue);
+      await tester.tapAt(node(0));
+      await tester.pump();
+      expect(c.selectedVariablePath, 'stats', reason: 'rows keep their order');
+
+      c.addImage(
+        'logo.png',
+        PngBytes.rgb(width: 8, height: 4, plot: (int x, int y, List<int> p) {}),
+      );
+      final Uint8List red = PngBytes.rgb(
+        width: 6,
+        height: 6,
+        plot: (int x, int y, List<int> p) => p[0] = 255,
+      );
+      c.imagePicker = () async => (name: 'red.png', bytes: red);
+      c.inspectorPage = ReportInspectorPage.images;
+      await tester.pump();
+      final Offset thumb =
+          tester.getTopLeft(inspector) +
+          Offset(
+            tester.getSize(inspector).width - 54,
+            RenderReportInspector.titleHeight +
+                RenderReportInspector.tabsHeight +
+                6 +
+                RenderReportInspector.groupHeight +
+                2 +
+                4 +
+                8 +
+                34,
+          );
+      await tester.tapAt(thumb);
+      await tester.pump();
+      expect(c.images['logo'], same(red), reason: 'the thumbnail replaces');
+      expect(c.imageNames, <String>['logo']);
+      c.undo();
+      expect(c.images['logo'], isNot(same(red)));
+      c.inspectorPage = ReportInspectorPage.fonts;
+      await tester.runAsync(settle);
+      await tester.pump();
+      c.beginPropertyEdit('font.add');
+      await tester.pump();
+      expect(c.completion!.items.single.label, 'Liberation Mono');
+      expect(c.acceptCompletion(), isTrue);
+      await tester.runAsync(settle);
+      await tester.pump();
+      expect(c.embeddedFamilies, <String>['Liberation Mono']);
+      expect(c.fontPreviewText('Liberation Mono'), isNotEmpty);
       expect(tester.takeException(), isNull);
     });
 
@@ -786,7 +1114,7 @@ void main() {
           home: QudsReportDesigner(
             controller: c,
             loadBundledFonts: false,
-            templates: ReportTemplates.all,
+            templates: fileTemplates(),
             onExport: (ReportExportFormat f, Uint8List bytes) {},
           ),
         ),
@@ -809,6 +1137,140 @@ void main() {
       expect(c.template.isRtl, isTrue);
       expect(c.images.keys, containsAll(<String>['logo', 'seal', 'stamp']));
       expect(c.template.name, 'شهادة شكر وتقدير');
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('pinching with two fingers zooms the canvas and the preview', (
+      WidgetTester tester,
+    ) async {
+      final ReportDesignerController c = await pumpDesigner(tester);
+      final Offset center = tester.getCenter(find.byType(ReportDesignerCanvas));
+      final double z0 = c.zoom;
+
+      final TestPointer pad = TestPointer(1, PointerDeviceKind.trackpad);
+      await tester.sendEventToBinding(pad.panZoomStart(center));
+      await tester.sendEventToBinding(pad.panZoomUpdate(center, scale: 1.5));
+      await tester.sendEventToBinding(pad.panZoomEnd());
+      await tester.pump();
+      expect(c.zoom, closeTo(z0 * 1.5, 1e-6));
+
+      final double z1 = c.zoom;
+      final TestGesture a = await tester.startGesture(
+        center - const Offset(60, 0),
+        pointer: 7,
+        kind: PointerDeviceKind.touch,
+      );
+      final TestGesture b = await tester.startGesture(
+        center + const Offset(60, 0),
+        pointer: 8,
+        kind: PointerDeviceKind.touch,
+      );
+      await a.moveTo(center - const Offset(30, 0));
+      await b.moveTo(center + const Offset(30, 0));
+      await a.up();
+      await b.up();
+      await tester.pump();
+      expect(c.zoom, closeTo(z1 / 2, 1e-6));
+      expect(c.selection, isEmpty);
+      expect(c.canUndo, isFalse);
+
+      c.togglePreview();
+      await tester.pump();
+      final Offset preview = tester.getCenter(
+        find.byType(ReportPreviewSurface),
+      );
+      final double z2 = c.zoom;
+      await tester.sendEventToBinding(pad.panZoomStart(preview));
+      await tester.sendEventToBinding(pad.panZoomUpdate(preview, scale: 2));
+      await tester.sendEventToBinding(pad.panZoomEnd());
+      await tester.pump();
+      expect(c.zoom, closeTo(z2 * 2, 1e-6));
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('problems panel opens, takes the user to a problem, closes', (
+      WidgetTester tester,
+    ) async {
+      final ReportDesignerController c = ReportDesignerController.fromXml(
+        sampleXml.replaceFirst('>Sub<', '>{{BOGUS(1)}}<'),
+      );
+      await pumpDesigner(tester, controller: c);
+      expect(find.byType(ReportProblemsPanel), findsNothing);
+      c.problemsOpen = true;
+      await tester.pump();
+      final Rect panel = tester.getRect(find.byType(ReportProblemsPanel));
+      expect(panel.height, greaterThan(100));
+      final RenderReportProblems render = tester.renderObject(
+        find.byType(ReportProblemsPanel),
+      );
+      final ReportDiagnostic first = c.problems.first;
+      expect(render.kindLabel(first), 'Unknown function');
+      expect(render.where(first), 'Report Header  ›  Text "sub"');
+
+      await tester.tapAt(
+        panel.topLeft +
+            const Offset(200, RenderReportProblems.headerHeight + 20),
+      );
+      await tester.pump();
+      expect(c.selection, <String>[byName(c, 'sub').id]);
+      expect(c.activeProblem, same(first));
+      expect(c.highlightProperty, 'text');
+      expect(tester.takeException(), isNull);
+
+      c.strings = ReportDesignerStrings.arabic;
+      await tester.pump();
+      expect(render.kindLabel(first), 'دالة غير معروفة');
+      expect(tester.takeException(), isNull);
+      c.strings = ReportDesignerStrings.english;
+      await tester.pump();
+
+      await tester.tapAt(panel.topRight + const Offset(-24, 16));
+      await tester.pump();
+      expect(c.problemsOpen, isFalse);
+      expect(find.byType(ReportProblemsPanel), findsNothing);
+    });
+
+    testWidgets('print button and Ctrl+P hand the host a PDF', (
+      WidgetTester tester,
+    ) async {
+      tester.view.physicalSize = const Size(1400, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final ReportDesignerController c = sample();
+      addTearDown(c.dispose);
+      final List<Uint8List> printed = <Uint8List>[];
+      await tester.pumpWidget(
+        MaterialApp(
+          home: QudsReportDesigner(
+            controller: c,
+            loadBundledFonts: false,
+            templates: const <ReportTemplateInfo>[],
+            onPrint: (Uint8List pdf) async => printed.add(pdf),
+          ),
+        ),
+      );
+      await tester.pump();
+      final Offset bar = tester.getTopLeft(find.byType(ReportToolbar));
+      final RenderReportToolbar toolbar = tester.renderObject(
+        find.byType(ReportToolbar),
+      );
+      expect(toolbar.rectOf('export'), isNull);
+      await tester.tapAt(bar + toolbar.rectOf('print')!.center);
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 300)),
+      );
+      await tester.pump();
+      expect(printed, hasLength(1));
+      expect(String.fromCharCodes(printed.first.take(5)), '%PDF-');
+
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyP);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 300)),
+      );
+      await tester.pump();
+      expect(printed, hasLength(2));
       expect(tester.takeException(), isNull);
     });
 
@@ -840,7 +1302,7 @@ void main() {
     ) async {
       final ReportDesignerController c = ReportDesignerController(
         clock: () => DateTime(2026, 10, 10, 9, 30),
-      )..loadTemplate(ReportTemplates.byId('sales_performance')!);
+      )..loadTemplate(fileTemplate('sales_performance'));
       await pumpDesigner(tester, controller: c);
       expect(tester.takeException(), isNull);
       await tester.sendKeyEvent(LogicalKeyboardKey.f5);
@@ -973,6 +1435,65 @@ void main() {
       expect(element().source, 'logo');
     });
 
+    test(
+      'replacing an image keeps its name and updates its elements',
+      () async {
+        final ReportDesignerController c = ReportDesignerController.fromXml(
+          sampleXml,
+        );
+        final String key = c.addImage('logo.png', wide)!;
+        final ReportImageElement e = c.insertImage(key)!;
+        final Uint8List square = PngBytes.rgb(
+          width: 12,
+          height: 12,
+          plot: (int x, int y, List<int> rgb) => rgb[0] = 255,
+        );
+        expect(c.replaceImage('missing', square), isFalse);
+        expect(
+          c.replaceImage(key, Uint8List.fromList(<int>[1, 2, 3])),
+          isFalse,
+        );
+        expect(c.replaceImage(key, square), isTrue);
+        expect(c.imageNames, <String>['logo']);
+        expect(c.images['logo'], same(square));
+        expect(
+          (c.template.findElement(e.id)!.$2 as ReportImageElement).source,
+          'logo',
+        );
+        c.undo();
+        expect(c.images['logo'], same(wide));
+        c.redo();
+        expect(c.images['logo'], same(square));
+
+        c.select(e.id);
+        expect(
+          c.properties.map((ReportProperty p) => p.key),
+          isNot(contains('source.replace')),
+        );
+        c.imagePicker = () async => (name: 'new.png', bytes: wide);
+        expect(
+          c.properties.map((ReportProperty p) => p.key),
+          contains('source.replace'),
+        );
+        c.setProperty('source.replace', 'Replace image…');
+        await Future<void>.delayed(Duration.zero);
+        expect(c.images['logo'], same(wide));
+        expect(c.imageNames, <String>['logo']);
+
+        c.select(null);
+        c.inspectorPage = ReportInspectorPage.images;
+        c.imagePicker = () async => (name: 'notes.txt', bytes: Uint8List(8));
+        c.setProperty('img.0.replace', 'Replace image…');
+        await Future<void>.delayed(Duration.zero);
+        expect(c.images['logo'], same(wide));
+        expect(c.notice, 'The chosen file is not a PNG or JPEG image');
+        c.imagePicker = () async => (name: 'red.png', bytes: square);
+        c.setProperty('img.0.replace', 'Replace image…');
+        await Future<void>.delayed(Duration.zero);
+        expect(c.images['logo'], same(square));
+      },
+    );
+
     test('report inspector lists embedded images', () {
       final ReportDesignerController c = ReportDesignerController.fromXml(
         sampleXml,
@@ -1005,10 +1526,17 @@ void main() {
 
   group('Report package fonts', () {
     List<ReportProperty> page(ReportDesignerController c) => c.properties;
-    List<String> deviceRows(ReportDesignerController c) => <String>[
-      for (final ReportProperty p in page(c))
-        if (p.key.startsWith('dev.')) p.label,
-    ];
+    List<String> deviceRows(ReportDesignerController c) {
+      c.beginPropertyEdit('font.add');
+      final List<String> out = <String>[
+        for (final ReportCompletionItem i
+            in c.completion?.items ?? const <ReportCompletionItem>[])
+          i.label,
+      ];
+      c.cancelPropertyEdit();
+      return out;
+    }
+
     ReportProperty prop(ReportDesignerController c, String key) =>
         page(c).firstWhere((ReportProperty p) => p.key == key);
 
@@ -1079,29 +1607,41 @@ void main() {
       c.inspectorPage = ReportInspectorPage.fonts;
       expect(c.inspectorTitle, 'Fonts');
       expect(prop(c, 'font.none').kind, ReportPropertyKind.note);
-      expect(prop(c, 'font.status').value, 'Looking for installed fonts…');
+      expect(prop(c, 'font.add').kind, ReportPropertyKind.text);
+      expect(c.deviceFamilies, isNull, reason: 'still listing');
       await settle();
-      expect(deviceRows(c), <String>[
-        'Broken',
-        'Liberation Mono',
-        'Liberation Serif',
-      ]);
+      expect(
+        deviceRows(c),
+        unorderedEquals(<String>[
+          'Broken',
+          'Liberation Mono',
+          'Liberation Serif',
+        ]),
+      );
 
-      c.setProperty('font.search', 'SERIF');
-      expect(deviceRows(c), <String>['Liberation Serif']);
-      c.setProperty('dev.0', 'Embed');
+      c.beginPropertyEdit('font.add');
+      final InlineCellEditor ed = c.propertyEditor;
+      ed.replaceRange(0, ed.formulaBar.length, 'SERIF');
+      expect(
+        c.completion!.items.map((ReportCompletionItem i) => i.label),
+        <String>['Liberation Serif'],
+      );
+      expect(c.acceptCompletion(0), isTrue);
+      expect(c.editingProperty, isNull, reason: 'picking a font commits');
       await settle();
       expect(c.embeddedFamilies, <String>['Liberation Serif']);
       expect(c.notice, startsWith('Embedded Liberation Serif (Regular + Bold'));
-      expect(deviceRows(c), isEmpty, reason: 'embedded families leave');
-      expect(prop(c, 'font.status').value, contains('No installed font'));
+      expect(
+        deviceRows(c),
+        isNot(contains('Liberation Serif')),
+        reason: 'embedded families leave',
+      );
       expect(prop(c, 'font.0.uses').value, 'No elements');
       c.setProperty('font.0.default', 'true');
       expect(c.template.defaultFont, 'Liberation Serif');
       expect(prop(c, 'font.0.default').value, 'true');
 
-      c.setProperty('font.search', '');
-      c.setProperty('dev.0', 'Embed');
+      c.setProperty('font.add', 'Broken');
       await settle();
       expect(c.notice, startsWith('Could not embed Broken'));
       expect(c.embeddedFamilies, <String>['Liberation Serif']);
@@ -1126,7 +1666,7 @@ void main() {
       ]);
       c.select(null);
       c.inspectorPage = ReportInspectorPage.fonts;
-      expect(prop(c, 'font.0.uses').value, '1 element');
+      expect(prop(c, 'font.0.uses').value, '1');
       c.setProperty('font.0.remove', 'Remove');
       expect(c.embeddedFamilies, <String>['Liberation Serif']);
       expect(device.listed, 1, reason: 'the device list is read once');
@@ -1459,4 +1999,31 @@ void main() {
       expect(c.mode, ReportDesignMode.design);
     });
   });
+}
+
+/// Serves the files of [dir] under the asset folder [prefix], with a matching
+/// `AssetManifest.bin`.
+class _DirectoryBundle extends CachingAssetBundle {
+  _DirectoryBundle(this.dir, this.prefix);
+
+  final String dir;
+  final String prefix;
+
+  @override
+  Future<ByteData> load(String key) async {
+    if (key == 'AssetManifest.bin') {
+      final Map<String, List<Map<String, String>>> manifest =
+          <String, List<Map<String, String>>>{
+            for (final File f in Directory(dir).listSync().whereType<File>())
+              '$prefix${f.uri.pathSegments.last}': <Map<String, String>>[
+                <String, String>{'asset': '$prefix${f.uri.pathSegments.last}'},
+              ],
+          };
+      return const StandardMessageCodec().encodeMessage(manifest)!;
+    }
+    final Uint8List bytes = File(
+      '$dir/${key.substring(prefix.length)}',
+    ).readAsBytesSync();
+    return ByteData.sublistView(bytes);
+  }
 }

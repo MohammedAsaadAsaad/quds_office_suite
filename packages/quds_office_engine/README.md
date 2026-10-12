@@ -99,12 +99,12 @@ CLI, or Flutter app fills it with data and exports it with
 
 | Platform | Installer | Portable |
 | --- | --- | --- |
-| Windows 10/11 (x64) | [QudsReportStudio-1.0.0-windows-x64-setup.exe](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.0.0/QudsReportStudio-1.0.0-windows-x64-setup.exe) | [QudsReportStudio-1.0.0-windows-x64-portable.zip](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.0.0/QudsReportStudio-1.0.0-windows-x64-portable.zip) |
-| Debian / Ubuntu (x64) | [quds-report-studio_1.0.0_amd64.deb](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.0.0/quds-report-studio_1.0.0_amd64.deb) | [QudsReportStudio-1.0.0-linux-x64.tar.gz](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.0.0/QudsReportStudio-1.0.0-linux-x64.tar.gz) |
+| Windows 10/11 (x64) | [QudsReportStudio-1.1.0-windows-x64-setup.exe](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.1.0/QudsReportStudio-1.1.0-windows-x64-setup.exe) | [QudsReportStudio-1.1.0-windows-x64-portable.zip](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.1.0/QudsReportStudio-1.1.0-windows-x64-portable.zip) |
+| Debian / Ubuntu (x64) | [quds-report-studio_1.1.0_amd64.deb](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.1.0/quds-report-studio_1.1.0_amd64.deb) | [QudsReportStudio-1.1.0-linux-x64.tar.gz](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.1.0/QudsReportStudio-1.1.0-linux-x64.tar.gz) |
 
 - **Windows:** run the setup. It doesn't need admin rights unless you
   choose "all users". Uninstall it from *Settings › Apps*.
-- **Debian / Ubuntu:** `sudo apt install ./quds-report-studio_1.0.0_amd64.deb`,
+- **Debian / Ubuntu:** `sudo apt install ./quds-report-studio_1.1.0_amd64.deb`,
   and `sudo apt remove quds-report-studio` to uninstall.
 - **Other Linux distributions:** extract the tar.gz and run `./install.sh`
   (per user, no root). Run `~/.local/opt/quds-report-studio/uninstall.sh`
@@ -113,7 +113,7 @@ CLI, or Flutter app fills it with data and exports it with
   for `.qrep` files, so double-clicking a report opens it in the studio.
 
 All files and SHA-256 checksums are on the
-[release page](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/tag/studio-v1.0.0).
+[release page](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/tag/studio-v1.1.0).
 
 <table>
   <tr>
@@ -256,7 +256,7 @@ along the diagonal — Arabic cannot be cut glyph by glyph and still join.
 
 ```yaml
 dependencies:
-  quds_office_engine: ^1.0.0
+  quds_office_engine: ^1.1.0
 ```
 
 ```bash
@@ -476,6 +476,23 @@ QudsReportEngine.fromXml(xml, functions: <String, ReportFunction>{
 `engine.validate()` reports unknown functions and malformed expressions with
 their element path. `ReportCompleter` powers autocomplete in a designer.
 
+Each `ReportDiagnostic` (from `validate()` or the parser) tells a designer
+where and what it is. `target` parses the path into a
+`ReportDiagnosticTarget`: the band and element index, the table column,
+chart series, or point, the attribute (`visibleWhen`, `dataSet`, …), or the
+variable, data table and column, or settings section. Parser and
+`validate()` paths for the same spot give the same `target.key`. `kind` is a
+`ReportDiagnosticKind` (expression, unknown function, layout, missing,
+duplicate, invalid value, structure, unsupported, file), and `summary` is
+the message without the exception class name.
+
+```dart
+for (final ReportDiagnostic d in engine.validate()) {
+  final ReportDiagnosticTarget at = d.target;
+  print('${d.kind.name} in ${at.band?.xmlName} #${at.element}: ${d.summary}');
+}
+```
+
 ### Charts
 
 `<Chart type="bar|horizontalBar|stackedBar|line|area|pie|donut">` aggregates a
@@ -496,13 +513,13 @@ draws vector charts. XLSX and DOCX embed **native, editable** Office charts.
 
 ### Ready-made templates
 
-`ReportTemplates.all` ships 16 production-style templates: eight families,
-each in an **Arabic (RTL)** and an **English** version, grouped by
-`ReportTemplateCategory`. Every template carries sample data
-(`info.sampleData()`), and most carry **pre-saved images** (logo, stamp,
-signature, seal, product photos) that travel inside the `.qrep` package.
+Sixteen production-style templates ship as ready-made `.qrep` files in
+`quds_office_editor`'s `templates/` folder: eight families, each in an
+**Arabic (RTL)** and an **English** version, grouped by
+`ReportTemplateCategory`. Every template carries sample data, and most carry
+**pre-saved images** (logo, stamp, signature, seal, product photos).
 
-| Category | Family | Arabic id | English id | Saved images |
+| Category | Family | Arabic file | English file | Saved images |
 | --- | --- | --- | --- | --- |
 | Sales | VAT sales invoice (QR, discounts, tax, amount in words) | `sales_invoice_ar` | `sales_invoice_en` | logo, stamp, signature |
 | Sales | Commercial invoice (bill-to / ship-to, Code 128) | `commercial_invoice_ar` | `invoice_en` | logo |
@@ -513,17 +530,17 @@ signature, seal, product photos) that travel inside the `.qrep` package.
 | Analytics | Sales dashboard (KPI cards, 4 charts, grouped orders) | `sales_performance_ar` | `sales_performance` | logo |
 | Human resources | Certificate of appreciation (A4 landscape) | `certificate_ar` | `certificate_en` | logo, stamp, signature, seal |
 
-Both versions of a family share one layout: `[[key]]` tokens are filled from
-per-language `strings` (titles, labels, fonts, date and currency formats), and
-RTL mirroring places everything for Arabic, so the pair never drifts apart.
+A template is an ordinary `.qrep` whose package also holds a
+`template.json` manifest (`ReportTemplateManifest`): id, family, English and
+Arabic titles and descriptions, category, language, and menu order. Open one
+in a designer, change it, and save it; add the manifest to make your own
+report a template.
 
 ```dart
-final ReportTemplateInfo info = ReportTemplates.find(
-  'product_catalog',
-  ReportTemplateLanguage.english,
-)!;
-final ReportTemplateInfo arabic = ReportTemplates.counterpart(info)!;
-// Layout + saved images + sample data as one .qrep package.
+final ReportTemplateInfo info = ReportTemplateInfo.decode(
+  File('templates/product_catalog_en.qrep').readAsBytesSync(),
+);
+// The file itself: layout + saved images + fonts + sample data.
 final QudsReportEngine engine = QudsReportEngine.fromPackage(
   info.package().encode(),
   fonts: fonts,
@@ -531,13 +548,13 @@ final QudsReportEngine engine = QudsReportEngine.fromPackage(
 final Uint8List pdf = await engine.exportToPdf(info.sampleData());
 ```
 
-`ReportTemplates.families`, `variants(family)` and `inCategory(category)`
-list the catalog. `info.family`, `info.language`, `familyTitle` and
-`familyTitleAr` label it in a picker. `ReportTemplateCategory.titleFor`
-gives the category caption in either language. The pictures come from
-`ReportTemplateArt` (logo, stamp, signature, seal and
-`ReportProductArt` photos), which draws them as anti-aliased PNGs in
-pure Dart, so the templates work with no asset files.
+`info.family`, `info.language`, `familyTitle` and `familyTitleAr` label a
+template in a picker, and `ReportTemplateInfo.compare` sorts a list by
+category, order, and family, Arabic first. `ReportTemplateCategory.titleFor`
+gives the category caption in either language.
+
+The older built-in catalog, `ReportTemplates`, still works but is
+deprecated and will be removed in 2.0.
 
 <table>
   <tr>

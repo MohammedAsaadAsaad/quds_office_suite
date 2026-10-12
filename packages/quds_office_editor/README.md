@@ -41,10 +41,10 @@ document.
 > **Try the report designer without writing code:**
 > [Quds Report Studio](#quds-report-studio-app) is a desktop app built on
 > `QudsReportDesigner`. Download the
-> [Windows installer](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.0.0/QudsReportStudio-1.0.0-windows-x64-setup.exe)
+> [Windows installer](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.1.0/QudsReportStudio-1.1.0-windows-x64-setup.exe)
 > or the
-> [Linux .deb](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.0.0/quds-report-studio_1.0.0_amd64.deb)
-> ([all downloads](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/tag/studio-v1.0.0)).
+> [Linux .deb](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.1.0/quds-report-studio_1.1.0_amd64.deb)
+> ([all downloads](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/tag/studio-v1.1.0)).
 
 ## What 1.0 brings
 
@@ -111,7 +111,7 @@ explorer, and it is offered at once inside `{{ }}`, with its computed value:
 
 ```yaml
 dependencies:
-  quds_office_editor: ^1.0.0
+  quds_office_editor: ^1.1.0
 ```
 
 ```bash
@@ -119,7 +119,7 @@ flutter pub add quds_office_editor
 ```
 
 Requires Flutter **3.44+** and Dart **3.12+**. The engine comes along as
-`quds_office_engine: ^1.0.0`. Everything is exported from one library:
+`quds_office_engine: ^1.1.0`. Everything is exported from one library:
 
 ```dart
 import 'package:quds_office_editor/quds_office_editor.dart';
@@ -187,8 +187,17 @@ class ReportHost extends StatefulWidget {
 }
 
 class _ReportHostState extends State<ReportHost> {
-  final ReportDesignerController controller = ReportDesignerController()
-    ..loadTemplate(ReportTemplates.byId('sales_invoice_ar')!);
+  final ReportDesignerController controller = ReportDesignerController();
+
+  @override
+  void initState() {
+    super.initState();
+    ReportTemplateLibrary.bundled().then(
+      (List<ReportTemplateInfo> all) => controller.loadTemplate(
+        all.firstWhere((ReportTemplateInfo t) => t.id == 'sales_invoice_ar'),
+      ),
+    );
+  }
 
   @override
   void dispose() {
@@ -315,7 +324,8 @@ has a ready-made implementation that scans the OS font folders.
 | `minInspectorWidth` / `maxInspectorWidth` | `240` / `640` | Drag limits; the canvas always keeps at least 240 px |
 | `onInspectorWidthChanged` | `null` | Called with the new width after a splitter drag or reset |
 | `onExport` | `null` | Receives exported bytes; hides Export when null |
-| `templates` | `ReportTemplates.all` | Entries in the Templates menu |
+| `onPrint` | `null` | Receives the report as PDF on **Print** or Ctrl+P, so the host can show a print dialog (for example with the `printing` package); hides Print when null |
+| `templates` | `null` | Entries in the Templates menu; null offers the bundled `.qrep` files (`ReportTemplateLibrary.bundled()`) |
 | `onPickImage` | `null` | Host file picker for "Import image…" (PNG / JPEG embedded in the `.qrep`); hides the buttons when null |
 | `onPickFont` | `null` | Host file picker for "Import font file…" (TrueType embedded in the `.qrep`); hides the button when null |
 | `deviceFonts` | `null` | Installed fonts listed on the Fonts tab for one-click embedding; hides the list when null |
@@ -394,6 +404,20 @@ Palette, Diagnostics) collapse independently. The title badge shows the
 element kind and its band. Diagnostics list template problems with severity
 icons.
 
+**Problems panel.** Set `controller.problemsOpen = true` (for example from
+a status bar button) to show the problems panel under the canvas;
+`problemsHeight` sets its starting height, and its top edge drags to
+resize. It lists `controller.problems`: the parser's checks and
+`validate()` for the report as it is now, errors first, plus anything the
+parser corrected or skipped when the file was opened (until
+`clearLoadDiagnostics()`). Each row shows the message, the kind of problem
+(`ReportDiagnostic.kind`), and where it is (`ReportDiagnostic.target`).
+Clicking a row calls `controller.revealDiagnostic(d)`, which selects the
+element or band and scrolls the canvas to it, opens the variable or data
+column, and marks the inspector property to fix
+(`controller.highlightProperty`). `ReportProblemsPanel` is also exported for
+hosts that lay out their own panes.
+
 To resize the inspector, drag the splitter between the canvas and the
 inspector. Double-clicking the splitter restores the default width.
 
@@ -437,10 +461,20 @@ Functions insert `NAME()` with the caret inside.
   voucher, inventory status, sales dashboard and certificate. A template
   loads with its sample data and its **pre-saved images** (logo, stamp,
   signature, seal, product photos), which then show in the Images tab and
-  save inside the `.qrep`. A blank report is also available. Pass your own
-  list in `templates:`.
+  save inside the `.qrep`. A blank report is also available.
+
+  The templates are ordinary `.qrep` files in this package's `templates/`
+  folder, each with a `template.json` manifest (`ReportTemplateManifest`):
+  title, category, language, and description. `ReportTemplateLibrary.bundled()`
+  reads them; `ReportTemplateInfo.decode(bytes)` reads any template file, so
+  your own templates are just more `.qrep` files. Pass your own list in
+  `templates:`.
 
   ![Product catalog template with its saved images](example/screenshots/report_template_catalog.png)
+- **Replace an image**: on the Images tab, click an image's thumbnail (or
+  **Replace image…** on an image element) to pick a new file. It keeps the
+  image's name, so every element that shows it updates at once; undo brings
+  the old picture back (`replaceImage`, `importReplacement`).
 - **Variables**: typed template variables (`text`, `number`, `boolean`,
   `date`, `list`, `expression`) are added and edited in the inspector when
   nothing is selected. The Variables menu inserts `{{Variables.x}}` at the
@@ -547,6 +581,7 @@ section.
 | F2, Enter, or double-click | Edit text in place |
 | Esc | Cancel edit, close popup, leave a tool, or clear selection |
 | F5 | Toggle design / preview (Esc also leaves preview) |
+| Ctrl+P | Print (when `onPrint` is set) |
 | F6 | Toggle the data explorer; there arrows / Tab / PageUp / PageDown move, F2 / Enter / typing edits, Delete clears |
 | Ctrl+= / Ctrl+- / Ctrl+0 | Zoom in / out / fit width |
 | Ctrl+Space | Open autocomplete |
@@ -565,13 +600,13 @@ Download it:
 
 | Platform | Installer | Portable |
 | --- | --- | --- |
-| Windows 10/11 (x64) | [QudsReportStudio-1.0.0-windows-x64-setup.exe](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.0.0/QudsReportStudio-1.0.0-windows-x64-setup.exe) | [QudsReportStudio-1.0.0-windows-x64-portable.zip](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.0.0/QudsReportStudio-1.0.0-windows-x64-portable.zip) |
-| Debian / Ubuntu (x64) | [quds-report-studio_1.0.0_amd64.deb](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.0.0/quds-report-studio_1.0.0_amd64.deb) | [QudsReportStudio-1.0.0-linux-x64.tar.gz](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.0.0/QudsReportStudio-1.0.0-linux-x64.tar.gz) |
+| Windows 10/11 (x64) | [QudsReportStudio-1.1.0-windows-x64-setup.exe](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.1.0/QudsReportStudio-1.1.0-windows-x64-setup.exe) | [QudsReportStudio-1.1.0-windows-x64-portable.zip](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.1.0/QudsReportStudio-1.1.0-windows-x64-portable.zip) |
+| Debian / Ubuntu (x64) | [quds-report-studio_1.1.0_amd64.deb](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.1.0/quds-report-studio_1.1.0_amd64.deb) | [QudsReportStudio-1.1.0-linux-x64.tar.gz](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.1.0/QudsReportStudio-1.1.0-linux-x64.tar.gz) |
 
 - **Windows:** run the setup. It doesn't need admin rights unless you
   choose "all users". Uninstall it from *Settings › Apps*. The portable zip
   runs in place, and `unregister-qrep.cmd` removes its file association.
-- **Debian / Ubuntu:** `sudo apt install ./quds-report-studio_1.0.0_amd64.deb`,
+- **Debian / Ubuntu:** `sudo apt install ./quds-report-studio_1.1.0_amd64.deb`,
   and `sudo apt remove quds-report-studio` to uninstall.
 - **Other Linux distributions:** extract the tar.gz and run `./install.sh`
   (per user, no root). Run `~/.local/opt/quds-report-studio/uninstall.sh`

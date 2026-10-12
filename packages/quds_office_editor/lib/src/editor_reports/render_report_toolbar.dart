@@ -114,6 +114,9 @@ enum ReportToolbarIcon {
   /// Download arrow (export).
   export,
 
+  /// Printer.
+  print,
+
   /// Band rows (add band).
   band,
 
@@ -800,6 +803,24 @@ class RenderReportToolbar extends RenderBox implements MouseTrackerAnnotation {
           stroke,
         );
         line(2.5, 14, 13.5, 14);
+      case ReportToolbarIcon.print:
+        canvas.drawPath(
+          Path()
+            ..moveTo(l + 4.5, t + 5.5)
+            ..lineTo(l + 4.5, t + 1.5)
+            ..lineTo(l + 11.5, t + 1.5)
+            ..lineTo(l + 11.5, t + 5.5),
+          stroke,
+        );
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            Rect.fromLTWH(l + 1.5, t + 5.5, 13, 6),
+            const Radius.circular(1.5),
+          ),
+          stroke,
+        );
+        canvas.drawRect(Rect.fromLTWH(l + 4.5, t + 9.5, 7, 5), stroke);
+        canvas.drawCircle(p(12, 7.8), 0.9, fill);
       case ReportToolbarIcon.band:
         bar(1.5, 2, 13, 2.5);
         canvas.drawRect(Rect.fromLTWH(l + 1.5, t + 5.5, 13, 3.5), stroke);

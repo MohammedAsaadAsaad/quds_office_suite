@@ -25,7 +25,7 @@ Two packages and one desktop app. Depend on each package **on its own**.
 | --- | --- | --- | --- |
 | **[`quds_office_engine`](packages/quds_office_engine)** | Pure Dart | OOXML + OPC/ZIP + formulas + PDF 1.7 | [pub.dev/packages/quds_office_engine](https://pub.dev/packages/quds_office_engine) |
 | **[`quds_office_editor`](packages/quds_office_editor)** | Flutter | Interactive Word / Sheet / Slide / PDF surfaces and the report designer | [pub.dev/packages/quds_office_editor](https://pub.dev/packages/quds_office_editor) |
-| **[`quds_report_studio`](apps/quds_report_studio)** | Flutter desktop app | Standalone report editor: open, design, preview, export `.qrep` | [Windows and Linux installers](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/tag/studio-v1.0.0) |
+| **[`quds_report_studio`](apps/quds_report_studio)** | Flutter desktop app | Standalone report editor: open, design, preview, export `.qrep` | [Windows and Linux installers](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/tag/studio-v1.1.0) |
 
 ```text
 ┌─────────────────────────────────────────────────────────────┐
@@ -103,14 +103,14 @@ Most Dart “Office” libraries stop at writing a simple DOCX. Quds goes furthe
 
 ```yaml
 dependencies:
-  quds_office_engine: ^1.0.0
+  quds_office_engine: ^1.1.0
 ```
 
 ### Editor (pulls the engine)
 
 ```yaml
 dependencies:
-  quds_office_editor: ^1.0.0
+  quds_office_editor: ^1.1.0
 ```
 
 This repository is a [Dart workspace](https://dart.dev/tools/pub/workspaces). From the root:
@@ -217,7 +217,10 @@ import 'dart:io';
 import 'package:quds_office_engine/quds_reports.dart';
 
 Future<void> main() async {
-  final ReportTemplateInfo info = ReportTemplates.byId('sales_performance')!;
+  // A ready-made template file from packages/quds_office_editor/templates/.
+  final ReportTemplateInfo info = ReportTemplateInfo.decode(
+    File('sales_performance.qrep').readAsBytesSync(),
+  );
   // Pass `fonts:` (a ReportFontRegistry) to embed faces; Arabic needs one.
   final QudsReportEngine engine = QudsReportEngine.fromXml(info.xml);
   final Map<String, Object?> data = info.sampleData(); // or your own Map
@@ -252,8 +255,8 @@ Download it:
 
 | Platform | Installer | Portable |
 | --- | --- | --- |
-| Windows 10/11 (x64) | [setup.exe](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.0.0/QudsReportStudio-1.0.0-windows-x64-setup.exe) | [zip](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.0.0/QudsReportStudio-1.0.0-windows-x64-portable.zip) |
-| Debian / Ubuntu (x64) | [.deb](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.0.0/quds-report-studio_1.0.0_amd64.deb) | [tar.gz](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.0.0/QudsReportStudio-1.0.0-linux-x64.tar.gz) |
+| Windows 10/11 (x64) | [setup.exe](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.1.0/QudsReportStudio-1.1.0-windows-x64-setup.exe) | [zip](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.1.0/QudsReportStudio-1.1.0-windows-x64-portable.zip) |
+| Debian / Ubuntu (x64) | [.deb](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.1.0/quds-report-studio_1.1.0_amd64.deb) | [tar.gz](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.1.0/QudsReportStudio-1.1.0-linux-x64.tar.gz) |
 
 It becomes the app for `.qrep` files on its first run. Install and
 uninstall steps are in the

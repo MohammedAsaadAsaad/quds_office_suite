@@ -11,8 +11,30 @@ import 'package:quds_report_studio/src/recent_files.dart';
 import 'package:quds_report_studio/src/report_document.dart';
 import 'package:quds_report_studio/src/report_studio_page.dart';
 import 'package:quds_report_studio/src/studio_settings.dart';
+import 'package:quds_report_studio/src/studio_templates.dart';
+
+late List<ReportTemplateInfo> _bundled;
+
+/// Lets real file I/O started inside a widget test finish: pumps until
+/// [done] holds (or five seconds pass).
+Future<void> settleIo(WidgetTester tester, {bool Function()? done}) async {
+  for (int i = 0; i < 250 && !(done?.call() ?? i >= 8); i++) {
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 20)),
+    );
+    await tester.pump();
+  }
+  await tester.pumpAndSettle();
+}
+
+StudioTemplates _catalog() =>
+    StudioTemplates(bundled: _bundled, persist: false);
 
 void main() {
+  setUpAll(() async {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    _bundled = await ReportTemplateLibrary.bundled();
+  });
   late Directory temp;
 
   setUp(() => temp = Directory.systemTemp.createTempSync('qrs_test'));
@@ -20,9 +42,9 @@ void main() {
 
   test('documents track unsaved changes and round-trip files', () async {
     final ReportDocument doc = ReportDocument();
-    doc.newFromTemplate(ReportTemplates.all.first);
+    doc.newFromTemplate(_bundled.first);
     expect(doc.dirty, isFalse);
-    expect(doc.fileName, '${ReportTemplates.all.first.id}.qrep');
+    expect(doc.fileName, '${_bundled.first.id}.qrep');
 
     doc.controller.addVariable();
     await Future<void>.delayed(const Duration(milliseconds: 300));
@@ -78,7 +100,7 @@ void main() {
     expect(other.controller.images['logo'], logo);
 
     final String legacy = '${temp.path}/legacy.qrep';
-    File(legacy).writeAsStringSync(ReportTemplates.all.first.xml);
+    File(legacy).writeAsStringSync(_bundled.first.xml);
     await other.open(legacy);
     expect(other.controller.images, isEmpty);
     expect(other.name, 'legacy');
@@ -263,12 +285,14 @@ void main() {
     final RecentFiles recent = RecentFiles(
       store: File('${temp.path}/recent.json'),
     );
-    await tester.pumpWidget(ReportStudioApp(recent: recent));
+    await tester.pumpWidget(
+      ReportStudioApp(templates: _catalog(), recent: recent),
+    );
     await tester.pump();
 
     expect(find.byType(QudsReportDesigner), findsOneWidget);
     expect(
-      find.textContaining(ReportTemplates.all.first.id, findRichText: true),
+      find.textContaining(_bundled.first.id, findRichText: true),
       findsWidgets,
     );
     expect(find.text('Saved'), findsOneWidget);
@@ -285,6 +309,283 @@ void main() {
     expect(state.document.dirty, isFalse);
   });
 
+  testWidgets('a file with problems opens quietly; the status bar lists them', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1600, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final String path = '${temp.path}/broken.qrep';
+    final ReportPackage good = _bundled.first.package();
+    File(path).writeAsBytesSync(
+      ReportPackage(
+        xml: good.xml.replaceFirst(
+          '<Bands>',
+          '<Variables><Var name="broken" value="{{SUM(x}}"/></Variables>'
+              '<Bands>',
+        ),
+        images: good.images,
+        fonts: good.fonts,
+      ).encode(),
+    );
+    await tester.pumpWidget(
+      ReportStudioApp(
+        templates: _catalog(),
+        recent: RecentFiles(store: File('${temp.path}/recent.json')),
+        initialPath: path,
+      ),
+    );
+    await settleIo(
+      tester,
+      done: () =>
+          tester
+              .state<ReportStudioPageState>(find.byType(ReportStudioPage))
+              .document
+              .path ==
+          path,
+    );
+    expect(find.byType(SnackBar), findsNothing);
+    final ReportDesignerController c = tester
+        .state<ReportStudioPageState>(find.byType(ReportStudioPage))
+        .document
+        .controller;
+    expect(c.problems.where((ReportDiagnostic d) => d.isError), isNotEmpty);
+    expect(find.byType(ReportProblemsPanel), findsNothing);
+
+    await tester.tap(find.byTooltip('Show problems'));
+    await tester.pumpAndSettle();
+    expect(c.problemsOpen, isTrue);
+    final Rect panel = tester.getRect(find.byType(ReportProblemsPanel));
+    await tester.tapAt(
+      panel.topLeft + const Offset(200, RenderReportProblems.headerHeight + 20),
+    );
+    await tester.pump();
+    expect(c.inspectorPage, ReportInspectorPage.variables);
+    expect(c.selectedVariablePath, 'broken');
+
+    await tester.tap(find.byTooltip('Hide problems'));
+    await tester.pumpAndSettle();
+    expect(find.byType(ReportProblemsPanel), findsNothing);
+  });
+
+  test('settings remember the theme and the language', () async {
+    final File store = File('${temp.path}/settings.json');
+    final StudioSettings settings = StudioSettings(store: store);
+    expect(settings.theme, StudioThemeChoice.system);
+    expect(settings.language, StudioLanguage.system);
+    int changes = 0;
+    settings.addListener(() => changes++);
+    await settings.setTheme(StudioThemeChoice.dark);
+    await settings.setLanguage(StudioLanguage.arabic);
+    await settings.setLanguage(StudioLanguage.arabic);
+    expect(changes, 2);
+
+    final StudioSettings again = StudioSettings(store: store);
+    await again.load();
+    expect(again.theme, StudioThemeChoice.dark);
+    expect(again.language, StudioLanguage.arabic);
+  });
+
+  testWidgets('settings switch the studio to Arabic and the dark theme', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1600, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final RecentFiles recent = RecentFiles(
+      store: File('${temp.path}/recent.json'),
+    );
+    final StudioSettings settings = StudioSettings(persist: false);
+    await tester.pumpWidget(
+      ReportStudioApp(
+        templates: _catalog(),
+        recent: recent,
+        settings: settings,
+      ),
+    );
+    await tester.pump();
+    expect(find.text('Saved'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Settings'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Language'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('العربية'));
+    await tester.pumpAndSettle();
+    expect(settings.language, StudioLanguage.arabic);
+    expect(find.text('محفوظ'), findsOneWidget);
+    expect(find.text('ملف'), findsOneWidget);
+    expect(
+      Directionality.of(tester.element(find.byType(ReportStudioPage))),
+      TextDirection.rtl,
+    );
+    final ReportStudioPageState state = tester.state(
+      find.byType(ReportStudioPage),
+    );
+    await tester.pump();
+    expect(state.document.controller.strings.isRtl, isTrue);
+
+    await settings.setTheme(StudioThemeChoice.dark);
+    await tester.pumpAndSettle();
+    expect(
+      Theme.of(tester.element(find.byType(ReportStudioPage))).brightness,
+      Brightness.dark,
+    );
+  });
+
+  testWidgets('prints the report at its page size', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1600, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final RecentFiles recent = RecentFiles(
+      store: File('${temp.path}/recent.json'),
+    );
+    final List<(Uint8List, String, double, double)> jobs =
+        <(Uint8List, String, double, double)>[];
+    await tester.pumpWidget(
+      ReportStudioApp(
+        templates: _catalog(),
+        recent: recent,
+        printer:
+            (
+              Uint8List document, {
+              required String name,
+              required double width,
+              required double height,
+            }) async {
+              jobs.add((document, name, width, height));
+              return true;
+            },
+      ),
+    );
+    await tester.pump();
+    final ReportStudioPageState state = tester.state(
+      find.byType(ReportStudioPage),
+    );
+    final ReportTemplate t = state.document.controller.template;
+
+    await tester.tap(find.byTooltip('Print (Ctrl+P)'));
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 300)),
+    );
+    await tester.pump();
+    expect(jobs, hasLength(1));
+    expect(String.fromCharCodes(jobs.first.$1.take(5)), '%PDF-');
+    expect(jobs.first.$2, state.document.name);
+    expect(jobs.first.$3, t.pageWidth);
+    expect(jobs.first.$4, t.pageHeight);
+
+    await tester.tap(find.text('File'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Print…'));
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 300)),
+    );
+    await tester.pumpAndSettle();
+    expect(jobs, hasLength(2));
+  });
+
+  test('user templates save, reload, and accept plain report files', () async {
+    final Directory dir = Directory('${temp.path}/templates');
+    final StudioTemplates catalog = StudioTemplates(
+      bundled: _bundled,
+      folder: dir,
+    );
+    await catalog.load();
+    expect(catalog.user, isEmpty);
+
+    final ReportTemplateInfo source = _bundled.first;
+    final ReportTemplateInfo saved = await catalog.save(
+      source.package(),
+      title: 'فاتورتي',
+      category: ReportTemplateCategory.finance,
+      rtl: true,
+    );
+    expect(saved.id, StudioTemplates.idFor('فاتورتي'));
+    expect(saved.id, startsWith('template_'));
+    expect(saved.category, ReportTemplateCategory.finance);
+    expect(saved.language, ReportTemplateLanguage.arabic);
+    expect(saved.images().keys.toSet(), source.images().keys.toSet());
+
+    await catalog.save(
+      source.package(),
+      title: 'فاتورتي',
+      category: ReportTemplateCategory.sales,
+      rtl: true,
+    );
+    expect(catalog.user, hasLength(1), reason: 'same title replaces');
+    expect(catalog.user.single.category, ReportTemplateCategory.sales);
+
+    File('${dir.path}/Plain Report.qrep').writeAsBytesSync(
+      ReportPackage(
+        xml: _bundled.firstWhere((ReportTemplateInfo t) => !t.rtl).xml,
+      ).encode(),
+    );
+    File('${dir.path}/broken.qrep').writeAsStringSync('not a report');
+    await catalog.load();
+    expect(catalog.user.map((ReportTemplateInfo t) => t.title), <String>[
+      'Plain Report',
+      'فاتورتي',
+    ]);
+    expect(catalog.user.first.id, 'plain_report');
+    expect(catalog.user.first.language, ReportTemplateLanguage.english);
+    expect(catalog.skipped, <String>['broken.qrep']);
+    expect(catalog.all, hasLength(_bundled.length + 2));
+  });
+
+  testWidgets('saves the report as a template and opens it from My templates', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1600, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final RecentFiles recent = RecentFiles(
+      store: File('${temp.path}/recent.json'),
+    );
+    final StudioTemplates catalog = StudioTemplates(
+      bundled: _bundled,
+      folder: Directory('${temp.path}/templates'),
+    );
+    await tester.pumpWidget(
+      ReportStudioApp(templates: catalog, recent: recent),
+    );
+    await tester.pump();
+    final ReportStudioPageState state = tester.state(
+      find.byType(ReportStudioPage),
+    );
+    final ReportDesignerController c = state.document.controller;
+    c.select(null);
+    c.setProperty('name', 'Branch invoice');
+    expect(c.template.name, 'Branch invoice');
+
+    await tester.tap(find.text('File'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save as template'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Finance'));
+    await settleIo(tester, done: () => catalog.user.isNotEmpty);
+    expect(catalog.user.single.title, 'Branch invoice');
+    expect(
+      File('${temp.path}/templates/branch_invoice.qrep').existsSync(),
+      isTrue,
+    );
+
+    state.document.newBlank();
+    await tester.pump();
+    await tester.tap(find.text('File'));
+    await settleIo(tester);
+    await tester.tap(find.text('New from template'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('My templates'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Branch invoice'));
+    await tester.pumpAndSettle();
+    expect(c.template.name, 'Branch invoice');
+    expect(state.document.fileName, 'branch_invoice.qrep');
+  });
+
   testWidgets('new from template walks category, family and language', (
     WidgetTester tester,
   ) async {
@@ -294,7 +595,9 @@ void main() {
     final RecentFiles recent = RecentFiles(
       store: File('${temp.path}/recent.json'),
     );
-    await tester.pumpWidget(ReportStudioApp(recent: recent));
+    await tester.pumpWidget(
+      ReportStudioApp(templates: _catalog(), recent: recent),
+    );
     await tester.pump();
 
     await tester.tap(find.text('File'));

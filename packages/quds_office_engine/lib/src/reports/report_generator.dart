@@ -106,6 +106,15 @@ class ReportGenerator {
       reportName: template.name,
     );
     final Map<String, ReportValue> vars = <String, ReportValue>{};
+    final List<ReportValue>? detailRows = template.variables.isEmpty
+        ? null
+        : _variableRows(
+            ReportScope(
+              data: data,
+              variables: ReportRecord.empty,
+              system: system,
+            ),
+          );
     for (final ReportVariable v in template.variables) {
       final ReportValue? host = variableOverrides[v.name];
       if (host != null) {
@@ -132,8 +141,9 @@ class ReportGenerator {
       }
       final ReportScope partial = ReportScope(
         data: data,
-        variables: ReportRecord(Map<String, ReportValue>.of(vars)),
+        variables: nestVariables(vars),
         system: system,
+        aggregateRows: detailRows,
       );
       try {
         vars[v.name] = v.type == ReportVariableType.expression
@@ -152,9 +162,59 @@ class ReportGenerator {
     }
     return ReportScope(
       data: data,
-      variables: ReportRecord(vars),
+      variables: nestVariables(vars),
       system: system,
     );
+  }
+
+  /// `Variables.*` record for [flat] values keyed by variable name: dotted
+  /// names (`stats.sum`) become nested records, so expressions read them as
+  /// `Variables.stats.sum`. When a name is both a value and a folder, the
+  /// first one wins.
+  static ReportRecord nestVariables(Map<String, ReportValue> flat) {
+    final Map<String, ReportValue> root = <String, ReportValue>{};
+    final Map<ReportRecord, Map<String, ReportValue>> folders =
+        Map<ReportRecord, Map<String, ReportValue>>.identity();
+    for (final MapEntry<String, ReportValue> e in flat.entries) {
+      final List<String> parts = e.key.split('.');
+      Map<String, ReportValue>? at = root;
+      for (int i = 0; i < parts.length - 1 && at != null; i++) {
+        final ReportValue? next = at[parts[i]];
+        if (next == null) {
+          final Map<String, ReportValue> fields = <String, ReportValue>{};
+          final ReportRecord folder = ReportRecord(fields);
+          folders[folder] = fields;
+          at[parts[i]] = folder;
+          at = fields;
+        } else {
+          at = next is ReportRecord ? folders[next] : null;
+        }
+      }
+      if (at != null) {
+        at.putIfAbsent(parts.last, () => e.value);
+      }
+    }
+    return ReportRecord(root);
+  }
+
+  /// Rows a variable's `SUM(item.x)` aggregates over: the detail band's data
+  /// set before its filter and sort, which may themselves read variables.
+  List<ReportValue>? _variableRows(ReportScope scope) {
+    final String? path = template.detail?.dataSet?.trim();
+    if (path == null || path.isEmpty) {
+      return null;
+    }
+    final ReportValue v;
+    try {
+      v = engine.evaluateSource(path, scope);
+    } on ReportExpressionException {
+      return null;
+    }
+    return switch (v) {
+      ReportList(:final List<ReportValue> items) => items,
+      ReportNull() => null,
+      _ => <ReportValue>[v],
+    };
   }
 
   bool _templateUsesPaging() {

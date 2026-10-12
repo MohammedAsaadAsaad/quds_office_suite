@@ -1,15 +1,18 @@
-/// Ready-made `.qrep` templates with matching sample data and images.
+/// Report templates: catalog entries ([ReportTemplateInfo]) read from
+/// template `.qrep` files, and the deprecated built-in [ReportTemplates].
 ///
 /// Templates come in families: each family has an Arabic (right-to-left)
-/// and an English (left-to-right) version built from one shared layout, so
-/// both always look the same. A developer can load any of them as-is, open
-/// it in the designer, and adapt bindings, colors, columns, and wording.
+/// and an English (left-to-right) version, so both look the same. The
+/// ready-made ones ship as `.qrep` files with `quds_office_editor`
+/// (`ReportTemplateLibrary`); any `.qrep` with a `template.json`
+/// ([ReportTemplateManifest]) is a template too.
 library;
 
 import 'dart:typed_data';
 
 import 'report_package.dart';
 import 'report_template_art.dart';
+import 'report_template_manifest.dart';
 
 /// What a template is for (designer grouping).
 enum ReportTemplateCategory {
@@ -57,7 +60,7 @@ enum ReportTemplateLanguage {
   final String label;
 }
 
-/// One catalog entry: XML plus the sample data and images it needs.
+/// One catalog entry: XML plus the sample data, images, and fonts it needs.
 class ReportTemplateInfo {
   /// ReportTemplateInfo API.
   ///
@@ -79,8 +82,49 @@ class ReportTemplateInfo {
     this._images,
     this._familyTitle,
     this._familyTitleAr,
+    this.order = 0,
   }) : _layout = xml,
-       family = family ?? id;
+       family = family ?? id,
+       _source = null;
+
+  /// The template saved in [package], described by its
+  /// [ReportPackage.template] manifest.
+  ///
+  /// Throws [ReportPackageException] when [package] has no manifest.
+  ReportTemplateInfo.fromPackage(ReportPackage package)
+    : this._manifest(
+        package,
+        package.template ??
+            (throw const ReportPackageException(
+              'Not a template: missing ${ReportTemplateManifest.entry}',
+            )),
+      );
+
+  ReportTemplateInfo._manifest(ReportPackage package, ReportTemplateManifest m)
+    : id = m.id,
+      family = m.family,
+      title = m.title,
+      titleAr = m.titleAr,
+      description = m.description,
+      descriptionAr = m.descriptionAr,
+      category = m.category,
+      rtl = m.language == ReportTemplateLanguage.arabic,
+      order = m.order,
+      strings = const <String, String>{},
+      _layout = package.xml,
+      _familyTitle = m.familyTitle,
+      _familyTitleAr = m.familyTitleAr,
+      _images = (() => package.images),
+      sampleData = (() => package.sampleData ?? <String, Object?>{}),
+      _source = package;
+
+  /// Reads a template `.qrep` ([ReportPackage.decode], then
+  /// [ReportTemplateInfo.fromPackage]).
+  ///
+  /// Throws [ReportPackageException] when the file is damaged or is not a
+  /// template.
+  factory ReportTemplateInfo.decode(Uint8List bytes) =>
+      ReportTemplateInfo.fromPackage(ReportPackage.decode(bytes));
 
   /// Stable identifier (`sales_invoice_ar`).
   final String id;
@@ -109,7 +153,12 @@ class ReportTemplateInfo {
   /// Values for the `[[key]]` tokens of the layout.
   final Map<String, String> strings;
 
+  /// Position within its [category]; lower comes first.
+  final int order;
+
   final String _layout;
+
+  final ReportPackage? _source;
 
   final String? _familyTitle;
 
@@ -152,9 +201,47 @@ class ReportTemplateInfo {
   Map<String, Uint8List> images() =>
       _images?.call() ?? const <String, Uint8List>{};
 
-  /// Complete `.qrep` package: layout, images, and sample data.
+  /// Complete `.qrep` package: layout, images, fonts, sample data, and
+  /// [manifest]. A template read from a file returns that file's package.
   ReportPackage package() =>
-      ReportPackage(xml: xml, images: images(), sampleData: sampleData());
+      _source ??
+      ReportPackage(
+        xml: xml,
+        images: images(),
+        sampleData: sampleData(),
+        template: manifest,
+      );
+
+  /// Catalog details as saved in a template `.qrep`.
+  ReportTemplateManifest get manifest => ReportTemplateManifest(
+    id: id,
+    family: family,
+    title: title,
+    titleAr: titleAr,
+    familyTitle: familyTitle,
+    familyTitleAr: familyTitleAr,
+    description: description,
+    descriptionAr: descriptionAr,
+    category: category,
+    language: language,
+    order: order,
+  );
+
+  /// Orders templates by [category], then [order], then family, Arabic
+  /// before English.
+  static int compare(ReportTemplateInfo a, ReportTemplateInfo b) {
+    int c = a.category.index.compareTo(b.category.index);
+    if (c == 0) {
+      c = a.order.compareTo(b.order);
+    }
+    if (c == 0) {
+      c = a.familyTitle.toLowerCase().compareTo(b.familyTitle.toLowerCase());
+    }
+    if (c == 0 && a.rtl != b.rtl) {
+      c = a.rtl ? -1 : 1;
+    }
+    return c == 0 ? a.id.compareTo(b.id) : c;
+  }
 
   /// [title] or [titleAr] for [arabic].
   String titleFor({required bool arabic}) => arabic ? titleAr : title;
@@ -176,6 +263,14 @@ class ReportTemplateInfo {
 
 /// Catalog of professional starting points, grouped by
 /// [ReportTemplateCategory]; every family ships Arabic and English versions.
+///
+/// The same templates now ship as editable `.qrep` files with
+/// `quds_office_editor` (`ReportTemplateLibrary.bundled()`); read any
+/// template file with [ReportTemplateInfo.decode].
+@Deprecated(
+  'Use the ready-made .qrep files: ReportTemplateLibrary.bundled() in '
+  'quds_office_editor, or ReportTemplateInfo.decode. Removed in 2.0.',
+)
 abstract final class ReportTemplates {
   /// Every template, in display order (families in order, Arabic first).
   static const List<ReportTemplateInfo> all = <ReportTemplateInfo>[

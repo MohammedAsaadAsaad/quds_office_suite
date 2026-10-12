@@ -79,7 +79,7 @@ class ReportCompletionPopup {
     OfficeTheme theme,
   ) {
     final List<ReportCompletionItem> items = result.items;
-    final bool dark = theme.pageBackground.computeLuminance() < 0.4;
+    final bool dark = theme.chromeFill.computeLuminance() < 0.4;
     final Color fill = dark ? const Color(0xFF2B2D31) : const Color(0xFFFFFFFF);
     final Color ink = dark ? const Color(0xFFECEFF4) : const Color(0xFF1F2937);
     final Color muted = dark

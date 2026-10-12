@@ -8,6 +8,7 @@ import 'package:quds_office_engine/quds_office_engine.dart';
 
 import '../embed/office_theme.dart';
 import 'report_layout_painter.dart';
+import 'report_pinch_zoom.dart';
 
 /// Paginated live preview of a [ReportDocumentLayout].
 class ReportPreviewSurface extends LeafRenderObjectWidget {
@@ -95,6 +96,26 @@ class RenderReportPreview extends RenderBox {
   final Map<String, TextPainter> _labels = <String, TextPainter>{};
   Offset _scroll = Offset.zero;
   Offset? _dragLast;
+  late final ReportPinchZoom _pinch = ReportPinchZoom(
+    zoom: () => _zoom,
+    onZoom: _zoomAround,
+    onPinchStart: () => _dragLast = null,
+  );
+
+  /// Sets the zoom keeping the content under [focal] in place, then pans by
+  /// [pan]. The host gets the new zoom through [onZoom].
+  void _zoomAround(double zoom, Offset focal, Offset pan) {
+    final double z = zoom.clamp(0.25, 4).toDouble();
+    const Offset margin = Offset(gap, gap);
+    final Offset content = focal + _scroll - margin;
+    final double k = z / _zoom;
+    _zoom = z;
+    onZoom?.call(z);
+    _scroll = margin + content * k - focal - pan;
+    _clamp();
+    markNeedsPaint();
+  }
+
   Duration _lastTap = Duration.zero;
   Offset _lastTapPos = Offset.zero;
 
@@ -230,10 +251,7 @@ class RenderReportPreview extends RenderBox {
       GestureBinding.instance.pointerSignalResolver.register(event, _onSignal);
       return;
     }
-    if (event is PointerPanZoomUpdateEvent) {
-      _scroll -= event.localPanDelta;
-      _clamp();
-      markNeedsPaint();
+    if (_pinch.handle(event)) {
       return;
     }
     if (event is PointerDownEvent) {

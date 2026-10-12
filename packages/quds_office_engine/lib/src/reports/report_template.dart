@@ -327,8 +327,30 @@ class ReportVariable {
     this.format,
   });
 
-  /// name API.
+  /// Name; dots group variables into folders, so `stats.sum` is referenced
+  /// as `{{Variables.stats.sum}}` and shown under `stats` by designers.
   String name;
+
+  static final RegExp _segment = RegExp(
+    r'^[A-Za-z_\u0600-\u06FF][A-Za-z0-9_\u0600-\u06FF]*$',
+  );
+
+  /// Whether [name] is one identifier or several joined by dots
+  /// (`total`, `stats.sum`).
+  static bool isValidName(String name) =>
+      name.isNotEmpty && name.split('.').every(_segment.hasMatch);
+
+  /// Parts of [name] split at dots (`['stats', 'sum']`).
+  List<String> get segments => name.split('.');
+
+  /// Folder part of [name] (`stats` for `stats.sum`); empty at the top level.
+  String get folder {
+    final int dot = name.lastIndexOf('.');
+    return dot < 0 ? '' : name.substring(0, dot);
+  }
+
+  /// Last part of [name] (`sum` for `stats.sum`).
+  String get leaf => name.substring(name.lastIndexOf('.') + 1);
 
   /// Value as authored (see [type]).
   String value;
