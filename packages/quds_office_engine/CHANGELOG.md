@@ -2,6 +2,15 @@
 
 All notable changes to `quds_office_engine` are documented here.
 
+## Unreleased
+
+- A free-form detail band honors `newPageBefore` and `newPageAfter`, so each
+  row can start its own page. Word export writes a page break between those
+  rows. A detail band that contains a table still flows its rows.
+- New template family `class_certificate`: one A4 landscape certificate per
+  row of a `students` table, in Arabic and English, with eight sample
+  students.
+
 ## 1.1.0
 
 - `ReportDiagnostic.target` says where a finding points

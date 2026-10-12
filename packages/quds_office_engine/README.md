@@ -58,7 +58,7 @@ semantic versioning, and breaking changes wait for 2.0.
 | **Opens what other suites save** | Word style chains, outline lists, and table styles. Excel shared formulas, inline strings, cached results, number formats, and charts drawn from their ranges. PowerPoint layouts, masters, placeholders, theme colors, and slide order |
 | **A report is one file** | A `.qrep` is a ZIP holding the layout, its images, and its TrueType fonts, so it exports the same on any machine |
 | **Data you can describe** | `<DataSchema>` types fields and tables. Calculated columns (`= qty * price`) feed groups, totals, charts, variables, and suggestions |
-| **16 bilingual templates** | 8 families in Arabic and English: invoices, statements, vouchers, inventory, catalogs, certificates, dashboards |
+| **18 bilingual templates** | 9 families in Arabic and English: invoices, statements, vouchers, inventory, catalogs, certificates, class certificates, dashboards |
 | **A desktop designer** | [Quds Report Studio](#quds-report-studio-download-the-desktop-designer) for Windows and Linux edits the same files |
 
 ### A LibreOffice file, rendered by this engine
@@ -283,7 +283,7 @@ import 'package:quds_office_engine/pdf_widgets.dart' as pw;
 | **PowerPoint** | Build, open, and write PPTX. Shapes, tables, notes, layouts and masters with placeholder inheritance and theme colors, transitions and animations including Morph, reverse playback clock |
 | **Office → PDF** | Replay Word layout, Excel grid, and slides (or notes pages, including two slides on one page) to PDF 1.7 with subsetted fonts, links, and outlines |
 | **pdf_widgets** | Constraint layout: flex, text, tables, charts, images, TOC, headers, footers, watermarks. Synchronous `Document.save()` |
-| **Band reports** | `.qrep` packages (XML layout + embedded images and fonts) with bands, groups, expressions, typed variables, tables, barcodes/QR, and charts → PDF, XLSX, DOCX. 16 ready-made templates (8 families, Arabic + English) with saved images |
+| **Band reports** | `.qrep` packages (XML layout + embedded images and fonts) with bands, groups, expressions, typed variables, tables, barcodes/QR, and charts → PDF, XLSX, DOCX. 18 ready-made templates (9 families, Arabic + English) with saved images |
 | **pdf_templates** | 100+ classified reports with **distinct `SheetSkin` layouts**, LTR/RTL, and brand themes |
 | **PdfFile** | Open PDF 1.7, paint a display list, extract text, annotate, fill AcroForm, incremental save |
 | **PdfToolbox** | Merge, extract, split, reorder, remove, rotate, reverse, insert, mix, stamp, number, Bates, crop — a new file with resources grafted |
@@ -513,8 +513,8 @@ draws vector charts. XLSX and DOCX embed **native, editable** Office charts.
 
 ### Ready-made templates
 
-Sixteen production-style templates ship as ready-made `.qrep` files in
-`quds_office_editor`'s `templates/` folder: eight families, each in an
+Eighteen production-style templates ship as ready-made `.qrep` files in
+`quds_office_editor`'s `templates/` folder: nine families, each in an
 **Arabic (RTL)** and an **English** version, grouped by
 `ReportTemplateCategory`. Every template carries sample data, and most carry
 **pre-saved images** (logo, stamp, signature, seal, product photos).
@@ -529,6 +529,7 @@ Sixteen production-style templates ship as ready-made `.qrep` files in
 | Inventory | Inventory status (reorder flags, pie and bar charts) | `inventory_ar` | `inventory_en` | none |
 | Analytics | Sales dashboard (KPI cards, 4 charts, grouped orders) | `sales_performance_ar` | `sales_performance` | logo |
 | Human resources | Certificate of appreciation (A4 landscape) | `certificate_ar` | `certificate_en` | logo, stamp, signature, seal |
+| Human resources | Class certificates (one page per student row) | `class_certificate_ar` | `class_certificate_en` | logo, stamp, signature, seal |
 
 A template is an ordinary `.qrep` whose package also holds a
 `template.json` manifest (`ReportTemplateManifest`): id, family, English and

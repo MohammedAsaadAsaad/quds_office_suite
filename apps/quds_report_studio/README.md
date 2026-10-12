@@ -292,8 +292,8 @@ section for the full API.
 
 **File › New from template** opens a categorized catalog: pick a category
 (Sales, Finance, Inventory, Analytics, Human resources), then a family, then
-**العربية** or **English**. Each of the eight families ships both versions
-(16 templates):
+**العربية** or **English**. Each of the nine families ships both versions
+(18 templates):
 
 | Category | Templates |
 | --- | --- |
@@ -301,7 +301,7 @@ section for the full API.
 | Finance | Customer account statement, receipt voucher |
 | Inventory | Inventory status |
 | Analytics | Sales performance dashboard |
-| Human resources | Certificate of appreciation |
+| Human resources | Certificate of appreciation, class certificates (one page per student) |
 
 Templates open with sample data, so the preview is meaningful right away,
 and with their **pre-saved images**: company logo, stamp, signature, seal,

@@ -5,6 +5,11 @@ This repository is a Dart workspace. Each published package keeps its own change
 - [`packages/quds_office_engine/CHANGELOG.md`](packages/quds_office_engine/CHANGELOG.md)
 - [`packages/quds_office_editor/CHANGELOG.md`](packages/quds_office_editor/CHANGELOG.md)
 
+## Unreleased
+
+- Class certificates: a report template that prints one certificate page for
+  each row of a student table. Preview, PDF, and Word each show every page.
+
 ## 1.1.0 / 1.1.0
 
 Engine **1.1.0**, editor **1.1.0**, and Report Studio **1.1.0**.

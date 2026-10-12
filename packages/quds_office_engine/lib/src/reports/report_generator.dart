@@ -21,8 +21,10 @@ import 'report_value.dart';
 ///
 /// Flow per page set: report header (page 1), page header, then for every
 /// group: group header, detail rows (or the detail table), group footer;
-/// finally the report summary. Page footers are reserved at the bottom of
-/// each page and painted once the page content is known, so they can show
+/// finally the report summary. A free-form detail row (no table in the
+/// band) honors [ReportBand.newPageBefore] and [ReportBand.newPageAfter],
+/// so one record can occupy its own page. Page footers are reserved at the
+/// bottom of each page and painted once the page content is known, so they can show
 /// page totals. When any text references `System.TotalPages`, layout runs
 /// again until the page count is stable.
 class ReportGenerator {
@@ -461,6 +463,9 @@ class _Flow {
     }
     final double rowHeight = detail.rowHeight ?? detail.height;
     for (int i = 0; i < rows.length; i++) {
+      if (detail.newPageBefore && !_fresh) {
+        _newPage();
+      }
       final ReportScope rowScope = gScope.copyWith(row: rows[i], rowIndex: i);
       final _Box box = _renderBand(
         detail,
@@ -469,6 +474,9 @@ class _Flow {
       );
       _place(box, keepTogether: true);
       pageRows.last.add(rows[i]);
+      if (detail.newPageAfter && i < rows.length - 1) {
+        _newPage();
+      }
     }
   }
 

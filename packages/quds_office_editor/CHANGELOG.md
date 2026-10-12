@@ -2,6 +2,11 @@
 
 All notable changes to `quds_office_editor` are documented here.
 
+## Unreleased
+
+- Bundled templates include class certificates (`class_certificate_ar` and
+  `class_certificate_en`): one page per student when you preview or export.
+
 ## 1.1.0
 
 Built on `quds_office_engine` 1.1.0.

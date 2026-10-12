@@ -41,12 +41,32 @@ class ReportDocxWriter {
     final _Ids ids = _Ids();
     final _Part body = _Part('/word/document.xml', ids);
     final _BlockWriter bodyWriter = _BlockWriter(t, body);
-    for (final ReportFlowEntry e in layout.flow) {
+    final ReportBand? detail = t.detail;
+    final bool pageEachRow =
+        detail != null &&
+        (detail.newPageBefore || detail.newPageAfter) &&
+        !detail.elements.any((ReportElement e) => e is ReportTableElement);
+    final bool breakBefore = detail?.newPageBefore ?? false;
+    final bool breakAfter = detail?.newPageAfter ?? false;
+    var broke = false;
+    final List<ReportFlowEntry> flow = layout.flow;
+    for (int i = 0; i < flow.length; i++) {
+      final ReportFlowEntry e = flow[i];
+      final bool row =
+          pageEachRow && e is ReportFlowBand && e.band == ReportBandKind.detail;
+      if (row && breakBefore && i > 0 && !broke) {
+        bodyWriter.pageBreak();
+      }
       switch (e) {
         case ReportFlowBand():
           bodyWriter.band(e.items, e.height);
         case ReportFlowTableRow():
           bodyWriter.tableRow(e);
+      }
+      broke = false;
+      if (row && breakAfter && i + 1 < flow.length) {
+        bodyWriter.pageBreak();
+        broke = true;
       }
     }
     bodyWriter.flush();
@@ -587,6 +607,14 @@ class _BlockWriter {
   }
 
   void flush() => _flushTable();
+
+  /// A Word page break, after any open table is closed.
+  void pageBreak() {
+    _flushTable();
+    _pendingSpace = 0;
+    _lastWasTable = false;
+    _out.write('<w:p><w:r><w:br w:type="page"/></w:r></w:p>');
+  }
 
   void _flushTable() {
     if (_pendingRows.isEmpty) {

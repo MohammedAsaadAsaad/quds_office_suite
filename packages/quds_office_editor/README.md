@@ -60,7 +60,7 @@ this package, with real fonts, from `flutter test`.
   </tr>
   <tr>
     <td><b>Data explorer</b> (F6): a painted grid over the report's sample data. Typed columns, calculated <b>ƒx</b> columns, CSV / JSON import, safe renames</td>
-    <td><b>16 bilingual templates</b>: each loads with its sample data and its logo, stamp, and product photos saved inside the <code>.qrep</code></td>
+    <td><b>18 bilingual templates</b>: each loads with its sample data and its logo, stamp, and product photos saved inside the <code>.qrep</code></td>
   </tr>
   <tr>
     <td><img src="example/screenshots/report_data_fields.png" alt="Typed fields"/></td>
@@ -458,7 +458,8 @@ Functions insert `NAME()` with the caret inside.
   (sales, finance, inventory, analytics, human resources). Picking a family
   asks for **العربية** or **English**. Every family ships both versions: VAT
   invoice, commercial invoice, product catalog, account statement, receipt
-  voucher, inventory status, sales dashboard and certificate. A template
+  voucher, inventory status, sales dashboard, certificate, and class
+  certificates (one page per student). A template
   loads with its sample data and its **pre-saved images** (logo, stamp,
   signature, seal, product photos), which then show in the Images tab and
   save inside the `.qrep`. A blank report is also available.

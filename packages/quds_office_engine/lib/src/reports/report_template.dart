@@ -1380,10 +1380,14 @@ class ReportBand {
   /// Page footer: print on the last page.
   bool printOnLastPage;
 
-  /// Start a new page before this band (group header, summary).
+  /// Start a new page before this band when the current page already has
+  /// content: a group header, the report summary, and each free-form detail
+  /// row. A detail band that contains a table keeps flowing its rows.
   bool newPageBefore;
 
-  /// Start a new page after this band (group footer).
+  /// Start a new page after this band: the report header, a group footer
+  /// while another group follows, and each free-form detail row while
+  /// another row follows.
   bool newPageAfter;
 
   /// Do not split this band (or a group header from its first row).
