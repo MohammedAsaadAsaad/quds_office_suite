@@ -2,10 +2,15 @@
 
 All notable changes to `quds_office_editor` are documented here.
 
-## Unreleased
+## 1.2.0
+
+Built on `quds_office_engine` 1.2.0.
 
 - Bundled templates include class certificates (`class_certificate_ar` and
-  `class_certificate_en`): one page per student when you preview or export.
+  `class_certificate_en`). This is the report form of a mail merge: the
+  Detail band is bound to the `students` table with **New page before**, so
+  preview and export show one certificate page per student. The sample class
+  has eight students.
 
 ## 1.1.0
 

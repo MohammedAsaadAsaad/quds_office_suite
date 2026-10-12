@@ -5,10 +5,14 @@ This repository is a Dart workspace. Each published package keeps its own change
 - [`packages/quds_office_engine/CHANGELOG.md`](packages/quds_office_engine/CHANGELOG.md)
 - [`packages/quds_office_editor/CHANGELOG.md`](packages/quds_office_editor/CHANGELOG.md)
 
-## Unreleased
+## 1.2.0 / 1.2.0
 
-- Class certificates: a report template that prints one certificate page for
-  each row of a student table. Preview, PDF, and Word each show every page.
+Engine **1.2.0**, editor **1.2.0**, and Report Studio **1.2.0**.
+
+- Band reports can print one page per table row, the same job as a mail
+  merge, kept in a single PDF or Word file. The new **Class certificates**
+  template (Arabic and English) is the example: eight students, eight pages.
+  Word mail merge (`MERGEFIELD`, one document per record) is unchanged.
 
 ## 1.1.0 / 1.1.0
 
