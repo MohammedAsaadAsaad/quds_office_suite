@@ -60,6 +60,7 @@ enum ReportImageFormat {
 /// images/stamp.jpg
 /// fonts/Cairo/regular.ttf embedded TrueType faces, used as fontFamily="Cairo"
 /// fonts/Cairo/bold.ttf
+/// shapes/districts.qmap   embedded region outlines for a shape map
 /// data/sample.json        design-time data shown by the designer (optional)
 /// template.json           catalog details when the file is a template
 /// ```
@@ -75,10 +76,12 @@ class ReportPackage {
     required this.xml,
     Map<String, Uint8List>? images,
     Map<String, ReportFontFiles>? fonts,
+    Map<String, Uint8List>? shapes,
     this.sampleData,
     this.template,
   }) : images = images ?? <String, Uint8List>{},
-       fonts = fonts ?? <String, ReportFontFiles>{};
+       fonts = fonts ?? <String, ReportFontFiles>{},
+       shapes = shapes ?? <String, Uint8List>{};
 
   /// Parses `.qrep` bytes: a package ZIP or a legacy plain-XML template.
   ///
@@ -102,6 +105,7 @@ class ReportPackage {
       throw const ReportPackageException('Missing $layoutEntry');
     }
     final Map<String, Uint8List> images = <String, Uint8List>{};
+    final Map<String, Uint8List> shapes = <String, Uint8List>{};
     Map<String, Object?>? sample;
     ReportTemplateManifest? template;
     final Map<String, (Uint8List?, Uint8List?)> faces =
@@ -152,6 +156,19 @@ class ReportPackage {
         }
         continue;
       }
+      final String? shapeKey = _shapeKey(entry.fileName);
+      if (shapeKey != null) {
+        final Uint8List data = _read(zip, entry.fileName);
+        if (data.length < 4 ||
+            data[0] != 0x51 ||
+            data[1] != 0x4D ||
+            data[2] != 0x41 ||
+            data[3] != 0x50) {
+          throw ReportPackageException('${entry.fileName} is not a shape layer');
+        }
+        shapes[shapeKey] = data;
+        continue;
+      }
       final String? key = _imageKey(entry.fileName);
       if (key == null) {
         continue;
@@ -171,6 +188,7 @@ class ReportPackage {
     return ReportPackage(
       xml: xml,
       images: images,
+      shapes: shapes,
       fonts: <String, ReportFontFiles>{
         for (final MapEntry<String, (Uint8List?, Uint8List?)> f
             in faces.entries)
@@ -186,6 +204,9 @@ class ReportPackage {
 
   /// Folder holding embedded images.
   static const String imagesFolder = 'images/';
+
+  /// Folder holding embedded shape layers (`shapes/<name>.qmap`).
+  static const String shapesFolder = 'shapes/';
 
   /// Folder holding embedded fonts (`fonts/<family>/regular.ttf|bold.ttf`).
   static const String fontsFolder = 'fonts/';
@@ -204,6 +225,9 @@ class ReportPackage {
 
   /// Embedded images by key (`<Image source="key"/>`).
   final Map<String, Uint8List> images;
+
+  /// Embedded shape layers by name (`shape="name"` on a shape map).
+  final Map<String, Uint8List> shapes;
 
   /// Embedded TrueType families by name (`fontFamily="Cairo"`).
   final Map<String, ReportFontFiles> fonts;
@@ -316,6 +340,13 @@ class ReportPackage {
       }
       zip.addFile('$imagesFolder$key.${format.extension}', data, store: true);
     }
+    final List<String> shapeNames = shapes.keys.toList()..sort();
+    for (final String key in shapeNames) {
+      if (!isValidKey(key)) {
+        throw ReportPackageException('Invalid shape name "$key"');
+      }
+      zip.addFile('$shapesFolder$key.qmap', shapes[key]!);
+    }
     final List<String> families = fonts.keys.toList()..sort();
     for (final String family in families) {
       if (!isValidFontFamily(family)) {
@@ -366,6 +397,20 @@ class ReportPackage {
       'bold.ttf' => (parts[0], true),
       _ => null,
     };
+  }
+
+  static String? _shapeKey(String fileName) {
+    if (!fileName.startsWith(shapesFolder) || !fileName.endsWith('.qmap')) {
+      return null;
+    }
+    final String key = fileName.substring(
+      shapesFolder.length,
+      fileName.length - 5,
+    );
+    if (key.isEmpty || key.contains('/')) {
+      return null;
+    }
+    return isValidKey(key) ? key : null;
   }
 
   static String? _imageKey(String fileName) {

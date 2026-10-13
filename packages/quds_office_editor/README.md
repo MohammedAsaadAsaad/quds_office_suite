@@ -170,6 +170,26 @@ pagination, and exporters come from the engine's
 
 ![Report designer: chart selected, inspector showing chart data](example/screenshots/report_designer.png)
 
+### Charts and shape maps
+
+The inspector lists every chart type and the plot controls that apply to the
+one you selected: depth and skew, hole and start angle, markers, curves,
+axis bounds, a target, and bands. **Import shapes…** on a shape map reads a
+shapefile (`.shp` with its `.dbf`), GeoJSON, or `.qmap`, embeds that file in
+the report, and binds the region key to the value table. Until you import a
+file, the chart draws the world atlas.
+
+<table>
+  <tr>
+    <td width="50%"><img src="example/screenshots/report_chart_gallery.png" alt="Chart gallery in the designer, combo chart selected"/></td>
+    <td width="50%"><img src="example/screenshots/report_shape_map.png" alt="Shape map selected, with import and the region key"/></td>
+  </tr>
+  <tr>
+    <td>Chart gallery: the combo chart and its plot controls</td>
+    <td>Shape map: world atlas, or your own file, keyed to the value table</td>
+  </tr>
+</table>
+
 ### Embed it
 
 ```dart

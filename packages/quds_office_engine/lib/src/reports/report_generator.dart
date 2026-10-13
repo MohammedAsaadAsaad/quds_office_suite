@@ -13,6 +13,7 @@ import 'report_expression.dart';
 import 'report_expression_engine.dart';
 import 'report_fonts.dart';
 import 'report_layout.dart';
+import 'report_shape.dart';
 import 'report_template.dart';
 import 'report_units.dart';
 import 'report_value.dart';
@@ -34,11 +35,13 @@ class ReportGenerator {
     required this.engine,
     required this.shaper,
     Map<String, Uint8List>? images,
+    Map<String, Uint8List>? shapes,
     DateTime? now,
     this.userName = '',
     Map<String, ReportValue>? variableOverrides,
     this.strict = false,
   }) : images = images ?? <String, Uint8List>{},
+       shapes = shapes ?? <String, Uint8List>{},
        now = now ?? DateTime.now(),
        variableOverrides = variableOverrides ?? <String, ReportValue>{};
 
@@ -53,6 +56,9 @@ class ReportGenerator {
 
   /// Named image resources (`source="logo"`).
   final Map<String, Uint8List> images;
+
+  /// Embedded shape layers (`shape="districts"`), encoded shape bytes.
+  final Map<String, Uint8List> shapes;
 
   /// `System.CurrentDate` / `CurrentTime`.
   final DateTime now;
@@ -1572,20 +1578,108 @@ class _Flow {
     var varyColors = e.isRadial;
     if (e.series.isEmpty) {
       final List<double> values = <double>[];
+      final List<double> xs = <double>[];
+      final List<double> sizes = <double>[];
+      final List<bool> totals = <bool>[];
       for (int i = 0; i < e.points.length; i++) {
         final ReportChartPoint p = e.points[i];
         final String label = _text(p.label, scope, null);
         categories.add(label);
         keys.add(ReportText(label));
         values.add(_evaluate(p.value, scope).asNumber?.toDouble() ?? 0);
+        xs.add(
+          p.x == null || p.x!.trim().isEmpty
+              ? (i + 1).toDouble()
+              : _evaluate(p.x!, scope).asNumber?.toDouble() ??
+                    (i + 1).toDouble(),
+        );
+        sizes.add(
+          p.size == null || p.size!.trim().isEmpty
+              ? 1
+              : _evaluate(p.size!, scope).asNumber?.toDouble() ?? 1,
+        );
+        totals.add(p.total);
         pointColors.add(
           p.color == null ? palette(i) : t.resolveColor(p.color, palette(i)),
         );
         varyColors = varyColors || p.color != null;
       }
+      if (e.lastIsTotal && totals.isNotEmpty) {
+        totals[totals.length - 1] = true;
+      }
       series.add(
-        ReportChartSeriesData(name: '', color: palette(0), values: values),
+        ReportChartSeriesData(
+          name: '',
+          color: palette(0),
+          values: values,
+          xs: xs,
+          sizes: sizes,
+          totals: totals,
+        ),
       );
+    } else if (e.chartType.plotsPoints) {
+      final List<ReportValue> rows = _chartRows(e, scope);
+      final ReportExpression? category = _nonEmpty(e.category) == null
+          ? null
+          : _parseExpression(e.category!.trim());
+      for (int s = 0; s < e.series.length; s++) {
+        final ReportChartSeries def = e.series[s];
+        final ReportExpression? yExpr = _nonEmpty(def.value) == null
+            ? null
+            : _parseExpression(def.value.trim());
+        final ReportExpression? xExpr = _nonEmpty(def.x) == null
+            ? null
+            : _parseExpression(def.x!.trim());
+        final ReportExpression? zExpr = _nonEmpty(def.size) == null
+            ? null
+            : _parseExpression(def.size!.trim());
+        final List<double> values = <double>[];
+        final List<double> xs = <double>[];
+        final List<double> sizes = <double>[];
+        for (int r = 0; r < rows.length; r++) {
+          final ReportScope rs = scope.copyWith(row: rows[r], rowIndex: r);
+          if (s == 0) {
+            final String label = category == null
+                ? '${r + 1}'
+                : g.engine.formatter.display(_evalParsed(category, rs));
+            categories.add(label);
+            keys.add(ReportText(label));
+            pointColors.add(palette(r));
+          }
+          values.add(
+            yExpr == null
+                ? 0
+                : _evalParsed(yExpr, rs).asNumber?.toDouble() ?? 0,
+          );
+          xs.add(
+            xExpr == null
+                ? (r + 1).toDouble()
+                : _evalParsed(xExpr, rs).asNumber?.toDouble() ??
+                      (r + 1).toDouble(),
+          );
+          sizes.add(
+            zExpr == null
+                ? 1
+                : _evalParsed(zExpr, rs).asNumber?.toDouble() ?? 1,
+          );
+        }
+        final String name = _text(def.name, scope, null);
+        series.add(
+          ReportChartSeriesData(
+            name: name.isEmpty && e.series.length > 1
+                ? 'Series ${s + 1}'
+                : name,
+            color: def.color == null
+                ? palette(s)
+                : t.resolveColor(def.color, palette(s)),
+            values: values,
+            xs: xs,
+            sizes: sizes,
+            style: def.style,
+            secondary: def.secondary,
+          ),
+        );
+      }
     } else {
       final List<ReportValue> rows = _chartRows(e, scope);
       final ReportExpression? category = _nonEmpty(e.category) == null
@@ -1636,6 +1730,14 @@ class _Flow {
               for (final List<double> v in samples[s])
                 _aggregate(e.aggregate, v),
             ],
+            style: def.style,
+            secondary: def.secondary,
+            totals: e.chartType == ReportChartType.waterfall
+                ? <bool>[
+                    for (int i = 0; i < samples[s].length; i++)
+                      e.lastIsTotal && i == samples[s].length - 1,
+                  ]
+                : null,
           ),
         );
       }
@@ -1656,19 +1758,23 @@ class _Flow {
         ? e.limit
         : order.length;
     final List<int> picked = order.sublist(0, keep);
+    const ReportColor increase = ReportColor(0xFF2E7D32);
+    const ReportColor decrease = ReportColor(0xFFC62828);
+    const ReportColor total = ReportColor(0xFF37474F);
+    final double? target = _nonEmpty(e.target) == null
+        ? null
+        : _evaluate(e.target!, scope).asNumber?.toDouble();
     return ReportChartData(
       type: e.chartType,
       title: _text(e.title, scope, null),
       categories: <String>[for (final int i in picked) categories[i]],
       series: <ReportChartSeriesData>[
-        for (final ReportChartSeriesData s in series)
-          ReportChartSeriesData(
-            name: s.name,
-            color: s.color,
-            values: <double>[for (final int i in picked) s.values[i]],
-          ),
+        for (final ReportChartSeriesData s in series) s.pick(picked),
       ],
-      pointColors: <ReportColor>[for (final int i in picked) pointColors[i]],
+      pointColors: <ReportColor>[
+        for (final int i in picked)
+          if (i < pointColors.length) pointColors[i],
+      ],
       rtl: t.mirrored,
       varyColors: varyColors,
       showLegend: e.showLegend,
@@ -1676,8 +1782,39 @@ class _Flow {
       showGrid: e.showGrid,
       showAxes: e.showAxes,
       valueFormat: _nonEmpty(e.valueFormat),
+      depth: e.depth,
+      skew: e.skew,
+      hole: e.hole,
+      startAngle: e.startAngle,
+      smooth: e.smooth,
+      showMarkers: e.showMarkers,
+      markerSize: e.markerSize,
+      lineWidth: e.lineWidth,
+      axisMin: e.axisMin,
+      axisMax: e.axisMax,
+      axisMin2: e.axisMin2,
+      axisMax2: e.axisMax2,
+      target: target,
+      showPercent: e.showPercent,
+      lastIsTotal: e.lastIsTotal,
+      bands: e.bands,
+      increase: e.increaseColor == null
+          ? increase
+          : t.resolveColor(e.increaseColor, increase),
+      decrease: e.decreaseColor == null
+          ? decrease
+          : t.resolveColor(e.decreaseColor, decrease),
+      total: e.totalColor == null ? total : t.resolveColor(e.totalColor, total),
+      shapes: e.chartType.isShapeMap ? _shapeLayer(e) : null,
+      showLabels: e.showLabels,
+      low: t.resolveColor(e.lowColor, const ReportColor(0xFFDEEBF7)),
+      high: t.resolveColor(e.highColor, const ReportColor(0xFF08306B)),
+      empty: t.resolveColor(e.emptyColor, const ReportColor(0xFFE4E4E4)),
     );
   }
+
+  ReportShapeLayer? _shapeLayer(ReportChartElement e) =>
+      ReportShapes.resolve(e.shape, g.shapes);
 
   static double _aggregate(ReportChartAggregate a, List<double> v) {
     if (a == ReportChartAggregate.count) {
@@ -2078,6 +2215,24 @@ class _Flow {
               bottom: math.max(u.bottom, p.bounds.bottom),
             );
     }
+    // An atomic chart that straddles the cut moves as a whole. Retreat the
+    // cut to its top, and repeat, so the charts below it keep their spacing
+    // instead of being drawn on top of the one that moved.
+    var splitAt = cut;
+    var retreated = true;
+    while (retreated) {
+      retreated = false;
+      for (final ({double top, double bottom}) unit in units.values) {
+        if (unit.top > ReportGenerator._eps &&
+            unit.top < splitAt - ReportGenerator._eps &&
+            unit.bottom > splitAt + ReportGenerator._eps) {
+          splitAt = unit.top;
+          retreated = true;
+        }
+      }
+    }
+    cut = splitAt;
+    restBottom = box.height - cut;
     for (final ReportPrimitive p in box.primitives) {
       final ReportRect b = p.bounds;
       final ({double top, double bottom})? unit = units[p.elementId];

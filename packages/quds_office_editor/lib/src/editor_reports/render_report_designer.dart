@@ -1039,6 +1039,7 @@ class RenderReportDesigner extends RenderBox implements MouseTrackerAnnotation {
           e,
           layout.elementRect(slot, e),
           _controller.images,
+          shapes: _controller.shapes,
           hideText: e.id == editing,
           fonts: _controller.effectiveFonts,
         );

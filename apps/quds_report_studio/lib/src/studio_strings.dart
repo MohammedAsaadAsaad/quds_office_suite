@@ -112,6 +112,7 @@ class StudioStrings {
     'Embed image in report': 'تضمين صورة في التقرير',
     'Embed TrueType fonts in report': 'تضمين خطوط TrueType في التقرير',
     'Import sample data': 'استيراد بيانات تجريبية',
+    'Import shapes': 'استيراد أشكال',
     'Export {format}': 'تصدير {format}',
     // Messages.
     'Saved {name}': 'تم حفظ {name}',

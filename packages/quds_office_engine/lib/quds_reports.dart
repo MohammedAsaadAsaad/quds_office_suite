@@ -19,6 +19,7 @@ export 'src/reports/report_generator.dart';
 export 'src/reports/report_layout.dart';
 export 'src/reports/report_mock_data.dart';
 export 'src/reports/report_package.dart';
+export 'src/reports/report_shape.dart';
 export 'src/reports/report_pdf_writer.dart';
 export 'src/reports/report_template.dart';
 export 'src/reports/report_template_art.dart';

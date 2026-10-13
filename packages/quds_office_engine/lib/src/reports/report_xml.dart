@@ -1050,6 +1050,33 @@ class QudsReportXmlParser {
       'border',
       'palette',
       'colors',
+      'depth',
+      'skew',
+      'hole',
+      'startangle',
+      'smooth',
+      'showmarkers',
+      'markersize',
+      'linewidth',
+      'axismin',
+      'axismax',
+      'axismin2',
+      'axismax2',
+      'target',
+      'showpercent',
+      'lastistotal',
+      'bands',
+      'increasecolor',
+      'decreasecolor',
+      'totalcolor',
+      'shape',
+      'atlas',
+      'shapekey',
+      'keyfield',
+      'lowcolor',
+      'highcolor',
+      'emptycolor',
+      'showlabels',
     },
   };
 
@@ -1305,6 +1332,26 @@ class QudsReportXmlParser {
             'stacked': ReportChartType.stackedBar,
             'doughnut': ReportChartType.donut,
             'ring': ReportChartType.donut,
+            'stacked100': ReportChartType.percentStackedBar,
+            'percent': ReportChartType.percentStackedBar,
+            '100': ReportChartType.percentStackedBar,
+            'point': ReportChartType.scatter,
+            'points': ReportChartType.scatter,
+            'dot': ReportChartType.scatter,
+            'dots': ReportChartType.scatter,
+            'xy': ReportChartType.scatter,
+            'spider': ReportChartType.radar,
+            'heat': ReportChartType.heatmap,
+            'meter': ReportChartType.gauge,
+            'spark': ReportChartType.sparkline,
+            'bar3d': ReportChartType.extrudedBar,
+            'column3d': ReportChartType.extrudedBar,
+            'pie3d': ReportChartType.extrudedPie,
+            'donut3d': ReportChartType.extrudedDonut,
+            'doughnut3d': ReportChartType.extrudedDonut,
+            'map': ReportChartType.shapeMap,
+            'choropleth': ReportChartType.shapeMap,
+            'shapemap': ReportChartType.shapeMap,
           },
         ) ??
         ReportChartType.bar;
@@ -1369,6 +1416,31 @@ class QudsReportXmlParser {
         }
       }
     }
+    c.depth = _num(e, const <String>['depth'], path) ?? 14;
+    c.skew = _num(e, const <String>['skew'], path) ?? 32;
+    c.hole = _num(e, const <String>['hole'], path) ?? 0.58;
+    c.startAngle = _num(e, const <String>['startAngle'], path) ?? -90;
+    c.smooth = _bool(e, const <String>['smooth'], path) ?? false;
+    c.showMarkers = _bool(e, const <String>['showMarkers'], path);
+    c.markerSize = _num(e, const <String>['markerSize'], path) ?? 2.6;
+    c.lineWidth = _num(e, const <String>['lineWidth'], path) ?? 1.6;
+    c.axisMin = _num(e, const <String>['axisMin'], path);
+    c.axisMax = _num(e, const <String>['axisMax'], path);
+    c.axisMin2 = _num(e, const <String>['axisMin2'], path);
+    c.axisMax2 = _num(e, const <String>['axisMax2'], path);
+    c.target = _expr(_attr(e, const <String>['target']), '$path@target');
+    c.showPercent = _bool(e, const <String>['showPercent'], path) ?? false;
+    c.lastIsTotal = _bool(e, const <String>['lastIsTotal'], path) ?? false;
+    c.bands = (_num(e, const <String>['bands'], path) ?? 3).round().clamp(0, 8);
+    c.increaseColor = _color(e, const <String>['increaseColor'], path);
+    c.decreaseColor = _color(e, const <String>['decreaseColor'], path);
+    c.totalColor = _color(e, const <String>['totalColor'], path);
+    c.shape = _attr(e, const <String>['shape', 'atlas']) ?? 'world';
+    c.shapeKey = _attr(e, const <String>['shapeKey', 'keyField']);
+    c.lowColor = _color(e, const <String>['lowColor'], path);
+    c.highColor = _color(e, const <String>['highColor'], path);
+    c.emptyColor = _color(e, const <String>['emptyColor'], path);
+    c.showLabels = _bool(e, const <String>['showLabels'], path) ?? true;
     for (final XmlElement child in e.childElements) {
       switch (child.localName) {
         case 'Series':
@@ -1382,6 +1454,21 @@ class QudsReportXmlParser {
                 ) ??
                 '',
             color: _color(child, const <String>['color'], sp),
+            x: _expr(_attr(child, const <String>['x']), '$sp@x'),
+            size: _expr(_attr(child, const <String>['size']), '$sp@size'),
+            style:
+                _enum(
+                  child,
+                  const <String>['style'],
+                  ReportSeriesStyle.values,
+                  sp,
+                  aliases: const <String, ReportSeriesStyle>{
+                    'bar': ReportSeriesStyle.column,
+                    'column': ReportSeriesStyle.column,
+                  },
+                ) ??
+                ReportSeriesStyle.column,
+            secondary: _bool(child, const <String>['secondary'], sp) ?? false,
           );
           _checkTemplate(s.name, sp);
           if (s.value.isEmpty) {
@@ -1401,6 +1488,9 @@ class QudsReportXmlParser {
                 ) ??
                 '',
             color: _color(child, const <String>['color'], pp),
+            x: _expr(_attr(child, const <String>['x']), '$pp@x'),
+            size: _expr(_attr(child, const <String>['size']), '$pp@size'),
+            total: _bool(child, const <String>['total'], pp) ?? false,
           );
           _checkTemplate(pt.label, pp);
           if (pt.value.isEmpty) {
@@ -1414,7 +1504,7 @@ class QudsReportXmlParser {
     if (single != null) {
       c.series.insert(0, ReportChartSeries(value: single));
     }
-    if (c.series.isNotEmpty && c.category == null) {
+    if (c.series.isNotEmpty && c.category == null && !c.chartType.plotsPoints) {
       _error(path, 'Data-bound chart needs a category expression');
     }
     if (c.series.isEmpty && c.points.isEmpty) {
@@ -1584,7 +1674,15 @@ class QudsReportXmlParser {
       _error('Settings/Margins', 'Margins leave no printable area');
     }
     final ReportBand? detail = t.detail;
-    if (detail == null && t.dataSchema.tables.isNotEmpty) {
+    final bool chartsReadData = t.bands
+        .expand((ReportBand b) => b.elements)
+        .any(
+          (ReportElement e) =>
+              e is ReportChartElement &&
+              e.dataSet != null &&
+              e.dataSet!.trim().isNotEmpty,
+        );
+    if (detail == null && t.dataSchema.tables.isNotEmpty && !chartsReadData) {
       _warn('Bands', 'No Detail band; data rows will not print');
     }
     if (t.band(ReportBandKind.groupFooter) != null ||
@@ -1610,7 +1708,9 @@ class QudsReportXmlParser {
       if (b.dataSet != null && b.kind != ReportBandKind.detail) {
         _warn(bp, 'dataSet is only used on the Detail band');
       }
-      if (b.designHeight > body) {
+      if (b.designHeight > body &&
+          b.kind != ReportBandKind.reportHeader &&
+          b.kind != ReportBandKind.reportSummary) {
         _warn(bp, 'Band is taller than the printable page height');
       }
       var i = 0;
@@ -1988,6 +2088,32 @@ class QudsReportXmlWriter {
           if (e.borderColor != null) 'borderColor': e.borderColor!,
           if (e.borderWidth != 0) 'borderWidth': '${pt(e.borderWidth)}pt',
           if (e.palette.isNotEmpty) 'palette': e.palette.join(','),
+          if (e.depth != 14) 'depth': pt(e.depth),
+          if (e.skew != 32) 'skew': '${e.skew}',
+          if (e.hole != 0.58) 'hole': '${e.hole}',
+          if (e.startAngle != -90) 'startAngle': '${e.startAngle}',
+          if (e.smooth) 'smooth': 'true',
+          if (e.showMarkers != null) 'showMarkers': '${e.showMarkers}',
+          if (e.markerSize != 2.6) 'markerSize': pt(e.markerSize),
+          if (e.lineWidth != 1.6) 'lineWidth': pt(e.lineWidth),
+          if (e.axisMin != null) 'axisMin': '${e.axisMin}',
+          if (e.axisMax != null) 'axisMax': '${e.axisMax}',
+          if (e.axisMin2 != null) 'axisMin2': '${e.axisMin2}',
+          if (e.axisMax2 != null) 'axisMax2': '${e.axisMax2}',
+          if (e.target != null) 'target': e.target!,
+          if (e.showPercent) 'showPercent': 'true',
+          if (e.lastIsTotal) 'lastIsTotal': 'true',
+          if (e.bands != 3) 'bands': '${e.bands}',
+          if (e.increaseColor != null) 'increaseColor': e.increaseColor!,
+          if (e.decreaseColor != null) 'decreaseColor': e.decreaseColor!,
+          if (e.totalColor != null) 'totalColor': e.totalColor!,
+          if (e.shape != 'world') 'shape': e.shape,
+          if (e.shapeKey != null && e.shapeKey!.isNotEmpty)
+            'shapeKey': e.shapeKey!,
+          if (e.lowColor != null) 'lowColor': e.lowColor!,
+          if (e.highColor != null) 'highColor': e.highColor!,
+          if (e.emptyColor != null) 'emptyColor': e.emptyColor!,
+          if (!e.showLabels) 'showLabels': 'false',
           ...tail,
         };
         if (e.series.isEmpty && e.points.isEmpty) {
@@ -1998,12 +2124,12 @@ class QudsReportXmlWriter {
         b.write('$pad<Chart${_attrs(a)}>\n');
         for (final ReportChartSeries s in e.series) {
           b.write(
-            '$p2<Series${_attrs(<String, String>{if (s.name.isNotEmpty) 'name': s.name, 'value': s.value, if (s.color != null) 'color': s.color!})}/>\n',
+            '$p2<Series${_attrs(<String, String>{if (s.name.isNotEmpty) 'name': s.name, 'value': s.value, if (s.color != null) 'color': s.color!, if (s.x != null) 'x': s.x!, if (s.size != null) 'size': s.size!, if (s.style != ReportSeriesStyle.column) 'style': s.style.name, if (s.secondary) 'secondary': 'true'})}/>\n',
           );
         }
         for (final ReportChartPoint p in e.points) {
           b.write(
-            '$p2<Point${_attrs(<String, String>{'label': p.label, 'value': p.value, if (p.color != null) 'color': p.color!})}/>\n',
+            '$p2<Point${_attrs(<String, String>{'label': p.label, 'value': p.value, if (p.color != null) 'color': p.color!, if (p.x != null) 'x': p.x!, if (p.size != null) 'size': p.size!, if (p.total) 'total': 'true'})}/>\n',
           );
         }
         b.write('$pad</Chart>\n');

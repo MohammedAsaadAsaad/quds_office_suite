@@ -64,6 +64,16 @@ The engine **never** imports `dart:ui` or Flutter. The editor **never** uses
   </tr>
 </table>
 
+<table>
+  <tr>
+    <td width="33%"><img src="packages/quds_office_engine/example/screenshots/report_chart_gallery.png" alt="Chart gallery"/></td>
+    <td width="33%"><img src="packages/quds_office_engine/example/screenshots/report_chart_extruded.png" alt="Extruded charts"/></td>
+    <td width="33%"><img src="packages/quds_office_engine/example/screenshots/report_shape_map.png" alt="Country shape map"/></td>
+  </tr>
+</table>
+
+Chart gallery and a country shape map, rendered by the engine.
+
 ### Report output (rendered by the engine, no Flutter)
 
 <table>

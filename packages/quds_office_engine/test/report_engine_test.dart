@@ -990,6 +990,126 @@ void main() {
       expect(pagesWithBars, <int>[2]);
     });
 
+    test('a chart below one that crosses the page does not overlap it', () {
+      final String xml = chartXml
+          .replaceFirst(
+            '<ReportHeader height="90mm">',
+            '<ReportHeader height="320mm">',
+          )
+          .replaceFirst(
+            'name="bars" x="10mm" y="0" width="120mm" height="60mm"',
+            'name="bars" x="10mm" y="230mm" width="90mm" height="40mm"',
+          )
+          .replaceFirst(
+            'name="pie" x="135mm" y="0" width="60mm" height="60mm"',
+            'name="pie" x="10mm" y="274mm" width="90mm" height="40mm"',
+          );
+      final QudsReportEngine engine = chartEngine(xml);
+      final ReportDocumentLayout layout = engine.layout(chartData());
+      ({double top, double bottom}) span(String name) {
+        final String id = idOf(engine, name);
+        var top = double.infinity;
+        var bottom = -double.infinity;
+        var page = 0;
+        for (final ReportPageLayout p in layout.pages) {
+          for (final ReportPrimitive prim in p.primitives) {
+            if (prim.elementId != id) {
+              continue;
+            }
+            if (page == 0) {
+              page = p.pageNumber;
+            }
+            expect(p.pageNumber, page, reason: name);
+            if (prim.bounds.top < top) {
+              top = prim.bounds.top;
+            }
+            if (prim.bounds.bottom > bottom) {
+              bottom = prim.bounds.bottom;
+            }
+          }
+        }
+        expect(page, 2, reason: name);
+        return (top: top, bottom: bottom);
+      }
+
+      final ({double top, double bottom}) upper = span('bars');
+      final ({double top, double bottom}) lower = span('pie');
+      expect(lower.top, greaterThanOrEqualTo(upper.bottom - 0.5));
+    });
+
+    test('draws scatter, waterfall, gauge, and extruded charts', () {
+      const String xml = '''
+<QudsReport name="Charts" pageSize="A4">
+  <Bands>
+    <ReportHeader height="220mm">
+      <Chart name="dots" x="10mm" y="4mm" width="80mm" height="40mm" chartType="scatter" showValues="true">
+        <Point label="A" x="1" value="4" size="2"/>
+        <Point label="B" x="3" value="9" size="6"/>
+        <Point label="C" x="5" value="2" size="3"/>
+      </Chart>
+      <Chart name="steps" x="100mm" y="4mm" width="80mm" height="40mm" chartType="waterfall" lastIsTotal="true" increaseColor="#166534" decreaseColor="#991B1B" totalColor="#1E3A8A">
+        <Point label="Open" value="40"/>
+        <Point label="In" value="15"/>
+        <Point label="Out" value="-8"/>
+        <Point label="Close" value="47" total="true"/>
+      </Chart>
+      <Chart name="dial" x="10mm" y="50mm" width="50mm" height="36mm" chartType="gauge" axisMin="0" axisMax="100" target="80" bands="3" hole="0.62">
+        <Point label="Score" value="64"/>
+      </Chart>
+      <Chart name="solid" x="70mm" y="50mm" width="50mm" height="36mm" chartType="extrudedBar" depth="16" skew="28">
+        <Point label="Q1" value="12"/>
+        <Point label="Q2" value="18"/>
+        <Point label="Q3" value="9"/>
+      </Chart>
+      <Chart name="mix" x="130mm" y="50mm" width="60mm" height="36mm" chartType="combo" dataSet="Data.months" category="Row.m">
+        <Series name="Revenue" value="Row.revenue" style="column"/>
+        <Series name="Margin" value="Row.margin" style="line" secondary="true"/>
+      </Chart>
+    </ReportHeader>
+  </Bands>
+</QudsReport>''';
+      final QudsReportEngine engine = chartEngine(xml);
+      expect(
+        engine.diagnostics.where(
+          (ReportDiagnostic d) => d.severity == ReportDiagnosticSeverity.error,
+        ),
+        isEmpty,
+      );
+      final ReportChartElement dots =
+          engine.template.bands.first.elements.first as ReportChartElement;
+      expect(dots.chartType, ReportChartType.scatter);
+      expect(dots.points.first.x, '1');
+      expect(engine.toXml(), contains('chartType="waterfall"'));
+      expect(engine.toXml(), contains('secondary="true"'));
+      final ReportDocumentLayout layout = engine.layout(<String, Object?>{
+        'months': <Map<String, Object?>>[
+          <String, Object?>{'m': 'Jan', 'revenue': 20, 'margin': 4},
+          <String, Object?>{'m': 'Feb', 'revenue': 28, 'margin': 7},
+          <String, Object?>{'m': 'Mar', 'revenue': 18, 'margin': 3},
+        ],
+      });
+      int painted(String name) {
+        final String id = idOf(engine, name);
+        return layout.pages.first.primitives
+            .where((ReportPrimitive p) => p.elementId == id)
+            .length;
+      }
+
+      expect(painted('dots'), greaterThan(3));
+      expect(painted('steps'), greaterThan(3));
+      expect(painted('dial'), greaterThan(2));
+      expect(painted('solid'), greaterThan(3));
+      expect(painted('mix'), greaterThan(3));
+      expect(
+        flowChart(layout, idOf(engine, 'dots')).data.toDrawingml(),
+        contains('scatterChart'),
+      );
+      expect(
+        flowChart(layout, idOf(engine, 'solid')).data.toDrawingml(),
+        contains('bar3DChart'),
+      );
+    });
+
     test('exports vector PDF paths and native Word / Excel charts', () async {
       final QudsReportEngine engine = chartEngine(chartXml);
       final Uint8List pdf = await engine.exportToPdf(chartData());
@@ -1021,6 +1141,191 @@ void main() {
       expect(header, greaterThanOrEqualTo(0));
       expect(grid[header + 1], containsAllInOrder(<String>['South', '40']));
     });
+
+    test('colors the world atlas by country code and labels wide regions', () {
+      const String xml = '''
+<QudsReport name="Map" pageSize="A4" defaultFont="Liberation Sans">
+  <Bands>
+    <ReportHeader height="120mm">
+      <Chart name="map" x="10mm" y="0" width="180mm" height="110mm" chartType="map" dataSet="Data.rows" category="Row.code" valueFormat="n0" showValues="true">
+        <Series name="Amount" value="Row.amount"/>
+      </Chart>
+    </ReportHeader>
+  </Bands>
+</QudsReport>''';
+      final ReportShapeFeature? libya = WorldCountries.layer.find('LY');
+      expect(libya, isNotNull);
+      expect(WorldCountries.layer.find('LBY'), same(libya));
+      expect(WorldCountries.layer.find('Libya'), same(libya));
+      expect(WorldCountries.layer.find('ليبيا'), same(libya));
+      expect(WorldCountries.layer.find('FR'), isNotNull);
+
+      final QudsReportEngine engine = chartEngine(xml);
+      expect(
+        engine.template.bands.first.elements.first,
+        isA<ReportChartElement>(),
+      );
+      final ReportChartElement chart =
+          engine.template.bands.first.elements.first as ReportChartElement;
+      expect(chart.chartType, ReportChartType.shapeMap);
+      expect(chart.shape, 'world');
+      expect(chartEngineRoundTrip(engine), engine.toXml());
+
+      final ReportPageLayout page = engine
+          .layout(<String, Object?>{
+            'rows': <Map<String, Object?>>[
+              <String, Object?>{'code': 'US', 'amount': 10},
+              <String, Object?>{'code': 'CN', 'amount': 90},
+              <String, Object?>{'code': 'Libya', 'amount': 1},
+              <String, Object?>{'code': 'LY', 'amount': 40},
+            ],
+          })
+          .pages
+          .first;
+      final String id = chart.id;
+      final List<ReportPathPrimitive> regions = <ReportPathPrimitive>[
+        for (final ReportPrimitive p in page.primitives)
+          if (p is ReportPathPrimitive && p.elementId == id && p.fill != null)
+            p,
+      ];
+      expect(regions.length, greaterThan(100));
+      const ReportColor low = ReportColor(0xFFDEEBF7);
+      const ReportColor high = ReportColor(0xFF08306B);
+      const ReportColor empty = ReportColor(0xFFE4E4E4);
+      expect(
+        regions.where((ReportPathPrimitive p) => p.fill == low),
+        isNotEmpty,
+      );
+      expect(
+        regions.where((ReportPathPrimitive p) => p.fill == high),
+        isNotEmpty,
+      );
+      expect(
+        regions.where((ReportPathPrimitive p) => p.fill == empty),
+        isNotEmpty,
+      );
+      final Iterable<String> labels = page.primitives
+          .whereType<ReportTextPrimitive>()
+          .where((ReportTextPrimitive t) => t.elementId == id)
+          .map((ReportTextPrimitive t) => t.text);
+      expect(labels, containsAll(<String>['10', '90']));
+      expect(
+        labels.any(
+          (String t) => t == 'US' || t.contains('United States') || t == 'USA',
+        ),
+        isTrue,
+      );
+      expect(labels.any((String t) => t == 'CN' || t == 'China'), isTrue);
+    });
+
+    test(
+      'imports a shapefile and GeoJSON and stores the layer in the package',
+      () {
+        final Uint8List shp = _polygonShapefile(<List<(double, double)>>[
+          <(double, double)>[(0, 0), (30, 0), (30, 20), (0, 20), (0, 0)],
+          <(double, double)>[(10, 5), (10, 12), (18, 12), (18, 5), (10, 5)],
+        ]);
+        final Uint8List dbf = _dbf('ISO_A2', 'ZZ');
+        final ReportShapeLayer fromShp = ReportShapeLayer.parseShapefile(
+          shp,
+          attributes: dbf,
+        );
+        expect(fromShp.features.single.key, 'ZZ');
+        expect(fromShp.features.single.rings, hasLength(2));
+        expect(
+          fromShp.features.single.rings.where((ReportShapeRing r) => r.hole),
+          hasLength(1),
+        );
+        final ReportShapeLayer round = ReportShapeLayer.decode(
+          fromShp.encode(),
+        );
+        expect(round.find('zz')?.key, 'ZZ');
+        expect(round.features.single.rings[1].hole, isTrue);
+
+        final ReportShapeLayer fromJson = ReportShapeLayer.parse(
+          Uint8List.fromList(
+            utf8.encode('''
+{"type":"FeatureCollection","features":[
+  {"type":"Feature","properties":{"NAME":"West","code":"W"},
+   "geometry":{"type":"Polygon","coordinates":[[[0,0],[20,0],[20,15],[0,0]]]}},
+  {"type":"Feature","properties":{"NAME":"East","code":"E"},
+   "geometry":{"type":"Polygon","coordinates":[[[40,0],[70,0],[70,25],[40,0]]]}}
+]}'''),
+          ),
+          keyField: 'code',
+        );
+        expect(fromJson.find('West')?.key, 'W');
+        expect(fromJson.find('E')?.label, 'East');
+
+        const String xml = '''
+<QudsReport name="Zones" pageSize="A4" defaultFont="Liberation Sans">
+  <Bands>
+    <ReportHeader height="80mm">
+      <Chart name="zones" x="10mm" y="0" width="160mm" height="70mm" chartType="shapeMap" shape="zones" dataSet="Data.rows" category="Row.code" valueFormat="n0">
+        <Series name="Amount" value="Row.n"/>
+      </Chart>
+    </ReportHeader>
+  </Bands>
+</QudsReport>''';
+        final Uint8List qmap = fromJson.encode();
+        final QudsReportEngine engine = QudsReportEngine.fromXml(
+          xml,
+          fonts: loadFonts(),
+          shapes: <String, Uint8List>{'zones': qmap},
+        );
+        final ReportPageLayout page = engine
+            .layout(<String, Object?>{
+              'rows': <Map<String, Object?>>[
+                <String, Object?>{'code': 'W', 'n': 5},
+                <String, Object?>{'code': 'East', 'n': 50},
+              ],
+            })
+            .pages
+            .first;
+        final String id = idOf(engine, 'zones');
+        final Set<int> fills = <int>{
+          for (final ReportPathPrimitive p
+              in page.primitives.whereType<ReportPathPrimitive>())
+            if (p.elementId == id &&
+                p.fill != null &&
+                p.fill!.argb != 0xFFE7F1F8)
+              p.fill!.argb,
+        };
+        expect(fills, containsAll(<int>[0xFFDEEBF7, 0xFF08306B]));
+        expect(
+          page.primitives.whereType<ReportTextPrimitive>().map(
+            (ReportTextPrimitive t) => t.text,
+          ),
+          containsAll(<String>['West', 'East']),
+        );
+
+        final Uint8List packed = ReportPackage(
+          xml: xml,
+          shapes: <String, Uint8List>{'zones': qmap},
+        ).encode();
+        final ReportPackage back = ReportPackage.decode(packed);
+        expect(back.shapes.keys, <String>['zones']);
+        expect(
+          ReportShapeLayer.decode(back.shapes['zones']!).find('W')?.label,
+          'West',
+        );
+        final QudsReportEngine opened = QudsReportEngine.fromPackage(
+          packed,
+          fonts: loadFonts(),
+        );
+        expect(
+          flowChart(
+            opened.layout(<String, Object?>{
+              'rows': <Map<String, Object?>>[
+                <String, Object?>{'code': 'W', 'n': 5},
+              ],
+            }),
+            idOf(opened, 'zones'),
+          ).data.shapes?.features,
+          hasLength(2),
+        );
+      },
+    );
   });
 
   group('Ready-made templates', () {
@@ -1121,7 +1426,7 @@ void main() {
         for (final ReportTemplateInfo t in ReportTemplates.all) t.id,
       };
       expect(ids, hasLength(ReportTemplates.all.length));
-      expect(ReportTemplates.families, hasLength(9));
+      expect(ReportTemplates.families, hasLength(10));
       for (final String family in ReportTemplates.families) {
         final List<ReportTemplateInfo> v = ReportTemplates.variants(family);
         expect(
@@ -1164,6 +1469,116 @@ void main() {
       );
       expect(ReportTemplateCategory.sales.titleFor(arabic: false), 'Sales');
       expect(ReportTemplates.byId('invoice_en')!.family, 'commercial_invoice');
+    });
+
+    test('the chart gallery draws every type and a country map', () {
+      final ReportTemplateInfo info = ReportTemplates.byId('chart_gallery_en')!;
+      final QudsReportEngine engine = QudsReportEngine.fromXml(
+        info.xml,
+        fonts: loadFonts(),
+        clock: () => fixedNow,
+      );
+      expect(
+        engine.diagnostics.where(
+          (ReportDiagnostic d) => d.severity == ReportDiagnosticSeverity.error,
+        ),
+        isEmpty,
+      );
+      final List<ReportChartElement> charts = engine.template.bands
+          .expand((ReportBand b) => b.elements)
+          .whereType<ReportChartElement>()
+          .toList();
+      expect(
+        charts.map((ReportChartElement c) => c.chartType).toSet(),
+        ReportChartType.values.toSet(),
+      );
+      final ReportChartElement map = charts.firstWhere(
+        (ReportChartElement c) => c.name == 'worldMap',
+      );
+      expect(map.dataSet, 'Data.countries');
+      expect(map.category, 'Row.code');
+      expect(map.series.single.value, 'Row.revenue');
+      final ReportDocumentLayout layout = engine.layout(info.sampleData());
+      expect(layout.pages, isNotEmpty);
+      final Set<int> fills = <int>{
+        for (final ReportPageLayout page in layout.pages)
+          for (final ReportPathPrimitive p
+              in page.primitives.whereType<ReportPathPrimitive>())
+            if (p.elementId == map.id &&
+                p.fill != null &&
+                p.fill!.argb != 0xFFE4E4E4 &&
+                p.fill!.argb != 0xFFE7F1F8)
+              p.fill!.argb,
+      };
+      expect(fills, containsAll(<int>[0xFFDEEBF7, 0xFF08306B]));
+      expect(
+        layout.pages
+            .expand((ReportPageLayout p) => p.primitives)
+            .whereType<ReportTextPrimitive>()
+            .map((ReportTextPrimitive t) => t.text),
+        contains('LY'),
+      );
+      final Map<
+        String,
+        List<({int page, double l, double t, double r, double b})>
+      >
+      boxes =
+          <
+            String,
+            List<({int page, double l, double t, double r, double b})>
+          >{};
+      for (final ReportPageLayout page in layout.pages) {
+        final Map<String, ({double l, double t, double r, double b})> onPage =
+            <String, ({double l, double t, double r, double b})>{};
+        for (final ReportPrimitive p in page.primitives) {
+          final String? id = p.elementId;
+          if (id == null || !charts.any((ReportChartElement c) => c.id == id)) {
+            continue;
+          }
+          final ({double l, double t, double r, double b})? have = onPage[id];
+          final ReportRect b = p.bounds;
+          onPage[id] = have == null
+              ? (l: b.left, t: b.top, r: b.right, b: b.bottom)
+              : (
+                  l: have.l < b.left ? have.l : b.left,
+                  t: have.t < b.top ? have.t : b.top,
+                  r: have.r > b.right ? have.r : b.right,
+                  b: have.b > b.bottom ? have.b : b.bottom,
+                );
+        }
+        for (final MapEntry<String, ({double l, double t, double r, double b})>
+            e
+            in onPage.entries) {
+          boxes.putIfAbsent(e.key, () => []).add((
+            page: page.pageNumber,
+            l: e.value.l,
+            t: e.value.t,
+            r: e.value.r,
+            b: e.value.b,
+          ));
+        }
+      }
+      final List<({int page, double l, double t, double r, double b})>
+      placed = <({int page, double l, double t, double r, double b})>[
+        for (final List<({int page, double l, double t, double r, double b})>
+            list
+            in boxes.values)
+          ...list,
+      ];
+      for (int i = 0; i < placed.length; i++) {
+        for (int j = i + 1; j < placed.length; j++) {
+          final ({int page, double l, double t, double r, double b}) a =
+              placed[i];
+          final ({int page, double l, double t, double r, double b}) b =
+              placed[j];
+          if (a.page != b.page) {
+            continue;
+          }
+          final bool overlaps =
+              a.l < b.r - 1 && b.l < a.r - 1 && a.t < b.b - 1 && b.t < a.b - 1;
+          expect(overlaps, isFalse, reason: 'page ${a.page}');
+        }
+      }
     });
 
     test('tokens are filled and XML stays well-formed', () {
@@ -1347,6 +1762,22 @@ void main() {
         'count',
       ]);
       expect(inserts(s.complete('{{Data.returns.', 15)), <String>['reason']);
+
+      final ReportCompleter formula = ReportCompleter(
+        template: schema,
+        band: schema.band(ReportBandKind.detail),
+        data: <String, Object?>{
+          'items': <Object?>[
+            <String, Object?>{'qty': 3},
+          ],
+        },
+        rowTable: 'items',
+      );
+      expect(inserts(formula.complete('q', 1, expression: true)).first, 'qty');
+      expect(
+        inserts(formula.complete('', 0, expression: true, force: true)),
+        containsAll(<String>['qty', 'calc1']),
+      );
     });
 
     test('functions insert parentheses with the caret inside', () {
@@ -2287,3 +2718,84 @@ void main() {
 
 String chartEngineRoundTrip(QudsReportEngine engine) =>
     QudsReportEngine.fromXml(engine.toXml()).toXml();
+
+/// One polygon shapefile. The first ring is the exterior; a later ring wound
+/// the other way is a hole.
+Uint8List _polygonShapefile(List<List<(double, double)>> parts) {
+  final List<(double, double)> points = <(double, double)>[
+    for (final List<(double, double)> part in parts) ...part,
+  ];
+  var xmin = points.first.$1;
+  var xmax = xmin;
+  var ymin = points.first.$2;
+  var ymax = ymin;
+  for (final (double, double) p in points) {
+    if (p.$1 < xmin) {
+      xmin = p.$1;
+    }
+    if (p.$1 > xmax) {
+      xmax = p.$1;
+    }
+    if (p.$2 < ymin) {
+      ymin = p.$2;
+    }
+    if (p.$2 > ymax) {
+      ymax = p.$2;
+    }
+  }
+  final int content = 4 + 32 + 4 + 4 + parts.length * 4 + points.length * 16;
+  final Uint8List bytes = Uint8List(100 + 8 + content);
+  final ByteData d = ByteData.sublistView(bytes);
+  d.setInt32(0, 9994, Endian.big);
+  d.setInt32(24, bytes.length ~/ 2, Endian.big);
+  d.setInt32(28, 1000, Endian.little);
+  d.setInt32(32, 5, Endian.little);
+  d.setFloat64(36, xmin, Endian.little);
+  d.setFloat64(44, ymin, Endian.little);
+  d.setFloat64(52, xmax, Endian.little);
+  d.setFloat64(60, ymax, Endian.little);
+  d.setInt32(100, 1, Endian.big);
+  d.setInt32(104, content ~/ 2, Endian.big);
+  var o = 108;
+  d.setInt32(o, 5, Endian.little);
+  o += 4;
+  for (final double v in <double>[xmin, ymin, xmax, ymax]) {
+    d.setFloat64(o, v, Endian.little);
+    o += 8;
+  }
+  d.setInt32(o, parts.length, Endian.little);
+  o += 4;
+  d.setInt32(o, points.length, Endian.little);
+  o += 4;
+  var cursor = 0;
+  for (final List<(double, double)> part in parts) {
+    d.setInt32(o, cursor, Endian.little);
+    o += 4;
+    cursor += part.length;
+  }
+  for (final (double, double) p in points) {
+    d.setFloat64(o, p.$1, Endian.little);
+    o += 8;
+    d.setFloat64(o, p.$2, Endian.little);
+    o += 8;
+  }
+  return bytes;
+}
+
+Uint8List _dbf(String field, String value) {
+  final Uint8List bytes = Uint8List(76);
+  final ByteData d = ByteData.sublistView(bytes);
+  bytes[0] = 0x03;
+  d.setUint32(4, 1, Endian.little);
+  d.setUint16(8, 65, Endian.little);
+  d.setUint16(10, 11, Endian.little);
+  final List<int> name = latin1.encode(field);
+  bytes.setRange(32, 32 + name.length, name);
+  bytes[43] = 0x43;
+  bytes[48] = 10;
+  bytes[64] = 0x0D;
+  bytes[65] = 0x20;
+  final List<int> cell = latin1.encode(value.padRight(10));
+  bytes.setRange(66, 76, cell);
+  return bytes;
+}

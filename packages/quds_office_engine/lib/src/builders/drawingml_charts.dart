@@ -4,7 +4,20 @@ import 'office_document_theme.dart';
 import 'office_markup.dart';
 
 /// Enum ChartKind.
-enum ChartKind { pie, donut, bar, line, area, stackedBar }
+enum ChartKind {
+  pie,
+  donut,
+  bar,
+  line,
+  area,
+  stackedBar,
+  percentStackedBar,
+  stackedArea,
+  scatter,
+  bubble,
+  radar,
+  combo,
+}
 
 /// DrawingML chart parts shared by Word and PowerPoint.
 abstract final class DrawingmlCharts {
@@ -182,6 +195,8 @@ abstract final class DrawingmlCharts {
     String titleColor = '2E75B6',
     bool horizontal = false,
     bool markers = false,
+    List<bool> lines = const <bool>[],
+    List<bool> secondary = const <bool>[],
     OfficeDocumentTheme? theme,
     ChartDisplay? display,
   }) {
@@ -230,7 +245,90 @@ abstract final class DrawingmlCharts {
       series: rows,
       pointColors: const <String>[],
       markers: markers,
+      lines: lines,
+      secondary: secondary,
       display: display,
+    );
+  }
+
+  /// Scatter or bubble chart. Each point's [ChartPoint.x] is the X value
+  /// (the category index when it is null) and [ChartPoint.value] is Y.
+  static String xy({
+    required String title,
+    required List<ChartSeries> series,
+    required bool rtl,
+    required bool bubble,
+    String titleColor = '404040',
+    OfficeDocumentTheme? theme,
+    ChartDisplay? display,
+  }) {
+    final ChartDisplay view = display ?? ChartDisplay();
+    final StringBuffer serXml = StringBuffer();
+    var s = 0;
+    for (final ChartSeries seriesItem in series) {
+      final List<ChartPoint> pts = <ChartPoint>[
+        for (final ChartPoint p in seriesItem.points)
+          if (p.value.isFinite) p,
+      ];
+      if (pts.isEmpty) {
+        continue;
+      }
+      final String color = OfficeMarkup.srgb(
+        seriesItem.color ?? theme?.colorAt(s) ?? pts.first.color,
+      );
+      final StringBuffer xLit = StringBuffer(
+        '<c:numLit><c:formatCode>General</c:formatCode>'
+        '<c:ptCount val="${pts.length}"/>',
+      );
+      final StringBuffer yLit = StringBuffer(
+        '<c:numLit><c:formatCode>General</c:formatCode>'
+        '<c:ptCount val="${pts.length}"/>',
+      );
+      final StringBuffer zLit = StringBuffer(
+        '<c:numLit><c:formatCode>General</c:formatCode>'
+        '<c:ptCount val="${pts.length}"/>',
+      );
+      for (int i = 0; i < pts.length; i++) {
+        final double x = pts[i].x ?? (i + 1).toDouble();
+        xLit.write('<c:pt idx="$i"><c:v>$x</c:v></c:pt>');
+        yLit.write('<c:pt idx="$i"><c:v>${pts[i].value}</c:v></c:pt>');
+        zLit.write('<c:pt idx="$i"><c:v>${pts[i].size ?? 1}</c:v></c:pt>');
+      }
+      xLit.write('</c:numLit>');
+      yLit.write('</c:numLit>');
+      zLit.write('</c:numLit>');
+      final String name = seriesItem.name.trim().isEmpty
+          ? 'Series ${s + 1}'
+          : seriesItem.name.trim();
+      serXml.write(
+        '<c:ser><c:idx val="$s"/><c:order val="$s"/>'
+        '<c:tx><c:v>${OfficeMarkup.escape(name)}</c:v></c:tx>'
+        '<c:spPr><a:solidFill><a:srgbClr val="$color"/></a:solidFill></c:spPr>'
+        '<c:xVal>$xLit</c:xVal><c:yVal>$yLit</c:yVal>'
+        '${bubble ? '<c:bubbleSize>$zLit</c:bubbleSize>' : ''}'
+        '<c:marker><c:symbol val="circle"/><c:size val="7"/>'
+        '<c:spPr><a:solidFill><a:srgbClr val="$color"/></a:solidFill>'
+        '</c:spPr></c:marker></c:ser>',
+      );
+      s++;
+    }
+    if (s == 0) {
+      return _emptyChart();
+    }
+    final String tag = bubble ? 'bubbleChart' : 'scatterChart';
+    final String style = bubble
+        ? '<c:bubbleScale val="100"/>'
+        : '<c:scatterStyle val="marker"/>';
+    final String plot =
+        '<c:$tag><c:varyColors val="0"/>$style$serXml'
+        '<c:axId val="100"/><c:axId val="200"/></c:$tag>'
+        '${_axes(horizontal: false, showAxes: view.showAxes, showGridlines: view.showGridlines, categoryTitle: view.categoryTitle, valueTitle: view.valueTitle)}';
+    return _wrap(
+      title: title,
+      rtl: rtl,
+      titleColor: titleColor,
+      plot: plot,
+      display: view,
     );
   }
 
@@ -252,6 +350,8 @@ abstract final class DrawingmlCharts {
           color: OfficeMarkup.srgb(
             custom ? s.color : (theme?.colorAt(i) ?? s.color),
           ),
+          x: s.x,
+          size: s.size,
         ),
       );
     }
@@ -273,6 +373,8 @@ abstract final class DrawingmlCharts {
     required List<({String name, String color, List<double> values})> series,
     required List<String> pointColors,
     required bool markers,
+    List<bool> lines = const <bool>[],
+    List<bool> secondary = const <bool>[],
     ChartDisplay? display,
   }) {
     final ChartDisplay view = display ?? ChartDisplay();
@@ -286,6 +388,8 @@ abstract final class DrawingmlCharts {
     cats.write('</c:strLit>');
 
     final StringBuffer serXml = StringBuffer();
+    final StringBuffer barSer = StringBuffer();
+    final StringBuffer lineSer = StringBuffer();
     for (int s = 0; s < series.length; s++) {
       final ({String name, String color, List<double> values}) row = series[s];
       final StringBuffer vals = StringBuffer(
@@ -305,7 +409,9 @@ abstract final class DrawingmlCharts {
             '<a:ln><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill></a:ln>'
             '</c:spPr></c:dPt>',
           );
-        } else if (kind == ChartKind.bar || kind == ChartKind.stackedBar) {
+        } else if (kind == ChartKind.bar ||
+            kind == ChartKind.stackedBar ||
+            kind == ChartKind.percentStackedBar) {
           pts.write(
             '<c:dPt><c:idx val="$i"/><c:invertIfNegative val="0"/>'
             '<c:spPr><a:solidFill><a:srgbClr val="$color"/></a:solidFill>'
@@ -325,12 +431,23 @@ abstract final class DrawingmlCharts {
           '${kind == ChartKind.area ? '<a:solidFill><a:srgbClr val="${row.color}">'
                     '<a:alpha val="40000"/></a:srgbClr></a:solidFill>' : ''}'
           '</c:spPr>';
-      serXml.write(
-        '<c:ser><c:idx val="$s"/><c:order val="$s"/>'
-        '<c:tx><c:v>${OfficeMarkup.escape(row.name)}</c:v></c:tx>'
-        '${kind == ChartKind.line || kind == ChartKind.area ? '$marker$lineFill' : ''}'
-        '$pts<c:cat>$cats</c:cat><c:val>$vals</c:val></c:ser>',
-      );
+      final bool asLine =
+          kind == ChartKind.combo && s < lines.length && lines[s];
+      final bool sec = s < secondary.length && secondary[s];
+      final String ax = sec
+          ? '<c:axId val="100"/><c:axId val="400"/>'
+          : '';
+      final String one =
+          '<c:ser><c:idx val="$s"/><c:order val="$s"/>'
+          '<c:tx><c:v>${OfficeMarkup.escape(row.name)}</c:v></c:tx>'
+          '${kind == ChartKind.line || kind == ChartKind.area || kind == ChartKind.stackedArea || kind == ChartKind.radar || asLine ? '$marker$lineFill' : ''}'
+          '$pts<c:cat>$cats</c:cat><c:val>$vals</c:val>$ax</c:ser>';
+      serXml.write(one);
+      if (asLine) {
+        lineSer.write(one);
+      } else {
+        barSer.write(one);
+      }
     }
 
     final String lang = rtl ? 'ar-SA' : 'en-US';
@@ -369,27 +486,63 @@ abstract final class DrawingmlCharts {
       valueTitle: view.valueTitle,
     );
 
+    final String barTag = view.view3d ? 'bar3DChart' : 'barChart';
+    final String pieTag = view.view3d ? 'pie3DChart' : 'pieChart';
+    final String grouping = switch (kind) {
+      ChartKind.stackedBar => 'stacked',
+      ChartKind.percentStackedBar => 'percentStacked',
+      _ => 'clustered',
+    };
+    final String areaGrouping = kind == ChartKind.stackedArea
+        ? 'stacked'
+        : 'standard';
+    final String secondAxis = secondary.contains(true)
+        ? '<c:valAx><c:axId val="400"/>'
+              '<c:scaling><c:orientation val="minMax"/></c:scaling>'
+              '<c:delete val="0"/><c:axPos val="r"/>'
+              '<c:majorTickMark val="out"/><c:minorTickMark val="none"/>'
+              '<c:crossAx val="100"/><c:crosses val="max"/>'
+              '<c:crossBetween val="between"/></c:valAx>'
+        : '';
     final String plot = switch (kind) {
       ChartKind.pie =>
-        '<c:pieChart><c:varyColors val="0"/>$serXml$dLbls'
-            '<c:firstSliceAng val="$slice"/></c:pieChart>',
+        '<c:$pieTag><c:varyColors val="0"/>$serXml$dLbls'
+            '<c:firstSliceAng val="$slice"/></c:$pieTag>',
       ChartKind.donut =>
         '<c:doughnutChart><c:varyColors val="0"/>$serXml$dLbls'
             '<c:firstSliceAng val="$slice"/><c:holeSize val="$hole"/>'
             '</c:doughnutChart>',
-      ChartKind.bar || ChartKind.stackedBar =>
-        '<c:barChart><c:barDir val="${horizontal ? 'bar' : 'col'}"/>'
-            '<c:grouping val="${kind == ChartKind.stackedBar ? 'stacked' : 'clustered'}"/>'
+      ChartKind.bar ||
+      ChartKind.stackedBar ||
+      ChartKind.percentStackedBar =>
+        '<c:$barTag><c:barDir val="${horizontal ? 'bar' : 'col'}"/>'
+            '<c:grouping val="$grouping"/>'
             '<c:varyColors val="0"/>$serXml$dLbls'
             '<c:gapWidth val="$gap"/><c:axId val="100"/><c:axId val="200"/>'
-            '</c:barChart>$axes',
+            '</c:$barTag>$axes$secondAxis',
       ChartKind.line =>
         '<c:lineChart><c:grouping val="standard"/><c:varyColors val="0"/>'
             '$serXml<c:marker val="${markers ? 1 : 0}"/>'
             '<c:axId val="100"/><c:axId val="200"/></c:lineChart>$axes',
-      ChartKind.area =>
-        '<c:areaChart><c:grouping val="standard"/><c:varyColors val="0"/>'
+      ChartKind.area || ChartKind.stackedArea =>
+        '<c:areaChart><c:grouping val="$areaGrouping"/><c:varyColors val="0"/>'
             '$serXml<c:axId val="100"/><c:axId val="200"/></c:areaChart>$axes',
+      ChartKind.radar =>
+        '<c:radarChart><c:radarStyle val="${markers ? 'marker' : 'standard'}"/>'
+            '<c:varyColors val="0"/>$serXml'
+            '<c:axId val="100"/><c:axId val="200"/></c:radarChart>$axes',
+      ChartKind.scatter || ChartKind.bubble =>
+        '<c:lineChart><c:grouping val="standard"/><c:varyColors val="0"/>'
+            '$serXml<c:axId val="100"/><c:axId val="200"/></c:lineChart>$axes',
+      ChartKind.combo =>
+        '<c:$barTag><c:barDir val="col"/><c:grouping val="clustered"/>'
+            '<c:varyColors val="0"/>$barSer$dLbls'
+            '<c:gapWidth val="$gap"/><c:axId val="100"/><c:axId val="200"/>'
+            '</c:$barTag>'
+            '<c:lineChart><c:grouping val="standard"/><c:varyColors val="0"/>'
+            '$lineSer<c:marker val="1"/>'
+            '<c:axId val="100"/><c:axId val="200"/></c:lineChart>'
+            '$axes$secondAxis',
     };
 
     final bool showLegend = view.showLegend;
@@ -406,7 +559,48 @@ abstract final class DrawingmlCharts {
         'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
         '<c:date1904 val="0"/><c:lang val="$lang"/><c:roundedCorners val="0"/>'
         '<c:chart>$titleXml<c:autoTitleDeleted val="${showTitle ? 0 : 1}"/>'
-        '<c:plotArea><c:layout/>$plot</c:plotArea>'
+        '<c:plotArea><c:layout/>${view.view3d ? '<c:view3D><c:rotX val="18"/>'
+                  '<c:rotY val="20"/><c:rAngAx val="0"/>'
+                  '<c:perspective val="20"/></c:view3D>' : ''}$plot</c:plotArea>'
+        '$legend<c:plotVisOnly val="1"/></c:chart></c:chartSpace>';
+  }
+
+  static String _wrap({
+    required String title,
+    required bool rtl,
+    required String titleColor,
+    required String plot,
+    required ChartDisplay display,
+  }) {
+    final String lang = rtl ? 'ar-SA' : 'en-US';
+    final String algn = rtl ? 'r' : 'l';
+    final bool showTitle = display.showTitle && title.trim().isNotEmpty;
+    final String titleXml = showTitle
+        ? '<c:title><c:tx><c:rich><a:bodyPr/><a:lstStyle/>'
+              '<a:p><a:pPr algn="$algn"${rtl ? ' rtl="1"' : ''}/><a:r>'
+              '<a:rPr lang="$lang" sz="1400" b="1">'
+              '<a:solidFill><a:srgbClr val="${OfficeMarkup.srgb(titleColor)}"/></a:solidFill>'
+              '<a:cs typeface="Arial"/></a:rPr>'
+              '<a:t>${OfficeMarkup.escape(title)}</a:t></a:r></a:p>'
+              '</c:rich></c:tx><c:overlay val="0"/></c:title>'
+        : '';
+    final String pos = rtl && display.legendPos == ChartLegendPos.bottom
+        ? 'l'
+        : DrawingmlVisualIo.legendPosXml(display.legendPos);
+    final String legend = display.showLegend
+        ? '<c:legend><c:legendPos val="$pos"/><c:overlay val="0"/></c:legend>'
+        : '';
+    final String view3d = display.view3d
+        ? '<c:view3D><c:rotX val="18"/><c:rotY val="20"/>'
+              '<c:rAngAx val="0"/><c:perspective val="20"/></c:view3D>'
+        : '';
+    return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" '
+        'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" '
+        'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+        '<c:date1904 val="0"/><c:lang val="$lang"/><c:roundedCorners val="0"/>'
+        '<c:chart>$titleXml<c:autoTitleDeleted val="${showTitle ? 0 : 1}"/>'
+        '<c:plotArea><c:layout/>$view3d$plot</c:plotArea>'
         '$legend<c:plotVisOnly val="1"/></c:chart></c:chartSpace>';
   }
 

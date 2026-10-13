@@ -81,6 +81,7 @@ class QudsReportEngine {
     this.template, {
     ReportFontRegistry? fonts,
     Map<String, Uint8List>? images,
+    Map<String, Uint8List>? shapes,
     this.userName = '',
     this.clock,
     Map<String, ReportFunction>? functions,
@@ -94,6 +95,7 @@ class QudsReportEngine {
        embeddedFonts = embeddedFonts ?? <String, ReportFontFiles>{},
        fonts = fonts ?? ReportFontRegistry(),
        images = images ?? <String, Uint8List>{},
+       shapes = shapes ?? <String, Uint8List>{},
        functions = functions ?? <String, ReportFunction>{},
        variables = variables ?? <String, Object?>{};
 
@@ -102,6 +104,7 @@ class QudsReportEngine {
     String xml, {
     ReportFontRegistry? fonts,
     Map<String, Uint8List>? images,
+    Map<String, Uint8List>? shapes,
     String userName = '',
     DateTime Function()? clock,
     Map<String, ReportFunction>? functions,
@@ -113,6 +116,7 @@ class QudsReportEngine {
       parsed.templateOrThrow,
       fonts: fonts,
       images: images,
+      shapes: shapes,
       userName: userName,
       clock: clock,
       functions: functions,
@@ -144,6 +148,7 @@ class QudsReportEngine {
       parsed.templateOrThrow,
       fonts: package.fontRegistry(base: fonts),
       images: <String, Uint8List>{...package.images, ...?images},
+      shapes: package.shapes,
       userName: userName,
       clock: clock,
       functions: functions,
@@ -163,6 +168,9 @@ class QudsReportEngine {
 
   /// Named images (`<Image source="logo"/>`).
   final Map<String, Uint8List> images;
+
+  /// Embedded shape layers (`shape="districts"` on a shape map).
+  final Map<String, Uint8List> shapes;
 
   /// TrueType files written into [toPackage] (the fonts of a package opened
   /// with [QudsReportEngine.fromPackage]). They must already be in [fonts]
@@ -210,6 +218,7 @@ class QudsReportEngine {
     xml: toXml(),
     images: images,
     fonts: embeddedFonts,
+    shapes: shapes,
     sampleData: sampleData,
   ).encode();
 
@@ -353,6 +362,7 @@ class QudsReportEngine {
       engine: engine,
       shaper: ReportTextShaper(fonts),
       images: images,
+      shapes: shapes,
       now: now,
       userName: userName,
       variableOverrides: <String, ReportValue>{

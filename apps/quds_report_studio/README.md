@@ -12,6 +12,12 @@ from the pure-Dart
 
 ![Quds Report Studio](screenshots/studio_chart.png)
 
+Open **Import shapes…** on a shape map to embed a shapefile, GeoJSON, or
+`.qmap` (neighborhoods, districts) and color it from a table. The world atlas
+is what the chart draws until you import a file.
+
+![Shape map in the designer](../../packages/quds_office_editor/example/screenshots/report_shape_map.png)
+
 ## Download
 
 | Platform | Installer | Portable |
@@ -292,15 +298,15 @@ section for the full API.
 
 **File › New from template** opens a categorized catalog: pick a category
 (Sales, Finance, Inventory, Analytics, Human resources), then a family, then
-**العربية** or **English**. Each of the nine families ships both versions
-(18 templates):
+**العربية** or **English**. Each of the ten families ships both versions
+(20 templates):
 
 | Category | Templates |
 | --- | --- |
 | Sales | VAT sales invoice, commercial invoice, product catalog |
 | Finance | Customer account statement, receipt voucher |
 | Inventory | Inventory status |
-| Analytics | Sales performance dashboard |
+| Analytics | Sales performance dashboard, chart gallery (every chart, and a country map bound to a `countries` table) |
 | Human resources | Certificate of appreciation, class certificates (one page per student) |
 
 **Class certificates** are the report form of a mail merge. The layout sits

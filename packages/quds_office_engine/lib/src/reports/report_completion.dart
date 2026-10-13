@@ -111,6 +111,7 @@ class ReportCompleter {
     this.data = const <String, Object?>{},
     this.hostFunctions = const <String>[],
     this.maxItems = 60,
+    this.rowTable,
   });
 
   /// template API.
@@ -127,6 +128,10 @@ class ReportCompleter {
 
   /// Cap on returned items.
   final int maxItems;
+
+  /// Table whose columns a calculated field may name directly (`price`
+  /// rather than `item.price`). Null outside that formula.
+  final String? rowTable;
 
   /// Built-in functions in display order.
   static const List<ReportFunctionInfo> functions = <ReportFunctionInfo>[
@@ -442,7 +447,15 @@ class ReportCompleter {
 
   List<ReportCompletionItem> _roots() {
     final String? rows = _rowDataset;
+    final String? table = rowTable?.trim();
+    final List<ReportCompletionItem> bare = table == null || table.isEmpty
+        ? const <ReportCompletionItem>[]
+        : _bareRowFields(table);
+    final Set<String> bareNames = <String>{
+      for (final ReportCompletionItem i in bare) i.insert.toLowerCase(),
+    };
     final List<ReportCompletionItem> out = <ReportCompletionItem>[
+      ...bare,
       if (rows != null)
         ReportCompletionItem(
           label: 'item',
@@ -477,7 +490,8 @@ class ReportCompleter {
           detail: 'Current group',
         ),
       for (final MapEntry<String, Object?> e in data.entries)
-        _valueItem(e.key, e.value),
+        if (!bareNames.contains(e.key.toLowerCase()))
+          _valueItem(e.key, e.value),
       for (final ReportFunctionInfo f in functions)
         ReportCompletionItem(
           label: '${f.name}(${f.signature})',
@@ -503,6 +517,55 @@ class ReportCompleter {
     ];
     return out;
   }
+
+  /// Columns of [table], inserted as bare names. Reserved roots (`Data`,
+  /// `item`, …) are left out: those names do not resolve to the column.
+  List<ReportCompletionItem> _bareRowFields(String table) {
+    final ReportDataTable? declared = template.dataSchema.table(table);
+    final List<ReportCompletionItem> out = <ReportCompletionItem>[];
+    final Set<String> seen = <String>{};
+    void add(String name, String detail) {
+      if (name.isEmpty || _reservedBare.contains(name.toLowerCase())) {
+        return;
+      }
+      if (!seen.add(name.toLowerCase())) {
+        return;
+      }
+      out.add(
+        ReportCompletionItem(
+          label: name,
+          insert: name,
+          kind: ReportCompletionKind.field,
+          detail: detail,
+        ),
+      );
+    }
+
+    if (declared != null) {
+      for (final ReportDataColumn c in declared.columns) {
+        add(c.name, c.isCalculated ? '= ${c.expression!.trim()}' : c.type.name);
+      }
+    }
+    final Object? row = _firstRow(_resolve(table));
+    if (row is Map) {
+      for (final MapEntry<Object?, Object?> e in row.entries) {
+        add('${e.key}', _preview(e.value));
+      }
+    }
+    return out;
+  }
+
+  static const Set<String> _reservedBare = <String>{
+    'system',
+    'variables',
+    'vars',
+    'var',
+    'data',
+    'group',
+    'item',
+    'row',
+    'record',
+  };
 
   /// Variables and folders directly under [folder] (`[]` is the top level,
   /// `['stats']` lists `stats.sum` as `sum`).

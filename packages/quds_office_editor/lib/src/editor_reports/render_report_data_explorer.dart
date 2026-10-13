@@ -139,7 +139,8 @@ class RenderReportDataExplorer extends RenderBox {
 
   final Map<String, TextPainter> _cache = <String, TextPainter>{};
   final Map<String, Rect> _buttons = <String, Rect>{};
-  final List<(Rect, String)> _sideRows = <(Rect, String)>[];
+  final List<_SideHit> _sideHits = <_SideHit>[];
+  final Set<String> _collapsed = <String>{};
 
   Offset _scroll = Offset.zero;
   double _sideScroll = 0;
@@ -240,8 +241,8 @@ class RenderReportDataExplorer extends RenderBox {
   // ------------------------------------------------------------ geometry
 
   double get _sideWidth => size.width < 520
-      ? math.max(120, size.width * 0.3)
-      : math.min(220, math.max(160, size.width * 0.2));
+      ? math.max(156, size.width * 0.36)
+      : math.min(268, math.max(210, size.width * 0.22));
 
   Rect get _sidebar => Rect.fromLTWH(0, 0, _sideWidth, size.height);
 
@@ -428,16 +429,58 @@ class RenderReportDataExplorer extends RenderBox {
     _lastTap = event.timeStamp;
     _lastTapPos = p;
 
-    for (final (Rect r, String name) in _sideRows) {
-      if (r.contains(p)) {
-        if (name != t.name) {
-          _controller.selectDataTable(name);
-        }
-        if (secondary) {
-          _context(event, ReportDataArea.table, table: name);
+    for (final _SideHit h in _sideHits) {
+      if (!h.rect.contains(p)) {
+        continue;
+      }
+      final bool chevron = h.twist > 0 && p.dx < h.twist;
+      if (h.action != null) {
+        if (!secondary && !chevron) {
+          if (h.table != null && h.table != t.name) {
+            _controller.selectDataTable(h.table!);
+          }
+          _press(h.action!);
         }
         return;
       }
+      if (h.table == null) {
+        if (h.toggle != null) {
+          _toggle(h.toggle!);
+        }
+        return;
+      }
+      if (chevron) {
+        _toggle(h.toggle!);
+        return;
+      }
+      if (_collapsed.contains(h.toggle)) {
+        _collapsed.remove(h.toggle);
+      }
+      if (h.table != t.name) {
+        _controller.selectDataTable(h.table!);
+      }
+      if (h.fieldRow >= 0) {
+        _controller.selectDataCell(h.fieldRow, -1);
+      } else if (h.column >= 0) {
+        _controller.selectDataCell(-1, h.column);
+        if (quick && h.formula) {
+          _controller.beginPropertyEdit('data.col.expression');
+        }
+      }
+      if (secondary) {
+        _context(
+          event,
+          h.column >= 0
+              ? ReportDataArea.header
+              : h.fieldRow >= 0
+              ? ReportDataArea.rowHeader
+              : ReportDataArea.table,
+          table: h.table!,
+          row: h.fieldRow,
+          column: h.column,
+        );
+      }
+      return;
     }
     if (_sidebar.contains(p)) {
       return;
@@ -660,12 +703,21 @@ class RenderReportDataExplorer extends RenderBox {
   /// Local rectangle of table [name] ('' for the fields) in the sidebar,
   /// once painted.
   Rect? sidebarRect(String name) {
-    for (final (Rect r, String n) in _sideRows) {
-      if (n == name) {
-        return r;
+    for (final _SideHit h in _sideHits) {
+      if (h.table == name && h.column < 0 && h.fieldRow < 0 && !h.formula) {
+        return h.rect;
       }
     }
     return null;
+  }
+
+  void _toggle(String key) {
+    if (_collapsed.contains(key)) {
+      _collapsed.remove(key);
+    } else {
+      _collapsed.add(key);
+    }
+    markNeedsPaint();
   }
 
   Rect _cellRect(ReportDataTableView t, int row, int column, Rect body) {
@@ -709,68 +761,325 @@ class RenderReportDataExplorer extends RenderBox {
     final Rect side = _sidebar;
     canvas.drawRect(side, Paint()..color = _theme.headerFill);
     canvas.drawLine(side.topRight, side.bottomRight, Paint()..color = _line);
+    final ReportDesignerStrings s = _controller.strings;
     _text(
-      _controller.strings.t('DATA'),
+      s.t('Field Explorer'),
       10.5,
       _muted,
       side.width - 24,
       bold: true,
     ).paint(canvas, const Offset(12, 14));
-    _sideRows.clear();
-    final List<ReportDataTableView> tables = _controller.dataTables;
+    _buttons.remove('table+');
+    _buttons.remove('formula+');
+    final List<_SideSpec> specs = _sideSpecs(s);
     final double maxScroll = math.max(
       0,
-      tables.length * sideRowHeight + 40 + 36 - side.height,
+      specs.length * sideRowHeight + 40 - side.height,
     );
     _sideScroll = _sideScroll.clamp(0, maxScroll).toDouble();
+    _sideHits.clear();
     canvas.save();
     canvas.clipRect(Rect.fromLTRB(0, 36, side.right - 1, side.bottom));
     var y = 38 - _sideScroll;
-    for (final ReportDataTableView t in tables) {
-      final Rect r = Rect.fromLTWH(4, y, side.width - 9, sideRowHeight - 2);
-      _sideRows.add((r, t.name));
-      final bool selected = t.name == current.name;
+    for (final _SideSpec spec in specs) {
+      final Rect r = Rect.fromLTWH(2, y, side.width - 6, sideRowHeight - 2);
+      final double indent = 6 + spec.depth * 13;
+      final double twist = spec.toggle == null ? 0 : indent + 14;
+      _sideHits.add(
+        _SideHit(
+          rect: r,
+          table: spec.table,
+          column: spec.column,
+          fieldRow: spec.fieldRow,
+          toggle: spec.toggle,
+          twist: twist,
+          formula: spec.formula,
+          action: spec.action,
+        ),
+      );
+      if (spec.action != null) {
+        final Rect add = Rect.fromLTWH(
+          indent,
+          r.top + 1,
+          r.right - indent - 4,
+          r.height - 2,
+        );
+        _buttons[spec.action!] = add;
+        _buttonFace(
+          canvas,
+          add,
+          spec.label,
+          _hover != null && r.contains(_hover!),
+        );
+        y += sideRowHeight;
+        continue;
+      }
+      final bool selected = _sideSelected(spec, current);
       final bool hot = _hover != null && r.contains(_hover!);
       if (selected || hot) {
         canvas.drawRRect(
-          RRect.fromRectAndRadius(r, const Radius.circular(5)),
+          RRect.fromRectAndRadius(r, const Radius.circular(4)),
           Paint()..color = _accent.withValues(alpha: selected ? 0.16 : 0.07),
         );
       }
       if (selected) {
         canvas.drawRRect(
           RRect.fromRectAndRadius(
-            Rect.fromLTWH(r.left, r.top + 6, 3, r.height - 12),
+            Rect.fromLTWH(r.left, r.top + 5, 3, r.height - 10),
             const Radius.circular(2),
           ),
-          Paint()..color = _accent,
+          Paint()..color = spec.formula ? const Color(0xFF7B5CC4) : _accent,
         );
       }
-      _tableGlyph(canvas, Offset(r.left + 12, r.center.dy), t.isFields);
-      final TextPainter count = _text('${t.rows.length}', 11, _muted, 60);
+      var x = indent;
+      if (spec.toggle != null) {
+        _chevron(
+          canvas,
+          Offset(x + 5, r.center.dy),
+          !_collapsed.contains(spec.toggle),
+        );
+        x += 14;
+      }
+      _fieldGlyph(canvas, Offset(x + 8, r.center.dy), spec.glyph);
+      x += 18;
+      final String? badge = spec.badge;
+      final TextPainter count = badge == null
+          ? _text('', 11, _muted, 10)
+          : _text(badge, 11, _muted, 48);
+      final double countW = badge == null ? 0 : count.width + 10;
       final TextPainter name = _text(
-        t.title,
-        12.5,
+        spec.label,
+        12,
         _ink,
-        r.width - 44 - count.width,
-        bold: selected,
+        math.max(16, r.right - x - countW - 6),
+        bold: selected || spec.depth == 0,
       );
-      name.paint(canvas, Offset(r.left + 26, r.center.dy - name.height / 2));
-      count.paint(
-        canvas,
-        Offset(r.right - count.width - 8, r.center.dy - count.height / 2),
-      );
+      name.paint(canvas, Offset(x, r.center.dy - name.height / 2));
+      if (badge != null) {
+        count.paint(
+          canvas,
+          Offset(r.right - count.width - 6, r.center.dy - count.height / 2),
+        );
+      }
       y += sideRowHeight;
     }
-    final Rect add = Rect.fromLTWH(8, y + 6, side.width - 17, 26);
-    _buttons['table+'] = add;
-    _buttonFace(
-      canvas,
-      add,
-      '+ New table',
-      _hover != null && add.contains(_hover!),
-    );
     canvas.restore();
+  }
+
+  bool _sideSelected(_SideSpec spec, ReportDataTableView current) {
+    if (spec.action != null ||
+        spec.table == null ||
+        spec.table != current.name) {
+      return false;
+    }
+    if (spec.fieldRow >= 0) {
+      return _controller.dataRow == spec.fieldRow;
+    }
+    if (spec.column >= 0) {
+      return _controller.dataColumn == spec.column;
+    }
+    return _controller.dataColumn < 0 &&
+        (!current.isFields || _controller.dataRow < 0);
+  }
+
+  List<_SideSpec> _sideSpecs(ReportDesignerStrings s) {
+    final List<ReportDataTableView> tables = _controller.dataTables;
+    final List<_SideSpec> out = <_SideSpec>[
+      _SideSpec(
+        label: s.t('Database Fields'),
+        depth: 0,
+        glyph: _FieldGlyph.folder,
+        toggle: 'db',
+      ),
+    ];
+    if (_collapsed.contains('db')) {
+      return out;
+    }
+    for (final ReportDataTableView t in tables) {
+      final bool expandable = t.isFields ? t.rows.isNotEmpty : true;
+      out.add(
+        _SideSpec(
+          label: t.isFields ? s.t('Fields') : t.title,
+          depth: 1,
+          glyph: t.isFields ? _FieldGlyph.fields : _FieldGlyph.table,
+          toggle: expandable ? 't:${t.name}' : null,
+          table: t.name,
+          badge: '${t.isFields ? t.rows.length : t.columns.length}',
+        ),
+      );
+      if (!expandable || _collapsed.contains('t:${t.name}')) {
+        continue;
+      }
+      if (t.isFields) {
+        for (int i = 0; i < t.rows.length; i++) {
+          final ReportDataType type =
+              ReportDataType.fromName(t.rows[i][2].displayText) ??
+              ReportDataType.text;
+          out.add(
+            _SideSpec(
+              label: t.rows[i][0].displayText,
+              depth: 2,
+              glyph: _glyphFor(type, calculated: false),
+              table: t.name,
+              fieldRow: i,
+            ),
+          );
+        }
+        continue;
+      }
+      for (int c = 0; c < t.columns.length; c++) {
+        final ReportDataColumnView col = t.columns[c];
+        out.add(
+          _SideSpec(
+            label: col.name,
+            depth: 2,
+            glyph: _glyphFor(col.type, calculated: col.isCalculated),
+            table: t.name,
+            column: c,
+            formula: col.isCalculated,
+          ),
+        );
+      }
+      out.add(
+        _SideSpec(
+          label: s.t('+ Column'),
+          depth: 2,
+          glyph: _FieldGlyph.text,
+          table: t.name,
+          action: 'col+',
+        ),
+      );
+      out.add(
+        _SideSpec(
+          label: s.t('+ Formula'),
+          depth: 2,
+          glyph: _FieldGlyph.formula,
+          table: t.name,
+          action: 'formula+',
+        ),
+      );
+    }
+    out.add(
+      _SideSpec(
+        label: s.t('+ New table'),
+        depth: 1,
+        glyph: _FieldGlyph.folder,
+        action: 'table+',
+      ),
+    );
+    return out;
+  }
+
+  _FieldGlyph _glyphFor(ReportDataType type, {required bool calculated}) {
+    if (calculated) {
+      return _FieldGlyph.formula;
+    }
+    return switch (type) {
+      ReportDataType.text => _FieldGlyph.text,
+      ReportDataType.number => _FieldGlyph.number,
+      ReportDataType.boolean => _FieldGlyph.boolean,
+      ReportDataType.date => _FieldGlyph.date,
+    };
+  }
+
+  void _chevron(Canvas canvas, Offset c, bool open) {
+    final Path path = Path();
+    if (open) {
+      path
+        ..moveTo(c.dx - 3.5, c.dy - 1.2)
+        ..lineTo(c.dx + 3.5, c.dy - 1.2)
+        ..lineTo(c.dx, c.dy + 3);
+    } else {
+      path
+        ..moveTo(c.dx - 1.5, c.dy - 3.5)
+        ..lineTo(c.dx + 2.2, c.dy)
+        ..lineTo(c.dx - 1.5, c.dy + 3.5);
+    }
+    canvas.drawPath(path..close(), Paint()..color = _muted);
+  }
+
+  void _fieldGlyph(Canvas canvas, Offset c, _FieldGlyph glyph) {
+    final Color tone = switch (glyph) {
+      _FieldGlyph.folder => const Color(0xFFE6A817),
+      _FieldGlyph.formula => const Color(0xFF7B5CC4),
+      _FieldGlyph.table || _FieldGlyph.fields => const Color(0xFF8D6E63),
+      _FieldGlyph.text => const Color(0xFF1565C0),
+      _FieldGlyph.number => const Color(0xFF2E7D32),
+      _FieldGlyph.boolean => const Color(0xFF00897B),
+      _FieldGlyph.date => const Color(0xFFEF6C00),
+    };
+    if (glyph == _FieldGlyph.folder) {
+      _folderIcon(canvas, c, tone);
+      return;
+    }
+    if (glyph == _FieldGlyph.table || glyph == _FieldGlyph.fields) {
+      _tableGlyph(canvas, c, glyph == _FieldGlyph.fields);
+      return;
+    }
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromCenter(center: c, width: 14, height: 14),
+        const Radius.circular(3),
+      ),
+      Paint()..color = tone.withValues(alpha: 0.16),
+    );
+    if (glyph == _FieldGlyph.formula) {
+      final TextPainter tp = _text('fx', 9, tone, 16, bold: true, italic: true);
+      tp.paint(canvas, c - Offset(tp.width / 2, tp.height / 2));
+      return;
+    }
+    if (glyph == _FieldGlyph.boolean) {
+      canvas.drawPath(
+        Path()
+          ..moveTo(c.dx - 4, c.dy)
+          ..lineTo(c.dx - 1.2, c.dy + 3)
+          ..lineTo(c.dx + 4.5, c.dy - 3.2),
+        Paint()
+          ..color = tone
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.4
+          ..strokeCap = StrokeCap.round,
+      );
+      return;
+    }
+    if (glyph == _FieldGlyph.date) {
+      final Rect r = Rect.fromCenter(center: c, width: 10, height: 9);
+      final Paint stroke = Paint()
+        ..color = tone
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.1;
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(r, const Radius.circular(1.5)),
+        stroke,
+      );
+      canvas.drawLine(
+        Offset(r.left, r.top + 3),
+        Offset(r.right, r.top + 3),
+        stroke,
+      );
+      return;
+    }
+    final TextPainter tp = _text(
+      glyph == _FieldGlyph.number ? '#' : 'Ab',
+      9,
+      tone,
+      16,
+      bold: true,
+    );
+    tp.paint(canvas, c - Offset(tp.width / 2, tp.height / 2));
+  }
+
+  void _folderIcon(Canvas canvas, Offset c, Color color) {
+    final Path path = Path()
+      ..moveTo(c.dx - 7, c.dy - 2)
+      ..lineTo(c.dx - 7, c.dy + 5)
+      ..lineTo(c.dx + 7, c.dy + 5)
+      ..lineTo(c.dx + 7, c.dy - 1)
+      ..lineTo(c.dx + 0.5, c.dy - 1)
+      ..lineTo(c.dx - 1.5, c.dy - 4)
+      ..lineTo(c.dx - 7, c.dy - 4)
+      ..close();
+    canvas.drawPath(path, Paint()..color = color);
   }
 
   void _tableGlyph(Canvas canvas, Offset c, bool fields) {
@@ -822,7 +1131,7 @@ class RenderReportDataExplorer extends RenderBox {
     final Rect h = Rect.fromLTWH(m.left, 0, m.width, headerHeight);
     canvas.drawLine(h.bottomLeft, h.bottomRight, Paint()..color = _line);
     for (final String k in _buttons.keys.toList()) {
-      if (k != 'table+') {
+      if (k != 'table+' && k != 'formula+') {
         _buttons.remove(k);
       }
     }
@@ -1326,4 +1635,57 @@ class RenderReportDataExplorer extends RenderBox {
       ..value =
           '${t.title}: ${t.rows.length} rows, ${t.columns.length} columns';
   }
+}
+
+/// Icon drawn beside a field in the explorer.
+enum _FieldGlyph { folder, table, fields, text, number, boolean, date, formula }
+
+/// One row of the field tree, before it is laid out.
+class _SideSpec {
+  const _SideSpec({
+    required this.label,
+    required this.depth,
+    required this.glyph,
+    this.toggle,
+    this.table,
+    this.column = -1,
+    this.fieldRow = -1,
+    this.formula = false,
+    this.action,
+    this.badge,
+  });
+
+  final String label;
+  final int depth;
+  final _FieldGlyph glyph;
+  final String? toggle;
+  final String? table;
+  final int column;
+  final int fieldRow;
+  final bool formula;
+  final String? action;
+  final String? badge;
+}
+
+/// A painted row of the field tree.
+class _SideHit {
+  const _SideHit({
+    required this.rect,
+    this.table,
+    this.column = -1,
+    this.fieldRow = -1,
+    this.toggle,
+    this.twist = 0,
+    this.formula = false,
+    this.action,
+  });
+
+  final Rect rect;
+  final String? table;
+  final int column;
+  final int fieldRow;
+  final String? toggle;
+  final double twist;
+  final bool formula;
+  final String? action;
 }

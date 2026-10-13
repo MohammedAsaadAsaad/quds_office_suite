@@ -56,6 +56,7 @@ class QudsReportDesigner extends StatefulWidget {
     this.onPickFont,
     this.deviceFonts,
     this.onPickData,
+    this.onPickShape,
     this.strings,
   });
 
@@ -135,6 +136,10 @@ class QudsReportDesigner extends StatefulWidget {
   /// (`.csv` or `.json`); the rows become the report's sample data, saved
   /// inside the `.qrep` package. The button is hidden when null.
   final ReportDataPicker? onPickData;
+
+  /// Opens a host file picker for a shape map's "Import shapes…" button
+  /// (`.shp` with its `.dbf`, GeoJSON, or `.qmap`). Hidden when null.
+  final ReportShapePicker? onPickShape;
 
   /// Interface language; follows the app locale
   /// ([Localizations.maybeLocaleOf]) when null, English when the locale has
@@ -230,6 +235,7 @@ class _QudsReportDesignerState extends State<QudsReportDesigner> {
         (oldWidget.onPickImage == null) != (widget.onPickImage == null) ||
         oldWidget.onPickFont != widget.onPickFont ||
         oldWidget.onPickData != widget.onPickData ||
+        oldWidget.onPickShape != widget.onPickShape ||
         !identical(oldWidget.deviceFonts, widget.deviceFonts)) {
       _bindPicker(oldWidget.controller);
     }
@@ -258,6 +264,9 @@ class _QudsReportDesignerState extends State<QudsReportDesigner> {
     }
     if (_c.dataPicker == widget.onPickData) {
       _c.dataPicker = null;
+    }
+    if (_c.shapePicker == widget.onPickShape) {
+      _c.shapePicker = null;
     }
     if (identical(_c.deviceFonts, widget.deviceFonts)) {
       _c.deviceFonts = null;
@@ -371,11 +380,13 @@ class _QudsReportDesignerState extends State<QudsReportDesigner> {
       previous
         ..fontPicker = null
         ..dataPicker = null
+        ..shapePicker = null
         ..deviceFonts = null;
     }
     _c.imagePicker = widget.onPickImage == null ? null : _pickImage;
     _c.fontPicker = widget.onPickFont;
     _c.dataPicker = widget.onPickData;
+    _c.shapePicker = widget.onPickShape;
     _c.deviceFonts = widget.deviceFonts;
     _loadCanvasFonts();
     if (previous != null) {

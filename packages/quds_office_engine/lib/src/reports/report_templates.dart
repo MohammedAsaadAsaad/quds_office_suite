@@ -555,6 +555,46 @@ abstract final class ReportTemplates {
       images: _logoImages,
     ),
     ReportTemplateInfo(
+      id: 'chart_gallery_ar',
+      family: 'chart_gallery',
+      title: 'Chart gallery (Arabic)',
+      titleAr: 'معرض المخططات (عربي)',
+      familyTitle: 'Chart gallery',
+      familyTitleAr: 'معرض المخططات',
+      description:
+          'Every chart type, then a world shape map colored from a separate '
+          'countries table (ISO code and revenue).',
+      descriptionAr:
+          'كل أنواع المخططات، ثم خريطة دول ملوّنة من جدول مستقل '
+          '(رمز الدولة والإيراد).',
+      category: ReportTemplateCategory.analytics,
+      rtl: true,
+      order: 70,
+      xml: _chartGallery,
+      strings: _chartGalleryAr,
+      sampleData: _chartGalleryArData,
+    ),
+    ReportTemplateInfo(
+      id: 'chart_gallery_en',
+      family: 'chart_gallery',
+      title: 'Chart gallery (English)',
+      titleAr: 'معرض المخططات (إنجليزي)',
+      familyTitle: 'Chart gallery',
+      familyTitleAr: 'معرض المخططات',
+      description:
+          'Every chart type, then a world shape map colored from a separate '
+          'countries table (ISO code and revenue).',
+      descriptionAr:
+          'كل أنواع المخططات، ثم خريطة دول ملوّنة من جدول مستقل '
+          '(رمز الدولة والإيراد).',
+      category: ReportTemplateCategory.analytics,
+      rtl: false,
+      order: 70,
+      xml: _chartGallery,
+      strings: _chartGalleryEn,
+      sampleData: _chartGalleryEnData,
+    ),
+    ReportTemplateInfo(
       id: 'certificate_ar',
       family: 'certificate',
       title: 'Certificate of appreciation (Arabic)',
@@ -2770,6 +2810,407 @@ Map<String, Object?> _classCertificateData(bool ar) {
         'for the history research paper',
         'لبحثه في التاريخ',
       ),
+    ],
+  };
+}
+
+// ------------------------------------------------------------ chart gallery
+
+const String _chartGallery = r'''<?xml version="1.0" encoding="UTF-8"?>
+<QudsReport name="[[name]]" isRtl="[[rtl]]" pageSize="A4" orientation="Portrait" defaultFont="[[font]]" defaultFontSize="8">
+    <Settings>
+        <Margins top="12mm" bottom="12mm" left="12mm" right="12mm"/>
+        <Colors primary="#1E3A8A" accent="#3B82F6" muted="#64748B" light="#F4F7FB" border="#E1E7EF" text="#0F172A" good="#166534" warm="#B45309"/>
+    </Settings>
+    <DataSchema>
+        <Field name="company" type="text"/>
+        <Field name="period" type="text"/>
+        <Field name="attainment" type="number" description="[[attainmentField]]"/>
+        <Table name="months" description="[[monthsTable]]">
+            <Column name="month" type="text"/>
+            <Column name="revenue" type="number"/>
+            <Column name="cost" type="number"/>
+            <Column name="orders" type="number"/>
+        </Table>
+        <Table name="shares" description="[[sharesTable]]">
+            <Column name="name" type="text"/>
+            <Column name="amount" type="number"/>
+        </Table>
+        <Table name="pipeline" description="[[pipelineTable]]">
+            <Column name="stage" type="text"/>
+            <Column name="count" type="number"/>
+        </Table>
+        <Table name="deals" description="[[dealsTable]]">
+            <Column name="client" type="text"/>
+            <Column name="units" type="number"/>
+            <Column name="margin" type="number"/>
+            <Column name="size" type="number"/>
+        </Table>
+        <Table name="skills" description="[[skillsTable]]">
+            <Column name="skill" type="text"/>
+            <Column name="sales" type="number"/>
+            <Column name="service" type="number"/>
+        </Table>
+        <Table name="quarters" description="[[quartersTable]]">
+            <Column name="region" type="text"/>
+            <Column name="q1" type="number"/>
+            <Column name="q2" type="number"/>
+            <Column name="q3" type="number"/>
+            <Column name="q4" type="number"/>
+        </Table>
+        <Table name="countries" description="[[countriesTable]]">
+            <Column name="code" type="text" description="[[codeField]]"/>
+            <Column name="name" type="text"/>
+            <Column name="revenue" type="number" description="[[revenueField]]"/>
+        </Table>
+    </DataSchema>
+    <Bands>
+        <ReportHeader height="822mm">
+            <Shape kind="RoundedRectangle" x="12mm" y="0mm" width="186mm" height="16mm" fill="primary" strokeWidth="0" cornerRadius="3pt"/>
+            <Text name="title" x="16mm" y="1mm" width="140mm" height="8mm" fontSize="14" bold="true" color="#FFFFFF">[[title]]</Text>
+            <Text x="16mm" y="9mm" width="178mm" height="6mm" fontSize="8" color="#DBEAFE">{{Data.company}}  •  {{Data.period}}</Text>
+            <Chart name="bars" x="12mm" y="22mm" width="90mm" height="50mm" chartType="bar" title="[[cBar]]" dataSet="Data.months" category="Row.month" valueFormat="n0" borderColor="border" borderWidth="0.4pt">
+                <Series name="[[revenue]]" value="Row.revenue" color="primary"/>
+                <Series name="[[cost]]" value="Row.cost" color="#94A3B8"/>
+            </Chart>
+            <Chart name="hbars" x="106mm" y="22mm" width="92mm" height="50mm" chartType="horizontalBar" title="[[cHBar]]" dataSet="Data.months" category="Row.month" showLegend="false" valueFormat="n0" borderColor="border" borderWidth="0.4pt">
+                <Series name="[[orders]]" value="Row.orders" color="accent"/>
+            </Chart>
+            <Chart name="stacked" x="12mm" y="76mm" width="90mm" height="50mm" chartType="stackedBar" title="[[cStacked]]" dataSet="Data.months" category="Row.month" valueFormat="n0" borderColor="border" borderWidth="0.4pt">
+                <Series name="[[revenue]]" value="Row.revenue" color="primary"/>
+                <Series name="[[cost]]" value="Row.cost" color="#94A3B8"/>
+            </Chart>
+            <Chart name="percent" x="106mm" y="76mm" width="92mm" height="50mm" chartType="percentStackedBar" title="[[cPercent]]" dataSet="Data.months" category="Row.month" borderColor="border" borderWidth="0.4pt">
+                <Series name="[[revenue]]" value="Row.revenue" color="primary"/>
+                <Series name="[[cost]]" value="Row.cost" color="#94A3B8"/>
+            </Chart>
+            <Chart name="lines" x="12mm" y="130mm" width="90mm" height="50mm" chartType="line" title="[[cLine]]" dataSet="Data.months" category="Row.month" showMarkers="true" valueFormat="n0" borderColor="border" borderWidth="0.4pt">
+                <Series name="[[revenue]]" value="Row.revenue" color="primary"/>
+            </Chart>
+            <Chart name="areas" x="106mm" y="130mm" width="92mm" height="50mm" chartType="area" title="[[cArea]]" dataSet="Data.months" category="Row.month" showLegend="false" valueFormat="n0" borderColor="border" borderWidth="0.4pt">
+                <Series name="[[revenue]]" value="Row.revenue" color="accent"/>
+            </Chart>
+            <Chart name="stackedArea" x="12mm" y="184mm" width="90mm" height="50mm" chartType="stackedArea" title="[[cStackedArea]]" dataSet="Data.months" category="Row.month" valueFormat="n0" borderColor="border" borderWidth="0.4pt">
+                <Series name="[[revenue]]" value="Row.revenue" color="primary"/>
+                <Series name="[[cost]]" value="Row.cost" color="#94A3B8"/>
+            </Chart>
+            <Chart name="combo" x="106mm" y="184mm" width="92mm" height="50mm" chartType="combo" title="[[cCombo]]" dataSet="Data.months" category="Row.month" valueFormat="n0" borderColor="border" borderWidth="0.4pt">
+                <Series name="[[revenue]]" value="Row.revenue" color="primary" style="column"/>
+                <Series name="[[orders]]" value="Row.orders" color="good" style="line" secondary="true"/>
+            </Chart>
+            <Chart name="pie" x="12mm" y="238mm" width="90mm" height="50mm" chartType="pie" title="[[cPie]]" dataSet="Data.shares" category="Row.name" showValues="true" valueFormat="n0" borderColor="border" borderWidth="0.4pt" palette="#1E3A8A,#3B82F6,#166534,#B45309,#DB2777">
+                <Series name="[[amount]]" value="Row.amount"/>
+            </Chart>
+            <Chart name="donut" x="106mm" y="238mm" width="92mm" height="50mm" chartType="donut" title="[[cDonut]]" dataSet="Data.shares" category="Row.name" showValues="true" valueFormat="n0" borderColor="border" borderWidth="0.4pt" palette="#1E3A8A,#3B82F6,#166534,#B45309,#DB2777">
+                <Series name="[[amount]]" value="Row.amount"/>
+            </Chart>
+            <Chart name="steps" x="12mm" y="292mm" width="90mm" height="50mm" chartType="waterfall" title="[[cWaterfall]]" lastIsTotal="true" valueFormat="n0" borderColor="border" borderWidth="0.4pt">
+                <Point label="[[open]]" value="40"/>
+                <Point label="[[sales]]" value="28"/>
+                <Point label="[[costs]]" value="-18"/>
+                <Point label="[[tax]]" value="-6"/>
+                <Point label="[[close]]" value="44" total="true"/>
+            </Chart>
+            <Chart name="funnel" x="106mm" y="292mm" width="92mm" height="50mm" chartType="funnel" title="[[cFunnel]]" dataSet="Data.pipeline" category="Row.stage" showValues="true" showLegend="false" valueFormat="n0" borderColor="border" borderWidth="0.4pt">
+                <Series name="[[count]]" value="Row.count" color="primary"/>
+            </Chart>
+            <Chart name="dial" x="12mm" y="346mm" width="90mm" height="50mm" chartType="gauge" title="[[cGauge]]" axisMin="0" axisMax="100" target="85" bands="3" borderColor="border" borderWidth="0.4pt">
+                <Point label="[[score]]" value="Data.attainment"/>
+            </Chart>
+            <Chart name="bullet" x="106mm" y="346mm" width="92mm" height="50mm" chartType="bullet" title="[[cBullet]]" axisMin="0" axisMax="100" target="80" bands="3" borderColor="border" borderWidth="0.4pt">
+                <Point label="[[score]]" value="Data.attainment"/>
+            </Chart>
+            <Chart name="dots" x="12mm" y="400mm" width="90mm" height="50mm" chartType="scatter" title="[[cScatter]]" dataSet="Data.deals" category="Row.client" borderColor="border" borderWidth="0.4pt">
+                <Series name="[[margin]]" value="Row.margin" x="Row.units" color="primary"/>
+            </Chart>
+            <Chart name="bubbles" x="106mm" y="400mm" width="92mm" height="50mm" chartType="bubble" title="[[cBubble]]" dataSet="Data.deals" category="Row.client" borderColor="border" borderWidth="0.4pt">
+                <Series name="[[margin]]" value="Row.margin" x="Row.units" size="Row.size" color="accent"/>
+            </Chart>
+            <Chart name="radar" x="12mm" y="454mm" width="90mm" height="50mm" chartType="radar" title="[[cRadar]]" dataSet="Data.skills" category="Row.skill" borderColor="border" borderWidth="0.4pt">
+                <Series name="[[salesTeam]]" value="Row.sales" color="primary"/>
+                <Series name="[[serviceTeam]]" value="Row.service" color="good"/>
+            </Chart>
+            <Chart name="heat" x="106mm" y="454mm" width="92mm" height="50mm" chartType="heatmap" title="[[cHeat]]" dataSet="Data.quarters" category="Row.region" valueFormat="n0" borderColor="border" borderWidth="0.4pt">
+                <Series name="Q1" value="Row.q1"/>
+                <Series name="Q2" value="Row.q2"/>
+                <Series name="Q3" value="Row.q3"/>
+                <Series name="Q4" value="Row.q4"/>
+            </Chart>
+            <Chart name="spark" x="12mm" y="508mm" width="90mm" height="50mm" chartType="sparkline" title="[[cSpark]]" dataSet="Data.months" category="Row.month" showLegend="false" showAxes="false" showGrid="false" borderColor="border" borderWidth="0.4pt">
+                <Series name="[[revenue]]" value="Row.revenue" color="primary"/>
+            </Chart>
+            <Chart name="solid" x="106mm" y="508mm" width="92mm" height="50mm" chartType="extrudedBar" title="[[cExtrudedBar]]" dataSet="Data.months" category="Row.month" showLegend="false" valueFormat="n0" borderColor="border" borderWidth="0.4pt">
+                <Series name="[[revenue]]" value="Row.revenue" color="primary"/>
+            </Chart>
+            <Chart name="solidPie" x="12mm" y="562mm" width="90mm" height="50mm" chartType="extrudedPie" title="[[cExtrudedPie]]" dataSet="Data.shares" category="Row.name" showValues="true" valueFormat="n0" borderColor="border" borderWidth="0.4pt" palette="#1E3A8A,#3B82F6,#166534,#B45309,#DB2777">
+                <Series name="[[amount]]" value="Row.amount"/>
+            </Chart>
+            <Chart name="solidDonut" x="106mm" y="562mm" width="92mm" height="50mm" chartType="extrudedDonut" title="[[cExtrudedDonut]]" dataSet="Data.shares" category="Row.name" valueFormat="n0" borderColor="border" borderWidth="0.4pt" palette="#1E3A8A,#3B82F6,#166534,#B45309,#DB2777">
+                <Series name="[[amount]]" value="Row.amount"/>
+            </Chart>
+            <Text x="12mm" y="618mm" width="186mm" height="8mm" fontSize="12" bold="true" color="primary">[[mapTitle]]</Text>
+            <Text x="12mm" y="626mm" width="186mm" height="6mm" fontSize="8" color="muted">[[mapNote]]</Text>
+            <Chart name="worldMap" x="12mm" y="634mm" width="186mm" height="100mm" chartType="shapeMap" shape="world" title="[[cMap]]" dataSet="Data.countries" category="Row.code" shapeKey="code" showLabels="true" showValues="false" valueFormat="n0" borderColor="border" borderWidth="0.4pt">
+                <Series name="[[revenue]]" value="Row.revenue" color="primary"/>
+            </Chart>
+            <Table name="countriesTable" x="12mm" y="740mm" width="186mm" height="80mm" dataSet="Data.countries" showGrid="true" headerBackground="light" headerColor="muted" stripeColor="light" fontSize="8" headerFontSize="7.5" rowHeight="6mm" headerHeight="7mm" padding="3pt">
+                <Columns>
+                    <Column width="28mm" header="[[colCode]]" align="start"/>
+                    <Column width="98mm" header="[[colCountry]]" align="start"/>
+                    <Column width="60mm" header="[[colRevenue]]" align="end"/>
+                </Columns>
+                <RowTemplate>
+                    <Cell field="item.code"/>
+                    <Cell field="item.name"/>
+                    <Cell field="item.revenue" format="n1"/>
+                </RowTemplate>
+            </Table>
+        </ReportHeader>
+        <PageFooter height="8mm">
+            <Line x1="12mm" y1="1mm" x2="198mm" y2="1mm" color="border" strokeWidth="0.4"/>
+            <Text x="12mm" y="2mm" width="120mm" height="5mm" fontSize="7.5" color="muted">{{Data.company}}</Text>
+            <Text x="140mm" y="2mm" width="58mm" height="5mm" fontSize="7.5" color="muted" alignment="end">[[page]] {{System.PageNumber}} [[of]] {{System.TotalPages}}</Text>
+        </PageFooter>
+    </Bands>
+</QudsReport>
+''';
+
+const Map<String, String> _chartGalleryAr = <String, String>{
+  ..._ar,
+  'name': 'معرض المخططات',
+  'title': 'معرض المخططات',
+  'monthsTable': 'شهور المبيعات',
+  'sharesTable': 'حصة الفئات',
+  'pipelineTable': 'مراحل البيع',
+  'dealsTable': 'الصفقات',
+  'skillsTable': 'المهارات',
+  'quartersTable': 'الإيراد الفصلي حسب المنطقة',
+  'countriesTable': 'إيراد الدول — مصدر تلوين الخريطة',
+  'codeField': 'رمز ISO الذي يطابق شكل الدولة',
+  'revenueField': 'الإيراد بالمليون دولار',
+  'attainmentField': 'نسبة التحقيق من 100',
+  'cBar': 'أعمدة',
+  'cHBar': 'أعمدة أفقية',
+  'cStacked': 'أعمدة مكدسة',
+  'cPercent': 'مكدس مئوي',
+  'cLine': 'خط',
+  'cArea': 'مساحة',
+  'cStackedArea': 'مساحة مكدسة',
+  'cCombo': 'عمود وخط',
+  'cPie': 'دائري',
+  'cDonut': 'حلقي',
+  'cWaterfall': 'شلال',
+  'cFunnel': 'قمع',
+  'cGauge': 'مقياس',
+  'cBullet': 'شريط هدف',
+  'cScatter': 'نقطي',
+  'cBubble': 'فقاعي',
+  'cRadar': 'رادار',
+  'cHeat': 'حراري',
+  'cSpark': 'شرارة',
+  'cExtrudedBar': 'أعمدة مجسمة',
+  'cExtrudedPie': 'دائري مجسم',
+  'cExtrudedDonut': 'حلقي مجسم',
+  'cMap': 'الإيراد حسب الدولة',
+  'mapTitle': 'خريطة الدول',
+  'mapNote': 'مربوطة بجدول countries: المفتاح Row.code والقيمة Row.revenue',
+  'revenue': 'الإيراد',
+  'cost': 'التكلفة',
+  'orders': 'الطلبات',
+  'amount': 'القيمة',
+  'count': 'العدد',
+  'margin': 'الهامش',
+  'salesTeam': 'المبيعات',
+  'serviceTeam': 'الخدمة',
+  'score': 'التحقيق',
+  'open': 'افتتاح',
+  'sales': 'مبيعات',
+  'costs': 'تكاليف',
+  'tax': 'ضريبة',
+  'close': 'إقفال',
+  'colCode': 'الرمز',
+  'colCountry': 'الدولة',
+  'colRevenue': 'الإيراد (مليون)',
+};
+
+const Map<String, String> _chartGalleryEn = <String, String>{
+  ..._en,
+  'name': 'Chart Gallery',
+  'title': 'Chart gallery',
+  'monthsTable': 'Monthly sales',
+  'sharesTable': 'Category share',
+  'pipelineTable': 'Sales stages',
+  'dealsTable': 'Deals',
+  'skillsTable': 'Skills',
+  'quartersTable': 'Quarterly revenue by region',
+  'countriesTable': 'Country revenue — colors the map',
+  'codeField': 'ISO code matched to the country shape',
+  'revenueField': 'Revenue in millions of USD',
+  'attainmentField': 'Attainment out of 100',
+  'cBar': 'Columns',
+  'cHBar': 'Bars',
+  'cStacked': 'Stacked columns',
+  'cPercent': '100% stacked',
+  'cLine': 'Line',
+  'cArea': 'Area',
+  'cStackedArea': 'Stacked area',
+  'cCombo': 'Column and line',
+  'cPie': 'Pie',
+  'cDonut': 'Donut',
+  'cWaterfall': 'Waterfall',
+  'cFunnel': 'Funnel',
+  'cGauge': 'Gauge',
+  'cBullet': 'Bullet',
+  'cScatter': 'Scatter',
+  'cBubble': 'Bubble',
+  'cRadar': 'Radar',
+  'cHeat': 'Heatmap',
+  'cSpark': 'Sparkline',
+  'cExtrudedBar': 'Extruded columns',
+  'cExtrudedPie': 'Extruded pie',
+  'cExtrudedDonut': 'Extruded donut',
+  'cMap': 'Revenue by country',
+  'mapTitle': 'Country map',
+  'mapNote': 'Bound to the countries table: key Row.code, value Row.revenue',
+  'revenue': 'Revenue',
+  'cost': 'Cost',
+  'orders': 'Orders',
+  'amount': 'Amount',
+  'count': 'Count',
+  'margin': 'Margin',
+  'salesTeam': 'Sales',
+  'serviceTeam': 'Service',
+  'score': 'Attainment',
+  'open': 'Open',
+  'sales': 'Sales',
+  'costs': 'Costs',
+  'tax': 'Tax',
+  'close': 'Close',
+  'colCode': 'Code',
+  'colCountry': 'Country',
+  'colRevenue': 'Revenue (million)',
+};
+
+Map<String, Object?> _chartGalleryArData() => _chartGalleryData(true);
+
+Map<String, Object?> _chartGalleryEnData() => _chartGalleryData(false);
+
+Map<String, Object?> _chartGalleryData(bool ar) {
+  String pick(String en, String arabic) => ar ? arabic : en;
+  return <String, Object?>{
+    'company': pick('Quds Trading', 'شركة القدس للتجارة'),
+    'period': pick('2026', '2026'),
+    'attainment': 74,
+    'months': <Map<String, Object?>>[
+      for (final (String en, String arabic, int revenue, int cost, int orders)
+          in <(String, String, int, int, int)>[
+            ('Jan', 'يناير', 42, 28, 120),
+            ('Feb', 'فبراير', 48, 30, 132),
+            ('Mar', 'مارس', 55, 33, 141),
+            ('Apr', 'أبريل', 51, 31, 128),
+            ('May', 'مايو', 63, 36, 156),
+            ('Jun', 'يونيو', 70, 39, 168),
+          ])
+        <String, Object?>{
+          'month': pick(en, arabic),
+          'revenue': revenue,
+          'cost': cost,
+          'orders': orders,
+        },
+    ],
+    'shares': <Map<String, Object?>>[
+      for (final (String en, String arabic, int amount)
+          in <(String, String, int)>[
+            ('Laptops', 'حواسيب', 34),
+            ('Monitors', 'شاشات', 22),
+            ('Accessories', 'ملحقات', 18),
+            ('Printers', 'طابعات', 14),
+            ('Services', 'خدمات', 12),
+          ])
+        <String, Object?>{'name': pick(en, arabic), 'amount': amount},
+    ],
+    'pipeline': <Map<String, Object?>>[
+      for (final (String en, String arabic, int count)
+          in <(String, String, int)>[
+            ('Leads', 'عملاء محتملون', 240),
+            ('Qualified', 'مؤهلون', 140),
+            ('Proposal', 'عروض', 72),
+            ('Won', 'صفقات رابحة', 31),
+          ])
+        <String, Object?>{'stage': pick(en, arabic), 'count': count},
+    ],
+    'deals': <Map<String, Object?>>[
+      for (final (String en, String arabic, int units, int margin, int size)
+          in <(String, String, int, int, int)>[
+            ('Tripoli', 'طرابلس', 12, 18, 4),
+            ('Benghazi', 'بنغازي', 20, 27, 7),
+            ('Cairo', 'القاهرة', 35, 22, 11),
+            ('Tunis', 'تونس', 16, 31, 5),
+            ('Riyadh', 'الرياض', 42, 40, 14),
+            ('Dubai', 'دبي', 28, 36, 9),
+          ])
+        <String, Object?>{
+          'client': pick(en, arabic),
+          'units': units,
+          'margin': margin,
+          'size': size,
+        },
+    ],
+    'skills': <Map<String, Object?>>[
+      for (final (String en, String arabic, int sales, int service)
+          in <(String, String, int, int)>[
+            ('Closing', 'الإقفال', 80, 55),
+            ('Discovery', 'الاستكشاف', 70, 74),
+            ('Demo', 'العرض', 64, 60),
+            ('Support', 'الدعم', 48, 88),
+            ('Renewal', 'التجديد', 76, 69),
+          ])
+        <String, Object?>{
+          'skill': pick(en, arabic),
+          'sales': sales,
+          'service': service,
+        },
+    ],
+    'quarters': <Map<String, Object?>>[
+      for (final (String en, String arabic, int q1, int q2, int q3, int q4)
+          in <(String, String, int, int, int, int)>[
+            ('North', 'الشمال', 18, 22, 19, 27),
+            ('South', 'الجنوب', 12, 14, 16, 15),
+            ('East', 'الشرق', 21, 19, 24, 28),
+            ('West', 'الغرب', 16, 18, 17, 20),
+          ])
+        <String, Object?>{
+          'region': pick(en, arabic),
+          'q1': q1,
+          'q2': q2,
+          'q3': q3,
+          'q4': q4,
+        },
+    ],
+    'countries': <Map<String, Object?>>[
+      for (final (String code, String en, String arabic, num revenue)
+          in <(String, String, String, num)>[
+            ('US', 'United States', 'الولايات المتحدة', 128),
+            ('CN', 'China', 'الصين', 96),
+            ('DE', 'Germany', 'ألمانيا', 54),
+            ('JP', 'Japan', 'اليابان', 47),
+            ('FR', 'France', 'فرنسا', 41),
+            ('GB', 'United Kingdom', 'المملكة المتحدة', 38),
+            ('IN', 'India', 'الهند', 33),
+            ('SA', 'Saudi Arabia', 'السعودية', 29),
+            ('CA', 'Canada', 'كندا', 27),
+            ('BR', 'Brazil', 'البرازيل', 22),
+            ('TR', 'Turkey', 'تركيا', 19),
+            ('AE', 'United Arab Emirates', 'الإمارات', 18),
+            ('EG', 'Egypt', 'مصر', 14),
+            ('QA', 'Qatar', 'قطر', 11),
+            ('LY', 'Libya', 'ليبيا', 6.4),
+          ])
+        <String, Object?>{
+          'code': code,
+          'name': pick(en, arabic),
+          'revenue': revenue,
+        },
     ],
   };
 }

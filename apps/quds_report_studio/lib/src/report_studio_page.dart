@@ -357,6 +357,36 @@ class ReportStudioPageState extends State<ReportStudioPage> {
     return (name: file.name, text: utf8.decode(bytes, allowMalformed: true));
   }
 
+  /// Shapefile (with a sibling `.dbf` when the path is known), GeoJSON, or
+  /// a previously saved `.qmap` layer.
+  Future<({String name, Uint8List bytes, Uint8List? attributes})?>
+  _pickShape() async {
+    final FilePickerResult? result = await FilePicker.platform.pickFiles(
+      dialogTitle: _s.t('Import shapes'),
+      type: FileType.custom,
+      allowedExtensions: const <String>['shp', 'geojson', 'json', 'qmap'],
+      withData: true,
+    );
+    final PlatformFile? file = result?.files.singleOrNull;
+    final Uint8List? bytes = file?.bytes;
+    if (file == null || bytes == null) {
+      return null;
+    }
+    Uint8List? attributes;
+    final String path = file.path ?? '';
+    if (!kIsWeb && path.isNotEmpty && file.extension?.toLowerCase() == 'shp') {
+      final String dbf = path.replaceAll(
+        RegExp(r'shp$', caseSensitive: false),
+        'dbf',
+      );
+      final File sibling = File(dbf);
+      if (sibling.existsSync()) {
+        attributes = await sibling.readAsBytes();
+      }
+    }
+    return (name: file.name, bytes: bytes, attributes: attributes);
+  }
+
   Future<void> _export(ReportExportFormat format, Uint8List bytes) async {
     final String name = '${_doc.name}.${format.name}';
     final String? path = await FilePicker.platform.saveFile(
@@ -456,6 +486,7 @@ class ReportStudioPageState extends State<ReportStudioPage> {
                   onPickImage: _pickImage,
                   onPickFont: _pickFonts,
                   onPickData: _pickData,
+                  onPickShape: _pickShape,
                   deviceFonts: widget.deviceFonts,
                 ),
               ),

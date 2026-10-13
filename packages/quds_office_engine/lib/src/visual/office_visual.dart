@@ -186,6 +186,7 @@ class ChartDisplay {
     this.firstSliceAng = 0,
     this.holeSize = 50,
     this.rtl = false,
+    this.view3d = false,
   });
 
   /// showLegend API.
@@ -227,6 +228,9 @@ class ChartDisplay {
   /// When true, chart XML is written with `c:chart/@rtl`.
   bool rtl;
 
+  /// Oblique 3D chart (`bar3DChart` / `pie3DChart` plus `c:view3D`).
+  bool view3d;
+
   /// copy API.
   ChartDisplay copy() => ChartDisplay(
     showLegend: showLegend,
@@ -242,6 +246,7 @@ class ChartDisplay {
     firstSliceAng: firstSliceAng,
     holeSize: holeSize,
     rtl: rtl,
+    view3d: view3d,
   );
 }
 

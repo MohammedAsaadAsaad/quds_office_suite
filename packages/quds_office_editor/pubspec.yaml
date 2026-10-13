@@ -2,7 +2,7 @@ name: quds_office_editor
 description: >-
   Flutter Office surfaces on custom RenderBox: Word, Excel, PowerPoint, PDF
   viewer/editor, and a visual band-report designer with inspector and preview.
-version: 1.2.0
+version: 1.3.0
 homepage: https://github.com/MohammedAsaadAsaad/quds_office_suite
 repository: https://github.com/MohammedAsaadAsaad/quds_office_suite/tree/main/packages/quds_office_editor
 issue_tracker: https://github.com/MohammedAsaadAsaad/quds_office_suite/issues
@@ -34,8 +34,8 @@ screenshots:
     path: example/screenshots/report_template_catalog.png
   - description: "Data explorer: edit the report's tables, typed columns, and calculated columns."
     path: example/screenshots/report_data_explorer.png
-  - description: "Inspector Fonts tab: embed installed fonts into the report."
-    path: example/screenshots/report_inspector_fonts.png
+  - description: "Shape map in the designer: import a shapefile or GeoJSON and bind it to the value table."
+    path: example/screenshots/report_shape_map.png
   - description: "Word canvas: paginated pages, BiDi caret, outline, and custom chrome."
     path: example/screenshots/word.png
   - description: "Excel grid: virtualized sheet, formula bar, charts, and sheet tabs."
@@ -52,7 +52,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  quds_office_engine: ^1.2.0
+  quds_office_engine: ^1.3.0
 
 dev_dependencies:
   flutter_lints: ^6.0.0

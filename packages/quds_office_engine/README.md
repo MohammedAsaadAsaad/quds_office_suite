@@ -58,7 +58,7 @@ semantic versioning, and breaking changes wait for 2.0.
 | **Opens what other suites save** | Word style chains, outline lists, and table styles. Excel shared formulas, inline strings, cached results, number formats, and charts drawn from their ranges. PowerPoint layouts, masters, placeholders, theme colors, and slide order |
 | **A report is one file** | A `.qrep` is a ZIP holding the layout, its images, and its TrueType fonts, so it exports the same on any machine |
 | **Data you can describe** | `<DataSchema>` types fields and tables. Calculated columns (`= qty * price`) feed groups, totals, charts, variables, and suggestions |
-| **18 bilingual templates** | 9 families in Arabic and English: invoices, statements, vouchers, inventory, catalogs, certificates, class certificates, dashboards |
+| **20 bilingual templates** | 10 families in Arabic and English: invoices, statements, vouchers, inventory, catalogs, certificates, class certificates, dashboards, and a chart gallery with a country shape map |
 | **A desktop designer** | [Quds Report Studio](#quds-report-studio-download-the-desktop-designer) for Windows and Linux edits the same files |
 
 ### A LibreOffice file, rendered by this engine
@@ -93,8 +93,9 @@ final Uint8List pdf = OfficePdfExport.fromBytes(
 is a free desktop app for designing the `.qrep` reports this engine
 generates. You design a layout once in the studio, then your Dart server,
 CLI, or Flutter app fills it with data and exports it with
-`QudsReportEngine`. It ships with 18 Arabic and English templates, including
-class certificates (one page per student, the report form of a mail merge).
+`QudsReportEngine`. It ships with 20 Arabic and English templates, including
+class certificates (one page per student) and a chart gallery with a country
+shape map.
 
 ![Quds Report Studio designing a dashboard report](example/screenshots/report_studio_designer.png)
 
@@ -284,7 +285,7 @@ import 'package:quds_office_engine/pdf_widgets.dart' as pw;
 | **PowerPoint** | Build, open, and write PPTX. Shapes, tables, notes, layouts and masters with placeholder inheritance and theme colors, transitions and animations including Morph, reverse playback clock |
 | **Office → PDF** | Replay Word layout, Excel grid, and slides (or notes pages, including two slides on one page) to PDF 1.7 with subsetted fonts, links, and outlines |
 | **pdf_widgets** | Constraint layout: flex, text, tables, charts, images, TOC, headers, footers, watermarks. Synchronous `Document.save()` |
-| **Band reports** | `.qrep` packages (XML layout + embedded images and fonts) with bands, groups, expressions, typed variables, tables, barcodes/QR, and charts → PDF, XLSX, DOCX. 18 ready-made templates (9 families, Arabic + English) with saved images |
+| **Band reports** | `.qrep` packages (XML layout + embedded images, fonts, and shape layers) with bands, groups, expressions, typed variables, tables, barcodes/QR, charts, and shape maps → PDF, XLSX, DOCX. 20 ready-made templates (10 families, Arabic + English) with saved images |
 | **pdf_templates** | 100+ classified reports with **distinct `SheetSkin` layouts**, LTR/RTL, and brand themes |
 | **PdfFile** | Open PDF 1.7, paint a display list, extract text, annotate, fill AcroForm, incremental save |
 | **PdfToolbox** | Merge, extract, split, reorder, remove, rotate, reverse, insert, mix, stamp, number, Bates, crop — a new file with resources grafted |
@@ -496,10 +497,60 @@ for (final ReportDiagnostic d in engine.validate()) {
 
 ### Charts
 
-`<Chart type="bar|horizontalBar|stackedBar|line|area|pie|donut">` aggregates a
-data set by a category expression (`sum`, `avg`, `count`, `min`, `max`,
-`first`, `last`, with sort and top N) or plots static `<Point>` values. PDF
-draws vector charts. XLSX and DOCX embed **native, editable** Office charts.
+A chart aggregates a data set by a category expression (`sum`, `avg`,
+`count`, `min`, `max`, `first`, `last`, with sort and top N) or plots static
+`<Point>` values. PDF and preview draw vectors. XLSX and DOCX embed a
+**native, editable** Office chart where Office has that type, and the nearest
+bar, line, or donut otherwise.
+
+`bar`, `horizontalBar`, `stackedBar`, `percentStackedBar`, `line`, `area`,
+`stackedArea`, `combo` (column plus a line on a secondary axis), `pie`,
+`donut`, `waterfall`, `gauge`, `bullet`, `funnel`, `scatter`, `bubble`,
+`radar`, `heatmap`, `sparkline`, `extrudedBar`, `extrudedPie`,
+`extrudedDonut`, and `shapeMap`.
+
+Plot controls: depth, skew, hole, start angle, smooth curves, markers, line
+width, axis bounds, a target and range bands, and waterfall colors. Scatter
+and bubble plot one point per row (`x`, `y`, and `size`).
+
+<table>
+  <tr>
+    <td width="50%"><img src="example/screenshots/report_chart_columns.png" alt="Column, bar, line, area, and combo charts"/></td>
+    <td width="50%"><img src="example/screenshots/report_chart_gallery.png" alt="Pie, waterfall, funnel, gauge, bullet, scatter, and bubble"/></td>
+  </tr>
+  <tr>
+    <td>Columns, bars, stacked and 100% stacked, line, area, and a column-and-line combo</td>
+    <td>Pie, donut, waterfall, funnel, gauge, bullet, scatter, and bubble</td>
+  </tr>
+  <tr>
+    <td><img src="example/screenshots/report_chart_extruded.png" alt="Radar, heatmap, sparkline, and extruded charts"/></td>
+    <td><img src="example/screenshots/report_shape_map.png" alt="Country shape map colored from a table"/></td>
+  </tr>
+  <tr>
+    <td>Radar, heatmap, sparkline, and extruded columns, pie, and donut</td>
+    <td>Shape map: countries colored from <code>Row.code</code> and <code>Row.revenue</code></td>
+  </tr>
+</table>
+
+### Shape maps
+
+`chartType="shapeMap"` colors closed regions from a numeric column. With no
+imported file the chart uses the bundled Natural Earth country atlas. A
+category matches an ISO alpha-2 or alpha-3 code, or an English, Arabic, or
+French country name.
+
+A district or neighborhood map is the same chart with your own file. Import
+a shapefile (`.shp` plus the sibling `.dbf`), GeoJSON (`.geojson` or
+`.json`), or a `.qmap` layer. The package stores it at `shapes/<name>.qmap`.
+The chart's `shape` is that name, `shapeKey` is the attribute that identifies
+each region (a district code, `NAME`, `ISO_A2`), and the category expression
+reads the matching column of the value table. The first matching row colors
+the region.
+
+PDF and preview draw the polygons in Web Mercator, with a min/max legend and
+labels on the widest regions. A world-sized layer leaves Antarctica out of
+the frame so the inhabited map fills the chart. Word and Excel show a bar of
+the region values.
 
 <table>
   <tr>
@@ -514,8 +565,8 @@ draws vector charts. XLSX and DOCX embed **native, editable** Office charts.
 
 ### Ready-made templates
 
-Eighteen production-style templates ship as ready-made `.qrep` files in
-`quds_office_editor`'s `templates/` folder: nine families, each in an
+Twenty production-style templates ship as ready-made `.qrep` files in
+`quds_office_editor`'s `templates/` folder: ten families, each in an
 **Arabic (RTL)** and an **English** version, grouped by
 `ReportTemplateCategory`. Every template carries sample data, and most carry
 **pre-saved images** (logo, stamp, signature, seal, product photos).
@@ -529,6 +580,7 @@ Eighteen production-style templates ship as ready-made `.qrep` files in
 | Finance | Receipt voucher (A5 landscape) | `receipt_voucher_ar` | `receipt_voucher_en` | logo, stamp, signature |
 | Inventory | Inventory status (reorder flags, pie and bar charts) | `inventory_ar` | `inventory_en` | none |
 | Analytics | Sales dashboard (KPI cards, 4 charts, grouped orders) | `sales_performance_ar` | `sales_performance` | logo |
+| Analytics | Chart gallery (every chart type, plus a country shape map bound to a `countries` table) | `chart_gallery_ar` | `chart_gallery_en` | none |
 | Human resources | Certificate of appreciation (A4 landscape) | `certificate_ar` | `certificate_en` | logo, stamp, signature, seal |
 | Human resources | Class certificates (one page per student row) | `class_certificate_ar` | `class_certificate_en` | logo, stamp, signature, seal |
 

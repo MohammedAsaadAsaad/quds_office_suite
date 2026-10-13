@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/gestures.dart';
@@ -470,6 +471,98 @@ void main() {
       c.dispose();
     });
 
+    test('a shape map embeds its file and binds the value table', () async {
+      final ReportDesignerController c = ReportDesignerController();
+      c.loadXml(
+        '<QudsReport name="Map" pageSize="A4"><Bands>'
+        '<ReportHeader height="90mm"/></Bands></QudsReport>',
+      );
+      expect(c.addDataTable('regions'), isTrue);
+      expect(
+        c.addDataColumn(
+          name: 'code',
+          type: ReportDataType.text,
+          table: 'regions',
+        ),
+        'code',
+      );
+      expect(
+        c.addDataColumn(
+          name: 'amount',
+          type: ReportDataType.number,
+          table: 'regions',
+        ),
+        'amount',
+      );
+      expect(c.addDataRow(table: 'regions'), isTrue);
+      expect(c.addDataRow(table: 'regions'), isTrue);
+      expect(c.setDataCell(0, 0, 'W', table: 'regions'), isTrue);
+      expect(c.setDataCell(0, 1, '5', table: 'regions'), isTrue);
+      expect(c.setDataCell(1, 0, 'E', table: 'regions'), isTrue);
+      expect(c.setDataCell(1, 1, '50', table: 'regions'), isTrue);
+
+      final ReportElement? added = c.addElement(
+        ReportDesignTool.chart,
+        ReportBandKind.reportHeader,
+        const ReportRect(10 * mm, 0, 0, 0),
+      );
+      final ReportChartElement chart = added! as ReportChartElement;
+      c.setProperty('dataSet', 'Data.regions');
+      c.setProperty('chartType', 'shapeMap');
+      expect(chart.shape, 'world');
+      expect(chart.category, 'Row.code');
+      expect(chart.series.single.value, 'Row.amount');
+
+      c.shapePicker = () async => (
+        name: 'districts.geojson',
+        bytes: Uint8List.fromList(
+          utf8.encode('''
+{"type":"FeatureCollection","features":[
+  {"type":"Feature","properties":{"code":"W","NAME":"West"},
+   "geometry":{"type":"Polygon","coordinates":[[[0,0],[30,0],[30,20],[0,0]]]}},
+  {"type":"Feature","properties":{"code":"E","NAME":"East"},
+   "geometry":{"type":"Polygon","coordinates":[[[40,0],[70,0],[70,25],[40,0]]]}}
+]}'''),
+        ),
+        attributes: null,
+      );
+      expect(await c.importShape(), 'districts');
+      expect(chart.shape, 'districts');
+      expect(chart.shapeKey, 'code');
+      expect(chart.category, 'Row.code');
+      expect(chart.series.single.value, 'Row.amount');
+      expect(c.shapes.containsKey('districts'), isTrue);
+
+      final ReportDesignerController back = ReportDesignerController();
+      back.loadPackage(c.toPackage());
+      final ReportChartElement loaded = back.template.allElements
+          .map(((ReportBand, ReportElement) p) => p.$2)
+          .whereType<ReportChartElement>()
+          .single;
+      expect(loaded.shape, 'districts');
+      expect(loaded.shapeKey, 'code');
+      expect(loaded.category, 'Row.code');
+      expect(loaded.series.single.value, 'Row.amount');
+      expect(
+        ReportShapeLayer.decode(back.shapes['districts']!).find('W')?.label,
+        'West',
+      );
+
+      final ReportDocumentLayout? layout = back.previewLayout;
+      expect(back.previewError, isNull);
+      final Set<int> fills = <int>{
+        for (final ReportPathPrimitive p
+            in layout!.pages.first.primitives.whereType<ReportPathPrimitive>())
+          if (p.elementId == loaded.id &&
+              p.fill != null &&
+              p.fill!.argb != 0xFFE7F1F8)
+            p.fill!.argb,
+      };
+      expect(fills, containsAll(<int>[0xFFDEEBF7, 0xFF08306B]));
+      c.dispose();
+      back.dispose();
+    });
+
     test('ready-made templates load with their sample data', () {
       for (final ReportTemplateInfo info in fileTemplates()) {
         final ReportDesignerController c = ReportDesignerController(
@@ -517,7 +610,7 @@ void main() {
       final List<ReportTemplateInfo> all = await ReportTemplateLibrary.bundled(
         bundle: _DirectoryBundle('templates', ReportTemplateLibrary.folder),
       );
-      expect(all, hasLength(18));
+      expect(all, hasLength(20));
       expect(all.first.id, 'sales_invoice_ar');
       expect(all.last.category, ReportTemplateCategory.hr);
       expect(
@@ -1794,6 +1887,18 @@ void main() {
       final int total = col(c, 'total');
       expect(t.columns[total].isCalculated, isTrue);
       expect(c.canEditDataCell(0, total), isFalse);
+      c.selectDataCell(-1, total);
+      c.beginPropertyEdit('data.col.expression');
+      c.propertyEditor.replaceRange(
+        0,
+        c.propertyEditor.formulaBar.length,
+        'pri',
+      );
+      expect(
+        c.completion!.items.map((ReportCompletionItem i) => i.insert),
+        contains('price'),
+      );
+      c.cancelPropertyEdit();
       expect(
         t.rows[0][total].asNumber,
         t.rows[0][q].asNumber! * t.rows[0][p].asNumber!,

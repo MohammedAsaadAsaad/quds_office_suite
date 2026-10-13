@@ -2,6 +2,28 @@
 
 All notable changes to `quds_office_engine` are documented here.
 
+## 1.3.0
+
+- Report charts add percent-stacked columns, stacked area, column-and-line
+  combo (with a secondary axis), waterfall, gauge, bullet, funnel, scatter,
+  bubble, radar, heatmap, sparkline, and extruded (oblique 3D) columns, pie,
+  and donut. Each has controllable depth, skew, hole, start angle, curve,
+  markers, line width, axis bounds, target, bands, and waterfall colors.
+  Scatter and bubble plot one point per row (`x`, `y`, and `size`). PDF and
+  preview draw them as vectors. Word and Excel get a native chart where
+  Office has one, and the nearest bar, line, or donut otherwise.
+- Ready-made templates add a chart gallery (`chart_gallery_ar` and
+  `chart_gallery_en`): every chart type, then a world shape map colored
+  from a separate `countries` table (`Row.code` to `Row.revenue`).
+- Shape maps color regions from the bundled country atlas or from a shapefile
+  or GeoJSON stored in the report (`shapes/<name>.qmap`). The atlas matches
+  an ISO alpha-2 or alpha-3 code and an English, Arabic, or French name.
+  PDF and preview draw the polygons in Web Mercator, a min/max legend, and
+  labels on the widest regions without overlap. A world-sized layer leaves
+  Antarctica out of the frame. Word and Excel show a bar of the region values.
+- A chart that crosses the bottom of a page moves to the next page together
+  with the charts below it, so a row is not drawn on top of the one that moved.
+
 ## 1.2.0
 
 Reports can do the same job as a mail merge, inside one file.

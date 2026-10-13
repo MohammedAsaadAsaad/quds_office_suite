@@ -220,6 +220,7 @@ class _Snapshot {
     this.selection,
     this.band,
     this.images,
+    this.shapes,
     this.fonts,
     this.sample,
   );
@@ -228,6 +229,7 @@ class _Snapshot {
   final List<String> selection;
   final ReportBandKind? band;
   final Map<String, Uint8List> images;
+  final Map<String, Uint8List> shapes;
   final Map<String, ReportFontFiles> fonts;
   final Map<String, Object?>? sample;
 }
@@ -259,6 +261,11 @@ typedef ReportFontPicker =
 /// Asks the host for a data file (`.json` or `.csv`); completes with null
 /// when cancelled.
 typedef ReportDataPicker = Future<({String name, String text})?> Function();
+
+/// Asks the host for a shapefile (`.shp`, with [attributes] the `.dbf`),
+/// GeoJSON, or a `.qmap` layer. Completes with null when cancelled.
+typedef ReportShapePicker =
+    Future<({String name, Uint8List bytes, Uint8List? attributes})?> Function();
 
 /// A column of the data explorer: declared in the template's
 /// [ReportDataSchema] ([inSchema]) or found in the data.
@@ -366,6 +373,7 @@ class ReportDesignerController extends ChangeNotifier {
     ReportTemplate? template,
     ReportFontRegistry? fonts,
     Map<String, Uint8List>? images,
+    Map<String, Uint8List>? shapes,
     Map<String, ReportFontFiles>? embeddedFonts,
     Map<String, Object?>? mockData,
     Map<String, Object?>? sampleData,
@@ -380,6 +388,7 @@ class ReportDesignerController extends ChangeNotifier {
   }) : _template = template ?? ReportTemplate(),
        fonts = fonts ?? ReportFontRegistry(),
        images = images ?? <String, Uint8List>{},
+       shapes = shapes ?? <String, Uint8List>{},
        embeddedFonts = embeddedFonts ?? <String, ReportFontFiles>{},
        _mockOverride = mockData,
        _sample = sampleData == null ? null : _revive(sampleData) {
@@ -471,6 +480,13 @@ class ReportDesignerController extends ChangeNotifier {
   /// Edit them through [addImage], [renameImage] and [removeImage] so the
   /// changes are undoable; loading another template replaces them.
   final Map<String, Uint8List> images;
+
+  /// Embedded shape layers (`shape="districts"`), saved as `shapes/*.qmap`.
+  final Map<String, Uint8List> shapes;
+
+  /// Host file picker for "Import shapes…" (`.shp` plus optional `.dbf`,
+  /// GeoJSON, or a `.qmap` layer). Hidden while null.
+  ReportShapePicker? shapePicker;
 
   /// Host file picker behind the inspector's "Import image…" buttons; the
   /// buttons are hidden while it is null.
@@ -673,10 +689,13 @@ class ReportDesignerController extends ChangeNotifier {
     } else {
       band = _selectedBand == null ? null : _template.band(_selectedBand!);
     }
+    final bool formulaColumn =
+        (editingProperty ?? '') == 'data.col.expression' && !dataTable.isFields;
     final ReportCompleter completer = ReportCompleter(
       template: _template,
       band: band,
       data: _preparedData,
+      rowTable: formulaColumn ? dataTable.name : null,
     );
     final int caret = ed.caretIndex;
     if (identical(ed, textEditor)) {
@@ -785,6 +804,7 @@ class ReportDesignerController extends ChangeNotifier {
   Uint8List toPackage() => ReportPackage(
     xml: toXml(),
     images: images,
+    shapes: shapes,
     fonts: embeddedFonts,
     sampleData: _sample,
   ).encode();
@@ -800,6 +820,7 @@ class ReportDesignerController extends ChangeNotifier {
     loadXml(
       package.xml,
       images: package.images,
+      shapes: package.shapes,
       fonts: package.fonts,
       sampleData: package.sampleData,
     );
@@ -815,6 +836,7 @@ class ReportDesignerController extends ChangeNotifier {
   void loadXml(
     String xml, {
     Map<String, Uint8List>? images,
+    Map<String, Uint8List>? shapes,
     Map<String, ReportFontFiles>? fonts,
     Map<String, Object?>? sampleData,
   }) {
@@ -822,6 +844,7 @@ class ReportDesignerController extends ChangeNotifier {
     replaceTemplate(
       parsed.template,
       images: images,
+      shapes: shapes,
       fonts: fonts,
       sampleData: sampleData,
     );
@@ -836,6 +859,7 @@ class ReportDesignerController extends ChangeNotifier {
     loadXml(
       package.xml,
       images: package.images,
+      shapes: package.shapes,
       fonts: package.fonts,
       sampleData: package.sampleData,
     );
@@ -848,6 +872,7 @@ class ReportDesignerController extends ChangeNotifier {
   void replaceTemplate(
     ReportTemplate template, {
     Map<String, Uint8List>? images,
+    Map<String, Uint8List>? shapes,
     Map<String, ReportFontFiles>? fonts,
     Map<String, Object?>? sampleData,
   }) {
@@ -867,6 +892,10 @@ class ReportDesignerController extends ChangeNotifier {
     this.images
       ..clear()
       ..addAll(next);
+    final Map<String, Uint8List> nextShapes = <String, Uint8List>{...?shapes};
+    this.shapes
+      ..clear()
+      ..addAll(nextShapes);
     final Map<String, ReportFontFiles> nextFonts = <String, ReportFontFiles>{
       ...?fonts,
     };
@@ -939,6 +968,7 @@ class ReportDesignerController extends ChangeNotifier {
     _template,
     fonts: effectiveFonts,
     images: images,
+    shapes: shapes,
     embeddedFonts: embeddedFonts,
     clock: clock,
     userName: userName,
@@ -1974,6 +2004,7 @@ class ReportDesignerController extends ChangeNotifier {
     List<String>.of(_selection),
     _selectedBand,
     Map<String, Uint8List>.of(images),
+    Map<String, Uint8List>.of(shapes),
     Map<String, ReportFontFiles>.of(embeddedFonts),
     _sample,
   );
@@ -1984,6 +2015,9 @@ class ReportDesignerController extends ChangeNotifier {
     images
       ..clear()
       ..addAll(s.images);
+    shapes
+      ..clear()
+      ..addAll(s.shapes);
     embeddedFonts
       ..clear()
       ..addAll(s.fonts);
@@ -2752,7 +2786,7 @@ class ReportDesignerController extends ChangeNotifier {
         value: _bool(e.showValues),
         group: g,
       ),
-      if (!e.isRadial) ...<ReportProperty>[
+      if (e.showsCartesianAxes) ...<ReportProperty>[
         ReportProperty(
           key: 'showGrid',
           label: 'Grid lines',
@@ -2768,6 +2802,7 @@ class ReportDesignerController extends ChangeNotifier {
           group: g,
         ),
       ],
+      ..._chartPlot(e),
       ReportProperty(
         key: 'valueFormat',
         label: 'Value format',
@@ -2784,9 +2819,12 @@ class ReportDesignerController extends ChangeNotifier {
       ),
       ReportProperty(
         key: 'category',
-        label: 'Category',
+        label: e.chartType.isShapeMap ? 'Region key' : 'Category',
         kind: ReportPropertyKind.expression,
         value: e.category ?? '',
+        hint: e.chartType.isShapeMap
+            ? 'Row.code — the column that matches the shape key'
+            : '',
         group: d,
       ),
       ReportProperty(
@@ -2880,6 +2918,9 @@ class ReportDesignerController extends ChangeNotifier {
           label: 'Value',
           kind: ReportPropertyKind.expression,
           value: ser.value,
+          hint: e.chartType.isShapeMap
+              ? 'Row.amount — the number colored on each region'
+              : '',
           group: group,
         ),
         ReportProperty(
@@ -2889,6 +2930,40 @@ class ReportDesignerController extends ChangeNotifier {
           value: ser.color ?? '',
           group: group,
         ),
+        if (e.chartType == ReportChartType.combo) ...<ReportProperty>[
+          ReportProperty(
+            key: 'series.$i.style',
+            label: 'Series style',
+            kind: ReportPropertyKind.choice,
+            value: ser.style.name,
+            options: _names(ReportSeriesStyle.values),
+            group: group,
+          ),
+          ReportProperty(
+            key: 'series.$i.secondary',
+            label: 'Secondary axis',
+            kind: ReportPropertyKind.toggle,
+            value: _bool(ser.secondary),
+            group: group,
+          ),
+        ],
+        if (e.chartType.plotsPoints) ...<ReportProperty>[
+          ReportProperty(
+            key: 'series.$i.x',
+            label: 'X value',
+            kind: ReportPropertyKind.expression,
+            value: ser.x ?? '',
+            group: group,
+          ),
+          if (e.chartType == ReportChartType.bubble)
+            ReportProperty(
+              key: 'series.$i.size',
+              label: 'Size value',
+              kind: ReportPropertyKind.expression,
+              value: ser.size ?? '',
+              group: group,
+            ),
+        ],
       ]);
     }
     if (e.series.isEmpty) {
@@ -2917,10 +2992,267 @@ class ReportDesignerController extends ChangeNotifier {
             value: pt.color ?? '',
             group: group,
           ),
+          if (e.chartType.plotsPoints) ...<ReportProperty>[
+            ReportProperty(
+              key: 'point.$i.x',
+              label: 'X value',
+              kind: ReportPropertyKind.expression,
+              value: pt.x ?? '',
+              group: group,
+            ),
+            if (e.chartType == ReportChartType.bubble)
+              ReportProperty(
+                key: 'point.$i.size',
+                label: 'Size value',
+                kind: ReportPropertyKind.expression,
+                value: pt.size ?? '',
+                group: group,
+              ),
+          ],
+          if (e.chartType == ReportChartType.waterfall)
+            ReportProperty(
+              key: 'point.$i.total',
+              label: 'Point total',
+              kind: ReportPropertyKind.toggle,
+              value: _bool(pt.total),
+              group: group,
+            ),
         ]);
       }
     }
     return out;
+  }
+
+  List<ReportProperty> _chartPlot(ReportChartElement e) {
+    const String p = 'Plot';
+    final bool lineLike =
+        e.chartType == ReportChartType.line ||
+        e.chartType == ReportChartType.area ||
+        e.chartType == ReportChartType.stackedArea ||
+        e.chartType == ReportChartType.combo ||
+        e.chartType == ReportChartType.radar ||
+        e.chartType == ReportChartType.sparkline ||
+        e.chartType.plotsPoints;
+    final bool pieLike = e.isRadial || e.chartType == ReportChartType.gauge;
+    final List<String> shapeNames = <String>[
+      'world',
+      for (final String name in shapes.keys)
+        if (name != 'world') name,
+    ];
+    if (e.shape.isNotEmpty && !shapeNames.contains(e.shape)) {
+      shapeNames.add(e.shape);
+    }
+    return <ReportProperty>[
+      if (e.chartType.isShapeMap) ...<ReportProperty>[
+        ReportProperty(
+          key: 'shape',
+          label: 'Shapes',
+          kind: ReportPropertyKind.choice,
+          value: e.shape.isEmpty ? 'world' : e.shape,
+          options: shapeNames,
+          group: p,
+        ),
+        ReportProperty(
+          key: 'shapeKey',
+          label: 'Shape key field',
+          kind: ReportPropertyKind.text,
+          value: e.shapeKey ?? '',
+          hint: 'Attribute that matches the table, such as a district code',
+          group: p,
+        ),
+        ReportProperty(
+          key: 'showLabels',
+          label: 'Region labels',
+          kind: ReportPropertyKind.toggle,
+          value: _bool(e.showLabels),
+          group: p,
+        ),
+        ReportProperty(
+          key: 'lowColor',
+          label: 'Low color',
+          kind: ReportPropertyKind.color,
+          value: e.lowColor ?? '',
+          group: p,
+        ),
+        ReportProperty(
+          key: 'highColor',
+          label: 'High color',
+          kind: ReportPropertyKind.color,
+          value: e.highColor ?? '',
+          group: p,
+        ),
+        ReportProperty(
+          key: 'emptyColor',
+          label: 'Empty color',
+          kind: ReportPropertyKind.color,
+          value: e.emptyColor ?? '',
+          group: p,
+        ),
+        if (shapePicker != null)
+          ReportProperty(
+            key: 'shape.import',
+            label: '',
+            kind: ReportPropertyKind.action,
+            value: 'Import shapes…',
+            group: p,
+          ),
+      ],
+      if (lineLike) ...<ReportProperty>[
+        ReportProperty(
+          key: 'smooth',
+          label: 'Smooth',
+          kind: ReportPropertyKind.toggle,
+          value: _bool(e.smooth),
+          group: p,
+        ),
+        ReportProperty(
+          key: 'showMarkers',
+          label: 'Markers',
+          kind: ReportPropertyKind.choice,
+          value: e.showMarkers == null
+              ? 'auto'
+              : (e.showMarkers! ? 'on' : 'off'),
+          options: const <String>['auto', 'on', 'off'],
+          group: p,
+        ),
+        ReportProperty(
+          key: 'markerSize',
+          label: 'Marker size',
+          kind: ReportPropertyKind.number,
+          value: _num(e.markerSize),
+          group: p,
+        ),
+        ReportProperty(
+          key: 'lineWidth',
+          label: 'Line width',
+          kind: ReportPropertyKind.number,
+          value: _num(e.lineWidth),
+          group: p,
+        ),
+      ],
+      if (e.chartType.isExtruded) ...<ReportProperty>[
+        ReportProperty(
+          key: 'depth',
+          label: 'Depth',
+          kind: ReportPropertyKind.number,
+          value: _num(e.depth),
+          group: p,
+        ),
+        ReportProperty(
+          key: 'skew',
+          label: 'Skew',
+          kind: ReportPropertyKind.number,
+          value: _num(e.skew),
+          group: p,
+        ),
+      ],
+      if (pieLike) ...<ReportProperty>[
+        ReportProperty(
+          key: 'hole',
+          label: 'Hole',
+          kind: ReportPropertyKind.number,
+          value: _num(e.hole),
+          group: p,
+        ),
+        ReportProperty(
+          key: 'startAngle',
+          label: 'Start angle',
+          kind: ReportPropertyKind.number,
+          value: _num(e.startAngle),
+          group: p,
+        ),
+      ],
+      if (e.chartType == ReportChartType.gauge ||
+          e.chartType == ReportChartType.bullet) ...<ReportProperty>[
+        ReportProperty(
+          key: 'target',
+          label: 'Target',
+          kind: ReportPropertyKind.expression,
+          value: e.target ?? '',
+          group: p,
+        ),
+        ReportProperty(
+          key: 'bands',
+          label: 'Range bands',
+          kind: ReportPropertyKind.number,
+          value: '${e.bands}',
+          group: p,
+        ),
+      ],
+      if (e.showsCartesianAxes ||
+          e.chartType == ReportChartType.gauge ||
+          e.chartType == ReportChartType.bullet ||
+          e.chartType.plotsPoints) ...<ReportProperty>[
+        ReportProperty(
+          key: 'axisMin',
+          label: 'Axis minimum',
+          kind: ReportPropertyKind.number,
+          value: e.axisMin == null ? '' : _num(e.axisMin!),
+          group: p,
+        ),
+        ReportProperty(
+          key: 'axisMax',
+          label: 'Axis maximum',
+          kind: ReportPropertyKind.number,
+          value: e.axisMax == null ? '' : _num(e.axisMax!),
+          group: p,
+        ),
+      ],
+      if (e.chartType == ReportChartType.combo ||
+          e.chartType.plotsPoints) ...<ReportProperty>[
+        ReportProperty(
+          key: 'axisMin2',
+          label: 'Secondary minimum',
+          kind: ReportPropertyKind.number,
+          value: e.axisMin2 == null ? '' : _num(e.axisMin2!),
+          group: p,
+        ),
+        ReportProperty(
+          key: 'axisMax2',
+          label: 'Secondary maximum',
+          kind: ReportPropertyKind.number,
+          value: e.axisMax2 == null ? '' : _num(e.axisMax2!),
+          group: p,
+        ),
+      ],
+      ReportProperty(
+        key: 'showPercent',
+        label: 'Percent labels',
+        kind: ReportPropertyKind.toggle,
+        value: _bool(e.showPercent),
+        group: p,
+      ),
+      if (e.chartType == ReportChartType.waterfall) ...<ReportProperty>[
+        ReportProperty(
+          key: 'lastIsTotal',
+          label: 'Last is total',
+          kind: ReportPropertyKind.toggle,
+          value: _bool(e.lastIsTotal),
+          group: p,
+        ),
+        ReportProperty(
+          key: 'increaseColor',
+          label: 'Increase color',
+          kind: ReportPropertyKind.color,
+          value: e.increaseColor ?? '',
+          group: p,
+        ),
+        ReportProperty(
+          key: 'decreaseColor',
+          label: 'Decrease color',
+          kind: ReportPropertyKind.color,
+          value: e.decreaseColor ?? '',
+          group: p,
+        ),
+        ReportProperty(
+          key: 'totalColor',
+          label: 'Total color',
+          kind: ReportPropertyKind.color,
+          value: e.totalColor ?? '',
+          group: p,
+        ),
+      ],
+    ];
   }
 
   List<ReportProperty> _boxProps(
@@ -4164,6 +4496,205 @@ class ReportDesignerController extends ChangeNotifier {
   /// Adds an `<Image>` showing embedded image [name] to the insertion band
   /// (at most 40 mm on its long side, keeping the aspect ratio) and selects
   /// it. Returns the element, or null when [name] is not embedded.
+  /// Reads a shapefile, GeoJSON, or `.qmap` from [shapePicker], embeds it,
+  /// and points the selected shape map at it. Returns the layer name.
+  Future<String?> importShape() async {
+    final ReportShapePicker? picker = shapePicker;
+    if (picker == null) {
+      return null;
+    }
+    final ({String name, Uint8List bytes, Uint8List? attributes})? picked =
+        await picker();
+    if (picked == null) {
+      return null;
+    }
+    final ReportShapeFile file;
+    try {
+      final ReportElement? selected = primary;
+      final String? keyField = selected is ReportChartElement
+          ? selected.shapeKey
+          : null;
+      file = ReportShapeLayer.read(
+        picked.bytes,
+        attributes: picked.attributes,
+        keyField: keyField,
+      );
+    } on ReportShapeException catch (e) {
+      _notice = e.message;
+      notifyListeners();
+      return null;
+    }
+    final String key = ReportPackage.keyFor(picked.name, taken: shapes.keys);
+    final Uint8List encoded = file.layer.encode();
+    _mutate(() {
+      shapes[key] = encoded;
+      final ReportElement? selected = primary;
+      if (selected is ReportChartElement && selected.chartType.isShapeMap) {
+        selected.shape = key;
+        final String? field = file.keyField;
+        if (field != null && field.isNotEmpty) {
+          selected.shapeKey = field;
+        }
+        _wireShapeMap(selected, forceKey: true);
+      }
+      return true;
+    });
+    return key;
+  }
+
+  /// Points a shape map at the table column that matches its region key and
+  /// the numeric column drawn on each region. A custom expression that
+  /// already names a column of the table is left as the user wrote it.
+  void _wireShapeMap(ReportChartElement e, {bool forceKey = false}) {
+    final ReportDataTableView? table = _chartTable(e);
+    final String row = _rowToken(e);
+    final String? keyCol = _shapeKeyColumn(table, e.shapeKey);
+    final String category = (e.category ?? '').trim();
+    final String typedKey = (e.shapeKey ?? '').trim();
+    if (forceKey && (keyCol != null || typedKey.isNotEmpty)) {
+      e.category = '$row.${keyCol ?? typedKey}';
+    } else if (_isPlaceholderCategory(category) ||
+        _missingColumn(category, table)) {
+      if (keyCol != null) {
+        e.category = '$row.$keyCol';
+      } else if (typedKey.isNotEmpty) {
+        e.category = '$row.$typedKey';
+      }
+    }
+    final String? measure = _measureColumn(table, keyCol ?? typedKey);
+    if (measure == null) {
+      return;
+    }
+    if (e.series.isEmpty) {
+      e.series.add(ReportChartSeries(name: measure, value: '$row.$measure'));
+      return;
+    }
+    if (_isPlaceholderValue(e.series.first.value)) {
+      e.series.first.value = '$row.$measure';
+    }
+  }
+
+  ReportDataTableView? _chartTable(ReportChartElement e) {
+    final String? set = e.dataSet;
+    if (set == null || set.trim().isEmpty) {
+      return null;
+    }
+    final String path = ReportData.normalizePath(
+      set.trim().replaceFirst(RegExp(r'^Data\.', caseSensitive: false), ''),
+    );
+    for (final ReportDataTableView t in dataTables) {
+      if (!t.isFields && t.name.toLowerCase() == path.toLowerCase()) {
+        return t;
+      }
+    }
+    return null;
+  }
+
+  String _rowToken(ReportChartElement e) {
+    final String category = (e.category ?? '').trim();
+    final int dot = category.indexOf('.');
+    if (dot > 0) {
+      final String head = category.substring(0, dot);
+      if (head == 'item' || head == 'Row' || head == 'row') {
+        return head;
+      }
+    }
+    return e.dataSet == null ? 'item' : 'Row';
+  }
+
+  String? _shapeKeyColumn(ReportDataTableView? table, String? shapeKey) {
+    if (table == null) {
+      return null;
+    }
+    final String requested = (shapeKey ?? '').trim();
+    if (requested.isNotEmpty) {
+      for (final ReportDataColumnView c in table.columns) {
+        if (c.name.toLowerCase() == requested.toLowerCase()) {
+          return c.name;
+        }
+      }
+    }
+    for (final String name in const <String>[
+      'iso_a2',
+      'iso_a3',
+      'adm0_a3',
+      'code',
+      'country',
+      'region',
+    ]) {
+      for (final ReportDataColumnView c in table.columns) {
+        if (c.name.toLowerCase() == name) {
+          return c.name;
+        }
+      }
+    }
+    for (final ReportDataColumnView c in table.columns) {
+      if (c.type == ReportDataType.text) {
+        return c.name;
+      }
+    }
+    return null;
+  }
+
+  String? _measureColumn(ReportDataTableView? table, String? keyColumn) {
+    if (table == null) {
+      return null;
+    }
+    for (final ReportDataColumnView c in table.columns) {
+      if (c.type == ReportDataType.number &&
+          c.name.toLowerCase() != keyColumn?.toLowerCase()) {
+        return c.name;
+      }
+    }
+    return null;
+  }
+
+  bool _isPlaceholderCategory(String category) {
+    return category.isEmpty ||
+        RegExp(
+          r'^(Row|item|row)\.category$',
+          caseSensitive: false,
+        ).hasMatch(category);
+  }
+
+  bool _isPlaceholderValue(String value) {
+    return value.trim().isEmpty ||
+        RegExp(
+          r'^(Row|item|row)\.(total|value\d*)$',
+          caseSensitive: false,
+        ).hasMatch(value.trim());
+  }
+
+  bool _missingColumn(String expression, ReportDataTableView? table) {
+    final String text = expression.trim();
+    final int dot = text.lastIndexOf('.');
+    if (dot <= 0 || dot == text.length - 1 || text.contains('(')) {
+      return false;
+    }
+    final String head = text.substring(0, dot);
+    if (head != 'item' && head != 'Row' && head != 'row') {
+      return false;
+    }
+    return !_namesTableColumn(text, table);
+  }
+
+  bool _namesTableColumn(String expression, ReportDataTableView? table) {
+    if (table == null) {
+      return false;
+    }
+    final int dot = expression.trim().lastIndexOf('.');
+    if (dot < 0 || dot == expression.trim().length - 1) {
+      return false;
+    }
+    final String name = expression.trim().substring(dot + 1);
+    for (final ReportDataColumnView c in table.columns) {
+      if (c.name.toLowerCase() == name.toLowerCase()) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   ReportImageElement? insertImage(String name) {
     final Uint8List? bytes = images[name];
     if (bytes == null) {
@@ -5756,7 +6287,7 @@ class ReportDesignerController extends ChangeNotifier {
             label: 'Formula',
             kind: ReportPropertyKind.expression,
             value: c.expression ?? '',
-            hint: 'stored values',
+            hint: 'qty * price — columns of this table by name',
             group: cg,
           ),
           if (c.error != null)
@@ -5832,6 +6363,32 @@ class ReportDesignerController extends ChangeNotifier {
     return out;
   }
 
+  /// Adds a calculated column (`0`, ready to edit) on the current table,
+  /// or the first table when the fields list is selected.
+  void _addFormulaField() {
+    String? table = dataTable.isFields ? null : dataTable.name;
+    if (table == null) {
+      for (final ReportDataTableView v in dataTables) {
+        if (!v.isFields) {
+          table = v.name;
+          break;
+        }
+      }
+    }
+    if (table == null) {
+      _notice = 'Add a table before a formula field';
+      return;
+    }
+    final String? n = addDataColumn(
+      type: ReportDataType.number,
+      expression: '0',
+      table: table,
+    );
+    if (n != null) {
+      beginPropertyEdit('data.col.expression');
+    }
+  }
+
   /// Handles the data explorer keys of [setProperty]; returns whether [key]
   /// was one.
   bool _setDataProperty(String key, String value) {
@@ -5860,14 +6417,8 @@ class ReportDesignerController extends ChangeNotifier {
       case 'data.col+':
         addDataColumn();
         beginPropertyEdit('data.col.name');
-      case 'data.calc+':
-        final String? n = addDataColumn(
-          type: ReportDataType.number,
-          expression: '0',
-        );
-        if (n != null) {
-          beginPropertyEdit('data.col.expression');
-        }
+      case 'data.calc+' || 'data.formula+':
+        _addFormulaField();
       case 'data.row.remove':
         if (_dataRow >= 0) {
           removeDataRows(<int>[_dataRow]);
@@ -6480,6 +7031,21 @@ class ReportDesignerController extends ChangeNotifier {
             s.value = v.trim();
           case 'color':
             s.color = _opt(v);
+          case 'x':
+            s.x = _opt(v);
+          case 'size':
+            s.size = _opt(v);
+          case 'style':
+            final ReportSeriesStyle? style = reportEnumByName(
+              ReportSeriesStyle.values,
+              v,
+            );
+            if (style == null) {
+              return false;
+            }
+            s.style = style;
+          case 'secondary':
+            s.secondary = _parseBool(v);
           default:
             return false;
         }
@@ -6497,6 +7063,12 @@ class ReportDesignerController extends ChangeNotifier {
             p.value = v.trim();
           case 'color':
             p.color = _opt(v);
+          case 'x':
+            p.x = _opt(v);
+          case 'size':
+            p.size = _opt(v);
+          case 'total':
+            p.total = _parseBool(v);
           default:
             return false;
         }
@@ -6511,6 +7083,26 @@ class ReportDesignerController extends ChangeNotifier {
           return false;
         }
         e.chartType = t;
+        if (t.isShapeMap) {
+          _wireShapeMap(e);
+        }
+      case 'shape':
+        e.shape = v.trim().isEmpty ? 'world' : v.trim();
+      case 'shapeKey':
+        e.shapeKey = _opt(v);
+        if (e.chartType.isShapeMap) {
+          _wireShapeMap(e, forceKey: true);
+        }
+      case 'showLabels':
+        e.showLabels = _parseBool(v);
+      case 'lowColor':
+        e.lowColor = _opt(v);
+      case 'highColor':
+        e.highColor = _opt(v);
+      case 'emptyColor':
+        e.emptyColor = _opt(v);
+      case 'shape.import':
+        unawaited(importShape());
       case 'title':
         e.title = v;
       case 'showLegend':
@@ -6525,6 +7117,9 @@ class ReportDesignerController extends ChangeNotifier {
         e.valueFormat = _opt(v);
       case 'dataSet':
         e.dataSet = _opt(v);
+        if (e.chartType.isShapeMap) {
+          _wireShapeMap(e);
+        }
       case 'category':
         e.category = _opt(v);
       case 'aggregate':
@@ -6619,6 +7214,93 @@ class ReportDesignerController extends ChangeNotifier {
           return false;
         }
         e.borderWidth = n;
+      case 'depth':
+        final double? depth = _parseNum(v);
+        if (depth == null || depth < 0) {
+          return false;
+        }
+        e.depth = depth;
+      case 'skew':
+        final double? skew = _parseNum(v);
+        if (skew == null) {
+          return false;
+        }
+        e.skew = skew;
+      case 'hole':
+        final double? hole = _parseNum(v);
+        if (hole == null || hole < 0 || hole > 0.9) {
+          return false;
+        }
+        e.hole = hole;
+      case 'startAngle':
+        final double? angle = _parseNum(v);
+        if (angle == null) {
+          return false;
+        }
+        e.startAngle = angle;
+      case 'smooth':
+        e.smooth = _parseBool(v);
+      case 'showMarkers':
+        switch (v.trim().toLowerCase()) {
+          case 'auto' || '':
+            e.showMarkers = null;
+          case 'on' || 'true':
+            e.showMarkers = true;
+          case 'off' || 'false':
+            e.showMarkers = false;
+          default:
+            return false;
+        }
+      case 'markerSize':
+        final double? marker = _parseNum(v);
+        if (marker == null || marker <= 0) {
+          return false;
+        }
+        e.markerSize = marker;
+      case 'lineWidth':
+        final double? width = _parseNum(v);
+        if (width == null || width < 0) {
+          return false;
+        }
+        e.lineWidth = width;
+      case 'axisMin':
+        e.axisMin = v.trim().isEmpty ? null : _parseNum(v);
+        if (v.trim().isNotEmpty && e.axisMin == null) {
+          return false;
+        }
+      case 'axisMax':
+        e.axisMax = v.trim().isEmpty ? null : _parseNum(v);
+        if (v.trim().isNotEmpty && e.axisMax == null) {
+          return false;
+        }
+      case 'axisMin2':
+        e.axisMin2 = v.trim().isEmpty ? null : _parseNum(v);
+        if (v.trim().isNotEmpty && e.axisMin2 == null) {
+          return false;
+        }
+      case 'axisMax2':
+        e.axisMax2 = v.trim().isEmpty ? null : _parseNum(v);
+        if (v.trim().isNotEmpty && e.axisMax2 == null) {
+          return false;
+        }
+      case 'target':
+        e.target = _opt(v);
+      case 'showPercent':
+        e.showPercent = _parseBool(v);
+      case 'lastIsTotal':
+        e.lastIsTotal = _parseBool(v);
+      case 'bands':
+        final int? bands = int.tryParse(v.trim());
+        if (bands == null || bands < 0 || bands > 8) {
+          return false;
+        }
+        e.bands = bands;
+      case 'increaseColor':
+        e.increaseColor = _opt(v);
+      case 'decreaseColor':
+        e.decreaseColor = _opt(v);
+      case 'totalColor':
+        e.totalColor = _opt(v);
       default:
         return false;
     }

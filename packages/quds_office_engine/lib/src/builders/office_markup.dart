@@ -60,6 +60,8 @@ class ChartPoint {
     required this.label,
     required this.value,
     this.color = '4472C4',
+    this.x,
+    this.size,
   });
 
   /// label API.
@@ -71,12 +73,26 @@ class ChartPoint {
   /// color API.
   final String color;
 
+  /// Scatter / bubble X. Null uses the category index.
+  final double? x;
+
+  /// Bubble size. Null uses a fixed marker.
+  final double? size;
+
   /// copyWith API.
-  ChartPoint copyWith({String? label, double? value, String? color}) {
+  ChartPoint copyWith({
+    String? label,
+    double? value,
+    String? color,
+    double? x,
+    double? size,
+  }) {
     return ChartPoint(
       label: label ?? this.label,
       value: value ?? this.value,
       color: color ?? this.color,
+      x: x ?? this.x,
+      size: size ?? this.size,
     );
   }
 }

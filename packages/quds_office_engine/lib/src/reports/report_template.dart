@@ -86,7 +86,96 @@ enum ReportCoordinateOrigin {
 }
 
 /// Chart family drawn by a [ReportChartElement].
-enum ReportChartType { bar, horizontalBar, stackedBar, line, area, pie, donut }
+enum ReportChartType {
+  /// Clustered columns.
+  bar,
+
+  /// Clustered bars.
+  horizontalBar,
+
+  /// Stacked columns.
+  stackedBar,
+
+  /// Stacked columns normalized to 100%.
+  percentStackedBar,
+
+  /// Lines through category values.
+  line,
+
+  /// Filled lines.
+  area,
+
+  /// Areas stacked per category.
+  stackedArea,
+
+  /// Pie.
+  pie,
+
+  /// Donut.
+  donut,
+
+  /// Columns plus lines, with an optional secondary axis.
+  combo,
+
+  /// Floating steps from a running total.
+  waterfall,
+
+  /// Dial for one value against a minimum, maximum, and target.
+  gauge,
+
+  /// Bar against qualitative bands and a target mark.
+  bullet,
+
+  /// Stages as centered trapezoids.
+  funnel,
+
+  /// One dot per row, X against Y.
+  scatter,
+
+  /// Scatter whose dot area encodes a third measure.
+  bubble,
+
+  /// Series as polygons around a center.
+  radar,
+
+  /// Category × series matrix colored by value.
+  heatmap,
+
+  /// Compact line, area, or columns with no chrome.
+  sparkline,
+
+  /// Columns with an oblique top and side.
+  extrudedBar,
+
+  /// Pie with a visible thickness.
+  extrudedPie,
+
+  /// Donut with a visible thickness.
+  extrudedDonut,
+
+  /// Regions of a shape layer colored by value.
+  shapeMap;
+
+  /// Pie, donut, and their extruded forms.
+  bool get isPie =>
+      this == pie ||
+      this == donut ||
+      this == extrudedPie ||
+      this == extrudedDonut;
+
+  /// Oblique 3D drawing.
+  bool get isExtruded =>
+      this == extrudedBar || this == extrudedPie || this == extrudedDonut;
+
+  /// Each row is a point (no category aggregation).
+  bool get plotsPoints => this == scatter || this == bubble;
+
+  /// Closed regions colored by a measure.
+  bool get isShapeMap => this == shapeMap;
+}
+
+/// How one combo series is drawn.
+enum ReportSeriesStyle { column, line, area }
 
 /// How rows sharing a category are combined into one chart value.
 enum ReportChartAggregate { sum, avg, count, min, max, first, last }
@@ -856,39 +945,88 @@ class ReportShapeElement extends ReportElement {
 /// `<Series name="…" value="…" color="…"/>` — one plotted measure.
 class ReportChartSeries {
   /// ReportChartSeries API.
-  ReportChartSeries({this.name = '', this.value = '', this.color});
+  ReportChartSeries({
+    this.name = '',
+    this.value = '',
+    this.color,
+    this.x,
+    this.size,
+    this.style = ReportSeriesStyle.column,
+    this.secondary = false,
+  });
 
   /// Legend label (template text, `{{ }}` allowed).
   String name;
 
-  /// Expression evaluated per row (`Row.total`).
+  /// Expression evaluated per row (`Row.total`). The Y value of a point chart.
   String value;
 
   /// Hex color; null picks from the chart palette.
   String? color;
 
+  /// X expression for [ReportChartType.scatter] and [ReportChartType.bubble].
+  String? x;
+
+  /// Size expression for [ReportChartType.bubble].
+  String? size;
+
+  /// Column, line, or area when the chart is a [ReportChartType.combo].
+  ReportSeriesStyle style;
+
+  /// Plot this series on the secondary value axis.
+  bool secondary;
+
   /// Deep copy.
-  ReportChartSeries copy() =>
-      ReportChartSeries(name: name, value: value, color: color);
+  ReportChartSeries copy() => ReportChartSeries(
+    name: name,
+    value: value,
+    color: color,
+    x: x,
+    size: size,
+    style: style,
+    secondary: secondary,
+  );
 }
 
 /// `<Point label="…" value="…" color="…"/>` — a static data point.
 class ReportChartPoint {
   /// ReportChartPoint API.
-  ReportChartPoint({this.label = '', this.value = '', this.color});
+  ReportChartPoint({
+    this.label = '',
+    this.value = '',
+    this.color,
+    this.x,
+    this.size,
+    this.total = false,
+  });
 
   /// Category label (template text).
   String label;
 
-  /// Expression or number literal.
+  /// Expression or number literal. The Y value of a point chart.
   String value;
 
   /// Hex color (pie slices); null picks from the palette.
   String? color;
 
+  /// X expression for a scatter or bubble point.
+  String? x;
+
+  /// Size expression for a bubble point.
+  String? size;
+
+  /// Waterfall bar drawn from zero (an absolute total) instead of a step.
+  bool total;
+
   /// Deep copy.
-  ReportChartPoint copy() =>
-      ReportChartPoint(label: label, value: value, color: color);
+  ReportChartPoint copy() => ReportChartPoint(
+    label: label,
+    value: value,
+    color: color,
+    x: x,
+    size: size,
+    total: total,
+  );
 }
 
 /// Vector chart fed by a data set (one category per distinct
@@ -929,6 +1067,31 @@ class ReportChartElement extends ReportElement {
     this.borderColor,
     this.borderWidth = 0,
     List<String>? palette,
+    this.depth = 14,
+    this.skew = 32,
+    this.hole = 0.58,
+    this.startAngle = -90,
+    this.smooth = false,
+    this.showMarkers,
+    this.markerSize = 2.6,
+    this.lineWidth = 1.6,
+    this.axisMin,
+    this.axisMax,
+    this.axisMin2,
+    this.axisMax2,
+    this.target,
+    this.showPercent = false,
+    this.lastIsTotal = false,
+    this.bands = 3,
+    this.increaseColor,
+    this.decreaseColor,
+    this.totalColor,
+    this.shape = 'world',
+    this.shapeKey,
+    this.lowColor,
+    this.highColor,
+    this.emptyColor,
+    this.showLabels = true,
   }) : series = series ?? <ReportChartSeries>[],
        points = points ?? <ReportChartPoint>[],
        palette = palette ?? <String>[];
@@ -1013,9 +1176,93 @@ class ReportChartElement extends ReportElement {
   /// Custom colors; empty uses [defaultPalette].
   final List<String> palette;
 
-  /// Pie or donut.
-  bool get isRadial =>
-      chartType == ReportChartType.pie || chartType == ReportChartType.donut;
+  /// Extrusion depth in points for [ReportChartType.isExtruded] charts.
+  double depth;
+
+  /// Oblique angle in degrees (0 = flat side, 90 = straight up).
+  double skew;
+
+  /// Donut and gauge hole, as a fraction of the radius (0–0.9).
+  double hole;
+
+  /// Pie start in degrees. 0 is the right side; -90 is the top.
+  double startAngle;
+
+  /// Curve line, area, radar, and sparkline series.
+  bool smooth;
+
+  /// Point markers. Null follows the chart type.
+  bool? showMarkers;
+
+  /// Marker diameter in points.
+  double markerSize;
+
+  /// Stroke width of lines, in points.
+  double lineWidth;
+
+  /// Primary value-axis minimum. Null lets the scale choose.
+  double? axisMin;
+
+  /// Primary value-axis maximum. Null lets the scale choose.
+  double? axisMax;
+
+  /// Secondary value-axis minimum.
+  double? axisMin2;
+
+  /// Secondary value-axis maximum.
+  double? axisMax2;
+
+  /// Expression for the gauge or bullet target.
+  String? target;
+
+  /// Value labels are shares of the category (or of the pie).
+  bool showPercent;
+
+  /// The last waterfall category is an absolute total.
+  bool lastIsTotal;
+
+  /// Qualitative bands behind a gauge or bullet (0 hides them).
+  int bands;
+
+  /// Waterfall increase color. Null uses green.
+  String? increaseColor;
+
+  /// Waterfall decrease color. Null uses red.
+  String? decreaseColor;
+
+  /// Waterfall total color. Null uses slate.
+  String? totalColor;
+
+  /// Shape layer: `world` is the bundled country atlas; any other name is
+  /// a layer embedded in the `.qrep` (`shapes/<name>.qmap`).
+  String shape;
+
+  /// Attribute used as the region key when a shapefile or GeoJSON is
+  /// imported. Empty lets the importer choose a code or name column.
+  String? shapeKey;
+
+  /// Color of the smallest value. Null uses a light blue.
+  String? lowColor;
+
+  /// Color of the largest value. Null uses a deep blue.
+  String? highColor;
+
+  /// Color of a region with no value. Null uses gray.
+  String? emptyColor;
+
+  /// Draw the region name on areas wide enough to hold it.
+  bool showLabels;
+
+  /// Pie, donut, or an extruded form of either.
+  bool get isRadial => chartType.isPie;
+
+  /// Grid and axis toggles apply.
+  bool get showsCartesianAxes =>
+      !isRadial &&
+      chartType != ReportChartType.gauge &&
+      chartType != ReportChartType.sparkline &&
+      chartType != ReportChartType.funnel &&
+      !chartType.isShapeMap;
 
   /// Palette color [index] (wraps).
   String paletteColor(int index) {
@@ -1062,6 +1309,31 @@ class ReportChartElement extends ReportElement {
     borderColor: borderColor,
     borderWidth: borderWidth,
     palette: List<String>.of(palette),
+    depth: depth,
+    skew: skew,
+    hole: hole,
+    startAngle: startAngle,
+    smooth: smooth,
+    showMarkers: showMarkers,
+    markerSize: markerSize,
+    lineWidth: lineWidth,
+    axisMin: axisMin,
+    axisMax: axisMax,
+    axisMin2: axisMin2,
+    axisMax2: axisMax2,
+    target: target,
+    showPercent: showPercent,
+    lastIsTotal: lastIsTotal,
+    bands: bands,
+    increaseColor: increaseColor,
+    decreaseColor: decreaseColor,
+    totalColor: totalColor,
+    shape: shape,
+    shapeKey: shapeKey,
+    lowColor: lowColor,
+    highColor: highColor,
+    emptyColor: emptyColor,
+    showLabels: showLabels,
   );
 }
 

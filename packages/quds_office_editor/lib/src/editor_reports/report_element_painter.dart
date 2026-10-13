@@ -52,6 +52,7 @@ class ReportElementPainter {
     ReportElement e,
     Rect r,
     Map<String, Uint8List> images, {
+    Map<String, Uint8List> shapes = const <String, Uint8List>{},
     bool hideText = false,
     ReportFontRegistry? fonts,
   }) {
@@ -68,7 +69,7 @@ class ReportElementPainter {
       case ReportShapeElement():
         _paintShape(canvas, layout, e, r);
       case ReportChartElement():
-        _paintChart(canvas, t, e, r, fonts ?? _defaultFonts);
+        _paintChart(canvas, t, e, r, fonts ?? _defaultFonts, shapes);
     }
   }
 
@@ -732,6 +733,7 @@ class ReportElementPainter {
     ReportChartElement e,
     Rect r,
     ReportFontRegistry fonts,
+    Map<String, Uint8List> shapes,
   ) {
     final ReportColor bg = t.resolveColor(
       e.background,
@@ -740,7 +742,7 @@ class ReportElementPainter {
     if (bg.alpha > 0) {
       canvas.drawRect(r, Paint()..color = Color(bg.argb));
     }
-    final ReportChartData data = sampleChartData(t, e);
+    final ReportChartData data = sampleChartData(t, e, shapes: shapes);
     final String key = <Object?>[
       r.width,
       r.height,
@@ -760,6 +762,12 @@ class ReportElementPainter {
         s.values.join(','),
       ],
       for (final ReportColor c in data.pointColors) c.argb,
+      e.shape,
+      e.showLabels,
+      e.lowColor,
+      e.highColor,
+      e.emptyColor,
+      identityHashCode(shapes[e.shape]),
       e.fontFamily,
       e.fontSize,
       e.textColor,
@@ -816,8 +824,9 @@ class ReportElementPainter {
   /// for data-bound series (the real values come from the data source).
   static ReportChartData sampleChartData(
     ReportTemplate t,
-    ReportChartElement e,
-  ) {
+    ReportChartElement e, {
+    Map<String, Uint8List> shapes = const <String, Uint8List>{},
+  }) {
     ReportColor palette(int i) =>
         t.resolveColor(e.paletteColor(i), t.primaryColor);
     final List<String> categories = <String>[];
@@ -826,21 +835,38 @@ class ReportElementPainter {
     var varyColors = e.isRadial;
     if (e.series.isEmpty) {
       final List<double> values = <double>[];
+      final List<double> xs = <double>[];
+      final List<double> sizes = <double>[];
+      final List<bool> totals = <bool>[];
       for (int i = 0; i < e.points.length; i++) {
         final ReportChartPoint p = e.points[i];
         categories.add(p.label);
         values.add(double.tryParse(p.value.trim()) ?? _sample[i % 8]);
+        xs.add(double.tryParse(p.x?.trim() ?? '') ?? (i + 1).toDouble());
+        sizes.add(double.tryParse(p.size?.trim() ?? '') ?? (4 + i).toDouble());
+        totals.add(p.total || (e.lastIsTotal && i == e.points.length - 1));
         pointColors.add(
           p.color == null ? palette(i) : t.resolveColor(p.color, palette(i)),
         );
         varyColors = varyColors || p.color != null;
       }
       series.add(
-        ReportChartSeriesData(name: '', color: palette(0), values: values),
+        ReportChartSeriesData(
+          name: '',
+          color: palette(0),
+          values: values,
+          xs: xs,
+          sizes: sizes,
+          totals: totals,
+        ),
       );
     } else {
-      final List<String> labels = t.isRtl ? _arabic : _latin;
-      final int n = e.limit > 0 && e.limit < labels.length
+      final List<String> labels = e.chartType.isShapeMap
+          ? const <String>['LY', 'EG', 'SA', 'US', 'FR', 'CN', 'BR', 'IN']
+          : (t.isRtl ? _arabic : _latin);
+      final int n = e.chartType.isShapeMap
+          ? labels.length
+          : e.limit > 0 && e.limit < labels.length
           ? e.limit
           : (e.isRadial ? 4 : 5);
       for (int i = 0; i < n; i++) {
@@ -861,6 +887,10 @@ class ReportElementPainter {
               for (int i = 0; i < n; i++)
                 _sample[(i + 3 * s) % 8] * (1 + s / 4),
             ],
+            xs: <double>[for (int i = 0; i < n; i++) (i + 1).toDouble()],
+            sizes: <double>[for (int i = 0; i < n; i++) 4 + i.toDouble()],
+            style: def.style,
+            secondary: def.secondary,
           ),
         );
       }
@@ -874,11 +904,7 @@ class ReportElementPainter {
           });
         for (int s = 0; s < series.length; s++) {
           final ReportChartSeriesData d = series[s];
-          series[s] = ReportChartSeriesData(
-            name: d.name,
-            color: d.color,
-            values: <double>[for (final int i in order) d.values[i]],
-          );
+          series[s] = d.pick(order);
         }
         final List<String> sorted = <String>[
           for (final int i in order) categories[i],
@@ -901,6 +927,31 @@ class ReportElementPainter {
       showGrid: e.showGrid,
       showAxes: e.showAxes,
       valueFormat: e.valueFormat,
+      depth: e.depth,
+      skew: e.skew,
+      hole: e.hole,
+      startAngle: e.startAngle,
+      smooth: e.smooth,
+      showMarkers: e.showMarkers,
+      markerSize: e.markerSize,
+      lineWidth: e.lineWidth,
+      axisMin: e.axisMin,
+      axisMax: e.axisMax,
+      axisMin2: e.axisMin2,
+      axisMax2: e.axisMax2,
+      showPercent: e.showPercent,
+      lastIsTotal: e.lastIsTotal,
+      bands: e.bands,
+      increase: t.resolveColor(e.increaseColor, const ReportColor(0xFF2E7D32)),
+      decrease: t.resolveColor(e.decreaseColor, const ReportColor(0xFFC62828)),
+      total: t.resolveColor(e.totalColor, const ReportColor(0xFF37474F)),
+      shapes: e.chartType.isShapeMap
+          ? ReportShapes.resolve(e.shape, shapes)
+          : null,
+      showLabels: e.showLabels,
+      low: t.resolveColor(e.lowColor, const ReportColor(0xFFDEEBF7)),
+      high: t.resolveColor(e.highColor, const ReportColor(0xFF08306B)),
+      empty: t.resolveColor(e.emptyColor, const ReportColor(0xFFE4E4E4)),
     );
   }
 

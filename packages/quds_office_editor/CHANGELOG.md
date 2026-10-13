@@ -2,6 +2,26 @@
 
 All notable changes to `quds_office_editor` are documented here.
 
+## 1.3.0
+
+Built on `quds_office_engine` 1.3.0.
+
+- The chart inspector lists the new types (including the scatter chart) and
+  the plot controls that apply to the selected type: depth and skew for
+  extruded charts, hole and start angle for pies and gauges, markers and
+  curves for lines, axis bounds, a target and bands for gauges and bullets,
+  and per-series style, secondary axis, X, and size.
+- Bundled templates include a chart gallery (`chart_gallery_ar` and
+  `chart_gallery_en`) with every chart type and a country shape map bound
+  to its own `countries` table.
+- A shape map chooses the world atlas or an imported shapefile, GeoJSON, or
+  `.qmap`. **Import shapes…** embeds the file in the `.qrep` and points the
+  region key at the table column that matches it (a district code, for
+  example). The inspector also sets the low, high, and empty colors and
+  whether wide regions are labeled.
+- Calculated columns stay in their table. A formula in that table can name a
+  sibling column directly (`price`) as well as `item.price`.
+
 ## 1.2.0
 
 Built on `quds_office_engine` 1.2.0.

@@ -871,6 +871,27 @@ class PptxDeckBuilder {
         rtl: rtl,
         theme: theme,
       ),
+      ChartKind.percentStackedBar ||
+      ChartKind.stackedArea ||
+      ChartKind.radar ||
+      ChartKind.combo => DrawingmlCharts.multiSeries(
+        title: title,
+        series: series.isEmpty
+            ? <ChartSeries>[ChartSeries(name: title, points: points)]
+            : series,
+        rtl: rtl,
+        kind: kind,
+        theme: theme,
+      ),
+      ChartKind.scatter || ChartKind.bubble => DrawingmlCharts.xy(
+        title: title,
+        series: series.isEmpty
+            ? <ChartSeries>[ChartSeries(name: title, points: points)]
+            : series,
+        rtl: rtl,
+        bubble: kind == ChartKind.bubble,
+        theme: theme,
+      ),
     };
   }
 

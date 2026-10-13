@@ -2,7 +2,7 @@ name: quds_office_engine
 description: >-
   Pure Dart Office, PDF, and report engine: DOCX/XLSX/PPTX, formulas, BiDi/RTL,
   PdfFile, pdf_widgets, and .qrep band reports exported to PDF, XLSX, and DOCX.
-version: 1.2.0
+version: 1.3.0
 homepage: https://github.com/MohammedAsaadAsaad/quds_office_suite
 repository: https://github.com/MohammedAsaadAsaad/quds_office_suite/tree/main/packages/quds_office_engine
 issue_tracker: https://github.com/MohammedAsaadAsaad/quds_office_suite/issues
@@ -32,10 +32,10 @@ screenshots:
     path: example/screenshots/report_certificate_ar.png
   - description: "The same report exported to XLSX with native Excel charts and typed cells."
     path: example/screenshots/report_sales_performance_xlsx.png
-  - description: "PDF widgets: invoice composed with Document / Table / MultiPage."
-    path: example/screenshots/pdf_widgets.png
-  - description: "Office to PDF: RTL formal letter exported to PDF 1.7."
-    path: example/screenshots/office_rtl.png
+  - description: "Chart gallery: pie, waterfall, funnel, gauge, bullet, scatter, and bubble, drawn as vectors."
+    path: example/screenshots/report_chart_gallery.png
+  - description: "Shape map: countries colored from a table, with a legend and labels on wide regions."
+    path: example/screenshots/report_shape_map.png
 
 platforms:
   android:
