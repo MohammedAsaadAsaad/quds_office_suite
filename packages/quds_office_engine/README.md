@@ -101,12 +101,12 @@ shape map.
 
 | Platform | Installer | Portable |
 | --- | --- | --- |
-| Windows 10/11 (x64) | [QudsReportStudio-1.2.0-windows-x64-setup.exe](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.2.0/QudsReportStudio-1.2.0-windows-x64-setup.exe) | [QudsReportStudio-1.2.0-windows-x64-portable.zip](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.2.0/QudsReportStudio-1.2.0-windows-x64-portable.zip) |
-| Debian / Ubuntu (x64) | [quds-report-studio_1.2.0_amd64.deb](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.2.0/quds-report-studio_1.2.0_amd64.deb) | [QudsReportStudio-1.2.0-linux-x64.tar.gz](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.2.0/QudsReportStudio-1.2.0-linux-x64.tar.gz) |
+| Windows 10/11 (x64) | [QudsReportStudio-1.4.0-windows-x64-setup.exe](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.4.0/QudsReportStudio-1.4.0-windows-x64-setup.exe) | [QudsReportStudio-1.4.0-windows-x64-portable.zip](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.4.0/QudsReportStudio-1.4.0-windows-x64-portable.zip) |
+| Debian / Ubuntu (x64) | [quds-report-studio_1.4.0_amd64.deb](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.4.0/quds-report-studio_1.4.0_amd64.deb) | [QudsReportStudio-1.4.0-linux-x64.tar.gz](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.4.0/QudsReportStudio-1.4.0-linux-x64.tar.gz) |
 
 - **Windows:** run the setup. It doesn't need admin rights unless you
   choose "all users". Uninstall it from *Settings › Apps*.
-- **Debian / Ubuntu:** `sudo apt install ./quds-report-studio_1.2.0_amd64.deb`,
+- **Debian / Ubuntu:** `sudo apt install ./quds-report-studio_1.4.0_amd64.deb`,
   and `sudo apt remove quds-report-studio` to uninstall.
 - **Other Linux distributions:** extract the tar.gz and run `./install.sh`
   (per user, no root). Run `~/.local/opt/quds-report-studio/uninstall.sh`
@@ -115,7 +115,7 @@ shape map.
   for `.qrep` files, so double-clicking a report opens it in the studio.
 
 All files and SHA-256 checksums are on the
-[release page](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/tag/studio-v1.2.0).
+[release page](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/tag/studio-v1.4.0).
 
 <table>
   <tr>
@@ -258,7 +258,7 @@ along the diagonal — Arabic cannot be cut glyph by glyph and still join.
 
 ```yaml
 dependencies:
-  quds_office_engine: ^1.2.0
+  quds_office_engine: ^1.4.0
 ```
 
 ```bash

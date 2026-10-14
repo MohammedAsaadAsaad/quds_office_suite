@@ -5,6 +5,16 @@ This repository is a Dart workspace. Each published package keeps its own change
 - [`packages/quds_office_engine/CHANGELOG.md`](packages/quds_office_engine/CHANGELOG.md)
 - [`packages/quds_office_editor/CHANGELOG.md`](packages/quds_office_editor/CHANGELOG.md)
 
+## 1.4.0 / 1.4.0
+
+Engine **1.4.0**, editor **1.4.0**, and Report Studio **1.4.0**.
+
+- A shape map labels each region from an attribute, a calculated column, or
+  a formula. The title, the region labels, and the legend each keep their
+  own font.
+- The designer puts insert tools in a side toolbox, and the map is its own
+  tool. Title, labels, and the legend each open a format box.
+
 ## 1.2.0 / 1.2.0
 
 Engine **1.2.0**, editor **1.2.0**, and Report Studio **1.2.0**.

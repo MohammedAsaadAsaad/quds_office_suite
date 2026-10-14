@@ -41,10 +41,10 @@ document.
 > **Try the report designer without writing code:**
 > [Quds Report Studio](#quds-report-studio-app) is a desktop app built on
 > `QudsReportDesigner`. Download the
-> [Windows installer](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.2.0/QudsReportStudio-1.2.0-windows-x64-setup.exe)
+> [Windows installer](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.4.0/QudsReportStudio-1.4.0-windows-x64-setup.exe)
 > or the
-> [Linux .deb](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.2.0/quds-report-studio_1.2.0_amd64.deb)
-> ([all downloads](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/tag/studio-v1.2.0)).
+> [Linux .deb](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.4.0/quds-report-studio_1.4.0_amd64.deb)
+> ([all downloads](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/tag/studio-v1.4.0)).
 
 ## What 1.0 brings
 
@@ -111,7 +111,7 @@ explorer, and it is offered at once inside `{{ }}`, with its computed value:
 
 ```yaml
 dependencies:
-  quds_office_editor: ^1.2.0
+  quds_office_editor: ^1.4.0
 ```
 
 ```bash
@@ -119,7 +119,7 @@ flutter pub add quds_office_editor
 ```
 
 Requires Flutter **3.44+** and Dart **3.12+**. The engine comes along as
-`quds_office_engine: ^1.2.0`. Everything is exported from one library:
+`quds_office_engine: ^1.4.0`. Everything is exported from one library:
 
 ```dart
 import 'package:quds_office_editor/quds_office_editor.dart';
@@ -625,13 +625,13 @@ Download it:
 
 | Platform | Installer | Portable |
 | --- | --- | --- |
-| Windows 10/11 (x64) | [QudsReportStudio-1.2.0-windows-x64-setup.exe](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.2.0/QudsReportStudio-1.2.0-windows-x64-setup.exe) | [QudsReportStudio-1.2.0-windows-x64-portable.zip](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.2.0/QudsReportStudio-1.2.0-windows-x64-portable.zip) |
-| Debian / Ubuntu (x64) | [quds-report-studio_1.2.0_amd64.deb](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.2.0/quds-report-studio_1.2.0_amd64.deb) | [QudsReportStudio-1.2.0-linux-x64.tar.gz](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.2.0/QudsReportStudio-1.2.0-linux-x64.tar.gz) |
+| Windows 10/11 (x64) | [QudsReportStudio-1.4.0-windows-x64-setup.exe](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.4.0/QudsReportStudio-1.4.0-windows-x64-setup.exe) | [QudsReportStudio-1.4.0-windows-x64-portable.zip](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.4.0/QudsReportStudio-1.4.0-windows-x64-portable.zip) |
+| Debian / Ubuntu (x64) | [quds-report-studio_1.4.0_amd64.deb](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.4.0/quds-report-studio_1.4.0_amd64.deb) | [QudsReportStudio-1.4.0-linux-x64.tar.gz](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.4.0/QudsReportStudio-1.4.0-linux-x64.tar.gz) |
 
 - **Windows:** run the setup. It doesn't need admin rights unless you
   choose "all users". Uninstall it from *Settings › Apps*. The portable zip
   runs in place, and `unregister-qrep.cmd` removes its file association.
-- **Debian / Ubuntu:** `sudo apt install ./quds-report-studio_1.2.0_amd64.deb`,
+- **Debian / Ubuntu:** `sudo apt install ./quds-report-studio_1.4.0_amd64.deb`,
   and `sudo apt remove quds-report-studio` to uninstall.
 - **Other Linux distributions:** extract the tar.gz and run `./install.sh`
   (per user, no root). Run `~/.local/opt/quds-report-studio/uninstall.sh`
