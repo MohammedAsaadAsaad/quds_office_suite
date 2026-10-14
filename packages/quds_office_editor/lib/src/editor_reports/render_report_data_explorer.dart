@@ -246,6 +246,14 @@ class RenderReportDataExplorer extends RenderBox {
 
   Rect get _sidebar => Rect.fromLTWH(0, 0, _sideWidth, size.height);
 
+  /// Field tree under the "Field Explorer" title.
+  Rect get _sideView => Rect.fromLTRB(0, 36, _sideWidth, size.height);
+
+  double _sideExtent(int count) => 38 + count * sideRowHeight;
+
+  double _sideMaxScroll(int count) =>
+      math.max(0.0, _sideExtent(count) - size.height);
+
   Rect get _main => Rect.fromLTRB(_sideWidth, 0, size.width, size.height);
 
   Rect get _grid =>
@@ -380,9 +388,13 @@ class RenderReportDataExplorer extends RenderBox {
     }
     final ReportDataTableView t = _controller.dataTable;
     if (event is PointerPanZoomUpdateEvent) {
-      _scroll -= event.localPanDelta;
-      _clamp(t);
-      markNeedsPaint();
+      if (_sidebar.contains(event.localPosition)) {
+        _scrollSide(event.localPanDelta.dy);
+      } else {
+        _scroll -= event.localPanDelta;
+        _clamp(t);
+        markNeedsPaint();
+      }
       return;
     }
     if (event is PointerHoverEvent) {
@@ -396,7 +408,11 @@ class RenderReportDataExplorer extends RenderBox {
       return;
     }
     if (event is PointerMoveEvent && _scrollDrag.isNotEmpty) {
-      _dragScrollbar(event.localPosition, t);
+      if (_scrollDrag == 'sv') {
+        _dragSideScrollbar(event.localPosition);
+      } else {
+        _dragScrollbar(event.localPosition, t);
+      }
       return;
     }
     if (event is PointerUpEvent || event is PointerCancelEvent) {
@@ -409,8 +425,7 @@ class RenderReportDataExplorer extends RenderBox {
       return;
     }
     if (_sidebar.contains(event.localPosition)) {
-      _sideScroll = math.max(0, _sideScroll + event.scrollDelta.dy);
-      markNeedsPaint();
+      _scrollSide(event.scrollDelta.dy);
       return;
     }
     _scroll += HardwareKeyboard.instance.isShiftPressed
@@ -420,9 +435,71 @@ class RenderReportDataExplorer extends RenderBox {
     markNeedsPaint();
   }
 
+  void _scrollSide(double dy) {
+    final int count = _sideSpecs(_controller.strings).length;
+    _sideScroll = (_sideScroll + dy).clamp(0, _sideMaxScroll(count)).toDouble();
+    markNeedsPaint();
+  }
+
+  /// Thumb of the field-tree scrollbar, or null when every row fits.
+  Rect? get sidebarScrollbar => _sideBar()?.thumb;
+
+  ({Rect track, Rect thumb})? _sideBar() {
+    final int count = _sideSpecs(_controller.strings).length;
+    final double max = _sideMaxScroll(count);
+    final Rect view = _sideView;
+    if (max <= 0 || view.height <= 0) {
+      return null;
+    }
+    final double content = view.height + max;
+    final Rect track = Rect.fromLTWH(
+      view.right - _bar,
+      view.top,
+      _bar,
+      view.height,
+    );
+    final double h = math.max(24, view.height * view.height / content);
+    final double y = view.top + (view.height - h) * _sideScroll / max;
+    return (track: track, thumb: Rect.fromLTWH(track.left + 2, y, _bar - 4, h));
+  }
+
+  bool _startSideScrollbar(Offset p) {
+    final ({Rect track, Rect thumb})? bar = _sideBar();
+    if (bar == null || !bar.track.contains(p)) {
+      return false;
+    }
+    _scrollDrag = 'sv';
+    _dragStart = p.dy;
+    _dragScroll = _sideScroll;
+    if (!bar.thumb.contains(p)) {
+      final double page = _sideView.height;
+      _scrollSide(p.dy < bar.thumb.top ? -page : page);
+      _dragScroll = _sideScroll;
+    }
+    return true;
+  }
+
+  void _dragSideScrollbar(Offset p) {
+    final ({Rect track, Rect thumb})? bar = _sideBar();
+    if (bar == null) {
+      return;
+    }
+    final int count = _sideSpecs(_controller.strings).length;
+    final double max = _sideMaxScroll(count);
+    final double free = _sideView.height - bar.thumb.height;
+    final double ratio = free <= 0 ? 0 : max / free;
+    _sideScroll = (_dragScroll + (p.dy - _dragStart) * ratio)
+        .clamp(0, max)
+        .toDouble();
+    markNeedsPaint();
+  }
+
   void _onDown(PointerDownEvent event, ReportDataTableView t) {
     final Offset p = event.localPosition;
     final bool secondary = event.buttons & kSecondaryMouseButton != 0;
+    if (!secondary && _startSideScrollbar(p)) {
+      return;
+    }
     final bool quick =
         event.timeStamp - _lastTap < const Duration(milliseconds: 400) &&
         (p - _lastTapPos).distance < 6;
@@ -430,7 +507,7 @@ class RenderReportDataExplorer extends RenderBox {
     _lastTapPos = p;
 
     for (final _SideHit h in _sideHits) {
-      if (!h.rect.contains(p)) {
+      if (!_sideView.contains(p) || !h.rect.contains(p)) {
         continue;
       }
       final bool chevron = h.twist > 0 && p.dx < h.twist;
@@ -712,12 +789,47 @@ class RenderReportDataExplorer extends RenderBox {
   }
 
   void _toggle(String key) {
-    if (_collapsed.contains(key)) {
+    final bool opening = _collapsed.contains(key);
+    if (opening) {
       _collapsed.remove(key);
     } else {
       _collapsed.add(key);
     }
+    if (opening) {
+      final List<_SideSpec> specs = _sideSpecs(_controller.strings);
+      final int index = specs.indexWhere((_SideSpec s) => s.toggle == key);
+      if (index >= 0) {
+        final double top = 38 + index * sideRowHeight;
+        if (top - _sideScroll > size.height - sideRowHeight * 4) {
+          _sideScroll = (top - 42)
+              .clamp(0, _sideMaxScroll(specs.length))
+              .toDouble();
+        }
+      }
+    }
     markNeedsPaint();
+  }
+
+  void _ensureSideRow(ReportDataTableView current) {
+    final List<_SideSpec> specs = _sideSpecs(_controller.strings);
+    var index = -1;
+    for (int i = 0; i < specs.length; i++) {
+      if (_sideSelected(specs[i], current)) {
+        index = i;
+        break;
+      }
+    }
+    if (index < 0) {
+      return;
+    }
+    final double top = 38 + index * sideRowHeight;
+    final double bottom = top + sideRowHeight;
+    if (top - _sideScroll < 36) {
+      _sideScroll = top - 38;
+    } else if (bottom - _sideScroll > size.height) {
+      _sideScroll = bottom - size.height;
+    }
+    _sideScroll = _sideScroll.clamp(0, _sideMaxScroll(specs.length)).toDouble();
   }
 
   Rect _cellRect(ReportDataTableView t, int row, int column, Rect body) {
@@ -745,6 +857,7 @@ class RenderReportDataExplorer extends RenderBox {
       }
       _shown = shown;
       _ensureVisible(t, _controller.dataRow, _controller.dataColumn);
+      _ensureSideRow(t);
     }
     _clamp(t);
     canvas.save();
@@ -772,17 +885,16 @@ class RenderReportDataExplorer extends RenderBox {
     _buttons.remove('table+');
     _buttons.remove('formula+');
     final List<_SideSpec> specs = _sideSpecs(s);
-    final double maxScroll = math.max(
-      0,
-      specs.length * sideRowHeight + 40 - side.height,
-    );
+    final double maxScroll = _sideMaxScroll(specs.length);
     _sideScroll = _sideScroll.clamp(0, maxScroll).toDouble();
+    final ({Rect track, Rect thumb})? bar = _sideBar();
     _sideHits.clear();
     canvas.save();
     canvas.clipRect(Rect.fromLTRB(0, 36, side.right - 1, side.bottom));
     var y = 38 - _sideScroll;
+    final double rowRight = side.width - 6 - (bar == null ? 0 : _bar);
     for (final _SideSpec spec in specs) {
-      final Rect r = Rect.fromLTWH(2, y, side.width - 6, sideRowHeight - 2);
+      final Rect r = Rect.fromLTWH(2, y, rowRight - 2, sideRowHeight - 2);
       final double indent = 6 + spec.depth * 13;
       final double twist = spec.toggle == null ? 0 : indent + 14;
       _sideHits.add(
@@ -864,6 +976,13 @@ class RenderReportDataExplorer extends RenderBox {
       y += sideRowHeight;
     }
     canvas.restore();
+    if (bar != null) {
+      canvas.drawRect(bar.track, Paint()..color = _theme.headerFill);
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(bar.thumb, const Radius.circular(3)),
+        Paint()..color = _ink.withValues(alpha: 0.45),
+      );
+    }
   }
 
   bool _sideSelected(_SideSpec spec, ReportDataTableView current) {

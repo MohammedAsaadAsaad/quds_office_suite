@@ -186,6 +186,23 @@ class QudsReportXmlParser {
     return null;
   }
 
+  void _readTextStyle(
+    ReportTextStyle style,
+    XmlElement e,
+    List<String> family,
+    List<String> size,
+    List<String> bold,
+    List<String> italic,
+    List<String> color,
+    String path,
+  ) {
+    style.fontFamily = _attr(e, family);
+    style.fontSize = _num(e, size, path);
+    style.bold = _bool(e, bold, path);
+    style.italic = _bool(e, italic, path);
+    style.color = _color(e, color, path);
+  }
+
   bool? _bool(XmlElement e, List<String> names, String path) {
     final String? raw = _attr(e, names);
     if (raw == null) {
@@ -1077,6 +1094,9 @@ class QudsReportXmlParser {
       'highcolor',
       'emptycolor',
       'showlabels',
+      'regioncolor',
+      'colorfield',
+      'labelfield',
     },
   };
 
@@ -1397,6 +1417,8 @@ class QudsReportXmlParser {
     c.valueFormat = _attr(e, const <String>['valueFormat', 'format']);
     c.fontSize = _num(e, const <String>['fontSize'], path) ?? 7.5;
     c.fontFamily = _attr(e, const <String>['fontFamily', 'font']);
+    c.bold = _bool(e, const <String>['bold'], path) ?? false;
+    c.italic = _bool(e, const <String>['italic'], path) ?? false;
     c.textColor = _color(e, const <String>['color', 'foreColor'], path);
     c.background = _color(e, const <String>['background', 'backColor'], path);
     c.borderColor = _color(e, const <String>['borderColor'], path);
@@ -1441,6 +1463,41 @@ class QudsReportXmlParser {
     c.highColor = _color(e, const <String>['highColor'], path);
     c.emptyColor = _color(e, const <String>['emptyColor'], path);
     c.showLabels = _bool(e, const <String>['showLabels'], path) ?? true;
+    c.labelField = _attr(e, const <String>['labelField']);
+    _readTextStyle(
+      c.titleStyle,
+      e,
+      const <String>['titleFont', 'titleFamily'],
+      const <String>['titleSize', 'titleFontSize'],
+      const <String>['titleBold'],
+      const <String>['titleItalic'],
+      const <String>['titleColor'],
+      path,
+    );
+    _readTextStyle(
+      c.labelStyle,
+      e,
+      const <String>['labelFont', 'labelFamily'],
+      const <String>['labelSize', 'labelFontSize'],
+      const <String>['labelBold'],
+      const <String>['labelItalic'],
+      const <String>['labelColor'],
+      path,
+    );
+    _readTextStyle(
+      c.legendStyle,
+      e,
+      const <String>['legendFont', 'legendFamily'],
+      const <String>['legendSize', 'legendFontSize'],
+      const <String>['legendBold'],
+      const <String>['legendItalic'],
+      const <String>['legendColor'],
+      path,
+    );
+    c.regionColor = _expr(
+      _attr(e, const <String>['regionColor', 'colorField']),
+      '$path@regionColor',
+    );
     for (final XmlElement child in e.childElements) {
       switch (child.localName) {
         case 'Series':
@@ -1949,6 +2006,16 @@ class QudsReportXmlWriter {
       ...e.extraAttributes,
     };
     String align(ReportTextAlign a) => a.name;
+    Map<String, String> styleAttrs(String prefix, ReportTextStyle style) =>
+        <String, String>{
+          if (style.fontFamily != null && style.fontFamily!.trim().isNotEmpty)
+            '${prefix}Font': style.fontFamily!.trim(),
+          if (style.fontSize != null) '${prefix}Size': pt(style.fontSize!),
+          if (style.bold == true) '${prefix}Bold': 'true',
+          if (style.italic == true) '${prefix}Italic': 'true',
+          if (style.color != null && style.color!.trim().isNotEmpty)
+            '${prefix}Color': style.color!.trim(),
+        };
     switch (e) {
       case ReportTextElement():
         final ReportTextStyle s = e.style;
@@ -2083,6 +2150,8 @@ class QudsReportXmlWriter {
           if (e.valueFormat != null) 'valueFormat': e.valueFormat!,
           if (e.fontSize != 7.5) 'fontSize': pt(e.fontSize),
           if (e.fontFamily != null) 'fontFamily': e.fontFamily!,
+          if (e.bold) 'bold': 'true',
+          if (e.italic) 'italic': 'true',
           if (e.textColor != null) 'color': e.textColor!,
           if (e.background != null) 'background': e.background!,
           if (e.borderColor != null) 'borderColor': e.borderColor!,
@@ -2114,6 +2183,13 @@ class QudsReportXmlWriter {
           if (e.highColor != null) 'highColor': e.highColor!,
           if (e.emptyColor != null) 'emptyColor': e.emptyColor!,
           if (!e.showLabels) 'showLabels': 'false',
+          if (e.labelField != null && e.labelField!.isNotEmpty)
+            'labelField': e.labelField!,
+          ...styleAttrs('title', e.titleStyle),
+          ...styleAttrs('label', e.labelStyle),
+          ...styleAttrs('legend', e.legendStyle),
+          if (e.regionColor != null && e.regionColor!.isNotEmpty)
+            'regionColor': e.regionColor!,
           ...tail,
         };
         if (e.series.isEmpty && e.points.isEmpty) {

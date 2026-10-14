@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart' show MaterialApp;
+import 'package:flutter/material.dart' show MaterialApp, Theme, ThemeData;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -561,6 +561,286 @@ void main() {
       expect(fills, containsAll(<int>[0xFFDEEBF7, 0xFF08306B]));
       c.dispose();
       back.dispose();
+    });
+
+    test('a map is its own tool and its file can be removed', () async {
+      final ReportDesignerController c = ReportDesignerController();
+      c.loadXml(
+        '<QudsReport name="Map" pageSize="A4"><Bands>'
+        '<ReportHeader height="90mm"/></Bands></QudsReport>',
+      );
+      expect(c.addDataTable('regions'), isTrue);
+      expect(
+        c.addDataColumn(
+          name: 'code',
+          type: ReportDataType.text,
+          table: 'regions',
+        ),
+        'code',
+      );
+      expect(
+        c.addDataColumn(
+          name: 'color',
+          type: ReportDataType.text,
+          table: 'regions',
+        ),
+        'color',
+      );
+      final ReportElement? chart = c.addElement(
+        ReportDesignTool.chart,
+        ReportBandKind.reportHeader,
+        const ReportRect(10 * mm, 0, 0, 0),
+      );
+      expect(
+        c.properties
+            .firstWhere((ReportProperty p) => p.key == 'chartType')
+            .options,
+        isNot(contains('shapeMap')),
+      );
+      final ReportElement? added = c.addElement(
+        ReportDesignTool.map,
+        ReportBandKind.reportHeader,
+        const ReportRect(20 * mm, 0, 0, 0),
+      );
+      final ReportChartElement map = added! as ReportChartElement;
+      expect(map.chartType, ReportChartType.shapeMap);
+      expect(chart, isA<ReportChartElement>());
+      final Iterable<String> keys = c.properties.map(
+        (ReportProperty p) => p.key,
+      );
+      expect(keys, isNot(contains('chartType')));
+      expect(keys, contains('regionColor'));
+      c.setProperty('dataSet', 'Data.regions');
+      expect(map.category, 'Row.code');
+      expect(map.regionColor, 'Row.color');
+      ReportProperty field(String key) =>
+          c.properties.firstWhere((ReportProperty p) => p.key == key);
+      expect(field('dataSet').kind, ReportPropertyKind.choice);
+      expect(field('dataSet').options, contains('Data.regions'));
+      expect(field('category').kind, ReportPropertyKind.choice);
+      expect(field('category').options, contains('Row.code'));
+      expect(field('regionColor').options, contains(''));
+      expect(field('regionColor').options, contains('Row.color'));
+      expect(field('title.fontFamily').nest, 'title');
+      expect(field('labels.fontSize').nest, 'labels');
+      expect(field('legend.color').nest, 'legend');
+      c.toggleFormatBox('title');
+      expect(c.formatBox, 'title');
+      c.setProperty('title.fontFamily', 'Liberation Serif');
+      c.setProperty('title.fontSize', '18');
+      c.setProperty('title.bold', 'true');
+      c.setProperty('title.color', '#112233');
+      c.setProperty('labels.fontSize', '11');
+      c.setProperty('labels.italic', 'true');
+      c.setProperty('legend.fontSize', '8');
+      c.setProperty('legend.color', '#445566');
+      expect(map.titleStyle.fontFamily, 'Liberation Serif');
+      expect(map.titleStyle.fontSize, 18);
+      expect(map.titleStyle.bold, isTrue);
+      expect(map.titleStyle.color, '#112233');
+      expect(map.labelStyle.fontSize, 11);
+      expect(map.labelStyle.italic, isTrue);
+      expect(map.legendStyle.fontSize, 8);
+      expect(map.legendStyle.color, '#445566');
+      c.toggleFormatBox('title');
+      expect(c.formatBox, isNull);
+
+      c.shapePicker = () async => (
+        name: 'districts.geojson',
+        bytes: Uint8List.fromList(
+          utf8.encode(
+            '{"type":"FeatureCollection","features":[{"type":"Feature",'
+            '"properties":{"code":"W","title":"Ramallah"},"geometry":{"type":"Polygon",'
+            '"coordinates":[[[35.2,31.5],[35.3,31.5],[35.3,31.6],[35.2,31.5]]]}}]}',
+          ),
+        ),
+        attributes: null,
+      );
+      expect(await c.importShape(), 'districts');
+      expect(c.shapes.containsKey('districts'), isTrue);
+      expect(field('shapeKey').kind, ReportPropertyKind.choice);
+      expect(field('shapeKey').options, containsAll(<String>['code', 'title']));
+      expect(map.labelField, 'title');
+      expect(field('labelField').kind, ReportPropertyKind.expression);
+      expect(
+        field('labelField').presets,
+        containsAll(<String>['code', 'title']),
+      );
+      expect(field('labelField').presets, isNot(contains('{{item.code}}')));
+      expect(field('labelField').presets, isNot(contains('color')));
+      expect(c.addDataColumn(expression: 'code'), 'calc1');
+      expect(c.addConstantColumn(value: 'حي'), 'constant1');
+      c.cancelPropertyEdit();
+      expect(
+        field('labelField').presets,
+        containsAll(<String>['calc1', 'constant1']),
+      );
+      c.beginPropertyEdit('labelField');
+      c.propertyEditor.replaceRange(
+        0,
+        c.propertyEditor.formulaBar.length,
+        'CONCAT(',
+      );
+      final ReportCompletionResult? suggestions = c.completion;
+      expect(suggestions, isNotNull);
+      final List<String> inserts = <String>[
+        for (final ReportCompletionItem i in suggestions!.items) i.insert,
+      ];
+      expect(inserts, containsAll(<String>['code', 'title', 'Row']));
+      expect(inserts, isNot(contains('item')));
+      expect(inserts.indexOf('code'), lessThan(inserts.indexOf('Data')));
+      c.cancelPropertyEdit();
+      c.setProperty('labelField', '{{CONCAT(Row.title, "\\n", Row.code)}}');
+      expect(map.labelField, '{{CONCAT(Row.title, "\\n", Row.code)}}');
+      c.setProperty('labelField', 'title');
+      c.setProperty('showLabels', 'false');
+      expect(
+        c.properties.map((ReportProperty p) => p.key),
+        isNot(contains('labelField')),
+      );
+      c.setProperty('showLabels', 'true');
+      expect(
+        c.properties.map((ReportProperty p) => p.key),
+        contains('shape.remove'),
+      );
+      c.setProperty('shape.remove', 'Remove map file');
+      expect(c.shapes.containsKey('districts'), isFalse);
+      expect(map.shape, 'world');
+      c.undo();
+      expect(c.shapes.containsKey('districts'), isTrue);
+      final ReportChartElement restored = c.template.allElements
+          .map(((ReportBand, ReportElement) pair) => pair.$2)
+          .whereType<ReportChartElement>()
+          .firstWhere((ReportChartElement e) => e.chartType.isShapeMap);
+      expect(restored.shape, 'districts');
+      c.dispose();
+    });
+
+    test('a map file opens as a data table', () async {
+      final ReportDesignerController c = ReportDesignerController();
+      c.loadXml(
+        '<QudsReport name="Map" pageSize="A4"><Bands>'
+        '<ReportHeader height="90mm"/></Bands></QudsReport>',
+      );
+      c.addElement(
+        ReportDesignTool.map,
+        ReportBandKind.reportHeader,
+        const ReportRect(12 * mm, 0, 0, 0),
+      );
+      c.shapePicker = () async => (
+        name: 'districts.geojson',
+        bytes: Uint8List.fromList(
+          utf8.encode(
+            '{"type":"FeatureCollection","features":[{"type":"Feature",'
+            '"properties":{"code":"W","title":"Ramallah","area":12},'
+            '"geometry":{"type":"Polygon","coordinates":[[[35.2,31.5],'
+            '[35.3,31.5],[35.3,31.6],[35.2,31.5]]]}}]}',
+          ),
+        ),
+        attributes: null,
+      );
+      expect(await c.importShape(), 'districts');
+      final ReportChartElement map = c.template.allElements
+          .map(((ReportBand, ReportElement) pair) => pair.$2)
+          .whereType<ReportChartElement>()
+          .first;
+      expect(map.dataSet, 'Data.districts');
+      final ReportDataTableView table = c.dataTables.firstWhere(
+        (ReportDataTableView t) => t.name == 'districts',
+      );
+      expect(table.description, 'Attributes of the map file');
+      expect(
+        table.columns.map((ReportDataColumnView c) => c.name),
+        containsAll(<String>['code', 'title', 'area']),
+      );
+      final int title = table.columns.indexWhere(
+        (ReportDataColumnView c) => c.name == 'title',
+      );
+      expect(table.rows.single[title].displayText, 'Ramallah');
+      c.selectDataTable('districts');
+      expect(c.setDataCell(0, title, 'بيتونيا'), isTrue);
+      expect(
+        ReportShapeLayer.decode(
+          c.shapes['districts']!,
+        ).features.single.valueOf('title'),
+        'بيتونيا',
+      );
+      expect(c.addDataRow(), isFalse);
+      expect(c.removeDataTable('districts'), isFalse);
+      expect(
+        c.addDataColumn(expression: 'code & "-" & title', table: 'districts'),
+        'calc1',
+      );
+      final ReportDataTableView calculated = c.dataTables.firstWhere(
+        (ReportDataTableView t) => t.name == 'districts',
+      );
+      final int calc = calculated.columns.indexWhere(
+        (ReportDataColumnView c) => c.name == 'calc1',
+      );
+      expect(calculated.rows.single[calc].displayText, 'W-بيتونيا');
+      expect(
+        c.addConstantColumn(name: 'kind', value: 'حي', table: 'districts'),
+        'kind',
+      );
+      final ReportDataTableView filled = c.dataTables.firstWhere(
+        (ReportDataTableView t) => t.name == 'districts',
+      );
+      final int kind = filled.columns.indexWhere(
+        (ReportDataColumnView c) => c.name == 'kind',
+      );
+      expect(filled.rows.single[kind].displayText, 'حي');
+      c.undo();
+      c.undo();
+      c.undo();
+      expect(
+        ReportShapeLayer.decode(
+          c.shapes['districts']!,
+        ).features.single.valueOf('title'),
+        'Ramallah',
+      );
+      c.dispose();
+    });
+
+    test('page fields, a total, a rounded box, and a signature insert', () {
+      final ReportDesignerController c = ReportDesignerController();
+      c.loadXml(
+        '<QudsReport name="Invoice" pageSize="A4"><Bands>'
+        '<ReportHeader height="80mm"/></Bands></QudsReport>',
+      );
+      ReportElement? placed(ReportDesignTool tool) => c.addElement(
+        tool,
+        ReportBandKind.reportHeader,
+        const ReportRect(12 * mm, 4, 0, 0),
+      );
+      expect(
+        (placed(ReportDesignTool.pageNumber)! as ReportTextElement).text,
+        '{{System.PageNumber}}',
+      );
+      expect(
+        (placed(ReportDesignTool.pages)! as ReportTextElement).text,
+        '{{System.PageNumber}} / {{System.TotalPages}}',
+      );
+      expect(
+        (placed(ReportDesignTool.date)! as ReportTextElement).text,
+        '{{System.CurrentDate}}',
+      );
+      expect(
+        (placed(ReportDesignTool.total)! as ReportTextElement).text,
+        '{{SUM(Row.total)}}',
+      );
+      expect(
+        (placed(ReportDesignTool.rounded)! as ReportShapeElement).kind,
+        ReportShapeKind.roundedRectangle,
+      );
+      expect(placed(ReportDesignTool.signature), isA<ReportShapeElement>());
+      expect(
+        c.template.allElements
+            .map(((ReportBand, ReportElement) pair) => pair.$2)
+            .whereType<ReportTextElement>()
+            .map((ReportTextElement e) => e.text),
+        contains('Signature'),
+      );
+      c.dispose();
     });
 
     test('ready-made templates load with their sample data', () {
@@ -1171,13 +1451,30 @@ void main() {
       WidgetTester tester,
     ) async {
       final ReportDesignerController c = await pumpDesigner(tester);
-      final Offset bar = tester.getTopLeft(find.byType(ReportToolbar));
-      final RenderReportToolbar toolbar = tester.renderObject(
-        find.byType(ReportToolbar),
+      expect(find.byType(ReportToolbox), findsOneWidget);
+      final Offset panel = tester.getTopLeft(find.byType(ReportToolbox));
+      final RenderReportToolbox toolbox = tester.renderObject(
+        find.byType(ReportToolbox),
       );
-      await tester.tapAt(bar + toolbar.rectOf('tool.text')!.center);
+      await tester.tapAt(panel + toolbox.rectOf('tool.text')!.center);
       await tester.pump();
       expect(c.tool, ReportDesignTool.text);
+
+      final TestGesture mouse = await tester.createGesture(
+        kind: PointerDeviceKind.mouse,
+      );
+      addTearDown(mouse.removePointer);
+      await mouse.addPointer();
+      await mouse.moveTo(panel + toolbox.rectOf('tool.map')!.center);
+      await tester.pump();
+      expect(
+        find.byWidgetPredicate(
+          (Widget w) => w is ReportToolboxCard && w.title == 'Map',
+        ),
+        findsOneWidget,
+      );
+      await mouse.moveTo(Offset.zero);
+      await tester.pump();
 
       await tester.sendKeyEvent(LogicalKeyboardKey.escape);
       await tester.pump();
@@ -2102,6 +2399,184 @@ void main() {
       await tester.sendKeyEvent(LogicalKeyboardKey.f6);
       await tester.pump();
       expect(c.mode, ReportDesignMode.design);
+    });
+
+    testWidgets('the field tree shows a scrollbar and scrolls', (
+      WidgetTester tester,
+    ) async {
+      tester.view.physicalSize = const Size(1200, 520);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final ReportDesignerController c = sample();
+      addTearDown(c.dispose);
+      c.mode = ReportDesignMode.data;
+      for (int i = 0; i < 24; i++) {
+        expect(c.addDataColumn(name: 'col$i'), 'col$i');
+      }
+      c.selectDataCell(-1, -1);
+      await tester.pumpWidget(
+        Directionality(
+          textDirection: TextDirection.ltr,
+          child: Overlay(
+            initialEntries: <OverlayEntry>[
+              OverlayEntry(
+                builder: (BuildContext context) => QudsReportDesigner(
+                  controller: c,
+                  loadBundledFonts: false,
+                  templates: const <ReportTemplateInfo>[],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+      await tester.pump();
+      final Finder explorer = find.byType(ReportDataExplorer);
+      final RenderReportDataExplorer ro = tester.renderObject(explorer);
+      final Offset origin = tester.getTopLeft(explorer);
+      expect(ro.sidebarScrollbar, isNotNull);
+      final double before = ro.sidebarRect('items')!.top;
+      final TestPointer mouse = TestPointer(1, PointerDeviceKind.mouse);
+      final Offset at = origin + const Offset(30, 90);
+      await tester.sendEventToBinding(mouse.hover(at));
+      await tester.pump();
+      await tester.sendEventToBinding(mouse.scroll(const Offset(0, 180)));
+      await tester.pump();
+      expect(ro.sidebarRect('items')!.top, lessThan(before - 40));
+
+      final Rect thumb = ro.sidebarScrollbar!;
+      final double scrolled = ro.sidebarRect('items')!.top;
+      await tester.dragFrom(origin + thumb.center, const Offset(0, 36));
+      await tester.pump();
+      expect(ro.sidebarRect('items')!.top, lessThan(scrolled));
+    });
+
+    testWidgets('a long choice menu scrolls and filters as you type', (
+      WidgetTester tester,
+    ) async {
+      tester.view.physicalSize = const Size(800, 480);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final List<String> picked = <String>[];
+      await tester.pumpWidget(
+        MediaQuery(
+          data: const MediaQueryData(size: Size(800, 480)),
+          child: Theme(
+            data: ThemeData.light(),
+            child: Directionality(
+              textDirection: TextDirection.ltr,
+              child: Overlay(
+                initialEntries: <OverlayEntry>[
+                  OverlayEntry(
+                    builder: (BuildContext context) {
+                      return GestureDetector(
+                        key: const Key('open-menu'),
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () {
+                          OfficeContextMenu.show(
+                            context: context,
+                            globalPosition: const Offset(24, 24),
+                            filterHint: 'Type to search',
+                            actions: <OfficeContextAction>[
+                              const OfficeContextAction.caption('Label field'),
+                              for (int i = 0; i < 40; i++)
+                                OfficeContextAction(
+                                  id: 'f$i',
+                                  label: i == 37 ? 'lbl' : 'field$i',
+                                ),
+                            ],
+                            onSelect: picked.add,
+                          );
+                        },
+                        child: const SizedBox.expand(),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.byKey(const Key('open-menu')));
+      await tester.pump();
+      final Finder menu = find.byKey(const Key('office-context-menu'));
+      expect(menu, findsOneWidget);
+      final RenderBox box = tester.renderObject(menu);
+      expect(box.size.height, lessThanOrEqualTo(480));
+      expect(find.text('Type to search'), findsOneWidget);
+      expect(find.text('lbl'), findsOneWidget);
+      final TestPointer mouse = TestPointer(1, PointerDeviceKind.mouse);
+      await tester.sendEventToBinding(mouse.hover(tester.getCenter(menu)));
+      await tester.pump();
+      await tester.sendEventToBinding(mouse.scroll(const Offset(0, 240)));
+      await tester.pump();
+      final Transform scrolled = tester.widget<Transform>(
+        find.descendant(of: menu, matching: find.byType(Transform)),
+      );
+      expect(scrolled.transform.getTranslation().y, lessThan(-40));
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyL);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyB);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyL);
+      await tester.pump();
+      expect(find.text('field0'), findsNothing);
+      expect(find.text('lbl'), findsWidgets);
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pump();
+      expect(picked, <String>['f37']);
+    });
+
+    testWidgets('closing a choice menu and opening another does not throw', (
+      WidgetTester tester,
+    ) async {
+      tester.view.physicalSize = const Size(800, 480);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      OverlayEntry? menu;
+      await tester.pumpWidget(
+        MediaQuery(
+          data: const MediaQueryData(size: Size(800, 480)),
+          child: Theme(
+            data: ThemeData.light(),
+            child: Directionality(
+              textDirection: TextDirection.ltr,
+              child: Overlay(
+                initialEntries: <OverlayEntry>[
+                  OverlayEntry(
+                    builder: (BuildContext context) {
+                      return GestureDetector(
+                        key: const Key('open-menu'),
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () {
+                          menu = OfficeContextMenu.show(
+                            context: context,
+                            globalPosition: const Offset(24, 24),
+                            actions: const <OfficeContextAction>[
+                              OfficeContextAction(id: 'a', label: 'Alpha'),
+                              OfficeContextAction(id: 'b', label: 'Beta'),
+                            ],
+                            onSelect: (_) {},
+                          );
+                        },
+                        child: const SizedBox.expand(),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.byKey(const Key('open-menu')));
+      await tester.pump();
+      expect(find.text('Alpha'), findsOneWidget);
+      OfficeContextMenu.dismiss(menu);
+      expect(() => OfficeContextMenu.dismiss(menu), returnsNormally);
+      await tester.tap(find.byKey(const Key('open-menu')));
+      await tester.pump();
+      expect(find.text('Beta'), findsOneWidget);
     });
   });
 }

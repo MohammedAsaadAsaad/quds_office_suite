@@ -38,6 +38,33 @@ enum ReportDesignTool {
 
   /// Draw a chart.
   chart,
+
+  /// Draw a shape map.
+  map,
+
+  /// A text box that prints the page number.
+  pageNumber,
+
+  /// A text box that prints the page number and the page count.
+  pages,
+
+  /// A text box that prints the date.
+  date,
+
+  /// A text box that prints the report name.
+  reportName,
+
+  /// A text box that prints the current row number.
+  rowNumber,
+
+  /// A text box that prints the sum of a column.
+  total,
+
+  /// Draw a rounded rectangle.
+  rounded,
+
+  /// A signature line with a caption.
+  signature,
 }
 
 /// Alignment and sizing commands for the selection.
@@ -137,6 +164,7 @@ class ReportProperty {
     this.min,
     this.pair = false,
     this.glyph,
+    this.nest,
   });
 
   /// Stable key passed to [ReportDesignerController.setProperty].
@@ -177,6 +205,10 @@ class ReportProperty {
   /// adjacent glyph toggles share one row.
   final String? glyph;
 
+  /// Shown inside the format box of this target (`title`, `labels`, `legend`)
+  /// instead of as its own row.
+  final String? nest;
+
   /// Whether a click opens the inline text editor.
   bool get isTextual =>
       kind != ReportPropertyKind.toggle &&
@@ -211,6 +243,7 @@ class ReportProperty {
     min: min ?? this.min,
     pair: pair ?? this.pair,
     glyph: glyph ?? this.glyph,
+    nest: nest,
   );
 }
 
@@ -506,6 +539,12 @@ class ReportDesignerController extends ChangeNotifier {
 
   Map<String, Object?>? _mockOverride;
   Map<String, Object?>? _mockInferred;
+  Map<String, Object?>? _shapeOverlay;
+  Map<String, Object?>? _shapeOverlayBase;
+  String _shapeOverlayStamp = '';
+  Map<String, String>? _shapeTableNames;
+  String _shapeTableNamesStamp = '';
+  final Map<String, _ShapeRows> _shapeRows = <String, _ShapeRows>{};
   int _mockRevision = -1;
 
   /// Host file picker behind the data explorer's "Import CSV / JSON…"
@@ -537,6 +576,19 @@ class ReportDesignerController extends ChangeNotifier {
 
   bool _disposed = false;
   ReportInspectorPage _inspectorPage = ReportInspectorPage.properties;
+
+  /// Open map format box: `title`, `labels`, or `legend`.
+  String? _formatBox;
+
+  /// Which map text's format box is open.
+  String? get formatBox => _formatBox;
+
+  /// Opens the format box of [target], or closes it when it is already open.
+  void toggleFormatBox(String target) {
+    _formatBox = _formatBox == target ? null : target;
+    notifyListeners();
+  }
+
   String _selectionKey = '|null';
 
   final List<_Snapshot> _undo = <_Snapshot>[];
@@ -691,11 +743,21 @@ class ReportDesignerController extends ChangeNotifier {
     }
     final bool formulaColumn =
         (editingProperty ?? '') == 'data.col.expression' && !dataTable.isFields;
+    final ReportChartElement? map =
+        (editingProperty ?? '') == 'labelField' &&
+            e is ReportChartElement &&
+            e.chartType.isShapeMap &&
+            !ReportShapes.isWorld(e.shape)
+        ? e
+        : null;
+    final String? mapTable = map == null ? null : shapeTableName(map.shape);
     final ReportCompleter completer = ReportCompleter(
       template: _template,
       band: band,
       data: _preparedData,
-      rowTable: formulaColumn ? dataTable.name : null,
+      rowTable: formulaColumn ? dataTable.name : mapTable,
+      rowSource: mapTable,
+      rowFieldsOnly: map != null,
     );
     final int caret = ed.caretIndex;
     if (identical(ed, textEditor)) {
@@ -916,18 +978,334 @@ class ReportDesignerController extends ChangeNotifier {
   /// data.
   Map<String, Object?> get mockData {
     final Map<String, Object?>? set = _mockOverride ?? _sample;
+    final Map<String, Object?> base;
     if (set != null) {
-      return set;
+      base = set;
+    } else {
+      if (_mockInferred == null || _mockRevision != _revision) {
+        _mockInferred = ReportMockData.infer(
+          _template,
+          rows: mockRows,
+          now: clock?.call(),
+        );
+        _mockRevision = _revision;
+      }
+      base = _mockInferred!;
     }
-    if (_mockInferred == null || _mockRevision != _revision) {
-      _mockInferred = ReportMockData.infer(
-        _template,
-        rows: mockRows,
-        now: clock?.call(),
+    return _withShapeTables(base, overwrite: set == null);
+  }
+
+  /// Data-explorer name of the attribute table for an embedded shape file.
+  String shapeTableName(String shapeKey) {
+    _ensureShapeTableNames();
+    return _shapeTableNames![shapeKey] ?? _shapeTableBase(shapeKey);
+  }
+
+  /// Shape file whose attributes are the data table [name], if any.
+  String? shapeKeyForTable(String name) {
+    final String key = ReportData.normalizePath(name).toLowerCase();
+    if (key.isEmpty) {
+      return null;
+    }
+    _ensureShapeTableNames();
+    for (final MapEntry<String, String> e in _shapeTableNames!.entries) {
+      if (e.value.toLowerCase() == key) {
+        return e.key;
+      }
+    }
+    return null;
+  }
+
+  void _ensureShapeTableNames() {
+    final String stamp = shapes.keys.join('\u0001');
+    if (_shapeTableNames != null && _shapeTableNamesStamp == stamp) {
+      return;
+    }
+    final Map<String, String> out = <String, String>{};
+    final Set<String> used = <String>{};
+    for (final String key in shapes.keys) {
+      if (ReportShapes.isWorld(key)) {
+        continue;
+      }
+      final String base = _shapeTableBase(key);
+      var name = base;
+      var n = 2;
+      while (!used.add(name.toLowerCase())) {
+        name = '$base$n';
+        n++;
+      }
+      out[key] = name;
+    }
+    _shapeTableNames = out;
+    _shapeTableNamesStamp = stamp;
+  }
+
+  static String _shapeTableBase(String shapeKey) {
+    final String raw = shapeKey.trim();
+    if (ReportData.isValidPath(raw)) {
+      return ReportData.normalizePath(raw);
+    }
+    final String cleaned = raw
+        .replaceAll(RegExp(r'[^A-Za-z0-9_\u00C0-\uFFFF]+'), '_')
+        .replaceAll(RegExp(r'^_+|_+$'), '');
+    if (cleaned.isNotEmpty && ReportData.isValidPath(cleaned)) {
+      return cleaned;
+    }
+    return 'shapes';
+  }
+
+  Map<String, Object?> _withShapeTables(
+    Map<String, Object?> base, {
+    required bool overwrite,
+  }) {
+    _ensureShapeTableNames();
+    final Map<String, String> names = _shapeTableNames!;
+    if (names.isEmpty) {
+      return base;
+    }
+    final String stamp = <String>[
+      for (final String key in names.keys)
+        '$key:${identityHashCode(shapes[key])}',
+    ].join('\u0001');
+    if (identical(_shapeOverlayBase, base) && _shapeOverlayStamp == stamp) {
+      return _shapeOverlay!;
+    }
+    Map<String, Object?>? copy;
+    for (final MapEntry<String, String> e in names.entries) {
+      if (!overwrite && ReportData.valueAt(copy ?? base, e.value) != null) {
+        continue;
+      }
+      final _ShapeRows rows = _rowsForShape(e.key);
+      if (rows.columns.isEmpty) {
+        continue;
+      }
+      copy ??= ReportData.copyMap(base);
+      ReportData(copy).set(e.value, rows.asList());
+    }
+    if (copy == null) {
+      _shapeOverlay = null;
+      _shapeOverlayBase = null;
+      _shapeOverlayStamp = '';
+      return base;
+    }
+    _shapeOverlay = copy;
+    _shapeOverlayBase = base;
+    _shapeOverlayStamp = stamp;
+    return copy;
+  }
+
+  _ShapeRows _rowsForShape(String shapeKey) {
+    final Uint8List? bytes = shapes[shapeKey];
+    final _ShapeRows? hit = _shapeRows[shapeKey];
+    if (bytes == null) {
+      return const _ShapeRows.empty();
+    }
+    if (hit != null && identical(hit.bytes, bytes)) {
+      return hit;
+    }
+    final ReportShapeLayer layer;
+    try {
+      layer = ReportShapeLayer.decode(bytes);
+    } on ReportShapeException {
+      return const _ShapeRows.empty();
+    }
+    final List<String> sources = <String>[];
+    final List<String> columns = <String>[];
+    void take(String source) {
+      final String raw = source.trim();
+      if (raw.isEmpty ||
+          sources.any((String s) => s.toLowerCase() == raw.toLowerCase())) {
+        return;
+      }
+      sources.add(raw);
+      columns.add(_dataColumnName(raw, columns));
+    }
+
+    if (layer.fields.isEmpty) {
+      take('key');
+      take('label');
+    } else {
+      for (final String field in layer.fields) {
+        take(field);
+      }
+    }
+    final List<Map<String, Object?>> rows = <Map<String, Object?>>[
+      for (final ReportShapeFeature feature in layer.features)
+        <String, Object?>{
+          for (int c = 0; c < columns.length; c++)
+            columns[c]: _shapeCell(feature, sources[c]),
+        },
+    ];
+    for (int c = 0; c < columns.length; c++) {
+      if (sources[c] == 'key') {
+        continue;
+      }
+      final List<num?> nums = <num?>[];
+      var numeric = true;
+      for (final Map<String, Object?> row in rows) {
+        final Object? value = row[columns[c]];
+        if (value == null || '$value'.trim().isEmpty) {
+          nums.add(null);
+          continue;
+        }
+        final num? n = ReportDataType.parseNumber('$value');
+        if (n == null) {
+          numeric = false;
+          break;
+        }
+        nums.add(n);
+      }
+      if (numeric && nums.any((num? n) => n != null)) {
+        for (int r = 0; r < rows.length; r++) {
+          rows[r][columns[c]] = nums[r];
+        }
+      }
+    }
+    final _ShapeRows built = _ShapeRows(
+      bytes: bytes,
+      columns: columns,
+      sources: sources,
+      rows: rows,
+    );
+    _shapeRows[shapeKey] = built;
+    return built;
+  }
+
+  static String _dataColumnName(String source, List<String> taken) {
+    var base = source.trim();
+    if (!ReportData.isValidName(base)) {
+      base = base
+          .replaceAll(RegExp(r'[^A-Za-z0-9_\u00C0-\uFFFF]+'), '_')
+          .replaceAll(RegExp(r'^_+|_+$'), '');
+      if (base.isEmpty || !ReportData.isValidName(base)) {
+        base = 'field';
+      }
+    }
+    var name = base;
+    var n = 2;
+    while (taken.any((String t) => t.toLowerCase() == name.toLowerCase())) {
+      name = '$base$n';
+      n++;
+    }
+    return name;
+  }
+
+  static String? _shapeCell(ReportShapeFeature feature, String source) {
+    final String text = switch (source) {
+      'key' => feature.key,
+      'label' => feature.label,
+      _ => feature.valueOf(source),
+    };
+    final String trimmed = text.trim();
+    return trimmed.isEmpty ? null : trimmed;
+  }
+
+  void _writeShapeCell(String table, int row, String column, Object? value) {
+    final String? shapeKey = shapeKeyForTable(table);
+    if (shapeKey == null) {
+      return;
+    }
+    final _ShapeRows info = _rowsForShape(shapeKey);
+    final int col = info.indexOf(column);
+    if (col < 0 || row < 0) {
+      return;
+    }
+    final Uint8List? bytes = shapes[shapeKey];
+    if (bytes == null) {
+      return;
+    }
+    final ReportShapeLayer layer;
+    try {
+      layer = ReportShapeLayer.decode(bytes);
+    } on ReportShapeException {
+      return;
+    }
+    if (row >= layer.features.length) {
+      return;
+    }
+    final String source = info.sources[col];
+    final String text = _shapeText(value);
+    shapes[shapeKey] = ReportShapeLayer(<ReportShapeFeature>[
+      for (int i = 0; i < layer.features.length; i++)
+        i == row
+            ? _featureValue(layer.features[i], source, text)
+            : layer.features[i],
+    ], fields: layer.fields).encode();
+  }
+
+  void _writeShapeColumn(String table, String column, Object? value) {
+    final String? shapeKey = shapeKeyForTable(table);
+    if (shapeKey == null) {
+      return;
+    }
+    final _ShapeRows info = _rowsForShape(shapeKey);
+    final int col = info.indexOf(column);
+    if (col < 0) {
+      return;
+    }
+    final Uint8List? bytes = shapes[shapeKey];
+    if (bytes == null) {
+      return;
+    }
+    final ReportShapeLayer layer;
+    try {
+      layer = ReportShapeLayer.decode(bytes);
+    } on ReportShapeException {
+      return;
+    }
+    final String source = info.sources[col];
+    final String text = _shapeText(value);
+    shapes[shapeKey] = ReportShapeLayer(<ReportShapeFeature>[
+      for (final ReportShapeFeature feature in layer.features)
+        _featureValue(feature, source, text),
+    ], fields: layer.fields).encode();
+  }
+
+  static String _shapeText(Object? value) => switch (value) {
+    null => '',
+    final num n => ReportNumber.formatPlainNumber(n),
+    _ => '$value',
+  };
+
+  static ReportShapeFeature _featureValue(
+    ReportShapeFeature feature,
+    String source,
+    String text,
+  ) {
+    if (source == 'key') {
+      return ReportShapeFeature(
+        key: text,
+        label: feature.label,
+        aliases: feature.aliases,
+        rings: feature.rings,
+        values: feature.values,
       );
-      _mockRevision = _revision;
     }
-    return _mockInferred!;
+    if (source == 'label') {
+      return ReportShapeFeature(
+        key: feature.key,
+        label: text.isEmpty ? feature.key : text,
+        aliases: feature.aliases,
+        rings: feature.rings,
+        values: feature.values,
+      );
+    }
+    final Map<String, String> values = Map<String, String>.of(feature.values);
+    String? found;
+    for (final String key in values.keys) {
+      if (key.toLowerCase() == source.toLowerCase()) {
+        found = key;
+        break;
+      }
+    }
+    values[found ?? source] = text;
+    return ReportShapeFeature(
+      key: feature.key,
+      label: feature.label,
+      aliases: feature.aliases,
+      rings: feature.rings,
+      values: values,
+    );
   }
 
   set mockData(Map<String, Object?>? data) {
@@ -1666,9 +2044,11 @@ class ReportDesignerController extends ChangeNotifier {
     final ReportElement e = _newElement(tool, target);
     final bool tiny = rect.width < 4 && rect.height < 4;
     final double w = tiny ? e.width : rect.width;
+    final bool flat =
+        tool == ReportDesignTool.line || tool == ReportDesignTool.signature;
     final double h = tiny
         ? e.height
-        : (tool == ReportDesignTool.line && rect.height < 3 ? 0 : rect.height);
+        : (flat && rect.height < 3 ? 0 : rect.height);
     final double left = tiny && _template.mirrored ? rect.left - w : rect.left;
     _mutate(() {
       e.name = _template.uniqueElementName(e.namePrefix);
@@ -1676,6 +2056,24 @@ class ReportDesignerController extends ChangeNotifier {
       _setPhysical(e, ReportRect(left, rect.top, w, h));
       if (target.height < e.y + e.height) {
         target.height = _round(e.y + e.height);
+      }
+      if (tool == ReportDesignTool.signature) {
+        const double mm = 72 / 25.4;
+        final double lineHeight = e.height < 0 ? 0 : e.height;
+        final ReportTextElement caption = ReportTextElement(
+          x: e.x,
+          y: e.y + lineHeight + 2,
+          width: e.width < 40 * mm ? 40 * mm : e.width,
+          height: 5 * mm,
+          text: _template.isRtl ? 'التوقيع' : 'Signature',
+          align: ReportTextAlign.center,
+          style: ReportTextStyle(fontSize: 8),
+        );
+        caption.name = _template.uniqueElementName(caption.namePrefix);
+        target.elements.add(caption);
+        if (target.height < caption.y + caption.height) {
+          target.height = _round(caption.y + caption.height);
+        }
       }
       return true;
     });
@@ -1758,6 +2156,81 @@ class ReportDesignerController extends ChangeNotifier {
               value: '$row.total',
             ),
           ],
+        );
+      case ReportDesignTool.map:
+        final String row = band.kind == ReportBandKind.detail ? 'item' : 'Row';
+        final String set = band.kind == ReportBandKind.detail
+            ? (band.dataSet ?? 'Data.items')
+            : 'Data.items';
+        return ReportChartElement(
+          chartType: ReportChartType.shapeMap,
+          width: 90 * mm,
+          height: 70 * mm,
+          title: rtl ? 'خريطة' : 'Map',
+          dataSet: set,
+          category: '$row.code',
+          series: <ReportChartSeries>[
+            ReportChartSeries(
+              name: rtl ? 'القيمة' : 'Value',
+              value: '$row.total',
+            ),
+          ],
+        );
+      case ReportDesignTool.pageNumber:
+        return ReportTextElement(
+          width: 18 * mm,
+          height: 6 * mm,
+          text: '{{System.PageNumber}}',
+          align: ReportTextAlign.end,
+        );
+      case ReportDesignTool.pages:
+        return ReportTextElement(
+          width: 28 * mm,
+          height: 6 * mm,
+          text: rtl
+              ? '{{System.PageNumber}} من {{System.TotalPages}}'
+              : '{{System.PageNumber}} / {{System.TotalPages}}',
+          align: ReportTextAlign.end,
+        );
+      case ReportDesignTool.date:
+        return ReportTextElement(
+          width: 28 * mm,
+          height: 6 * mm,
+          text: '{{System.CurrentDate}}',
+        );
+      case ReportDesignTool.reportName:
+        return ReportTextElement(
+          width: 50 * mm,
+          height: 7 * mm,
+          text: '{{System.ReportName}}',
+          style: ReportTextStyle(fontSize: 14, bold: true),
+        );
+      case ReportDesignTool.rowNumber:
+        return ReportTextElement(
+          width: 12 * mm,
+          height: 6 * mm,
+          text: '{{System.RowNumber}}',
+          align: ReportTextAlign.center,
+        );
+      case ReportDesignTool.total:
+        return ReportTextElement(
+          width: 28 * mm,
+          height: 6 * mm,
+          text: '{{SUM(Row.total)}}',
+          align: ReportTextAlign.end,
+        );
+      case ReportDesignTool.rounded:
+        return ReportShapeElement(
+          width: 40 * mm,
+          height: 18 * mm,
+          kind: ReportShapeKind.roundedRectangle,
+          cornerRadius: 6,
+        );
+      case ReportDesignTool.signature:
+        return ReportShapeElement(
+          width: 50 * mm,
+          kind: ReportShapeKind.line,
+          strokeColor: 'primary',
         );
     }
   }
@@ -2187,6 +2660,7 @@ class ReportDesignerController extends ChangeNotifier {
     if (key != _selectionKey) {
       _selectionKey = key;
       _highlightProperty = null;
+      _formatBox = null;
       if (_selection.isNotEmpty ||
           _selectedBand != null ||
           _mode == ReportDesignMode.data) {
@@ -2753,6 +3227,9 @@ class ReportDesignerController extends ChangeNotifier {
   }
 
   List<ReportProperty> _chartProps(ReportChartElement e) {
+    if (e.chartType.isShapeMap) {
+      return _mapProps(e);
+    }
     const String g = 'Chart';
     const String d = 'Data';
     const String s = 'Style';
@@ -2762,7 +3239,10 @@ class ReportDesignerController extends ChangeNotifier {
         label: 'Chart type',
         kind: ReportPropertyKind.choice,
         value: e.chartType.name,
-        options: _names(ReportChartType.values),
+        options: _names(<Enum>[
+          for (final ReportChartType type in ReportChartType.values)
+            if (!type.isShapeMap) type,
+        ]),
         group: g,
       ),
       ReportProperty(
@@ -3034,69 +3514,7 @@ class ReportDesignerController extends ChangeNotifier {
         e.chartType == ReportChartType.sparkline ||
         e.chartType.plotsPoints;
     final bool pieLike = e.isRadial || e.chartType == ReportChartType.gauge;
-    final List<String> shapeNames = <String>[
-      'world',
-      for (final String name in shapes.keys)
-        if (name != 'world') name,
-    ];
-    if (e.shape.isNotEmpty && !shapeNames.contains(e.shape)) {
-      shapeNames.add(e.shape);
-    }
     return <ReportProperty>[
-      if (e.chartType.isShapeMap) ...<ReportProperty>[
-        ReportProperty(
-          key: 'shape',
-          label: 'Shapes',
-          kind: ReportPropertyKind.choice,
-          value: e.shape.isEmpty ? 'world' : e.shape,
-          options: shapeNames,
-          group: p,
-        ),
-        ReportProperty(
-          key: 'shapeKey',
-          label: 'Shape key field',
-          kind: ReportPropertyKind.text,
-          value: e.shapeKey ?? '',
-          hint: 'Attribute that matches the table, such as a district code',
-          group: p,
-        ),
-        ReportProperty(
-          key: 'showLabels',
-          label: 'Region labels',
-          kind: ReportPropertyKind.toggle,
-          value: _bool(e.showLabels),
-          group: p,
-        ),
-        ReportProperty(
-          key: 'lowColor',
-          label: 'Low color',
-          kind: ReportPropertyKind.color,
-          value: e.lowColor ?? '',
-          group: p,
-        ),
-        ReportProperty(
-          key: 'highColor',
-          label: 'High color',
-          kind: ReportPropertyKind.color,
-          value: e.highColor ?? '',
-          group: p,
-        ),
-        ReportProperty(
-          key: 'emptyColor',
-          label: 'Empty color',
-          kind: ReportPropertyKind.color,
-          value: e.emptyColor ?? '',
-          group: p,
-        ),
-        if (shapePicker != null)
-          ReportProperty(
-            key: 'shape.import',
-            label: '',
-            kind: ReportPropertyKind.action,
-            value: 'Import shapes…',
-            group: p,
-          ),
-      ],
       if (lineLike) ...<ReportProperty>[
         ReportProperty(
           key: 'smooth',
@@ -3252,6 +3670,290 @@ class ReportDesignerController extends ChangeNotifier {
           group: p,
         ),
       ],
+    ];
+  }
+
+  List<String> _shapeFields(ReportChartElement e) {
+    final ReportShapeLayer? layer = ReportShapes.resolve(e.shape, shapes);
+    if (layer == null || layer.fields.isEmpty) {
+      return const <String>[];
+    }
+    return layer.fields;
+  }
+
+  /// Columns a map label may name: the file's attributes, then any constant
+  /// or calculated column added on that map's data table.
+  List<String> _mapLabelColumns(ReportChartElement e) {
+    final List<String> out = <String>[];
+    final Set<String> seen = <String>{};
+    void add(String name) {
+      final String n = name.trim();
+      if (n.isEmpty || !seen.add(n.toLowerCase())) {
+        return;
+      }
+      out.add(n);
+    }
+
+    for (final String name in _shapeFields(e)) {
+      add(name);
+    }
+    if (e.shape.isEmpty || ReportShapes.isWorld(e.shape)) {
+      return out;
+    }
+    final String table = shapeTableName(e.shape).toLowerCase();
+    for (final ReportDataTableView t in dataTables) {
+      if (t.isFields || t.name.toLowerCase() != table) {
+        continue;
+      }
+      for (final ReportDataColumnView c in t.columns) {
+        add(c.name);
+      }
+    }
+    return out;
+  }
+
+  List<String> _keepChoice(List<String> options, String current) {
+    final String value = current.trim();
+    if (value.isEmpty) {
+      return options;
+    }
+    if (options.any((String o) => o.toLowerCase() == value.toLowerCase())) {
+      return options;
+    }
+    return <String>[...options, value];
+  }
+
+  List<String> _dataSetChoices() => <String>[
+    for (final ReportDataTableView table in dataTables)
+      if (!table.isFields) 'Data.${table.name}',
+  ];
+
+  List<String> _columnChoices(ReportChartElement e, {bool allowNone = false}) {
+    final ReportDataTableView? table = _chartTable(e);
+    if (table == null || table.columns.isEmpty) {
+      return const <String>[];
+    }
+    final String row = _rowToken(e);
+    return <String>[
+      if (allowNone) '',
+      for (final ReportDataColumnView column in table.columns)
+        '$row.${column.name}',
+    ];
+  }
+
+  ReportProperty _boundField(
+    String key,
+    String label,
+    String value,
+    List<String> options,
+    String group, {
+    String hint = '',
+  }) {
+    if (options.isEmpty) {
+      return ReportProperty(
+        key: key,
+        label: label,
+        kind: ReportPropertyKind.expression,
+        value: value,
+        hint: hint,
+        group: group,
+      );
+    }
+    return ReportProperty(
+      key: key,
+      label: label,
+      kind: ReportPropertyKind.choice,
+      value: value,
+      options: _keepChoice(options, value),
+      hint: hint,
+      group: group,
+    );
+  }
+
+  List<ReportProperty> _fontBox(String nest, ReportTextStyle style) =>
+      <ReportProperty>[
+        ReportProperty(
+          key: '$nest.fontFamily',
+          label: 'Family',
+          kind: ReportPropertyKind.text,
+          value: style.fontFamily ?? '',
+          group: 'Map',
+          nest: nest,
+        ),
+        ReportProperty(
+          key: '$nest.fontSize',
+          label: 'Size',
+          kind: ReportPropertyKind.number,
+          value: style.fontSize == null ? '' : _num(style.fontSize!),
+          group: 'Map',
+          nest: nest,
+        ),
+        ReportProperty(
+          key: '$nest.bold',
+          label: 'Bold',
+          kind: ReportPropertyKind.toggle,
+          value: _bool(style.bold ?? false),
+          group: 'Map',
+          nest: nest,
+        ),
+        ReportProperty(
+          key: '$nest.italic',
+          label: 'Italic',
+          kind: ReportPropertyKind.toggle,
+          value: _bool(style.italic ?? false),
+          group: 'Map',
+          nest: nest,
+        ),
+        ReportProperty(
+          key: '$nest.color',
+          label: 'Color',
+          kind: ReportPropertyKind.color,
+          value: style.color ?? '',
+          group: 'Map',
+          nest: nest,
+        ),
+      ];
+
+  List<ReportProperty> _mapProps(ReportChartElement e) {
+    const String g = 'Map';
+    const String d = 'Data';
+    final List<String> shapeNames = <String>[
+      'world',
+      for (final String name in shapes.keys)
+        if (name != 'world') name,
+    ];
+    if (e.shape.isNotEmpty && !shapeNames.contains(e.shape)) {
+      shapeNames.add(e.shape);
+    }
+    final bool embedded = e.shape != 'world' && shapes.containsKey(e.shape);
+    final List<String> fields = _shapeFields(e);
+    final List<String> sets = _dataSetChoices();
+    return <ReportProperty>[
+      ReportProperty(
+        key: 'title',
+        label: 'Title',
+        kind: ReportPropertyKind.text,
+        value: e.title,
+        group: g,
+      ),
+      ReportProperty(
+        key: 'shape',
+        label: 'Shapes',
+        kind: ReportPropertyKind.choice,
+        value: e.shape.isEmpty ? 'world' : e.shape,
+        options: shapeNames,
+        group: g,
+      ),
+      if (fields.isEmpty)
+        ReportProperty(
+          key: 'shapeKey',
+          label: 'Shape key field',
+          kind: ReportPropertyKind.text,
+          value: e.shapeKey ?? '',
+          hint: 'Attribute that matches the table, such as a district code',
+          group: g,
+        )
+      else
+        ReportProperty(
+          key: 'shapeKey',
+          label: 'Shape key field',
+          kind: ReportPropertyKind.choice,
+          value: e.shapeKey ?? '',
+          options: _keepChoice(fields, e.shapeKey ?? ''),
+          hint: 'Attribute that matches the table, such as a district code',
+          group: g,
+        ),
+      if (shapePicker != null)
+        ReportProperty(
+          key: 'shape.import',
+          label: '',
+          kind: ReportPropertyKind.action,
+          value: 'Import shapes…',
+          group: g,
+        ),
+      if (embedded)
+        ReportProperty(
+          key: 'shape.remove',
+          label: '',
+          kind: ReportPropertyKind.action,
+          value: 'Remove map file',
+          group: g,
+        ),
+      ReportProperty(
+        key: 'showLabels',
+        label: 'Region labels',
+        kind: ReportPropertyKind.toggle,
+        value: _bool(e.showLabels),
+        group: g,
+      ),
+      if (e.showLabels)
+        ReportProperty(
+          key: 'labelField',
+          label: 'Label field',
+          kind: ReportPropertyKind.expression,
+          value: e.labelField ?? '',
+          presets: _keepChoice(_mapLabelColumns(e), e.labelField ?? ''),
+          hint:
+              'A map column, or a formula such as CONCAT(name, "\\n", code) or CONCAT(Row.name, "\\n", Row.code)',
+          group: g,
+        ),
+      ReportProperty(
+        key: 'showLegend',
+        label: 'Legend',
+        kind: ReportPropertyKind.toggle,
+        value: _bool(e.showLegend),
+        group: g,
+      ),
+      ReportProperty(
+        key: 'lowColor',
+        label: 'Low color',
+        kind: ReportPropertyKind.color,
+        value: e.lowColor ?? '',
+        group: g,
+      ),
+      ReportProperty(
+        key: 'highColor',
+        label: 'High color',
+        kind: ReportPropertyKind.color,
+        value: e.highColor ?? '',
+        group: g,
+      ),
+      ReportProperty(
+        key: 'emptyColor',
+        label: 'Empty color',
+        kind: ReportPropertyKind.color,
+        value: e.emptyColor ?? '',
+        group: g,
+      ),
+      _boundField('dataSet', 'Data set', e.dataSet ?? '', sets, d),
+      _boundField(
+        'category',
+        'Region key',
+        e.category ?? '',
+        _columnChoices(e),
+        d,
+        hint: 'Row.code — the column that matches the shape key',
+      ),
+      _boundField(
+        'regionColor',
+        'Region color',
+        e.regionColor ?? '',
+        _columnChoices(e, allowNone: true),
+        d,
+        hint: 'Row.color — #hex or a palette name for each region',
+      ),
+      if (e.series.isNotEmpty)
+        _boundField(
+          'series.0.value',
+          'Value',
+          e.series.first.value,
+          _columnChoices(e),
+          d,
+          hint: 'Row.amount — the number colored on each region',
+        ),
+      ..._fontBox('title', e.titleStyle),
+      ..._fontBox('labels', e.labelStyle),
+      ..._fontBox('legend', e.legendStyle),
     ];
   }
 
@@ -4535,11 +5237,48 @@ class ReportDesignerController extends ChangeNotifier {
         if (field != null && field.isNotEmpty) {
           selected.shapeKey = field;
         }
+        final String? label = file.nameField;
+        final String current = (selected.labelField ?? '').trim();
+        final bool known = file.layer.fields.any(
+          (String name) => name.toLowerCase() == current.toLowerCase(),
+        );
+        if (label != null && label.isNotEmpty && (current.isEmpty || !known)) {
+          selected.labelField = label;
+        }
+        final String table = shapeTableName(key);
+        final String set = (selected.dataSet ?? '').trim().toLowerCase();
+        if (set.isEmpty || set == 'data.items') {
+          selected.dataSet = 'Data.$table';
+        }
         _wireShapeMap(selected, forceKey: true);
+        _dataTable = table;
       }
       return true;
     });
     return key;
+  }
+
+  /// Drops an embedded shape file and points every map that used it back
+  /// at the world atlas. The atlas itself is not a file in the report.
+  bool removeShape([String? name]) {
+    final ReportElement? current = primary;
+    final String key =
+        (name ?? (current is ReportChartElement ? current.shape : '')).trim();
+    if (key.isEmpty || key == 'world' || !shapes.containsKey(key)) {
+      return false;
+    }
+    _mutate(() {
+      shapes.remove(key);
+      for (final ReportBand band in _template.bands) {
+        for (final ReportElement element in band.elements) {
+          if (element is ReportChartElement && element.shape == key) {
+            element.shape = 'world';
+          }
+        }
+      }
+      return true;
+    });
+    return true;
   }
 
   /// Points a shape map at the table column that matches its region key and
@@ -4561,6 +5300,7 @@ class ReportDesignerController extends ChangeNotifier {
         e.category = '$row.$typedKey';
       }
     }
+    _wireRegionColor(e, table, row, keyCol ?? typedKey);
     final String? measure = _measureColumn(table, keyCol ?? typedKey);
     if (measure == null) {
       return;
@@ -4634,6 +5374,31 @@ class ReportDesignerController extends ChangeNotifier {
       }
     }
     return null;
+  }
+
+  void _wireRegionColor(
+    ReportChartElement e,
+    ReportDataTableView? table,
+    String row,
+    String keyColumn,
+  ) {
+    if ((e.regionColor ?? '').trim().isNotEmpty || table == null) {
+      return;
+    }
+    for (final String name in const <String>[
+      'color',
+      'colour',
+      'fill',
+      'regioncolor',
+    ]) {
+      for (final ReportDataColumnView column in table.columns) {
+        final String lower = column.name.toLowerCase();
+        if (lower == name && lower != keyColumn.toLowerCase()) {
+          e.regionColor = '$row.${column.name}';
+          return;
+        }
+      }
+    }
   }
 
   String? _measureColumn(ReportDataTableView? table, String? keyColumn) {
@@ -5045,7 +5810,11 @@ class ReportDesignerController extends ChangeNotifier {
               r.field(c.name) ?? ReportNull.instance,
           ],
       ],
-      description: table?.description ?? '',
+      description: (table?.description ?? '').isNotEmpty
+          ? table!.description
+          : shapeKeyForTable(name) == null
+          ? ''
+          : 'Attributes of the map file',
       inSchema: table != null,
     );
   }
@@ -5166,6 +5935,19 @@ class ReportDesignerController extends ChangeNotifier {
   bool get dataEditable => !hasHostData;
 
   /// Text of [value] for editing (no display format).
+  String _sharedCell(ReportDataTableView t, int column) {
+    if (t.rows.isEmpty || column < 0 || column >= t.columns.length) {
+      return '';
+    }
+    final String first = dataCellText(t.rows.first[column]);
+    for (final List<ReportValue> row in t.rows.skip(1)) {
+      if (dataCellText(row[column]) != first) {
+        return '';
+      }
+    }
+    return first;
+  }
+
   static String dataCellText(ReportValue value) => switch (value) {
     ReportNull() => '',
     ReportList(:final List<ReportValue> items) => '[${items.length} items]',
@@ -5374,6 +6156,7 @@ class ReportDesignerController extends ChangeNotifier {
         return false;
       }
       r[key] = value;
+      _writeShapeCell(t.name, row, col.name, value);
       return true;
     });
   }
@@ -5384,6 +6167,11 @@ class ReportDesignerController extends ChangeNotifier {
   bool addDataRow({int? at, String? table}) {
     final ReportDataTableView? t = _tableFor(table);
     if (t == null) {
+      return false;
+    }
+    if (shapeKeyForTable(t.name) != null) {
+      _notice = 'Rows come from the map file';
+      notifyListeners();
       return false;
     }
     return _editSample((ReportData d) {
@@ -5409,6 +6197,11 @@ class ReportDesignerController extends ChangeNotifier {
   bool removeDataRows(Iterable<int> rows, {String? table}) {
     final ReportDataTableView? t = _tableFor(table);
     if (t == null) {
+      return false;
+    }
+    if (shapeKeyForTable(t.name) != null) {
+      _notice = 'Rows come from the map file';
+      notifyListeners();
       return false;
     }
     final List<int> order = rows.toSet().toList()..sort();
@@ -5540,6 +6333,97 @@ class ReportDesignerController extends ChangeNotifier {
     _dataColumn = t.columns.length;
     notifyListeners();
     return n;
+  }
+
+  /// Adds a stored column and writes [value] into every row. Selects it
+  /// and returns its name; null when [name] is invalid or taken. Undoable.
+  String? addConstantColumn({
+    String? name,
+    String value = '',
+    ReportDataType type = ReportDataType.text,
+    String? table,
+  }) {
+    final ReportDataTableView? t = _tableFor(table);
+    if (t == null) {
+      return null;
+    }
+    final Iterable<String> taken = t.columns.map(
+      (ReportDataColumnView c) => c.name,
+    );
+    final String n = name?.trim() ?? _freeName(taken, 'constant');
+    if (_rejectName(n, taken, 'column')) {
+      return null;
+    }
+    final (bool ok, Object? parsed) = _parseValue(value, type);
+    if (!ok) {
+      _notice = '"${value.trim()}" is not a valid ${type.name}';
+      notifyListeners();
+      return null;
+    }
+    final bool done = _editStructure((ReportData? d) {
+      _schemaTable(t).columns.add(ReportDataColumn(name: n, type: type));
+      if (d != null) {
+        _rawList(d, t.name);
+        for (final Map<String, Object?> r in d.rows(t.name)) {
+          r[n] = parsed;
+        }
+      }
+      _writeShapeColumn(t.name, n, parsed);
+      return true;
+    });
+    if (!done) {
+      return null;
+    }
+    _dataTable = t.name;
+    _dataRow = -1;
+    _dataColumn = t.columns.length;
+    beginPropertyEdit('data.col.fill');
+    return n;
+  }
+
+  /// Writes [text] into every row of column [name]. A shape attribute is
+  /// written back into the map file as well. Undoable.
+  bool fillDataColumn(String name, String text, {String? table}) {
+    final ReportDataTableView? t = _tableFor(table);
+    if (t == null) {
+      return false;
+    }
+    final ReportDataColumnView? col = _columnView(t, name);
+    if (col == null || col.isCalculated) {
+      return false;
+    }
+    final (bool ok, Object? value) = _parseValue(text, col.type);
+    if (!ok) {
+      _notice = '"${text.trim()}" is not a valid ${col.type.name}';
+      notifyListeners();
+      return false;
+    }
+    return _editSample((ReportData d) {
+      final List<Map<String, Object?>> rows = d.rows(t.name);
+      var changed = false;
+      for (final Map<String, Object?> r in rows) {
+        final String key = _rawKey(r, col.name) ?? col.name;
+        if (r[key] != value) {
+          r[key] = value;
+          changed = true;
+        }
+      }
+      if (!changed && rows.isNotEmpty) {
+        return false;
+      }
+      _writeShapeColumn(t.name, col.name, value);
+      return true;
+    });
+  }
+
+  ReportDataColumnView? _columnView(ReportDataTableView t, String name) {
+    final String want = name.trim().toLowerCase();
+    for (final ReportDataColumnView c in t.columns) {
+      if (c.name.toLowerCase() == want) {
+        return c;
+      }
+    }
+    return null;
   }
 
   /// Removes column [name] from [table] (default: [dataTable]): from the
@@ -5776,6 +6660,12 @@ class ReportDesignerController extends ChangeNotifier {
   bool removeDataTable(String name) {
     final String n = ReportData.normalizePath(name);
     if (n.isEmpty || _view(n) == null) {
+      return false;
+    }
+    if (shapeKeyForTable(n) != null) {
+      _notice =
+          'This table comes from the map file. Remove the map file to drop it.';
+      notifyListeners();
       return false;
     }
     final bool done = _editStructure((ReportData? d) {
@@ -6224,7 +7114,7 @@ class ReportDesignerController extends ChangeNotifier {
           value: t.description,
           group: g,
         ),
-        if (!host)
+        if (!host && shapeKeyForTable(t.name) == null)
           ReportProperty(
             key: 'data.row+',
             label: '',
@@ -6246,7 +7136,15 @@ class ReportDesignerController extends ChangeNotifier {
           value: 'Add calculated column',
           group: g,
         ),
-        if (!host && _dataRow >= 0)
+        if (!host)
+          ReportProperty(
+            key: 'data.const+',
+            label: '',
+            kind: ReportPropertyKind.action,
+            value: 'Add constant column',
+            group: g,
+          ),
+        if (!host && _dataRow >= 0 && shapeKeyForTable(t.name) == null)
           ReportProperty(
             key: 'data.row.remove',
             label: '',
@@ -6254,13 +7152,14 @@ class ReportDesignerController extends ChangeNotifier {
             value: 'Delete row ${_dataRow + 1}',
             group: g,
           ),
-        ReportProperty(
-          key: 'data.table.remove',
-          label: '',
-          kind: ReportPropertyKind.action,
-          value: 'Delete table',
-          group: g,
-        ),
+        if (shapeKeyForTable(t.name) == null)
+          ReportProperty(
+            key: 'data.table.remove',
+            label: '',
+            kind: ReportPropertyKind.action,
+            value: 'Delete table',
+            group: g,
+          ),
       ]);
       if (_dataColumn >= 0 && _dataColumn < t.columns.length) {
         final ReportDataColumnView c = t.columns[_dataColumn];
@@ -6290,6 +7189,15 @@ class ReportDesignerController extends ChangeNotifier {
             hint: 'qty * price — columns of this table by name',
             group: cg,
           ),
+          if (!c.isCalculated && !host)
+            ReportProperty(
+              key: 'data.col.fill',
+              label: 'Value on every row',
+              kind: ReportPropertyKind.text,
+              value: _sharedCell(t, _dataColumn),
+              hint: 'Writes this into every row',
+              group: cg,
+            ),
           if (c.error != null)
             ReportProperty(
               key: 'data.col.error',
@@ -6419,6 +7327,10 @@ class ReportDesignerController extends ChangeNotifier {
         beginPropertyEdit('data.col.name');
       case 'data.calc+' || 'data.formula+':
         _addFormulaField();
+      case 'data.const+':
+        addConstantColumn();
+      case 'data.col.fill' when col != null:
+        fillDataColumn(col.name, value);
       case 'data.row.remove':
         if (_dataRow >= 0) {
           removeDataRows(<int>[_dataRow]);
@@ -7013,6 +7925,38 @@ class ReportDesignerController extends ChangeNotifier {
   }
 
   bool _applyChart(ReportChartElement e, String key, String v) {
+    final List<String> dot = key.split('.');
+    if (dot.length == 2 &&
+        (dot[0] == 'title' || dot[0] == 'labels' || dot[0] == 'legend')) {
+      final ReportTextStyle style = switch (dot[0]) {
+        'title' => e.titleStyle,
+        'labels' => e.labelStyle,
+        _ => e.legendStyle,
+      };
+      switch (dot[1]) {
+        case 'fontFamily':
+          style.fontFamily = _opt(v);
+        case 'fontSize':
+          if (v.trim().isEmpty) {
+            style.fontSize = null;
+            return true;
+          }
+          final double? n = _parseNum(v);
+          if (n == null || n <= 0) {
+            return false;
+          }
+          style.fontSize = n;
+        case 'bold':
+          style.bold = _parseBool(v);
+        case 'italic':
+          style.italic = _parseBool(v);
+        case 'color':
+          style.color = _opt(v);
+        default:
+          return false;
+      }
+      return true;
+    }
     final List<String> parts = key.split('.');
     if (parts.length == 3) {
       final int? i = int.tryParse(parts[1]);
@@ -7095,14 +8039,22 @@ class ReportDesignerController extends ChangeNotifier {
         }
       case 'showLabels':
         e.showLabels = _parseBool(v);
+      case 'labelField':
+        e.labelField = _opt(v);
       case 'lowColor':
         e.lowColor = _opt(v);
       case 'highColor':
         e.highColor = _opt(v);
       case 'emptyColor':
         e.emptyColor = _opt(v);
+      case 'regionColor':
+        e.regionColor = _opt(v);
       case 'shape.import':
         unawaited(importShape());
+        return false;
+      case 'shape.remove':
+        removeShape(e.shape);
+        return false;
       case 'title':
         e.title = v;
       case 'showLegend':
@@ -7195,6 +8147,10 @@ class ReportDesignerController extends ChangeNotifier {
         e.fontSize = n;
       case 'fontFamily':
         e.fontFamily = _opt(v);
+      case 'bold':
+        e.bold = _parseBool(v);
+      case 'italic':
+        e.italic = _parseBool(v);
       case 'textColor':
         e.textColor = _opt(v);
       case 'palette':
@@ -7808,4 +8764,38 @@ class ReportDesignerController extends ChangeNotifier {
     propertyEditor.bridge.detach();
     super.dispose();
   }
+}
+
+class _ShapeRows {
+  const _ShapeRows({
+    required this.bytes,
+    required this.columns,
+    required this.sources,
+    required this.rows,
+  });
+
+  const _ShapeRows.empty()
+    : bytes = null,
+      columns = const <String>[],
+      sources = const <String>[],
+      rows = const <Map<String, Object?>>[];
+
+  final Uint8List? bytes;
+  final List<String> columns;
+  final List<String> sources;
+  final List<Map<String, Object?>> rows;
+
+  int indexOf(String column) {
+    final String want = column.trim().toLowerCase();
+    for (int i = 0; i < columns.length; i++) {
+      if (columns[i].toLowerCase() == want) {
+        return i;
+      }
+    }
+    return -1;
+  }
+
+  List<Object?> asList() => <Object?>[
+    for (final Map<String, Object?> row in rows) Map<String, Object?>.of(row),
+  ];
 }

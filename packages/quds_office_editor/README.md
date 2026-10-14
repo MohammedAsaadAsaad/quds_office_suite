@@ -177,7 +177,10 @@ one you selected: depth and skew, hole and start angle, markers, curves,
 axis bounds, a target, and bands. **Import shapes…** on a shape map reads a
 shapefile (`.shp` with its `.dbf`), GeoJSON, or `.qmap`, embeds that file in
 the report, and binds the region key to the value table. Until you import a
-file, the chart draws the world atlas.
+file, the chart draws the world atlas. Insert tools sit in a side toolbox,
+and the map is its own tool. Region labels choose a field from the layer,
+including a calculated column. Title, labels, and the legend each open their
+own format box: family, size, bold, italic, and color.
 
 <table>
   <tr>

@@ -103,6 +103,7 @@ enum _RowKind {
   search,
   imageCard,
   fontCard,
+  formatBox,
 }
 
 class _Row {
@@ -745,12 +746,25 @@ class RenderReportInspector extends RenderBox
 
   double get _labelWidth => math.max(92, size.width * 0.38);
 
-  Rect _valueRect(Rect row) => Rect.fromLTRB(
+  Rect _valueRect(Rect row, {double trailing = 0}) => Rect.fromLTRB(
     _labelWidth,
     row.top + 4,
-    size.width - _pad,
+    size.width - _pad - trailing,
     row.bottom - 4,
   );
+
+  Rect _formatButton(Rect row) =>
+      Rect.fromLTWH(size.width - _pad - 22, row.center.dy - 11, 22, 22);
+
+  List<Rect> _formatInner(Rect card, int count) => <Rect>[
+    for (int i = 0; i < count; i++)
+      Rect.fromLTWH(
+        card.left,
+        card.top + 6 + i * rowHeight,
+        card.width,
+        rowHeight,
+      ),
+  ];
 
   (Rect, Rect) _pairRects(Rect row) {
     final double w = (size.width - 2 * _pad - 8) / 2;
@@ -918,7 +932,13 @@ class RenderReportInspector extends RenderBox
   double _propertyRows(List<_Row> rows, double y, List<ReportProperty> props) {
     final Map<String, List<ReportProperty>> actions =
         <String, List<ReportProperty>>{};
+    final Map<String, List<ReportProperty>> nested =
+        <String, List<ReportProperty>>{};
     for (final ReportProperty p in props) {
+      if (p.nest != null) {
+        (nested[p.nest!] ??= <ReportProperty>[]).add(p);
+        continue;
+      }
       if (p.kind == ReportPropertyKind.action) {
         (actions[p.group] ??= <ReportProperty>[]).add(p);
       }
@@ -927,6 +947,10 @@ class RenderReportInspector extends RenderBox
     var i = 0;
     while (i < props.length) {
       final ReportProperty p = props[i];
+      if (p.nest != null) {
+        i++;
+        continue;
+      }
       if (p.group != group) {
         if (group != null) {
           y += _sectionGap;
@@ -978,14 +1002,33 @@ class RenderReportInspector extends RenderBox
         continue;
       }
       final double h = _rowHeightFor(p);
+      final String? box = switch (p.key) {
+        'title' => 'title',
+        'showLabels' => 'labels',
+        'showLegend' => 'legend',
+        _ => null,
+      };
+      final List<ReportProperty>? kids = box == null ? null : nested[box];
       rows.add(
         _Row(
           _RowKind.property,
           Rect.fromLTWH(0, y, size.width, h),
           props: <ReportProperty>[p],
+          text: kids == null ? '' : box!,
         ),
       );
       y += h;
+      if (kids != null && _controller.formatBox == box) {
+        final double boxH = 8 + kids.length * rowHeight + 8;
+        rows.add(
+          _Row(
+            _RowKind.formatBox,
+            Rect.fromLTWH(8, y, size.width - 16, boxH),
+            props: kids,
+          ),
+        );
+        y += boxH + 4;
+      }
       i++;
     }
     return y;
@@ -1350,7 +1393,29 @@ class RenderReportInspector extends RenderBox
       case _RowKind.group:
         return _groupHits(row);
       case _RowKind.property:
-        return _fieldHits(row.property!, _valueRect(row.rect));
+        final bool format = row.text.isNotEmpty;
+        return <_Hit>[
+          ..._fieldHits(
+            row.property!,
+            _valueRect(row.rect, trailing: format ? 28 : 0),
+          ),
+          if (format)
+            _Hit(
+              _HitKind.action,
+              _formatButton(row.rect),
+              property: _synthetic('format.${row.text}'),
+              value: row.text,
+              tip: _s.t('Format'),
+              icon: Icons.format_size,
+              active: _controller.formatBox == row.text,
+            ),
+        ];
+      case _RowKind.formatBox:
+        final List<Rect> inner = _formatInner(row.rect, row.props.length);
+        return <_Hit>[
+          for (int i = 0; i < inner.length; i++)
+            ..._fieldHits(row.props[i], _valueRect(inner[i])),
+        ];
       case _RowKind.pair:
         final (Rect a, Rect b) = _pairRects(row.rect);
         return <_Hit>[
@@ -1700,7 +1765,19 @@ class RenderReportInspector extends RenderBox
         case _RowKind.property:
           final ReportProperty p = row.property!;
           if (p.key == key) {
-            return (p, _valueRect(row.rect), '');
+            return (
+              p,
+              _valueRect(row.rect, trailing: row.text.isEmpty ? 0 : 28),
+              '',
+            );
+          }
+        case _RowKind.formatBox:
+          final List<Rect> inner = _formatInner(row.rect, row.props.length);
+          for (int i = 0; i < inner.length; i++) {
+            final ReportProperty p = row.props[i];
+            if (p.key == key) {
+              return (p, _valueRect(inner[i]), '');
+            }
           }
         case _RowKind.pair:
           final (Rect a, Rect b) = _pairRects(row.rect);
@@ -1992,7 +2069,11 @@ class RenderReportInspector extends RenderBox
             : Rect.fromLTRB(text.left - 24, text.top, text.right, text.bottom);
         markNeedsPaint();
       case _HitKind.action:
-        _controller.setProperty(p!.key, p.value);
+        if (p!.key.startsWith('format.')) {
+          _controller.toggleFormatBox(p.key.substring('format.'.length));
+          return;
+        }
+        _controller.setProperty(p.key, p.value);
       case _HitKind.folderAction:
         _controller.selectedVariablePath = hit.value;
         _controller.setProperty(p!.key, p.value);
@@ -2143,6 +2224,8 @@ class RenderReportInspector extends RenderBox
           );
         case _RowKind.property:
           _paintProperty(canvas, row, hot);
+        case _RowKind.formatBox:
+          _paintFormatBox(canvas, row, hot);
         case _RowKind.pair:
           final (Rect a, Rect b) = _pairRects(row.rect);
           _paintControl(
@@ -2301,7 +2384,10 @@ class RenderReportInspector extends RenderBox
             'Rectangle',
           ),
         },
-        ReportChartElement() => (ReportToolbarIcon.chart, 'Chart'),
+        ReportChartElement(:final ReportChartType chartType) =>
+          chartType.isShapeMap
+              ? (ReportToolbarIcon.map, 'Map')
+              : (ReportToolbarIcon.chart, 'Chart'),
       };
       return (
         icon,
@@ -2576,8 +2662,57 @@ class RenderReportInspector extends RenderBox
       _draw(canvas, _wideNote(p), Offset(_pad, r.top + 6));
       return;
     }
+    final bool format = row.text.isNotEmpty;
     _paintLabel(canvas, p.label, r);
-    _paintControl(canvas, p, _valueRect(r), hot);
+    _paintControl(canvas, p, _valueRect(r, trailing: format ? 28 : 0), hot);
+    if (format) {
+      _paintFormatButton(canvas, row, hot);
+    }
+  }
+
+  void _paintFormatButton(Canvas canvas, _Row row, _Hit? hot) {
+    final Rect b = _formatButton(row.rect);
+    final bool open = _controller.formatBox == row.text;
+    final bool h =
+        hot != null && hot.kind == _HitKind.action && hot.value == row.text;
+    final RRect rr = RRect.fromRectAndRadius(b, const Radius.circular(6));
+    canvas.drawRRect(
+      rr,
+      Paint()..color = open || h ? _accent.withValues(alpha: 0.16) : _fieldFill,
+    );
+    canvas.drawRRect(
+      rr,
+      Paint()
+        ..color = open ? _accent : _line
+        ..style = PaintingStyle.stroke,
+    );
+    _icon(
+      canvas,
+      Icons.format_size,
+      b.center,
+      16,
+      open || h ? _accent : _muted,
+    );
+  }
+
+  void _paintFormatBox(Canvas canvas, _Row row, _Hit? hot) {
+    final RRect rr = RRect.fromRectAndRadius(
+      row.rect.deflate(1),
+      const Radius.circular(8),
+    );
+    canvas.drawRRect(rr, Paint()..color = _fieldFill);
+    canvas.drawRRect(
+      rr,
+      Paint()
+        ..color = _line
+        ..style = PaintingStyle.stroke,
+    );
+    final List<Rect> inner = _formatInner(row.rect, row.props.length);
+    for (int i = 0; i < inner.length; i++) {
+      final ReportProperty p = row.props[i];
+      _paintLabel(canvas, p.label, inner[i]);
+      _paintControl(canvas, p, _valueRect(inner[i]), hot);
+    }
   }
 
   bool _isHot(_Hit? hot, _HitKind kind, ReportProperty p, [String? value]) =>

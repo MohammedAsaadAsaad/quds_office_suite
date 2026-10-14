@@ -1062,6 +1062,8 @@ class ReportChartElement extends ReportElement {
     this.valueFormat,
     this.fontSize = 7.5,
     this.fontFamily,
+    this.bold = false,
+    this.italic = false,
     this.textColor,
     this.background,
     this.borderColor,
@@ -1092,9 +1094,17 @@ class ReportChartElement extends ReportElement {
     this.highColor,
     this.emptyColor,
     this.showLabels = true,
+    this.regionColor,
+    this.labelField,
+    ReportTextStyle? titleStyle,
+    ReportTextStyle? labelStyle,
+    ReportTextStyle? legendStyle,
   }) : series = series ?? <ReportChartSeries>[],
        points = points ?? <ReportChartPoint>[],
-       palette = palette ?? <String>[];
+       palette = palette ?? <String>[],
+       titleStyle = titleStyle ?? ReportTextStyle(),
+       labelStyle = labelStyle ?? ReportTextStyle(),
+       legendStyle = legendStyle ?? ReportTextStyle();
 
   /// Default slice / series colors (Office-like, print safe).
   static const List<String> defaultPalette = <String>[
@@ -1155,13 +1165,21 @@ class ReportChartElement extends ReportElement {
   /// Format spec for value labels (`currency:LYD`, `n0`, `percent`).
   String? valueFormat;
 
-  /// Label size, points (the title is 1.3×).
+  /// Label size, points. A chart title is drawn at 1.3×; a map uses this size
+  /// for the title, the legend, and the region labels.
   double fontSize;
 
   /// Font family; null uses the template default.
   String? fontFamily;
 
+  /// Bold title, legend, and region labels.
+  bool bold;
+
+  /// Italic title, legend, and region labels.
+  bool italic;
+
   /// Label color; null uses the template text color.
+  /// On a map, null keeps region labels in a color that contrasts with the fill.
   String? textColor;
 
   /// background API.
@@ -1253,6 +1271,24 @@ class ReportChartElement extends ReportElement {
   /// Draw the region name on areas wide enough to hold it.
   bool showLabels;
 
+  /// Expression that paints each region, such as `Row.color`.
+  /// A `#hex` value, a CSS name, or a palette name. Empty keeps the
+  /// value gradient.
+  String? regionColor;
+
+  /// Attribute drawn as the region name. Empty uses the name stored
+  /// with the shape, or the key when the file has no name column.
+  String? labelField;
+
+  /// Title font. Empty fields use the chart font.
+  final ReportTextStyle titleStyle;
+
+  /// Region-label font. An empty color keeps a color that contrasts with the fill.
+  final ReportTextStyle labelStyle;
+
+  /// Legend font (the low and high values under the scale).
+  final ReportTextStyle legendStyle;
+
   /// Pie, donut, or an extruded form of either.
   bool get isRadial => chartType.isPie;
 
@@ -1304,6 +1340,8 @@ class ReportChartElement extends ReportElement {
     valueFormat: valueFormat,
     fontSize: fontSize,
     fontFamily: fontFamily,
+    bold: bold,
+    italic: italic,
     textColor: textColor,
     background: background,
     borderColor: borderColor,
@@ -1334,6 +1372,11 @@ class ReportChartElement extends ReportElement {
     highColor: highColor,
     emptyColor: emptyColor,
     showLabels: showLabels,
+    regionColor: regionColor,
+    labelField: labelField,
+    titleStyle: titleStyle.copy(),
+    labelStyle: labelStyle.copy(),
+    legendStyle: legendStyle.copy(),
   );
 }
 

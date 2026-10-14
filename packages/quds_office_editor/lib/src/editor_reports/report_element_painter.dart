@@ -55,6 +55,7 @@ class ReportElementPainter {
     Map<String, Uint8List> shapes = const <String, Uint8List>{},
     bool hideText = false,
     ReportFontRegistry? fonts,
+    Map<String, Object?>? data,
   }) {
     final ReportTemplate t = layout.template;
     switch (e) {
@@ -69,7 +70,7 @@ class ReportElementPainter {
       case ReportShapeElement():
         _paintShape(canvas, layout, e, r);
       case ReportChartElement():
-        _paintChart(canvas, t, e, r, fonts ?? _defaultFonts, shapes);
+        _paintChart(canvas, t, e, r, fonts ?? _defaultFonts, shapes, data);
     }
   }
 
@@ -734,6 +735,7 @@ class ReportElementPainter {
     Rect r,
     ReportFontRegistry fonts,
     Map<String, Uint8List> shapes,
+    Map<String, Object?>? data,
   ) {
     final ReportColor bg = t.resolveColor(
       e.background,
@@ -742,35 +744,63 @@ class ReportElementPainter {
     if (bg.alpha > 0) {
       canvas.drawRect(r, Paint()..color = Color(bg.argb));
     }
-    final ReportChartData data = sampleChartData(t, e, shapes: shapes);
+    final ReportChartData chart = sampleChartData(
+      t,
+      e,
+      shapes: shapes,
+      data: data,
+    );
     final String key = <Object?>[
       r.width,
       r.height,
       identityHashCode(fonts),
-      data.type,
-      data.title,
-      data.rtl,
-      data.showLegend,
-      data.showValues,
-      data.showGrid,
-      data.showAxes,
-      data.valueFormat,
-      data.categories.join('\u0001'),
-      for (final ReportChartSeriesData s in data.series) ...<Object>[
+      chart.type,
+      chart.title,
+      chart.rtl,
+      chart.showLegend,
+      chart.showValues,
+      chart.showGrid,
+      chart.showAxes,
+      chart.valueFormat,
+      chart.categories.join('\u0001'),
+      for (final String label in chart.regionLabels ?? const <String>[]) label,
+      for (final String label
+          in chart.featureLabels?.values ?? const <String>[])
+        label,
+      for (final ReportChartSeriesData s in chart.series) ...<Object>[
         s.name,
         s.color.argb,
         s.values.join(','),
       ],
-      for (final ReportColor c in data.pointColors) c.argb,
+      for (final ReportColor c in chart.pointColors) c.argb,
       e.shape,
       e.showLabels,
+      e.labelField,
+      e.regionColor,
       e.lowColor,
       e.highColor,
       e.emptyColor,
       identityHashCode(shapes[e.shape]),
       e.fontFamily,
       e.fontSize,
+      e.bold,
+      e.italic,
       e.textColor,
+      e.titleStyle.fontFamily,
+      e.titleStyle.fontSize,
+      e.titleStyle.bold,
+      e.titleStyle.italic,
+      e.titleStyle.color,
+      e.labelStyle.fontFamily,
+      e.labelStyle.fontSize,
+      e.labelStyle.bold,
+      e.labelStyle.italic,
+      e.labelStyle.color,
+      e.legendStyle.fontFamily,
+      e.legendStyle.fontSize,
+      e.legendStyle.bold,
+      e.legendStyle.italic,
+      e.legendStyle.color,
       t.defaultFont,
     ].join('|');
     List<ReportPrimitive>? prims = _charts[key];
@@ -784,13 +814,21 @@ class ReportElementPainter {
             shaper: shaper,
             formatter: ReportFormatter(defaults: t.formats),
           ).render(
-            data,
+            chart,
             ReportRect(0, 0, r.width, r.height),
             font: ReportFontSpec(
               family: e.fontFamily ?? t.defaultFont,
               size: e.fontSize > 0 ? e.fontSize : 7.5,
+              bold: e.bold,
+              italic: e.italic,
             ),
             textColor: t.resolveColor(e.textColor, t.textColor),
+            labelColor: (e.labelStyle.color ?? e.textColor) == null
+                ? null
+                : t.resolveColor(
+                    e.labelStyle.color ?? e.textColor,
+                    t.textColor,
+                  ),
           );
       _charts[key] = prims;
     }
@@ -826,6 +864,7 @@ class ReportElementPainter {
     ReportTemplate t,
     ReportChartElement e, {
     Map<String, Uint8List> shapes = const <String, Uint8List>{},
+    Map<String, Object?>? data,
   }) {
     ReportColor palette(int i) =>
         t.resolveColor(e.paletteColor(i), t.primaryColor);
@@ -914,6 +953,39 @@ class ReportElementPainter {
           ..addAll(sorted);
       }
     }
+    final List<String>? regionLabels = _formulaLabels(
+      e,
+      data,
+      categories,
+      series,
+      pointColors,
+      palette,
+      shapes,
+    );
+    Map<String, String>? featureLabels;
+    if (e.chartType.isShapeMap && e.showLabels) {
+      final ReportShapeLayer? layer = ReportShapes.resolve(e.shape, shapes);
+      final String field = (e.labelField ?? '').trim();
+      if (layer != null && field.isNotEmpty) {
+        final ReportValue root = data == null
+            ? ReportRecord.empty
+            : ReportValue.from(data);
+        featureLabels = QudsExpressionEngine().shapeFieldLabels(
+          field: field,
+          layer: layer,
+          schema: t.dataSchema,
+          data: root is ReportRecord ? root : null,
+          keyField: e.shapeKey,
+        );
+      }
+    }
+    final ReportFontSpec chartFont = ReportFontSpec(
+      family: e.fontFamily ?? t.defaultFont,
+      size: e.fontSize > 0 ? e.fontSize : 7.5,
+      bold: e.bold,
+      italic: e.italic,
+    );
+    final bool map = e.chartType.isShapeMap;
     return ReportChartData(
       type: e.chartType,
       title: e.title,
@@ -949,10 +1021,106 @@ class ReportElementPainter {
           ? ReportShapes.resolve(e.shape, shapes)
           : null,
       showLabels: e.showLabels,
+      labelField: e.labelField,
+      regionLabels: regionLabels,
+      featureLabels: featureLabels,
+      titleFont: map ? reportStyleFont(e.titleStyle, chartFont) : null,
+      titleInk: map
+          ? t.resolveColor(e.titleStyle.color ?? e.textColor, t.textColor)
+          : null,
+      labelFont: map ? reportStyleFont(e.labelStyle, chartFont) : null,
+      legendFont: map ? reportStyleFont(e.legendStyle, chartFont) : null,
+      legendInk: map
+          ? t.resolveColor(e.legendStyle.color ?? e.textColor, t.textColor)
+          : null,
+      regionColors: (e.regionColor ?? '').trim().isEmpty
+          ? null
+          : <ReportColor?>[
+              for (int i = 0; i < categories.length; i++) palette(i),
+            ],
       low: t.resolveColor(e.lowColor, const ReportColor(0xFFDEEBF7)),
       high: t.resolveColor(e.highColor, const ReportColor(0xFF08306B)),
       empty: t.resolveColor(e.emptyColor, const ReportColor(0xFFE4E4E4)),
     );
+  }
+
+  /// When the label is a formula, captions come from [data] and the
+  /// sample categories become the real region keys. An empty list still
+  /// marks formula mode, so a missing row is not labeled with the key.
+  static List<String>? _formulaLabels(
+    ReportChartElement e,
+    Map<String, Object?>? data,
+    List<String> categories,
+    List<ReportChartSeriesData> series,
+    List<ReportColor> pointColors,
+    ReportColor Function(int) palette,
+    Map<String, Uint8List> shapes,
+  ) {
+    if (!e.chartType.isShapeMap ||
+        !QudsExpressionEngine.isLabelFormula(e.labelField)) {
+      return null;
+    }
+    final List<ReportValue> rows = data == null
+        ? const <ReportValue>[]
+        : _boundRows(data, e.dataSet);
+    final ReportValue root = ReportValue.from(data);
+    final Map<String, String> captions = rows.isEmpty
+        ? const <String, String>{}
+        : QudsExpressionEngine().regionCaptions(
+            e.labelField!.trim(),
+            e.category,
+            rows,
+            ReportScope(
+              data: root is ReportRecord ? root : ReportRecord.empty,
+              variables: ReportRecord.empty,
+              system: ReportSystemInfo(now: DateTime.utc(2020)),
+            ),
+            shapes: ReportShapes.resolve(e.shape, shapes),
+          );
+    if (captions.isNotEmpty) {
+      categories
+        ..clear()
+        ..addAll(captions.keys);
+      pointColors
+        ..clear()
+        ..addAll(<ReportColor>[
+          for (int i = 0; i < categories.length; i++) palette(i),
+        ]);
+      for (int s = 0; s < series.length; s++) {
+        final ReportChartSeriesData old = series[s];
+        series[s] = ReportChartSeriesData(
+          name: old.name,
+          color: old.color,
+          values: <double>[
+            for (int i = 0; i < categories.length; i++)
+              _sample[(i + 3 * s) % 8] * (1 + s / 4),
+          ],
+          style: old.style,
+          secondary: old.secondary,
+        );
+      }
+      return <String>[for (final String key in categories) captions[key] ?? ''];
+    }
+    return List<String>.filled(categories.length, '');
+  }
+
+  static List<ReportValue> _boundRows(
+    Map<String, Object?> data,
+    String? dataSet,
+  ) {
+    final String set = (dataSet ?? '').trim();
+    if (set.isEmpty) {
+      return const <ReportValue>[];
+    }
+    final String path = set.replaceFirst(
+      RegExp(r'^Data\.', caseSensitive: false),
+      '',
+    );
+    final ReportValue value = ReportValue.from(ReportData.valueAt(data, path));
+    if (value is ReportList) {
+      return value.items;
+    }
+    return const <ReportValue>[];
   }
 
   void _bindingTag(Canvas canvas, Rect r, String label) {

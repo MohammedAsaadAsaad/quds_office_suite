@@ -340,6 +340,13 @@ class ReportDesignerStrings {
     'Bullet': 'رصاصة',
     'Funnel': 'قمع',
     'Shape map': 'خريطة أشكال',
+    'Map': 'خريطة',
+    'Remove map file': 'حذف ملف الخريطة',
+    'Region color': 'لون المنطقة',
+    'Row.color — #hex or a palette name for each region':
+        'Row.color — لون #hex أو اسم من لوحة الألوان لكل منطقة',
+    'This file is not longitude and latitude. Reproject it to WGS84 (EPSG:4326) and import it again.':
+        'هذا الملف ليس بخطوط الطول والعرض. أعد إسقاطه إلى WGS84 (EPSG:4326) ثم استورده من جديد.',
     'Shapes': 'الأشكال',
     'Region key': 'مفتاح المنطقة',
     'LY, LBY, or Libya': 'LY أو LBY أو Libya أو ليبيا',
@@ -350,6 +357,10 @@ class ReportDesignerStrings {
     'Shape key field': 'حقل مفتاح الشكل',
     'Attribute that matches the table, such as a district code':
         'عمود الملف الذي يطابق الجدول، مثل رمز الحي',
+    'Label field': 'حقل التسمية',
+    'The column drawn on each region': 'العمود الذي يُرسم اسماً لكل منطقة',
+    'A map column, or a formula such as CONCAT(name, "\\n", code) or CONCAT(Row.name, "\\n", Row.code)':
+        'عمود من ملف الخريطة، أو صيغة مثل CONCAT(name, "\\n", code) أو CONCAT(Row.name, "\\n", Row.code)',
     'Region labels': 'تسميات المناطق',
     'Low color': 'لون القيمة الصغرى',
     'High color': 'لون القيمة الكبرى',
@@ -482,6 +493,7 @@ class ReportDesignerStrings {
     'Letters, digits, _ and -; used as <Image source="…">':
         'حروف وأرقام و_ و-؛ يُستخدم في <Image source="…">',
     'Filter installed fonts': 'ابحث في الخطوط المثبتة',
+    'Type to search': 'اكتب للبحث',
     'stored values': 'قيم مخزنة',
     'qty * price — columns of this table by name':
         'qty * price — أعمدة هذا الجدول بالاسم مباشرة',
@@ -556,6 +568,13 @@ class ReportDesignerStrings {
     'Add row': 'إضافة صف',
     'Add column': 'إضافة عمود',
     'Add calculated column': 'إضافة عمود محسوب',
+    'Add constant column': 'إضافة عمود ثابت',
+    'Value on every row': 'قيمة لكل الصفوف',
+    'Writes this into every row': 'تُكتب هذه القيمة في كل الصفوف',
+    'Attributes of the map file': 'خصائص ملف الخريطة',
+    'Rows come from the map file': 'الصفوف تأتي من ملف الخريطة',
+    'This table comes from the map file. Remove the map file to drop it.':
+        'هذا الجدول من ملف الخريطة. احذف ملف الخريطة لإزالته.',
     'Delete table': 'حذف الجدول',
     'Delete column': 'حذف العمود',
     'New table': 'جدول جديد',
@@ -622,6 +641,49 @@ class ReportDesignerStrings {
     'Insert at the caret': 'إدراج عند المؤشر',
     'Insert as a text box': 'إدراج كمربع نص',
     'Select (Esc)': 'تحديد (Esc)',
+    'Insert': 'إدراج',
+    'Pick, move, and resize what is already on the page.':
+        'اختر ما على الصفحة ثم حرّكه أو غيّر مقاسه.',
+    'Fixed words, or a field such as {{Data.customer}}.':
+        'نص ثابت، أو حقل مثل {{Data.customer}}.',
+    'Page number': 'رقم الصفحة',
+    'Prints the number of this page.': 'يطبع رقم هذه الصفحة.',
+    'Page count': 'عدد الصفحات',
+    'This page and the page count, such as 2 / 5.':
+        'هذه الصفحة وعدد الصفحات، مثل 2 / 5.',
+    'Print date': 'تاريخ الطباعة',
+    'The date the report is printed.': 'تاريخ طباعة التقرير.',
+    'Report name': 'اسم التقرير',
+    'The name stored on the report.': 'الاسم المحفوظ على التقرير.',
+    'Row number': 'رقم الصف',
+    '1, 2, 3… for the current record. Place it in the detail band.':
+        '١، ٢، ٣… للسجل الحالي. ضعه في شريط التفاصيل.',
+    'Column total': 'مجموع العمود',
+    'The sum of a column. Change Row.total to your own field.':
+        'مجموع عمود. غيّر Row.total إلى اسم حقلك.',
+    'Signature': 'التوقيع',
+    'A line to sign on, with a caption underneath.':
+        'خط للتوقيع، وتحته عبارة توضيحية.',
+    'A picture. Import a PNG or JPEG and it is stored inside the report.':
+        'صورة. استورد PNG أو JPEG فتُحفظ داخل التقرير.',
+    'One row for every record. Bind each column to a field.':
+        'صف لكل سجل. اربط كل عمود بحقل.',
+    'A Code 128 barcode from a number or a field.':
+        'باركود Code 128 من رقم أو من حقل.',
+    'A square code for a link, a reference, or a field.':
+        'رمز مربّع لرابط أو مرجع أو حقل.',
+    'A straight rule for separators and underlines.':
+        'خط مستقيم للفواصل والتسطير.',
+    'A box. Fill it, or leave it as an outline.':
+        'صندوق. عبّئه أو اتركه إطارًا فقط.',
+    'Rounded box': 'صندوق دائري الزوايا',
+    'A box with rounded corners, for a card or a frame.':
+        'صندوق بزوايا دائرية، لبطاقة أو إطار.',
+    'A circle or an oval.': 'دائرة أو شكل بيضوي.',
+    'Columns, lines, pies, and the other charts, bound to a table.':
+        'أعمدة وخطوط ودوائر وبقية المخططات، مربوطة بجدول.',
+    'Regions from a shape file. Color each one from a column, joined by a key.':
+        'مناطق من ملف أشكال. لوّن كل منطقة من عمود، والربط بالمفتاح.',
     'Text box': 'مربع نص',
     'Repeating table': 'جدول متكرر',
     'Undo (Ctrl+Z)': 'تراجع (Ctrl+Z)',

@@ -1,4 +1,8 @@
+import 'dart:math' as math;
+
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:quds_office_engine/quds_office_engine.dart';
 
 import '../editor_pdf/pdf_text_selection.dart';
@@ -148,10 +152,16 @@ class PdfContextHit {
 abstract final class OfficeContextMenu {
   /// dismiss API.
   static void dismiss(OverlayEntry? entry) {
-    if (entry == null || !entry.mounted) {
+    if (entry == null) {
       return;
     }
-    entry.remove();
+    try {
+      // `mounted` stays true until the next frame, so a second dismiss (the
+      // menu already closed itself) must not call remove() again.
+      entry.remove();
+    } on Object {
+      return;
+    }
   }
 
   static OverlayEntry? show({
@@ -159,6 +169,7 @@ abstract final class OfficeContextMenu {
     required Offset globalPosition,
     required List<OfficeContextAction> actions,
     required ValueChanged<String> onSelect,
+    String? filterHint,
   }) {
     if (actions.isEmpty) {
       return null;
@@ -182,9 +193,7 @@ abstract final class OfficeContextMenu {
         return;
       }
       closed = true;
-      if (entry.mounted) {
-        entry.remove();
-      }
+      OfficeContextMenu.dismiss(entry);
     }
 
     entry = OverlayEntry(
@@ -194,6 +203,7 @@ abstract final class OfficeContextMenu {
           actions: actions,
           theme: theme,
           direction: direction,
+          filterHint: filterHint,
           onDismiss: close,
           onSelect: (String id) {
             close();
@@ -798,7 +808,7 @@ class _MenuPalette {
   final Color disabled;
 }
 
-class _OfficeContextOverlay extends StatelessWidget {
+class _OfficeContextOverlay extends StatefulWidget {
   const _OfficeContextOverlay({
     required this.globalPosition,
     required this.actions,
@@ -806,6 +816,7 @@ class _OfficeContextOverlay extends StatelessWidget {
     required this.direction,
     required this.onDismiss,
     required this.onSelect,
+    this.filterHint,
   });
 
   /// globalPosition API.
@@ -820,6 +831,10 @@ class _OfficeContextOverlay extends StatelessWidget {
   /// direction API.
   final TextDirection direction;
 
+  /// Shown while the query is empty. Typing filters when this is set or the
+  /// menu has more than eight commands.
+  final String? filterHint;
+
   /// onDismiss API.
   final VoidCallback onDismiss;
 
@@ -827,30 +842,253 @@ class _OfficeContextOverlay extends StatelessWidget {
   final ValueChanged<String> onSelect;
 
   @override
-  /// build API.
-  Widget build(BuildContext context) {
-    final _MenuPalette palette = _MenuPalette.of(theme);
-    final Size screen = MediaQuery.sizeOf(context);
-    const double width = 292;
-    final double height = actions.fold<double>(12, (
-      double h,
-      OfficeContextAction a,
-    ) {
-      final double row = a.isCaption ? 22 : 36;
-      return h + (a.separatorBefore ? 9 : 0) + row;
+  State<_OfficeContextOverlay> createState() => _OfficeContextOverlayState();
+}
+
+class _MenuRow {
+  const _MenuRow(this.action, this.top, this.height);
+
+  final OfficeContextAction action;
+  final double top;
+  final double height;
+}
+
+class _OfficeContextOverlayState extends State<_OfficeContextOverlay> {
+  static const double _width = 292;
+  static const double _filterHeight = 34;
+
+  final FocusNode _focus = FocusNode();
+  String _query = '';
+  double _scroll = 0;
+  int _selected = 0;
+
+  @override
+  void dispose() {
+    _focus.dispose();
+    super.dispose();
+  }
+
+  bool get _filtering {
+    if (widget.filterHint != null) {
+      return true;
+    }
+    var commands = 0;
+    for (final OfficeContextAction a in widget.actions) {
+      if (!a.isCaption) {
+        commands++;
+      }
+    }
+    return commands > 8;
+  }
+
+  List<OfficeContextAction> get _visible {
+    if (_query.isEmpty) {
+      return widget.actions;
+    }
+    final String q = _query.toLowerCase();
+    return <OfficeContextAction>[
+      for (final OfficeContextAction a in widget.actions)
+        if (!a.isCaption && a.label.toLowerCase().contains(q))
+          OfficeContextAction(
+            id: a.id,
+            label: a.label,
+            icon: a.icon,
+            shortcut: a.shortcut,
+            enabled: a.enabled,
+            danger: a.danger,
+          ),
+    ];
+  }
+
+  List<_MenuRow> _rows(List<OfficeContextAction> items) {
+    final List<_MenuRow> out = <_MenuRow>[];
+    var y = 0.0;
+    for (final OfficeContextAction a in items) {
+      if (a.separatorBefore) {
+        y += 9;
+      }
+      final double h = a.isCaption ? 22 : 36;
+      out.add(_MenuRow(a, y, h));
+      y += h;
+    }
+    return out;
+  }
+
+  int _selectableCount(List<OfficeContextAction> items) {
+    var n = 0;
+    for (final OfficeContextAction a in items) {
+      if (!a.isCaption && a.enabled) {
+        n++;
+      }
+    }
+    return n;
+  }
+
+  OfficeContextAction? _selectedAction(List<OfficeContextAction> items) {
+    var i = 0;
+    for (final OfficeContextAction a in items) {
+      if (a.isCaption || !a.enabled) {
+        continue;
+      }
+      if (i == _selected) {
+        return a;
+      }
+      i++;
+    }
+    return null;
+  }
+
+  void _nudge(double dy) {
+    final double maxScroll = _maxScroll(MediaQuery.sizeOf(context));
+    setState(() {
+      _scroll = (_scroll + dy).clamp(0, maxScroll);
     });
-    final double left = globalPosition.dx.clamp(
+  }
+
+  void _reveal(Size screen) {
+    final List<OfficeContextAction> items = _visible;
+    final List<_MenuRow> rows = _rows(items);
+    var i = 0;
+    _MenuRow? row;
+    for (var r = 0; r < rows.length; r++) {
+      final OfficeContextAction a = rows[r].action;
+      if (a.isCaption || !a.enabled) {
+        continue;
+      }
+      if (i == _selected) {
+        row = rows[r];
+        break;
+      }
+      i++;
+    }
+    if (row == null) {
+      return;
+    }
+    final double view = _viewHeight(screen, _extent(items));
+    if (row.top < _scroll) {
+      _scroll = row.top;
+    } else if (row.top + row.height > _scroll + view) {
+      _scroll = row.top + row.height - view;
+    }
+    _scroll = _scroll.clamp(0, _maxScroll(screen));
+  }
+
+  double _extent(List<OfficeContextAction> items) {
+    var h = 0.0;
+    for (final OfficeContextAction a in items) {
+      h += (a.separatorBefore ? 9 : 0) + (a.isCaption ? 22 : 36);
+    }
+    return h;
+  }
+
+  double _viewHeight(Size screen, double extent) {
+    final double chrome = 12 + (_filtering ? _filterHeight : 0);
+    final double maxHeight = (screen.height - 16).clamp(80.0, screen.height);
+    final double natural = chrome + extent;
+    final double menu = natural > maxHeight ? maxHeight : natural;
+    return menu - chrome;
+  }
+
+  double _maxScroll(Size screen) {
+    final double extent = _extent(_visible);
+    return math.max(0, extent - _viewHeight(screen, extent));
+  }
+
+  KeyEventResult _onKey(FocusNode node, KeyEvent event) {
+    if (!_filtering || event is KeyUpEvent) {
+      return KeyEventResult.ignored;
+    }
+    final LogicalKeyboardKey key = event.logicalKey;
+    if (key == LogicalKeyboardKey.escape) {
+      if (_query.isNotEmpty) {
+        setState(() {
+          _query = '';
+          _scroll = 0;
+          _selected = 0;
+        });
+      } else {
+        widget.onDismiss();
+      }
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.backspace) {
+      if (_query.isNotEmpty) {
+        setState(() {
+          _query = _query.substring(0, _query.length - 1);
+          _scroll = 0;
+          _selected = 0;
+        });
+      }
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.enter) {
+      final OfficeContextAction? action = _selectedAction(_visible);
+      if (action != null) {
+        widget.onSelect(action.id);
+      }
+      return KeyEventResult.handled;
+    }
+    final int count = _selectableCount(_visible);
+    if (key == LogicalKeyboardKey.arrowDown ||
+        key == LogicalKeyboardKey.arrowUp) {
+      if (count > 0) {
+        setState(() {
+          _selected = key == LogicalKeyboardKey.arrowDown
+              ? math.min(count - 1, _selected + 1)
+              : math.max(0, _selected - 1);
+          _reveal(MediaQuery.sizeOf(context));
+        });
+      }
+      return KeyEventResult.handled;
+    }
+    if (HardwareKeyboard.instance.isControlPressed ||
+        HardwareKeyboard.instance.isMetaPressed ||
+        HardwareKeyboard.instance.isAltPressed) {
+      return KeyEventResult.ignored;
+    }
+    final String? typed = event.character;
+    final String ch = (typed != null && typed.isNotEmpty)
+        ? typed
+        : (key.keyLabel.length == 1 ? key.keyLabel : '');
+    if (ch.isEmpty || ch.codeUnitAt(0) < 0x20) {
+      return KeyEventResult.ignored;
+    }
+    setState(() {
+      _query += ch;
+      _scroll = 0;
+      _selected = 0;
+    });
+    return KeyEventResult.handled;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final _MenuPalette palette = _MenuPalette.of(widget.theme);
+    final Size screen = MediaQuery.sizeOf(context);
+    final bool filtering = _filtering;
+    final List<OfficeContextAction> items = _visible;
+    final double extent = _extent(items);
+    final double view = _viewHeight(screen, extent);
+    final double chrome = 12 + (filtering ? _filterHeight : 0);
+    final double height = chrome + view;
+    final double maxScroll = math.max(0, extent - view);
+    final double offset = _scroll.clamp(0, maxScroll);
+    final double left = widget.globalPosition.dx.clamp(
       8,
-      (screen.width - width - 8).clamp(8, screen.width),
+      (screen.width - _width - 8).clamp(8, screen.width),
     );
-    final double top = globalPosition.dy.clamp(
+    final double top = widget.globalPosition.dy.clamp(
       8,
       (screen.height - height - 8).clamp(8, screen.height),
     );
+    final OfficeContextAction? current = _selectedAction(items);
+    final double thumb = maxScroll <= 0
+        ? 0
+        : math.max(18, view * view / extent);
     return Directionality(
-      textDirection: direction,
+      textDirection: widget.direction,
       child: Theme(
-        data: theme,
+        data: widget.theme,
         child: Material(
           type: MaterialType.transparency,
           child: Stack(
@@ -858,46 +1096,187 @@ class _OfficeContextOverlay extends StatelessWidget {
               Positioned.fill(
                 child: Listener(
                   behavior: HitTestBehavior.translucent,
-                  onPointerDown: (_) => onDismiss(),
+                  onPointerDown: (_) => widget.onDismiss(),
                 ),
               ),
               Positioned(
                 left: left,
                 top: top,
-                width: width,
-                child: Material(
-                  color: palette.surface,
-                  elevation: 12,
-                  shadowColor: const Color(0x40000000),
-                  surfaceTintColor: const Color(0x00000000),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    side: BorderSide(color: palette.border),
-                  ),
-                  clipBehavior: Clip.antiAlias,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 6),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: <Widget>[
-                        for (final OfficeContextAction action
-                            in actions) ...<Widget>[
-                          if (action.separatorBefore)
-                            Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 4),
-                              child: ColoredBox(
-                                color: palette.divider,
-                                child: const SizedBox(height: 1),
+                width: _width,
+                height: height,
+                child: Focus(
+                  focusNode: _focus,
+                  autofocus: filtering,
+                  onKeyEvent: _onKey,
+                  child: Material(
+                    key: const Key('office-context-menu'),
+                    color: palette.surface,
+                    elevation: 12,
+                    shadowColor: const Color(0x40000000),
+                    surfaceTintColor: const Color(0x00000000),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      side: BorderSide(color: palette.border),
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 6),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: <Widget>[
+                          if (filtering)
+                            SizedBox(
+                              height: _filterHeight,
+                              child: Padding(
+                                padding: const EdgeInsets.fromLTRB(
+                                  12,
+                                  2,
+                                  12,
+                                  4,
+                                ),
+                                child: Row(
+                                  children: <Widget>[
+                                    Icon(
+                                      Icons.search,
+                                      size: 16,
+                                      color: palette.muted,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        _query.isEmpty
+                                            ? (widget.filterHint ??
+                                                  'Type to search')
+                                            : _query,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          color: _query.isEmpty
+                                              ? palette.muted
+                                              : palette.text,
+                                          height: 1.2,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
-                          _OfficeContextItem(
-                            action: action,
-                            palette: palette,
-                            onSelect: onSelect,
+                          SizedBox(
+                            height: view,
+                            child: Stack(
+                              children: <Widget>[
+                                Positioned.fill(
+                                  child: ClipRect(
+                                    child: Listener(
+                                      onPointerSignal: (PointerSignalEvent e) {
+                                        if (e is PointerScrollEvent) {
+                                          _nudge(e.scrollDelta.dy);
+                                        } else if (e
+                                            is PointerPanZoomUpdateEvent) {
+                                          _nudge(
+                                            (e as PointerPanZoomUpdateEvent)
+                                                .panDelta
+                                                .dy,
+                                          );
+                                        }
+                                      },
+                                      child: Transform.translate(
+                                        offset: Offset(0, -offset),
+                                        child: OverflowBox(
+                                          alignment: Alignment.topLeft,
+                                          minWidth: 0,
+                                          maxWidth: _width,
+                                          minHeight: 0,
+                                          maxHeight: double.infinity,
+                                          child: Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.stretch,
+                                            children: <Widget>[
+                                              for (final OfficeContextAction
+                                                  action
+                                                  in items) ...<Widget>[
+                                                if (action.separatorBefore)
+                                                  Padding(
+                                                    padding:
+                                                        const EdgeInsets.symmetric(
+                                                          vertical: 4,
+                                                        ),
+                                                    child: ColoredBox(
+                                                      color: palette.divider,
+                                                      child: const SizedBox(
+                                                        height: 1,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                _OfficeContextItem(
+                                                  action: action,
+                                                  palette: palette,
+                                                  selected:
+                                                      filtering &&
+                                                      !action.isCaption &&
+                                                      action.enabled &&
+                                                      identical(
+                                                        action,
+                                                        current,
+                                                      ),
+                                                  onSelect: widget.onSelect,
+                                                ),
+                                              ],
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                if (maxScroll > 0)
+                                  Positioned(
+                                    right: 2,
+                                    top: 2,
+                                    bottom: 2,
+                                    width: 8,
+                                    child: GestureDetector(
+                                      behavior: HitTestBehavior.opaque,
+                                      onVerticalDragUpdate:
+                                          (DragUpdateDetails d) {
+                                            final double track = math.max(
+                                              1,
+                                              view - thumb,
+                                            );
+                                            _nudge(
+                                              d.delta.dy * maxScroll / track,
+                                            );
+                                          },
+                                      child: Align(
+                                        alignment: Alignment.topCenter,
+                                        child: Padding(
+                                          padding: EdgeInsets.only(
+                                            top: (view - thumb) <= 0
+                                                ? 0
+                                                : (view - 4 - thumb) *
+                                                      (offset / maxScroll),
+                                          ),
+                                          child: Container(
+                                            width: 4,
+                                            height: thumb,
+                                            decoration: BoxDecoration(
+                                              color: palette.muted,
+                                              borderRadius:
+                                                  BorderRadius.circular(2),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
                           ),
                         ],
-                      ],
+                      ),
                     ),
                   ),
                 ),
@@ -915,6 +1294,7 @@ class _OfficeContextItem extends StatefulWidget {
     required this.action,
     required this.palette,
     required this.onSelect,
+    this.selected = false,
   });
 
   /// action API.
@@ -925,6 +1305,9 @@ class _OfficeContextItem extends StatefulWidget {
 
   /// onSelect API.
   final ValueChanged<String> onSelect;
+
+  /// Keyboard highlight.
+  final bool selected;
 
   @override
   /// createState API.
@@ -973,7 +1356,7 @@ class _OfficeContextItemState extends State<_OfficeContextItem> {
         behavior: HitTestBehavior.opaque,
         onTap: action.enabled ? () => widget.onSelect(action.id) : null,
         child: ColoredBox(
-          color: _hot && action.enabled
+          color: (_hot || widget.selected) && action.enabled
               ? palette.hover
               : const Color(0x00000000),
           child: Padding(

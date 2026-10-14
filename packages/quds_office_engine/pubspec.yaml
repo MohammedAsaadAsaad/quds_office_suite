@@ -2,7 +2,7 @@ name: quds_office_engine
 description: >-
   Pure Dart Office, PDF, and report engine: DOCX/XLSX/PPTX, formulas, BiDi/RTL,
   PdfFile, pdf_widgets, and .qrep band reports exported to PDF, XLSX, and DOCX.
-version: 1.3.0
+version: 1.4.0
 homepage: https://github.com/MohammedAsaadAsaad/quds_office_suite
 repository: https://github.com/MohammedAsaadAsaad/quds_office_suite/tree/main/packages/quds_office_engine
 issue_tracker: https://github.com/MohammedAsaadAsaad/quds_office_suite/issues

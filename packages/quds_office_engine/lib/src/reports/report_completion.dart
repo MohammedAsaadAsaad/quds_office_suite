@@ -112,6 +112,8 @@ class ReportCompleter {
     this.hostFunctions = const <String>[],
     this.maxItems = 60,
     this.rowTable,
+    this.rowSource,
+    this.rowFieldsOnly = false,
   });
 
   /// template API.
@@ -132,6 +134,14 @@ class ReportCompleter {
   /// Table whose columns a calculated field may name directly (`price`
   /// rather than `item.price`). Null outside that formula.
   final String? rowTable;
+
+  /// Table that `Row` and `item` complete against. Null keeps the band's
+  /// data set. A map label sets this to the map file's table.
+  final String? rowSource;
+
+  /// Roots are [rowTable]'s columns, `Row`, `Data`, `System`, and functions.
+  /// Unrelated report records are left out.
+  final bool rowFieldsOnly;
 
   /// Built-in functions in display order.
   static const List<ReportFunctionInfo> functions = <ReportFunctionInfo>[
@@ -423,6 +433,10 @@ class ReportCompleter {
   // ---------------------------------------------------------------- items
 
   String? get _rowDataset {
+    final String? bound = rowSource?.trim();
+    if (bound != null && bound.isNotEmpty) {
+      return bound;
+    }
     final ReportBand? b = band;
     final String? own = b?.dataSet;
     if (own != null && own.trim().isNotEmpty) {
@@ -456,7 +470,14 @@ class ReportCompleter {
     };
     final List<ReportCompletionItem> out = <ReportCompletionItem>[
       ...bare,
-      if (rows != null)
+      if (rowFieldsOnly && rows != null)
+        ReportCompletionItem(
+          label: 'Row',
+          insert: 'Row',
+          kind: ReportCompletionKind.root,
+          detail: 'Map fields',
+        )
+      else if (rows != null)
         ReportCompletionItem(
           label: 'item',
           insert: 'item',
@@ -489,9 +510,10 @@ class ReportCompleter {
           kind: ReportCompletionKind.root,
           detail: 'Current group',
         ),
-      for (final MapEntry<String, Object?> e in data.entries)
-        if (!bareNames.contains(e.key.toLowerCase()))
-          _valueItem(e.key, e.value),
+      if (!rowFieldsOnly)
+        for (final MapEntry<String, Object?> e in data.entries)
+          if (!bareNames.contains(e.key.toLowerCase()))
+            _valueItem(e.key, e.value),
       for (final ReportFunctionInfo f in functions)
         ReportCompletionItem(
           label: '${f.name}(${f.signature})',

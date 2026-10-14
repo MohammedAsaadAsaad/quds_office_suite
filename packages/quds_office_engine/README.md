@@ -548,9 +548,13 @@ reads the matching column of the value table. The first matching row colors
 the region.
 
 PDF and preview draw the polygons in Web Mercator, with a min/max legend and
-labels on the widest regions. A world-sized layer leaves Antarctica out of
-the frame so the inhabited map fills the chart. Word and Excel show a bar of
-the region values.
+labels on the widest regions. The label is a shape attribute, a calculated
+column on that layer, or a formula such as `Concat(Name, "\n", SHAPE_Area)`.
+The title, the region labels, and the legend each take their own font
+(`titleStyle`, `labelStyle`, `legendStyle`). An empty field inherits the
+chart font, and an empty label color stays the contrast color. A world-sized
+layer leaves Antarctica out of the frame so the inhabited map fills the chart.
+Word and Excel show a bar of the region values.
 
 <table>
   <tr>

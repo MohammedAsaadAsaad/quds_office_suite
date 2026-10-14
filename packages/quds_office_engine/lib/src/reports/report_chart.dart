@@ -11,6 +11,7 @@ import 'dart:typed_data';
 import '../builders/drawingml_charts.dart';
 import '../builders/office_markup.dart';
 import '../visual/office_visual.dart';
+import 'report_expression_engine.dart';
 import 'report_fonts.dart';
 import 'report_format.dart';
 import 'report_layout.dart';
@@ -74,6 +75,18 @@ class ReportChartSeriesData {
   );
 }
 
+/// [style] over [base]. Empty fields keep [base].
+ReportFontSpec reportStyleFont(ReportTextStyle style, ReportFontSpec base) {
+  final String family = (style.fontFamily ?? '').trim();
+  final double? size = style.fontSize;
+  return ReportFontSpec(
+    family: family.isEmpty ? base.family : family,
+    size: size != null && size > 0 ? size : base.size,
+    bold: style.bold ?? base.bold,
+    italic: style.italic ?? base.italic,
+  );
+}
+
 /// Aggregated chart content ready to draw or export.
 class ReportChartData {
   /// ReportChartData API.
@@ -114,6 +127,15 @@ class ReportChartData {
     this.low = const ReportColor(0xFFDEEBF7),
     this.high = const ReportColor(0xFF08306B),
     this.empty = const ReportColor(0xFFE4E4E4),
+    this.regionColors,
+    this.labelField,
+    this.regionLabels,
+    this.featureLabels,
+    this.titleFont,
+    this.titleInk,
+    this.labelFont,
+    this.legendFont,
+    this.legendInk,
   });
 
   /// type API.
@@ -223,6 +245,38 @@ class ReportChartData {
 
   /// Shape-map region with no value.
   final ReportColor empty;
+
+  /// Per-category fill when the map has a region-color column.
+  /// Null keeps the value gradient. A null entry is an unmatched region.
+  final List<ReportColor?>? regionColors;
+
+  /// Attribute drawn on each region. Empty uses [ReportShapeFeature.label].
+  /// A `{{ }}` template is evaluated per row; the results are [regionLabels].
+  final String? labelField;
+
+  /// Formula caption for each category, aligned with [categories].
+  /// Null when the label is a shape attribute or the feature name.
+  final List<String>? regionLabels;
+
+  /// Caption of each region by [ReportShapeFeature.key], for a calculated
+  /// or stored column that is not an attribute of the shape file.
+  final Map<String, String>? featureLabels;
+
+  /// Map title font. Null uses the chart font, enlarged on charts that are
+  /// not maps.
+  final ReportFontSpec? titleFont;
+
+  /// Map title color. Null uses the chart text color.
+  final ReportColor? titleInk;
+
+  /// Region-label font. Null uses the chart font.
+  final ReportFontSpec? labelFont;
+
+  /// Legend font. Null uses the chart font.
+  final ReportFontSpec? legendFont;
+
+  /// Legend color. Null uses the chart text color.
+  final ReportColor? legendInk;
 
   /// Pie, donut, or an extruded form of either.
   bool get isRadial => type.isPie;
@@ -407,6 +461,24 @@ class ReportChartRenderer {
   /// Formats value labels and axis ticks (digits, separators).
   final ReportFormatter formatter;
 
+  static String _featureLabel(ReportChartData d, ReportShapeFeature feature) {
+    final Map<String, String>? labels = d.featureLabels;
+    if (labels == null || labels.isEmpty) {
+      return '';
+    }
+    final String? exact = labels[feature.key];
+    if (exact != null) {
+      return exact.trim();
+    }
+    final String lower = feature.key.toLowerCase();
+    for (final MapEntry<String, String> e in labels.entries) {
+      if (e.key.toLowerCase() == lower) {
+        return e.value.trim();
+      }
+    }
+    return '';
+  }
+
   static const ReportColor _gridColor = ReportColor(0xFFE3E6EA);
   static const ReportColor _axisColor = ReportColor(0xFF9AA0A6);
   static const ReportColor _tickColor = ReportColor(0xFF6B7280);
@@ -415,6 +487,7 @@ class ReportChartRenderer {
   late List<ReportPrimitive> _out;
   late ReportFontSpec _font;
   late ReportColor _textColor;
+  ReportColor? _labelColor;
   String? _elementId;
   ReportBandKind? _band;
 
@@ -424,12 +497,14 @@ class ReportChartRenderer {
     ReportRect box, {
     required ReportFontSpec font,
     required ReportColor textColor,
+    ReportColor? labelColor,
     String? elementId,
     ReportBandKind? band,
   }) {
     _out = <ReportPrimitive>[];
     _font = font;
     _textColor = textColor;
+    _labelColor = labelColor;
     _elementId = elementId;
     _band = band;
     var area = ReportRect(
@@ -442,18 +517,23 @@ class ReportChartRenderer {
       return _out;
     }
     if (data.title.isNotEmpty) {
-      final ReportFontSpec tf = ReportFontSpec(
-        family: font.family,
-        size: font.size * 1.3,
-        bold: true,
-      );
+      final ReportFontSpec tf =
+          data.titleFont ??
+          (data.type.isShapeMap
+              ? font
+              : ReportFontSpec(
+                  family: font.family,
+                  size: font.size * 1.3,
+                  bold: true,
+                  italic: font.italic,
+                ));
       final double h = shaper.lineHeight(tf);
       _label(
         data.title,
         tf,
         ReportRect(area.left, area.top, area.width, h),
         ReportTextAlign.center,
-        textColor,
+        data.titleInk ?? textColor,
       );
       area = ReportRect(
         area.left,
@@ -2414,6 +2494,34 @@ class ReportChartRenderer {
     final ReportShapeLayer layer = d.shapes!;
     const ReportColor ocean = ReportColor(0xFFE7F1F8);
     final Map<int, double> values = <int, double>{};
+    final Map<int, ReportColor> paints = <int, ReportColor>{};
+    final bool colored = d.regionColors != null;
+    if (colored) {
+      final List<ReportColor?> colors = d.regionColors!;
+      final int n = math.min(d.categories.length, colors.length);
+      for (int i = 0; i < n; i++) {
+        final ReportColor? color = colors[i];
+        if (color == null) {
+          continue;
+        }
+        final int? at = layer.indexOf(d.categories[i]);
+        if (at != null) {
+          paints.putIfAbsent(at, () => color);
+        }
+      }
+    }
+    final Map<int, String> formulaText = <int, String>{};
+    if (d.regionLabels != null) {
+      final int n = math.min(d.categories.length, d.regionLabels!.length);
+      for (int i = 0; i < n; i++) {
+        final int? at = layer.indexOf(d.categories[i]);
+        if (at != null) {
+          formulaText.putIfAbsent(at, () => d.regionLabels![i]);
+        }
+      }
+    }
+    final bool formula = d.regionLabels != null;
+    final bool namedField = (d.labelField ?? '').trim().isNotEmpty;
     if (d.series.isNotEmpty) {
       final ReportChartSeriesData series = d.series.first;
       final int n = math.min(d.categories.length, series.values.length);
@@ -2430,12 +2538,14 @@ class ReportChartRenderer {
       lo = lo == null || v < lo ? v : lo;
       hi = hi == null || v > hi ? v : hi;
     }
-    final bool legend = d.showLegend && lo != null && hi != null;
+    final bool legend = !colored && d.showLegend && lo != null && hi != null;
+    final ReportFontSpec legendFont = d.legendFont ?? _font;
+    final double legendBand = shaper.lineHeight(legendFont) + 16;
     final ReportRect plot = ReportRect(
       area.left,
       area.top,
       area.width,
-      math.max(8, area.height - (legend ? 26 : 0)),
+      math.max(8, area.height - (legend ? legendBand : 0)),
     );
     _out.add(
       ReportRectPrimitive(
@@ -2557,8 +2667,15 @@ class ReportChartRenderer {
       if (item.ring.hole) {
         fill = ocean;
       } else {
+        final ReportColor? named = paints[item.feature];
         final double? v = values[item.feature];
-        fill = v == null ? d.empty : _mix(d.low, d.high, (v - lo!) / span);
+        if (named != null) {
+          fill = named;
+        } else if (colored || v == null) {
+          fill = d.empty;
+        } else {
+          fill = _mix(d.low, d.high, (v - lo!) / span);
+        }
       }
       final bool darkFill = _dark(fill);
       _out.add(
@@ -2576,10 +2693,9 @@ class ReportChartRenderer {
       );
     }
     if (d.showLabels) {
-      final ReportFontSpec labelFont = ReportFontSpec(
-        family: _font.family,
-        size: math.max(6, _font.size * 0.9),
-      );
+      final String labelSource = (d.labelField ?? '').trim();
+      QudsExpressionEngine? labelEngine;
+      final ReportFontSpec labelFont = d.labelFont ?? _font;
       final double line = shaper.lineHeight(labelFont);
       int mainRing(ReportShapeFeature feature) {
         var best = -1;
@@ -2649,50 +2765,92 @@ class ReportChartRenderer {
         final String valueText = v == null
             ? ''
             : formatter.format(ReportNumber(v), d.valueFormat);
-        String text = feature.label.trim().isEmpty
-            ? feature.key
-            : feature.label;
-        if (shaper.measure(text, labelFont) > w - 2) {
-          text = feature.key;
+        final bool own = formula || namedField;
+        String resolved;
+        if (formula && formulaText.containsKey(f)) {
+          resolved = formulaText[f]!.trim();
+        } else if (formula && labelSource.isNotEmpty) {
+          labelEngine ??= QudsExpressionEngine(formatter: formatter);
+          resolved = labelEngine
+              .shapeCaption(labelSource, feature, layer)
+              .trim();
+        } else if (namedField) {
+          resolved = feature.valueOf(d.labelField).trim();
+          if (resolved.isEmpty) {
+            resolved = _featureLabel(d, feature);
+          }
+        } else {
+          resolved = feature.label.trim().isEmpty
+              ? feature.key
+              : feature.label.trim();
         }
-        final double textW = shaper.measure(text, labelFont);
-        if (text.isEmpty || textW > w - 2) {
+        if (resolved.isEmpty) {
           continue;
         }
+        List<String> lines = resolved.split('\n');
+        double widest = 0;
+        for (final String lineText in lines) {
+          final double lw = shaper.measure(lineText, labelFont);
+          if (lw > widest) {
+            widest = lw;
+          }
+        }
+        final double valueW = shaper.measure(valueText, labelFont);
         final bool withValue =
-            d.showValues &&
-            valueText.isNotEmpty &&
-            h >= line * 2 + 2 &&
-            shaper.measure(valueText, labelFont) <= w - 2;
-        final double block = withValue ? line * 2 : line;
-        final double lx = left + (w - textW) / 2;
+            d.showValues && valueText.isNotEmpty && valueW <= w - 2;
+        if (widest > w - 2 || lines.length * line > h - 2) {
+          if (own) {
+            continue;
+          }
+          final String key = feature.key.trim();
+          final double keyW = shaper.measure(key, labelFont);
+          if (key.isEmpty || keyW > w - 2) {
+            continue;
+          }
+          lines = <String>[key];
+          widest = keyW;
+        }
+        final double block = (lines.length + (withValue ? 1 : 0)) * line;
+        if (block > h - 2) {
+          continue;
+        }
+        final double lx = left + (w - widest) / 2;
         final double ly = top + (h - block) / 2;
         if (ly < plot.top || ly + block > plot.bottom) {
           continue;
         }
-        if (crowded(lx - 1.5, ly - 0.8, lx + textW + 1.5, ly + block + 0.8)) {
+        if (crowded(lx - 1.5, ly - 0.8, lx + widest + 1.5, ly + block + 0.8)) {
           continue;
         }
         final ReportColor ink =
-            _dark(
-              v == null
-                  ? d.empty
-                  : _mix(d.low, d.high, lo == null ? 0 : (v - lo) / span),
-            )
-            ? ReportColor.white
-            : const ReportColor(0xFF1A1A1A);
-        _label(
-          text,
-          labelFont,
-          ReportRect(lx, ly, textW, line),
-          ReportTextAlign.center,
-          ink,
-        );
+            _labelColor ??
+            (_dark(
+                  v == null
+                      ? d.empty
+                      : _mix(d.low, d.high, lo == null ? 0 : (v - lo) / span),
+                )
+                ? ReportColor.white
+                : const ReportColor(0xFF1A1A1A));
+        for (int i = 0; i < lines.length; i++) {
+          final double lw = shaper.measure(lines[i], labelFont);
+          _label(
+            lines[i],
+            labelFont,
+            ReportRect(left + (w - lw) / 2, ly + i * line, lw, line),
+            ReportTextAlign.center,
+            ink,
+          );
+        }
         if (withValue) {
           _label(
             valueText,
             labelFont,
-            ReportRect(lx, ly + line, textW, line),
+            ReportRect(
+              left + (w - valueW) / 2,
+              ly + lines.length * line,
+              valueW,
+              line,
+            ),
             ReportTextAlign.center,
             ink,
           );
@@ -2700,7 +2858,7 @@ class ReportChartRenderer {
         taken.add((
           l: lx - 1.5,
           t: ly - 0.8,
-          r: lx + textW + 1.5,
+          r: lx + widest + 1.5,
           b: ly + block + 0.8,
         ));
       }
@@ -2709,7 +2867,7 @@ class ReportChartRenderer {
       return;
     }
     final double barW = math.min(110, area.width * 0.42);
-    final double y = area.bottom - 12;
+    final double y = area.bottom - 10;
     const int steps = 14;
     for (int i = 0; i < steps; i++) {
       _out.add(
@@ -2728,20 +2886,21 @@ class ReportChartRenderer {
     }
     final String loText = formatter.format(ReportNumber(lo), d.valueFormat);
     final String hiText = formatter.format(ReportNumber(hi), d.valueFormat);
-    final double line = shaper.lineHeight(_font);
-    final double loW = shaper.measure(loText, _font);
-    final double hiW = shaper.measure(hiText, _font);
+    final double line = shaper.lineHeight(legendFont);
+    final double loW = shaper.measure(loText, legendFont);
+    final double hiW = shaper.measure(hiText, legendFont);
+    final ReportColor legendInk = d.legendInk ?? _textColor;
     final double yText = y - line - 1;
     _label(
       loText,
-      _font,
+      legendFont,
       ReportRect(area.left, yText, loW + 1, line),
       ReportTextAlign.start,
-      _textColor,
+      legendInk,
     );
     _label(
       hiText,
-      _font,
+      legendFont,
       ReportRect(
         area.left + math.max(loW + 6, barW - hiW),
         yText,
@@ -2749,7 +2908,7 @@ class ReportChartRenderer {
         line,
       ),
       ReportTextAlign.start,
-      _textColor,
+      legendInk,
     );
     if (values.length < layer.features.length) {
       final double x = area.left + barW + 10;

@@ -1523,8 +1523,13 @@ class _Flow {
         font: ReportFontSpec(
           family: e.fontFamily ?? t.defaultFont,
           size: e.fontSize > 0 ? e.fontSize : 7.5,
+          bold: e.bold,
+          italic: e.italic,
         ),
         textColor: t.resolveColor(e.textColor, t.textColor),
+        labelColor: (e.labelStyle.color ?? e.textColor) == null
+            ? null
+            : t.resolveColor(e.labelStyle.color ?? e.textColor, t.textColor),
         elementId: e.id,
         band: kind,
       ),
@@ -1575,6 +1580,8 @@ class _Flow {
     final List<ReportValue> keys = <ReportValue>[];
     final List<ReportChartSeriesData> series = <ReportChartSeriesData>[];
     final List<ReportColor> pointColors = <ReportColor>[];
+    List<ReportColor?>? regionColors;
+    List<String>? regionLabels;
     var varyColors = e.isRadial;
     if (e.series.isEmpty) {
       final List<double> values = <double>[];
@@ -1693,6 +1700,11 @@ class _Flow {
       final List<List<List<double>>> samples = <List<List<double>>>[
         for (int s = 0; s < e.series.length; s++) <List<double>>[],
       ];
+      final ReportExpression? colorExpr =
+          e.chartType.isShapeMap && _nonEmpty(e.regionColor) != null
+          ? _parseExpression(e.regionColor!.trim())
+          : null;
+      final List<ReportColor?> paints = <ReportColor?>[];
       for (int r = 0; r < rows.length; r++) {
         final ReportScope rs = scope.copyWith(row: rows[r], rowIndex: r);
         final ReportValue key = category == null
@@ -1702,11 +1714,18 @@ class _Flow {
         final int ci = index.putIfAbsent(label, () {
           categories.add(label);
           keys.add(key);
+          paints.add(null);
           for (final List<List<double>> s in samples) {
             s.add(<double>[]);
           }
           return categories.length - 1;
         });
+        if (colorExpr != null && paints[ci] == null) {
+          paints[ci] = _paintColor(
+            t,
+            g.engine.formatter.display(_evalParsed(colorExpr, rs)),
+          );
+        }
         for (int s = 0; s < measures.length; s++) {
           final ReportExpression? m = measures[s];
           final num? v = m == null ? null : _evalParsed(m, rs).asNumber;
@@ -1744,6 +1763,23 @@ class _Flow {
       for (int i = 0; i < categories.length; i++) {
         pointColors.add(palette(i));
       }
+      if (colorExpr != null) {
+        regionColors = paints;
+      }
+      final String labelSource = (e.labelField ?? '').trim();
+      if (e.chartType.isShapeMap &&
+          QudsExpressionEngine.isLabelFormula(labelSource)) {
+        final Map<String, String> captions = g.engine.regionCaptions(
+          labelSource,
+          e.category,
+          rows,
+          scope,
+          shapes: _shapeLayer(e),
+        );
+        regionLabels = <String>[
+          for (final String key in categories) captions[key] ?? '',
+        ];
+      }
     }
     final List<int> order = List<int>.generate(categories.length, (int i) => i);
     if (e.sortBy != ReportChartSort.none) {
@@ -1764,6 +1800,27 @@ class _Flow {
     final double? target = _nonEmpty(e.target) == null
         ? null
         : _evaluate(e.target!, scope).asNumber?.toDouble();
+    Map<String, String>? featureLabels;
+    if (e.chartType.isShapeMap && e.showLabels) {
+      final ReportShapeLayer? layer = _shapeLayer(e);
+      final String field = (e.labelField ?? '').trim();
+      if (layer != null && field.isNotEmpty) {
+        featureLabels = g.engine.shapeFieldLabels(
+          field: field,
+          layer: layer,
+          schema: t.dataSchema,
+          data: scope.data,
+          keyField: e.shapeKey,
+        );
+      }
+    }
+    final ReportFontSpec chartFont = ReportFontSpec(
+      family: e.fontFamily ?? t.defaultFont,
+      size: e.fontSize > 0 ? e.fontSize : 7.5,
+      bold: e.bold,
+      italic: e.italic,
+    );
+    final bool map = e.chartType.isShapeMap;
     return ReportChartData(
       type: e.chartType,
       title: _text(e.title, scope, null),
@@ -1807,10 +1864,44 @@ class _Flow {
       total: e.totalColor == null ? total : t.resolveColor(e.totalColor, total),
       shapes: e.chartType.isShapeMap ? _shapeLayer(e) : null,
       showLabels: e.showLabels,
+      labelField: e.labelField,
+      regionLabels: regionLabels == null
+          ? null
+          : <String>[for (final int i in picked) regionLabels[i]],
+      featureLabels: featureLabels,
+      titleFont: map ? reportStyleFont(e.titleStyle, chartFont) : null,
+      titleInk: map
+          ? t.resolveColor(e.titleStyle.color ?? e.textColor, t.textColor)
+          : null,
+      labelFont: map ? reportStyleFont(e.labelStyle, chartFont) : null,
+      legendFont: map ? reportStyleFont(e.legendStyle, chartFont) : null,
+      legendInk: map
+          ? t.resolveColor(e.legendStyle.color ?? e.textColor, t.textColor)
+          : null,
       low: t.resolveColor(e.lowColor, const ReportColor(0xFFDEEBF7)),
       high: t.resolveColor(e.highColor, const ReportColor(0xFF08306B)),
       empty: t.resolveColor(e.emptyColor, const ReportColor(0xFFE4E4E4)),
+      regionColors: regionColors == null
+          ? null
+          : <ReportColor?>[for (final int i in picked) regionColors[i]],
     );
+  }
+
+  /// A region color from `#hex`, a CSS name, or a palette entry.
+  ReportColor? _paintColor(ReportTemplate template, String raw) {
+    final String key = raw.trim();
+    if (key.isEmpty) {
+      return null;
+    }
+    final String lower = key.toLowerCase();
+    String? mapped;
+    for (final MapEntry<String, String> entry in template.colors.entries) {
+      if (entry.key.toLowerCase() == lower) {
+        mapped = entry.value;
+        break;
+      }
+    }
+    return ReportColor.tryParse(mapped ?? key);
   }
 
   ReportShapeLayer? _shapeLayer(ReportChartElement e) =>

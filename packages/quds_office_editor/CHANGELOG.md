@@ -2,6 +2,20 @@
 
 All notable changes to `quds_office_editor` are documented here.
 
+## 1.4.0
+
+Built on `quds_office_engine` 1.4.0.
+
+- Insert tools live in a side toolbox. Each tool shows a hover card with its
+  name, a short description, and a small drawing. The map is its own tool.
+- A shape map's choices are dropdowns. Region labels ask which field to draw,
+  including calculated and constant columns from the shape table. A long menu
+  scrolls, and typing filters it.
+- Title, region labels, and the legend each have a format button. It opens a
+  box for family, size, bold, italic, and color.
+- The data explorer edits an imported shape layer as a table, so a calculated
+  column can be the region's label. An imported shape file can be removed.
+
 ## 1.3.0
 
 Built on `quds_office_engine` 1.3.0.

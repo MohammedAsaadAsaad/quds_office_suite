@@ -23,7 +23,7 @@ dart pub logins   # or: flutter pub login
 Confirm the account that will own the packages on [pub.dev](https://pub.dev).
 
 Version in both `pubspec.yaml` files must match the release you want
-(currently `1.3.0` for both). CHANGELOG entries must exist for that version.
+(currently `1.4.0` for both). CHANGELOG entries must exist for that version.
 
 ---
 
@@ -44,7 +44,7 @@ flutter pub publish --dry-run
 Fix every warning you can: missing LICENSE, short description, undocumented
 public API, leftover `publish_to: none`, path dependencies.
 
-The editor depends on `quds_office_engine: ^1.3.0`. Inside the workspace,
+The editor depends on `quds_office_engine: ^1.4.0`. Inside the workspace,
 Dart resolves the local package. On pub.dev, the version must already exist
 **before** you publish the editor.
 
@@ -76,8 +76,8 @@ flutter pub publish
 ## 5. Tag the monorepo
 
 ```bash
-git tag v1.3.0
-git push origin v1.3.0
+git tag v1.4.0
+git push origin v1.4.0
 ```
 
 If later versions diverge, tag per package (`engine-v0.2.0`, `editor-v0.2.0`).
@@ -102,4 +102,4 @@ Follow [semver](https://semver.org):
 - **Major** — breaking API.
 
 When the engine breaks its API, bump the editor constraint in the same PR
-(`quds_office_engine: ^1.3.0`) and publish engine first.
+(`quds_office_engine: ^1.4.0`) and publish engine first.

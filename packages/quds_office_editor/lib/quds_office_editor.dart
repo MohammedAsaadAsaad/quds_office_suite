@@ -27,6 +27,7 @@ export 'src/editor_reports/render_report_inspector.dart';
 export 'src/editor_reports/render_report_preview.dart';
 export 'src/editor_reports/render_report_problems.dart';
 export 'src/editor_reports/render_report_toolbar.dart';
+export 'src/editor_reports/render_report_toolbox.dart';
 export 'src/editor_reports/report_completion_popup.dart';
 export 'src/editor_reports/report_bundled_fonts.dart';
 export 'src/editor_reports/report_design_layout.dart';

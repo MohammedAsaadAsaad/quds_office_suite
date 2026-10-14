@@ -1218,6 +1218,476 @@ void main() {
       expect(labels.any((String t) => t == 'CN' || t == 'China'), isTrue);
     });
 
+    test('keeps a district boundary smooth and refuses projected metres', () {
+      final ReportShapeLayer layer = ReportShapeLayer.parse(
+        Uint8List.fromList(
+          utf8.encode(
+            '{"type":"FeatureCollection","features":[{"type":"Feature",'
+            '"properties":{"code":"A"},"geometry":{"type":"Polygon",'
+            '"coordinates":[[[35.2,31.5],[35.200001,31.500001],'
+            '[35.21,31.51],[35.2,31.5]]]}}]}',
+          ),
+        ),
+        keyField: 'code',
+      );
+      final ReportShapeRing ring = ReportShapeLayer.decode(
+        layer.encode(),
+      ).features.single.rings.single;
+      expect((ring.lonLat[2] - 35.200001).abs(), lessThan(0.000002));
+      expect((ring.lonLat[3] - 31.500001).abs(), lessThan(0.000002));
+      expect(
+        () => ReportShapeLayer.read(
+          _polygonShapefile(<List<(double, double)>>[
+            <(double, double)>[
+              (200000, 600000),
+              (200100, 600000),
+              (200100, 600100),
+              (200000, 600000),
+            ],
+          ]),
+        ),
+        throwsA(isA<ReportShapeException>()),
+      );
+    });
+
+    test('paints each region from a color column joined by its key', () {
+      const String xml = '''
+<QudsReport name="Zones" pageSize="A4" defaultFont="Liberation Sans">
+  <Bands>
+    <ReportHeader height="80mm">
+      <Chart name="zones" x="10mm" y="0" width="160mm" height="70mm" chartType="shapeMap" shape="zones" dataSet="Data.rows" category="Row.code" regionColor="Row.color">
+        <Series name="Amount" value="Row.n"/>
+      </Chart>
+    </ReportHeader>
+  </Bands>
+</QudsReport>''';
+      final Uint8List qmap = ReportShapeLayer.parse(
+        Uint8List.fromList(
+          utf8.encode('''
+{"type":"FeatureCollection","features":[
+  {"type":"Feature","properties":{"code":"W","NAME":"West"},
+   "geometry":{"type":"Polygon","coordinates":[[[0,0],[20,0],[20,15],[0,0]]]}},
+  {"type":"Feature","properties":{"code":"E","NAME":"East"},
+   "geometry":{"type":"Polygon","coordinates":[[[40,0],[70,0],[70,25],[40,0]]]}}
+]}'''),
+        ),
+        keyField: 'code',
+      ).encode();
+      final QudsReportEngine engine = QudsReportEngine.fromXml(
+        xml,
+        fonts: loadFonts(),
+        shapes: <String, Uint8List>{'zones': qmap},
+      );
+      expect(chartEngineRoundTrip(engine), engine.toXml());
+      final ReportPageLayout page = engine
+          .layout(<String, Object?>{
+            'rows': <Map<String, Object?>>[
+              <String, Object?>{'code': 'W', 'n': 5, 'color': '#C0392B'},
+              <String, Object?>{'code': 'E', 'n': 50, 'color': 'green'},
+            ],
+          })
+          .pages
+          .first;
+      final Set<int> fills = <int>{
+        for (final ReportPathPrimitive p
+            in page.primitives.whereType<ReportPathPrimitive>())
+          if (p.elementId == idOf(engine, 'zones') &&
+              p.fill != null &&
+              p.fill!.argb != 0xFFE7F1F8)
+            p.fill!.argb,
+      };
+      expect(fills, containsAll(<int>[0xFFC0392B, 0xFF008000]));
+      expect(fills, isNot(contains(0xFFDEEBF7)));
+    });
+
+    test('draws the chosen attribute and keeps every column', () {
+      final ReportShapeLayer layer = ReportShapeLayer.parse(
+        Uint8List.fromList(
+          utf8.encode('''
+{"type":"FeatureCollection","features":[
+  {"type":"Feature","properties":{"code":"W","NAME":"West","title":"Ramallah"},
+   "geometry":{"type":"Polygon","coordinates":[[[0,0],[20,0],[20,15],[0,0]]]}},
+  {"type":"Feature","properties":{"code":"E","NAME":"East","title":"Nablus"},
+   "geometry":{"type":"Polygon","coordinates":[[[40,0],[70,0],[70,25],[40,0]]]}}
+]}'''),
+        ),
+        keyField: 'code',
+      );
+      final ReportShapeLayer stored = ReportShapeLayer.decode(layer.encode());
+      expect(stored.fields, <String>['code', 'NAME', 'title']);
+      expect(stored.features.first.valueOf('title'), 'Ramallah');
+      const String xml = '''
+<QudsReport name="Zones" pageSize="A4" defaultFont="Liberation Sans">
+  <Bands>
+    <ReportHeader height="80mm">
+      <Chart name="zones" x="10mm" y="0" width="160mm" height="70mm" chartType="shapeMap" shape="zones" dataSet="Data.rows" category="Row.code" labelField="title" showLegend="false">
+        <Series name="Amount" value="Row.n"/>
+      </Chart>
+    </ReportHeader>
+  </Bands>
+</QudsReport>''';
+      final QudsReportEngine engine = QudsReportEngine.fromXml(
+        xml,
+        fonts: loadFonts(),
+        shapes: <String, Uint8List>{'zones': stored.encode()},
+      );
+      expect(chartEngineRoundTrip(engine), engine.toXml());
+      expect(engine.toXml(), contains('labelField="title"'));
+      final ReportPageLayout page = engine
+          .layout(<String, Object?>{
+            'rows': <Map<String, Object?>>[
+              <String, Object?>{'code': 'W', 'n': 5},
+              <String, Object?>{'code': 'E', 'n': 50},
+            ],
+          })
+          .pages
+          .first;
+      final Iterable<String> labels = page.primitives
+          .whereType<ReportTextPrimitive>()
+          .map((ReportTextPrimitive t) => t.text);
+      expect(labels, containsAll(<String>['Ramallah', 'Nablus']));
+      expect(labels, isNot(contains('West')));
+    });
+
+    test('a label formula joins text and a chosen field is not the key', () {
+      final QudsExpressionEngine expressions = QudsExpressionEngine();
+      final ReportScope scope = ReportScope(
+        data: ReportRecord.empty,
+        variables: ReportRecord.empty,
+        system: ReportSystemInfo(now: DateTime.utc(2020)),
+        row: ReportValue.from(<String, Object?>{
+          'name': 'رام الله',
+          'code': '18',
+        }),
+      );
+      expect(
+        expressions.interpolate('{{CONCAT(Row.name, "\\n", Row.code)}}', scope),
+        'رام الله\n18',
+      );
+      expect(
+        expressions.interpolate('{{Row.name & " " & Row.code}}', scope),
+        'رام الله 18',
+      );
+      expect(
+        expressions.interpolate('{{Row.name + " " + Row.code}}', scope),
+        'رام الله 18',
+      );
+
+      final ReportShapeLayer layer = ReportShapeLayer.parse(
+        Uint8List.fromList(
+          utf8.encode('''
+{"type":"FeatureCollection","features":[
+  {"type":"Feature","properties":{"code":"W","title":"Short"},
+   "geometry":{"type":"Polygon","coordinates":[[[0,0],[30,0],[30,15],[0,0]]]}},
+  {"type":"Feature","properties":{"code":"99","title":"AVeryLongNeighborhoodNameThatCannotFitInside"},
+   "geometry":{"type":"Polygon","coordinates":[[[32,0],[40,0],[40,8],[32,0]]]}}
+]}'''),
+        ),
+        keyField: 'code',
+      );
+      const String xml = '''
+<QudsReport name="Zones" pageSize="A4" defaultFont="Liberation Sans">
+  <Bands>
+    <ReportHeader height="80mm">
+      <Chart name="zones" x="10mm" y="0" width="160mm" height="70mm" chartType="shapeMap" shape="zones" dataSet="Data.rows" category="Row.code" labelField="{{CONCAT(Row.title, '\\n', 'حي')}}" showLegend="false" showValues="false">
+        <Series name="Amount" value="Row.n"/>
+      </Chart>
+    </ReportHeader>
+  </Bands>
+</QudsReport>''';
+      final QudsReportEngine engine = QudsReportEngine.fromXml(
+        xml,
+        fonts: loadFonts(),
+        shapes: <String, Uint8List>{'zones': layer.encode()},
+      );
+      final Iterable<String> labels = engine
+          .layout(<String, Object?>{
+            'rows': <Map<String, Object?>>[
+              <String, Object?>{'code': 'W', 'title': 'Short', 'n': 5},
+              <String, Object?>{
+                'code': '99',
+                'title': 'AVeryLongNeighborhoodNameThatCannotFitInside',
+                'n': 1,
+              },
+            ],
+          })
+          .pages
+          .first
+          .primitives
+          .whereType<ReportTextPrimitive>()
+          .map((ReportTextPrimitive t) => t.text);
+      expect(labels, containsAll(<String>['Short', 'حي']));
+      expect(labels, isNot(contains('99')));
+      expect(
+        labels,
+        isNot(contains('AVeryLongNeighborhoodNameThatCannotFitInside')),
+      );
+    });
+
+    test('a label formula reads map columns directly and through Row', () {
+      expect(QudsExpressionEngine.isLabelFormula('title'), isFalse);
+      expect(QudsExpressionEngine.isLabelFormula('name'), isFalse);
+      expect(
+        QudsExpressionEngine.isLabelFormula('CONCAT(name, "\\n", code)'),
+        isTrue,
+      );
+      expect(QudsExpressionEngine.isLabelFormula('Row.name'), isTrue);
+      expect(
+        QudsExpressionEngine.isLabelFormula(
+          '{{CONCAT(Row.name, "\\n", code)}}',
+        ),
+        isTrue,
+      );
+
+      final ReportShapeLayer layer = ReportShapeLayer.parse(
+        Uint8List.fromList(
+          utf8.encode('''
+{"type":"FeatureCollection","features":[
+  {"type":"Feature","properties":{"code":"18","name":"Ramallah"},
+   "geometry":{"type":"Polygon","coordinates":[[[0,0],[30,0],[30,15],[0,0]]]}},
+  {"type":"Feature","properties":{"code":"99","name":"Nablus"},
+   "geometry":{"type":"Polygon","coordinates":[[[32,0],[62,0],[62,15],[32,0]]]}}
+]}'''),
+        ),
+        keyField: 'code',
+      );
+      Iterable<String> draw(String labelField) {
+        final String xml =
+            '''
+<QudsReport name="Zones" pageSize="A4" defaultFont="Liberation Sans">
+  <Bands>
+    <ReportHeader height="80mm">
+      <Chart name="zones" x="10mm" y="0" width="160mm" height="70mm" chartType="shapeMap" shape="zones" dataSet="Data.rows" category="Row.code" labelField="$labelField" showLegend="false" showValues="false">
+        <Series name="Amount" value="Row.n"/>
+      </Chart>
+    </ReportHeader>
+  </Bands>
+</QudsReport>''';
+        return QudsReportEngine.fromXml(
+              xml,
+              fonts: loadFonts(),
+              shapes: <String, Uint8List>{'zones': layer.encode()},
+            )
+            .layout(<String, Object?>{
+              'rows': <Map<String, Object?>>[
+                <String, Object?>{'code': '18', 'n': 5},
+                <String, Object?>{'code': '99', 'n': 1},
+              ],
+            })
+            .pages
+            .first
+            .primitives
+            .whereType<ReportTextPrimitive>()
+            .map((ReportTextPrimitive t) => t.text);
+      }
+
+      final Iterable<String> direct = draw("CONCAT(name, '\\n', code)");
+      expect(direct, containsAll(<String>['Ramallah', '18', 'Nablus', '99']));
+      final Iterable<String> throughRow = draw(
+        "CONCAT(Row.name, ' - ', Row.code)",
+      );
+      expect(throughRow, containsAll(<String>['Ramallah - 18', 'Nablus - 99']));
+    });
+
+    test('a map label still draws shape columns when the data set differs', () {
+      final ReportShapeLayer layer = ReportShapeLayer.parse(
+        Uint8List.fromList(
+          utf8.encode('''
+{"type":"FeatureCollection","features":[
+  {"type":"Feature","properties":{"Name":"Ramallah","SHAPE_Area":"12"},
+   "geometry":{"type":"Polygon","coordinates":[[[0,0],[40,0],[40,20],[0,0]]]}},
+  {"type":"Feature","properties":{"Name":"Nablus","SHAPE_Area":"9"},
+   "geometry":{"type":"Polygon","coordinates":[[[42,0],[80,0],[80,20],[42,0]]]}}
+]}'''),
+        ),
+        keyField: 'Name',
+      );
+      const String xml = '''
+<QudsReport name="Zones" pageSize="A4" defaultFont="Liberation Sans">
+  <Bands>
+    <ReportHeader height="80mm">
+      <Chart name="zones" x="10mm" y="0" width="160mm" height="70mm" chartType="shapeMap" shape="zones" dataSet="Data.items" category="Item.name" labelField="{{Concat(Name, '\\n', SHAPE_Area)}}" showLegend="false" showValues="false">
+        <Series name="Qty" value="Item.qty"/>
+      </Chart>
+    </ReportHeader>
+  </Bands>
+</QudsReport>''';
+      final Iterable<String> labels =
+          QudsReportEngine.fromXml(
+                xml,
+                fonts: loadFonts(),
+                shapes: <String, Uint8List>{'zones': layer.encode()},
+              )
+              .layout(<String, Object?>{
+                'items': <Map<String, Object?>>[
+                  <String, Object?>{'name': 'Pen', 'qty': 2},
+                ],
+              })
+              .pages
+              .first
+              .primitives
+              .whereType<ReportTextPrimitive>()
+              .map((ReportTextPrimitive t) => t.text);
+      expect(labels, containsAll(<String>['Ramallah', '12', 'Nablus', '9']));
+      expect(labels, isNot(contains('Pen')));
+    });
+
+    test('a calculated map column is drawn as the region label', () {
+      final ReportShapeLayer layer = ReportShapeLayer.parse(
+        Uint8List.fromList(
+          utf8.encode('''
+{"type":"FeatureCollection","features":[
+  {"type":"Feature","properties":{"Name":"Ramallah","SHAPE_Area":"12"},
+   "geometry":{"type":"Polygon","coordinates":[[[0,0],[40,0],[40,20],[0,0]]]}},
+  {"type":"Feature","properties":{"Name":"Nablus","SHAPE_Area":"9"},
+   "geometry":{"type":"Polygon","coordinates":[[[42,0],[80,0],[80,20],[42,0]]]}}
+]}'''),
+        ),
+        keyField: 'Name',
+      );
+      const String xml = '''
+<QudsReport name="Zones" pageSize="A4" defaultFont="Liberation Sans">
+  <DataSchema>
+    <Table name="districts">
+      <Column name="lbl" type="text" expression="Name &amp; ' ' &amp; SHAPE_Area"/>
+    </Table>
+  </DataSchema>
+  <Bands>
+    <ReportHeader height="80mm">
+      <Chart name="zones" x="10mm" y="0" width="160mm" height="70mm" chartType="shapeMap" shape="zones" dataSet="Data.items" category="Item.name" labelField="lbl" showLegend="false" showValues="false">
+        <Series name="Qty" value="Item.qty"/>
+      </Chart>
+    </ReportHeader>
+  </Bands>
+</QudsReport>''';
+      final Iterable<String> labels =
+          QudsReportEngine.fromXml(
+                xml,
+                fonts: loadFonts(),
+                shapes: <String, Uint8List>{'zones': layer.encode()},
+              )
+              .layout(<String, Object?>{
+                'items': <Map<String, Object?>>[
+                  <String, Object?>{'name': 'Pen', 'qty': 2},
+                ],
+              })
+              .pages
+              .first
+              .primitives
+              .whereType<ReportTextPrimitive>()
+              .map((ReportTextPrimitive t) => t.text);
+      expect(labels, containsAll(<String>['Ramallah 12', 'Nablus 9']));
+      expect(labels, isNot(contains('Ramallah')));
+      expect(labels, isNot(contains('Pen')));
+    });
+
+    test('a map font is shared by the title, the legend, and the labels', () {
+      final ReportShapeLayer layer = ReportShapeLayer.parse(
+        Uint8List.fromList(
+          utf8.encode('''
+{"type":"FeatureCollection","features":[
+  {"type":"Feature","properties":{"Name":"Ramallah","code":"W"},
+   "geometry":{"type":"Polygon","coordinates":[[[0,0],[40,0],[40,20],[0,0]]]}},
+  {"type":"Feature","properties":{"Name":"Nablus","code":"E"},
+   "geometry":{"type":"Polygon","coordinates":[[[42,0],[80,0],[80,20],[42,0]]]}}
+]}'''),
+        ),
+        keyField: 'code',
+        nameField: 'Name',
+      );
+      const String xml = '''
+<QudsReport name="Zones" pageSize="A4" defaultFont="Liberation Sans">
+  <Bands>
+    <ReportHeader height="80mm">
+      <Chart name="zones" x="10mm" y="0" width="160mm" height="70mm" chartType="shapeMap" shape="zones" dataSet="Data.rows" category="Row.code" labelField="Name" title="Map" fontSize="16" fontFamily="Liberation Serif" bold="true" italic="true" color="#112233" showValues="false">
+        <Series name="Qty" value="Row.n"/>
+      </Chart>
+    </ReportHeader>
+  </Bands>
+</QudsReport>''';
+      final List<ReportTextPrimitive> texts =
+          QudsReportEngine.fromXml(
+                xml,
+                fonts: loadFonts(),
+                shapes: <String, Uint8List>{'zones': layer.encode()},
+              )
+              .layout(<String, Object?>{
+                'rows': <Map<String, Object?>>[
+                  <String, Object?>{'code': 'W', 'n': 5},
+                  <String, Object?>{'code': 'E', 'n': 9},
+                ],
+              })
+              .pages
+              .first
+              .primitives
+              .whereType<ReportTextPrimitive>()
+              .toList();
+      expect(
+        texts.map((ReportTextPrimitive t) => t.text),
+        containsAll(<String>['Map', 'Ramallah', 'Nablus', '5', '9']),
+      );
+      for (final ReportTextPrimitive text in texts) {
+        expect(text.font.family, 'Liberation Serif');
+        expect(text.font.size, 16);
+        expect(text.font.bold, isTrue);
+        expect(text.font.italic, isTrue);
+        expect(text.color.argb, 0xFF112233);
+      }
+    });
+
+    test('title, labels, and the legend each keep their own font', () {
+      final ReportShapeLayer layer = ReportShapeLayer.parse(
+        Uint8List.fromList(
+          utf8.encode('''
+{"type":"FeatureCollection","features":[
+  {"type":"Feature","properties":{"Name":"Ramallah","code":"W"},
+   "geometry":{"type":"Polygon","coordinates":[[[0,0],[40,0],[40,20],[0,0]]]}},
+  {"type":"Feature","properties":{"Name":"Nablus","code":"E"},
+   "geometry":{"type":"Polygon","coordinates":[[[42,0],[80,0],[80,20],[42,0]]]}}
+]}'''),
+        ),
+        keyField: 'code',
+      );
+      const String xml = '''
+<QudsReport name="Zones" pageSize="A4" defaultFont="Liberation Sans">
+  <Bands>
+    <ReportHeader height="80mm">
+      <Chart name="zones" x="10mm" y="0" width="160mm" height="70mm" chartType="shapeMap" shape="zones" dataSet="Data.rows" category="Row.code" labelField="Name" title="Map" titleSize="18" titleBold="true" titleColor="#112233" labelSize="11" labelItalic="true" labelColor="#334455" legendSize="8" legendColor="#667788" showValues="false">
+        <Series name="Qty" value="Row.n"/>
+      </Chart>
+    </ReportHeader>
+  </Bands>
+</QudsReport>''';
+      final List<ReportTextPrimitive> texts =
+          QudsReportEngine.fromXml(
+                xml,
+                fonts: loadFonts(),
+                shapes: <String, Uint8List>{'zones': layer.encode()},
+              )
+              .layout(<String, Object?>{
+                'rows': <Map<String, Object?>>[
+                  <String, Object?>{'code': 'W', 'n': 5},
+                  <String, Object?>{'code': 'E', 'n': 9},
+                ],
+              })
+              .pages
+              .first
+              .primitives
+              .whereType<ReportTextPrimitive>()
+              .toList();
+      ReportTextPrimitive text(String value) =>
+          texts.firstWhere((ReportTextPrimitive t) => t.text == value);
+      expect(text('Map').font.size, 18);
+      expect(text('Map').font.bold, isTrue);
+      expect(text('Map').color.argb, 0xFF112233);
+      expect(text('Ramallah').font.size, 11);
+      expect(text('Ramallah').font.italic, isTrue);
+      expect(text('Ramallah').color.argb, 0xFF334455);
+      expect(text('5').font.size, 8);
+      expect(text('5').color.argb, 0xFF667788);
+      expect(text('9').font.size, 8);
+    });
+
     test(
       'imports a shapefile and GeoJSON and stores the layer in the package',
       () {
@@ -1777,6 +2247,42 @@ void main() {
       expect(
         inserts(formula.complete('', 0, expression: true, force: true)),
         containsAll(<String>['qty', 'calc1']),
+      );
+    });
+
+    test('a map label completes the map columns, not the report records', () {
+      final ReportCompleter map = ReportCompleter(
+        template: t,
+        band: t.band(ReportBandKind.detail),
+        data: <String, Object?>{
+          'customer': 'Ali',
+          'seller': <String, Object?>{'name': 'Quds'},
+          'items': <Object?>[
+            <String, Object?>{'name': 'Pen', 'qty': 2},
+          ],
+          'districts': <Object?>[
+            <String, Object?>{'name': 'Ramallah', 'code': '18'},
+          ],
+        },
+        rowTable: 'districts',
+        rowSource: 'districts',
+        rowFieldsOnly: true,
+      );
+      final List<String> roots = inserts(
+        map.complete('CONCAT(', 7, expression: true),
+      );
+      expect(roots, containsAll(<String>['name', 'code', 'Row', 'CONCAT()']));
+      expect(roots, isNot(contains('seller')));
+      expect(roots, isNot(contains('customer')));
+      expect(roots, isNot(contains('item')));
+      expect(roots.indexOf('name'), lessThan(roots.indexOf('Data')));
+      expect(
+        inserts(map.complete('Row.', 4, expression: true)),
+        containsAll(<String>['name', 'code']),
+      );
+      expect(
+        inserts(map.complete('row.', 4, expression: true)),
+        containsAll(<String>['name', 'code']),
       );
     });
 

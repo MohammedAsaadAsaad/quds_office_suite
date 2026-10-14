@@ -39,6 +39,33 @@ enum ReportToolbarIcon {
   /// Bar chart.
   chart,
 
+  /// Shape map.
+  map,
+
+  /// A page marked with its number.
+  pageNumber,
+
+  /// Page number and page count.
+  pages,
+
+  /// Calendar.
+  date,
+
+  /// Report title lines.
+  reportName,
+
+  /// Numbered rows.
+  rowNumber,
+
+  /// A summed column.
+  total,
+
+  /// Rounded rectangle.
+  rounded,
+
+  /// A signing stroke.
+  signature,
+
   /// Document gallery (templates).
   templates,
 
@@ -621,6 +648,93 @@ class RenderReportToolbar extends RenderBox implements MouseTrackerAnnotation {
         bar(2.5, 8, 3, 6);
         bar(6.5, 3, 3, 11);
         bar(10.5, 6, 3, 8);
+      case ReportToolbarIcon.map:
+        final Path land = Path()
+          ..moveTo(l + 2.5, t + 6)
+          ..lineTo(l + 7, t + 2.5)
+          ..lineTo(l + 13.5, t + 5.5)
+          ..lineTo(l + 12, t + 13)
+          ..lineTo(l + 4.5, t + 14)
+          ..close();
+        canvas.drawPath(land, stroke);
+      case ReportToolbarIcon.pageNumber:
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            Rect.fromLTWH(l + 3.5, t + 1.5, 9, 13),
+            const Radius.circular(1),
+          ),
+          stroke,
+        );
+        line(5.5, 5, 10.5, 5);
+        line(5.5, 8, 10.5, 8);
+        line(5.5, 11, 8.5, 11);
+      case ReportToolbarIcon.pages:
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            Rect.fromLTWH(l + 2, t + 3.5, 8, 10),
+            const Radius.circular(1),
+          ),
+          stroke,
+        );
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            Rect.fromLTWH(l + 6, t + 2, 8, 10),
+            const Radius.circular(1),
+          ),
+          Paint()..color = const Color(0xFFFFFFFF),
+        );
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            Rect.fromLTWH(l + 6, t + 2, 8, 10),
+            const Radius.circular(1),
+          ),
+          stroke,
+        );
+      case ReportToolbarIcon.date:
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            Rect.fromLTWH(l + 2, t + 2.5, 12, 11),
+            const Radius.circular(1.5),
+          ),
+          stroke,
+        );
+        canvas.drawRect(Rect.fromLTWH(l + 2, t + 2.5, 12, 3.5), fill);
+        bar(4.5, 8, 2, 2);
+        bar(8, 8, 2, 2);
+        bar(4.5, 11, 2, 2);
+      case ReportToolbarIcon.reportName:
+        line(2, 4, 14, 4);
+        line(2, 8, 11, 8);
+        line(2, 11.5, 13, 11.5);
+      case ReportToolbarIcon.rowNumber:
+        line(2, 4, 5, 4);
+        line(7, 4, 14, 4);
+        line(2, 8, 5, 8);
+        line(7, 8, 14, 8);
+        line(2, 12, 5, 12);
+        line(7, 12, 14, 12);
+      case ReportToolbarIcon.total:
+        line(12, 3, 3.5, 3);
+        line(3.5, 3, 8.5, 8);
+        line(3.5, 13, 8.5, 8);
+        line(12, 13, 3.5, 13);
+      case ReportToolbarIcon.rounded:
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            Rect.fromLTWH(l + 1.5, t + 3.5, 13, 9),
+            const Radius.circular(3),
+          ),
+          stroke,
+        );
+      case ReportToolbarIcon.signature:
+        canvas.drawPath(
+          Path()
+            ..moveTo(l + 1, t + 9)
+            ..cubicTo(l + 4, t + 3, l + 7, t + 13, l + 10, t + 7)
+            ..cubicTo(l + 12, t + 4, l + 13, t + 8, l + 15, t + 8),
+          stroke,
+        );
+        line(1, 13, 15, 13);
       case ReportToolbarIcon.templates:
         canvas.drawRect(Rect.fromLTWH(l + 1.5, t + 1.5, 9, 11), stroke);
         canvas.drawRect(

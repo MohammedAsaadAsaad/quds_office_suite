@@ -17,14 +17,16 @@ import 'render_report_inspector.dart';
 import 'render_report_preview.dart';
 import 'render_report_problems.dart';
 import 'render_report_toolbar.dart';
+import 'render_report_toolbox.dart';
 import 'report_completion_popup.dart';
 import 'report_bundled_fonts.dart';
 import 'report_designer_controller.dart';
 import 'report_designer_strings.dart';
 import 'report_template_library.dart';
 
-/// Band report designer: toolbar, design canvas or live preview, and the
-/// property inspector, all painted by custom RenderBoxes.
+/// Band report designer: toolbar, an insert panel, the design canvas or
+/// live preview, and the property inspector, all painted by custom
+/// RenderBoxes.
 ///
 /// ```dart
 /// final controller = ReportDesignerController.fromXml(qrepXml);
@@ -155,6 +157,9 @@ class _QudsReportDesignerState extends State<QudsReportDesigner> {
   OverlayEntry? _menu;
   String _message = '';
   final GlobalKey _inspectorKey = GlobalKey();
+  final GlobalKey _toolboxKey = GlobalKey();
+  final GlobalKey _workKey = GlobalKey();
+  ReportToolboxHover? _toolHover;
   late double _inspectorWidth =
       widget.initialInspectorWidth ?? widget.inspectorWidth;
   bool _splitterHot = false;
@@ -168,6 +173,67 @@ class _QudsReportDesignerState extends State<QudsReportDesigner> {
   ReportDesignerController get _c => widget.controller;
 
   String _t(String english) => _c.strings.t(english);
+
+  void _onToolHover(ReportToolboxHover? next) {
+    if (!mounted || _toolHover == next) {
+      return;
+    }
+    setState(() => _toolHover = next);
+  }
+
+  Widget _toolCard(BoxConstraints box) {
+    final ReportToolboxHover? hover = _toolHover;
+    final BuildContext? toolboxContext = _toolboxKey.currentContext;
+    final BuildContext? stackContext = _workKey.currentContext;
+    if (hover == null || toolboxContext == null || stackContext == null) {
+      return const SizedBox.shrink();
+    }
+    final RenderObject? toolboxObject = toolboxContext.findRenderObject();
+    final RenderObject? stackObject = stackContext.findRenderObject();
+    if (toolboxObject is! RenderBox ||
+        stackObject is! RenderBox ||
+        !toolboxObject.hasSize ||
+        !stackObject.hasSize) {
+      return const SizedBox.shrink();
+    }
+    const double cardW = 252;
+    const double cardH = 172;
+    final Offset topRight = stackObject.globalToLocal(
+      toolboxObject.localToGlobal(hover.button.topRight),
+    );
+    final Offset topLeft = stackObject.globalToLocal(
+      toolboxObject.localToGlobal(hover.button.topLeft),
+    );
+    double left = topRight.dx + 8;
+    if (left + cardW > box.maxWidth - 8) {
+      left = topLeft.dx - cardW - 8;
+    }
+    if (left < 8) {
+      left = 8;
+    }
+    double top = topRight.dy - 4;
+    if (top + cardH > box.maxHeight - 8) {
+      top = box.maxHeight - cardH - 8;
+    }
+    if (top < 8) {
+      top = 8;
+    }
+    return Positioned(
+      left: left,
+      top: top,
+      width: cardW,
+      height: cardH,
+      child: IgnorePointer(
+        child: ReportToolboxCard(
+          title: _t(hover.title),
+          description: _t(hover.description),
+          icon: hover.icon,
+          theme: widget.theme,
+          direction: _c.strings.direction,
+        ),
+      ),
+    );
+  }
 
   void _syncStrings() {
     final ReportDesignerStrings s =
@@ -485,8 +551,9 @@ class _QudsReportDesignerState extends State<QudsReportDesigner> {
   void _showMenu(
     Offset at,
     List<OfficeContextAction> actions,
-    ValueChanged<String> onSelect,
-  ) {
+    ValueChanged<String> onSelect, {
+    String? filterHint,
+  }) {
     _dismissMenu();
     _menu = OfficeContextMenu.show(
       context: context,
@@ -508,6 +575,7 @@ class _QudsReportDesignerState extends State<QudsReportDesigner> {
                   separatorBefore: a.separatorBefore,
                 ),
       ],
+      filterHint: filterHint,
       onSelect: (String id) {
         _menu = null;
         onSelect(id);
@@ -905,35 +973,151 @@ class _QudsReportDesignerState extends State<QudsReportDesigner> {
   void _inspectorChoice(ReportInspectorChoice choice) {
     _activate();
     final ReportProperty p = choice.property;
-    _showMenu(choice.globalPosition, <OfficeContextAction>[
-      OfficeContextAction.caption(p.label),
-      for (final String option in choice.choices)
-        OfficeContextAction(
-          id: option,
-          label: choice.options == null
-              ? _c.strings.option(option)
-              : (option.isEmpty ? _t('None') : option),
-          icon: option == p.value ? Icons.check : null,
-          shortcut: choice.details[option],
-        ),
-    ], (String value) => _c.setProperty(p.key, value));
+    _showMenu(
+      choice.globalPosition,
+      <OfficeContextAction>[
+        OfficeContextAction.caption(p.label),
+        for (final String option in choice.choices)
+          OfficeContextAction(
+            id: option,
+            label: choice.options == null
+                ? _c.strings.option(option)
+                : (option.isEmpty ? _t('None') : option),
+            icon: option == p.value ? Icons.check : null,
+            shortcut: choice.details[option],
+          ),
+      ],
+      (String value) => _c.setProperty(p.key, value),
+      filterHint: choice.choices.length > 8 ? _t('Type to search') : null,
+    );
   }
 
   // ------------------------------------------------------------ toolbar
 
-  static const Map<ReportDesignTool, (ReportToolbarIcon, String)> _tools =
-      <ReportDesignTool, (ReportToolbarIcon, String)>{
-        ReportDesignTool.select: (ReportToolbarIcon.select, 'Select (Esc)'),
-        ReportDesignTool.text: (ReportToolbarIcon.text, 'Text box'),
-        ReportDesignTool.image: (ReportToolbarIcon.image, 'Image'),
-        ReportDesignTool.table: (ReportToolbarIcon.table, 'Repeating table'),
-        ReportDesignTool.barcode: (ReportToolbarIcon.barcode, 'Barcode'),
-        ReportDesignTool.qr: (ReportToolbarIcon.qr, 'QR code'),
-        ReportDesignTool.line: (ReportToolbarIcon.line, 'Line'),
-        ReportDesignTool.rectangle: (ReportToolbarIcon.rectangle, 'Rectangle'),
-        ReportDesignTool.ellipse: (ReportToolbarIcon.ellipse, 'Ellipse'),
-        ReportDesignTool.chart: (ReportToolbarIcon.chart, 'Chart'),
-      };
+  static const List<ReportToolboxEntry> _insertTools = <ReportToolboxEntry>[
+    ReportToolboxEntry(
+      tool: ReportDesignTool.select,
+      icon: ReportToolbarIcon.select,
+      title: 'Select (Esc)',
+      description: 'Pick, move, and resize what is already on the page.',
+    ),
+    ReportToolboxEntry(
+      tool: ReportDesignTool.text,
+      icon: ReportToolbarIcon.text,
+      title: 'Text box',
+      description: 'Fixed words, or a field such as {{Data.customer}}.',
+      gapBefore: true,
+    ),
+    ReportToolboxEntry(
+      tool: ReportDesignTool.pageNumber,
+      icon: ReportToolbarIcon.pageNumber,
+      title: 'Page number',
+      description: 'Prints the number of this page.',
+    ),
+    ReportToolboxEntry(
+      tool: ReportDesignTool.pages,
+      icon: ReportToolbarIcon.pages,
+      title: 'Page count',
+      description: 'This page and the page count, such as 2 / 5.',
+    ),
+    ReportToolboxEntry(
+      tool: ReportDesignTool.date,
+      icon: ReportToolbarIcon.date,
+      title: 'Print date',
+      description: 'The date the report is printed.',
+    ),
+    ReportToolboxEntry(
+      tool: ReportDesignTool.reportName,
+      icon: ReportToolbarIcon.reportName,
+      title: 'Report name',
+      description: 'The name stored on the report.',
+    ),
+    ReportToolboxEntry(
+      tool: ReportDesignTool.rowNumber,
+      icon: ReportToolbarIcon.rowNumber,
+      title: 'Row number',
+      description:
+          '1, 2, 3… for the current record. Place it in the detail band.',
+    ),
+    ReportToolboxEntry(
+      tool: ReportDesignTool.total,
+      icon: ReportToolbarIcon.total,
+      title: 'Column total',
+      description: 'The sum of a column. Change Row.total to your own field.',
+    ),
+    ReportToolboxEntry(
+      tool: ReportDesignTool.signature,
+      icon: ReportToolbarIcon.signature,
+      title: 'Signature',
+      description: 'A line to sign on, with a caption underneath.',
+    ),
+    ReportToolboxEntry(
+      tool: ReportDesignTool.image,
+      icon: ReportToolbarIcon.image,
+      title: 'Image',
+      description:
+          'A picture. Import a PNG or JPEG and it is stored inside the report.',
+      gapBefore: true,
+    ),
+    ReportToolboxEntry(
+      tool: ReportDesignTool.table,
+      icon: ReportToolbarIcon.table,
+      title: 'Repeating table',
+      description: 'One row for every record. Bind each column to a field.',
+    ),
+    ReportToolboxEntry(
+      tool: ReportDesignTool.barcode,
+      icon: ReportToolbarIcon.barcode,
+      title: 'Barcode',
+      description: 'A Code 128 barcode from a number or a field.',
+    ),
+    ReportToolboxEntry(
+      tool: ReportDesignTool.qr,
+      icon: ReportToolbarIcon.qr,
+      title: 'QR code',
+      description: 'A square code for a link, a reference, or a field.',
+    ),
+    ReportToolboxEntry(
+      tool: ReportDesignTool.line,
+      icon: ReportToolbarIcon.line,
+      title: 'Line',
+      description: 'A straight rule for separators and underlines.',
+      gapBefore: true,
+    ),
+    ReportToolboxEntry(
+      tool: ReportDesignTool.rectangle,
+      icon: ReportToolbarIcon.rectangle,
+      title: 'Rectangle',
+      description: 'A box. Fill it, or leave it as an outline.',
+    ),
+    ReportToolboxEntry(
+      tool: ReportDesignTool.rounded,
+      icon: ReportToolbarIcon.rounded,
+      title: 'Rounded box',
+      description: 'A box with rounded corners, for a card or a frame.',
+    ),
+    ReportToolboxEntry(
+      tool: ReportDesignTool.ellipse,
+      icon: ReportToolbarIcon.ellipse,
+      title: 'Ellipse',
+      description: 'A circle or an oval.',
+    ),
+    ReportToolboxEntry(
+      tool: ReportDesignTool.chart,
+      icon: ReportToolbarIcon.chart,
+      title: 'Chart',
+      description:
+          'Columns, lines, pies, and the other charts, bound to a table.',
+      gapBefore: true,
+    ),
+    ReportToolboxEntry(
+      tool: ReportDesignTool.map,
+      icon: ReportToolbarIcon.map,
+      title: 'Map',
+      description:
+          'Regions from a shape file. Color each one from a column, joined by a key.',
+    ),
+  ];
 
   static const Map<ReportAlignAction, (ReportToolbarIcon, String)>
   _aligns = <ReportAlignAction, (ReportToolbarIcon, String)>{
@@ -975,16 +1159,6 @@ class _QudsReportDesignerState extends State<QudsReportDesigner> {
         label: 'Variables',
         enabled: design,
       ),
-      for (final MapEntry<ReportDesignTool, (ReportToolbarIcon, String)> t
-          in _tools.entries)
-        ReportToolbarItem(
-          id: 'tool.${t.key.name}',
-          icon: t.value.$1,
-          tooltip: t.value.$2,
-          enabled: design,
-          active: design && _c.tool == t.key,
-          separatorBefore: t.key == ReportDesignTool.select,
-        ),
       ReportToolbarItem(
         id: 'undo',
         icon: ReportToolbarIcon.undo,
@@ -1525,6 +1699,7 @@ class _QudsReportDesignerState extends State<QudsReportDesigner> {
     final ReportDataTableView t = _c.dataTable;
     final bool editable = _c.dataEditable;
     final bool fields = t.isFields;
+    final bool shape = _c.shapeKeyForTable(t.name) != null;
     final List<OfficeContextAction> actions = <OfficeContextAction>[
       if (hit.area == ReportDataArea.cell &&
           _c.canEditDataCell(hit.row, hit.column))
@@ -1542,7 +1717,10 @@ class _QudsReportDesignerState extends State<QudsReportDesigner> {
           icon: Icons.backspace_outlined,
           shortcut: 'Del',
         ),
-      if (!fields && editable && hit.row >= 0) ...<OfficeContextAction>[
+      if (!fields &&
+          editable &&
+          !shape &&
+          hit.row >= 0) ...<OfficeContextAction>[
         const OfficeContextAction(
           id: 'rowAbove',
           label: 'Insert row above',
@@ -1563,6 +1741,7 @@ class _QudsReportDesignerState extends State<QudsReportDesigner> {
       ],
       if (!fields &&
           editable &&
+          !shape &&
           hit.row < 0 &&
           hit.area != ReportDataArea.table)
         const OfficeContextAction(
@@ -1582,6 +1761,12 @@ class _QudsReportDesignerState extends State<QudsReportDesigner> {
           label: 'Add calculated column',
           icon: Icons.functions,
         ),
+        if (editable)
+          const OfficeContextAction(
+            id: 'constAdd',
+            label: 'Add constant column',
+            icon: Icons.push_pin_outlined,
+          ),
       ],
       if (!fields && hit.column >= 0) ...<OfficeContextAction>[
         OfficeContextAction(
@@ -1610,7 +1795,7 @@ class _QudsReportDesignerState extends State<QudsReportDesigner> {
           icon: Icons.delete_outline,
           danger: true,
         ),
-      if (hit.area == ReportDataArea.table && !fields)
+      if (hit.area == ReportDataArea.table && !fields && !shape)
         const OfficeContextAction(
           id: 'tableDelete',
           label: 'Delete table',
@@ -1647,6 +1832,8 @@ class _QudsReportDesignerState extends State<QudsReportDesigner> {
           _c.setProperty('data.col+', '');
         case 'calcAdd':
           _c.setProperty('data.calc+', '');
+        case 'constAdd':
+          _c.setProperty('data.const+', '');
         case 'colRename':
           _c.selectDataCell(-1, hit.column);
           _c.beginPropertyEdit('data.col.name');
@@ -1908,9 +2095,12 @@ class _QudsReportDesignerState extends State<QudsReportDesigner> {
           Expanded(
             child: LayoutBuilder(
               builder: (BuildContext context, BoxConstraints box) {
+                final double toolbox = _c.mode == ReportDesignMode.design
+                    ? ReportToolbox.width
+                    : 0;
                 final double width = _clampInspector(
                   _inspectorWidth,
-                  box.maxWidth,
+                  box.maxWidth - toolbox,
                 );
                 final Widget work = _c.problemsOpen
                     ? Column(
@@ -1931,21 +2121,44 @@ class _QudsReportDesignerState extends State<QudsReportDesigner> {
                         ],
                       )
                     : surface;
-                return Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                final bool design = _c.mode == ReportDesignMode.design;
+                return Stack(
+                  key: _workKey,
                   children: <Widget>[
-                    Expanded(child: work),
-                    _splitter(theme, box.maxWidth),
-                    SizedBox(
-                      width: width,
-                      child: ReportInspector(
-                        key: _inspectorKey,
-                        controller: _c,
-                        theme: theme,
-                        onChoose: _inspectorChoice,
-                        onActivate: _activate,
-                      ),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: <Widget>[
+                        if (design)
+                          SizedBox(
+                            width: ReportToolbox.width,
+                            child: ReportToolbox(
+                              key: _toolboxKey,
+                              entries: _insertTools,
+                              heading: _t('Insert'),
+                              active: _c.tool,
+                              theme: theme,
+                              onPressed: (ReportDesignTool tool) {
+                                _activate();
+                                _c.tool = tool;
+                              },
+                              onHover: _onToolHover,
+                            ),
+                          ),
+                        Expanded(child: work),
+                        _splitter(theme, box.maxWidth),
+                        SizedBox(
+                          width: width,
+                          child: ReportInspector(
+                            key: _inspectorKey,
+                            controller: _c,
+                            theme: theme,
+                            onChoose: _inspectorChoice,
+                            onActivate: _activate,
+                          ),
+                        ),
+                      ],
                     ),
+                    if (design) _toolCard(box),
                   ],
                 );
               },

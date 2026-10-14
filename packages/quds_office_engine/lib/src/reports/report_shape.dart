@@ -58,13 +58,15 @@ class ReportShapeFeature {
     required this.label,
     List<String>? aliases,
     List<ReportShapeRing>? rings,
+    Map<String, String>? values,
   }) : aliases = aliases ?? <String>[],
-       rings = rings ?? <ReportShapeRing>[];
+       rings = rings ?? <ReportShapeRing>[],
+       values = Map<String, String>.unmodifiable(values ?? const <String, String>{});
 
   /// Value the report data matches (`LY`, `LBY`, a district code).
   final String key;
 
-  /// Name drawn on a wide region.
+  /// Name drawn on a wide region when no label field is chosen.
   final String label;
 
   /// Other spellings that match this region (`Libya`, `ليبيا`).
@@ -72,6 +74,23 @@ class ReportShapeFeature {
 
   /// Outer rings and holes.
   final List<ReportShapeRing> rings;
+
+  /// Attribute columns from the shapefile or GeoJSON, keyed by field name.
+  final Map<String, String> values;
+
+  /// The attribute [field], or empty when this feature has no such column.
+  String valueOf(String? field) {
+    final String want = (field ?? '').trim().toLowerCase();
+    if (want.isEmpty) {
+      return '';
+    }
+    for (final MapEntry<String, String> entry in values.entries) {
+      if (entry.key.toLowerCase() == want) {
+        return entry.value.trim();
+      }
+    }
+    return '';
+  }
 }
 
 /// A shape file read for a report: the layer to embed, and the attribute
@@ -79,23 +98,32 @@ class ReportShapeFeature {
 /// stores them).
 class ReportShapeFile {
   /// ReportShapeFile API.
-  const ReportShapeFile({required this.layer, this.keyField});
+  const ReportShapeFile({required this.layer, this.keyField, this.nameField});
 
   /// Regions to store under `shapes/` in the `.qrep`.
   final ReportShapeLayer layer;
 
   /// Shapefile or GeoJSON attribute that supplied [ReportShapeFeature.key].
   final String? keyField;
+
+  /// Attribute best suited to be drawn as the region name.
+  final String? nameField;
 }
 
 /// A set of regions drawn as one map.
 class ReportShapeLayer {
   /// ReportShapeLayer API.
-  ReportShapeLayer(List<ReportShapeFeature> features)
-    : features = List<ReportShapeFeature>.unmodifiable(features);
+  ReportShapeLayer(List<ReportShapeFeature> features, {List<String>? fields})
+    : features = List<ReportShapeFeature>.unmodifiable(features),
+      fields = List<String>.unmodifiable(fields ?? const <String>[]);
 
   /// features API.
   final List<ReportShapeFeature> features;
+
+  /// Attribute columns stored with an imported file, in file order.
+  /// Empty for the bundled world atlas and for layers saved before
+  /// columns were kept.
+  final List<String> fields;
 
   Map<String, int>? _index;
 
@@ -129,10 +157,25 @@ class ReportShapeLayer {
       raw.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
 
   /// Compact bytes (`QMAP`) stored under `shapes/` in a `.qrep`.
+  ///
+  /// Version 2 stores each coordinate as microdegrees, so a district
+  /// boundary stays smooth when the map fills the page. Version 3 also
+  /// stores every attribute column, so a label can use a field other
+  /// than the key. Version 1 (the bundled world atlas) is still read.
   Uint8List encode() {
     final BytesBuilder b = BytesBuilder();
-    b.add(<int>[0x51, 0x4D, 0x41, 0x50, 1]);
+    final bool rich = fields.isNotEmpty;
+    b.add(<int>[0x51, 0x4D, 0x41, 0x50, rich ? 3 : 2]);
     _u16(b, features.length);
+    final List<String> columns = rich
+        ? fields.take(255).toList(growable: false)
+        : const <String>[];
+    if (rich) {
+      b.addByte(columns.length);
+      for (final String name in columns) {
+        _str(b, name);
+      }
+    }
     for (final ReportShapeFeature f in features) {
       _str(b, f.key);
       _str(b, f.label);
@@ -144,13 +187,16 @@ class ReportShapeLayer {
       for (int i = 0; i < aliases.length && i < 255; i++) {
         _str(b, aliases[i]);
       }
+      for (final String name in columns) {
+        _str(b, f.valueOf(name));
+      }
       _u16(b, f.rings.length);
       for (final ReportShapeRing ring in f.rings) {
         _u16(b, ring.length);
         b.addByte(ring.hole ? 1 : 0);
         for (int i = 0; i < ring.length; i++) {
-          _i16(b, _q(ring.lonLat[i * 2], 180));
-          _i16(b, _q(ring.lonLat[i * 2 + 1], 90));
+          _i32(b, _micro(ring.lonLat[i * 2], 180));
+          _i32(b, _micro(ring.lonLat[i * 2 + 1], 90));
         }
       }
     }
@@ -166,13 +212,27 @@ class ReportShapeLayer {
         bytes[3] != 0x50) {
       throw const ReportShapeException('Not a shape layer');
     }
-    if (bytes[4] != 1) {
-      throw ReportShapeException('Unknown shape layer version ${bytes[4]}');
+    final int version = bytes[4];
+    if (version != 1 && version != 2 && version != 3) {
+      throw ReportShapeException('Unknown shape layer version $version');
     }
     final ByteData data = ByteData.sublistView(bytes);
     var o = 5;
     final int count = _readU16(data, o);
     o += 2;
+    final List<String> columns = <String>[];
+    if (version == 3) {
+      if (o >= bytes.length) {
+        throw const ReportShapeException('Truncated shape layer');
+      }
+      final int fieldCount = bytes[o];
+      o++;
+      for (int i = 0; i < fieldCount; i++) {
+        final (String name, int n) = _readStr(bytes, o);
+        o = n;
+        columns.add(name);
+      }
+    }
     final List<ReportShapeFeature> features = <ReportShapeFeature>[];
     for (int i = 0; i < count; i++) {
       final (String key, int k) = _readStr(bytes, o);
@@ -190,6 +250,12 @@ class ReportShapeLayer {
         o = n;
         names.add(name);
       }
+      final Map<String, String> values = <String, String>{};
+      for (final String name in columns) {
+        final (String value, int n) = _readStr(bytes, o);
+        o = n;
+        values[name] = value;
+      }
       final int rings = _readU16(data, o);
       o += 2;
       final List<ReportShapeRing> parts = <ReportShapeRing>[];
@@ -203,10 +269,17 @@ class ReportShapeLayer {
         o++;
         final Float64List lonLat = Float64List(n * 2);
         for (int p = 0; p < n; p++) {
-          lonLat[p * 2] = _readI16(data, o) / 100;
-          o += 2;
-          lonLat[p * 2 + 1] = _readI16(data, o) / 100;
-          o += 2;
+          if (version == 1) {
+            lonLat[p * 2] = _readI16(data, o) / 100;
+            o += 2;
+            lonLat[p * 2 + 1] = _readI16(data, o) / 100;
+            o += 2;
+          } else {
+            lonLat[p * 2] = _readI32(data, o) / 1000000;
+            o += 4;
+            lonLat[p * 2 + 1] = _readI32(data, o) / 1000000;
+            o += 4;
+          }
         }
         if (n >= 3) {
           parts.add(ReportShapeRing(hole: hole, lonLat: lonLat));
@@ -218,10 +291,11 @@ class ReportShapeLayer {
           label: label.isEmpty ? key : label,
           aliases: names,
           rings: parts,
+          values: values,
         ),
       );
     }
-    return ReportShapeLayer(features);
+    return ReportShapeLayer(features, fields: columns);
   }
 
   /// Shapefile (`.shp`), GeoJSON, or [encode] bytes. [attributes] is the
@@ -274,21 +348,50 @@ class ReportShapeLayer {
     }
     if (bytes.length >= 4 &&
         ByteData.sublistView(bytes).getInt32(0, Endian.big) == 9994) {
+      final ReportShapeLayer layer = parseShapefile(
+        bytes,
+        attributes: attributes,
+        keyField: keyField,
+        nameField: nameField,
+      );
+      _requireGeographic(layer);
       return ReportShapeFile(
-        layer: parseShapefile(
-          bytes,
-          attributes: attributes,
-          keyField: keyField,
-          nameField: nameField,
-        ),
+        layer: layer,
         keyField: _dbfKeyName(attributes, keyField),
+        nameField: _dbfLabelName(attributes, nameField),
       );
     }
     final String text = utf8.decode(bytes, allowMalformed: true);
-    return ReportShapeFile(
-      layer: parseGeoJson(text, keyField: keyField, nameField: nameField),
-      keyField: _geoKeyName(text, keyField),
+    final ReportShapeLayer layer = parseGeoJson(
+      text,
+      keyField: keyField,
+      nameField: nameField,
     );
+    _requireGeographic(layer);
+    return ReportShapeFile(
+      layer: layer,
+      keyField: _geoKeyName(text, keyField),
+      nameField: _geoLabelName(text, nameField),
+    );
+  }
+
+  /// Refuses a projected shapefile (metres) instead of clamping it into
+  /// a blob at the edge of the degree range.
+  static void _requireGeographic(ReportShapeLayer layer) {
+    for (final ReportShapeFeature feature in layer.features) {
+      for (final ReportShapeRing ring in feature.rings) {
+        for (int i = 0; i < ring.length; i++) {
+          final double lon = ring.lonLat[i * 2];
+          final double lat = ring.lonLat[i * 2 + 1];
+          if (lon.abs() > 180.0001 || lat.abs() > 90.0001) {
+            throw const ReportShapeException(
+              'This file is not longitude and latitude. '
+              'Reproject it to WGS84 (EPSG:4326) and import it again.',
+            );
+          }
+        }
+      }
+    }
   }
 
   /// ESRI polygon shapefile. [attributes] supplies the region key.
@@ -342,6 +445,7 @@ class ReportShapeLayer {
                   ? const <String>[]
                   : <String>[named],
               rings: rings,
+              values: _rowValues(dbf, record),
             ),
           );
         }
@@ -351,7 +455,18 @@ class ReportShapeLayer {
     if (features.isEmpty) {
       throw const ReportShapeException('The shapefile has no polygons');
     }
-    return ReportShapeLayer(features);
+    return ReportShapeLayer(features, fields: dbf?.fields ?? const <String>[]);
+  }
+
+  static Map<String, String> _rowValues(_Dbf? dbf, List<String> record) {
+    if (dbf == null) {
+      return const <String, String>{};
+    }
+    final Map<String, String> values = <String, String>{};
+    for (int c = 0; c < dbf.fields.length && c < record.length; c++) {
+      values[dbf.fields[c]] = record[c].trim();
+    }
+    return values;
   }
 
   /// GeoJSON `FeatureCollection`, `Feature`, or `Polygon`.
@@ -390,6 +505,7 @@ class ReportShapeLayer {
       });
     }
     final List<ReportShapeFeature> out = <ReportShapeFeature>[];
+    final List<String> fields = <String>[];
     for (int i = 0; i < features.length; i++) {
       final Map<String, Object?> feature = features[i];
       final Object? geometry = feature['geometry'];
@@ -417,13 +533,33 @@ class ReportShapeLayer {
           label: label,
           aliases: _aliases(props, key, label),
           rings: rings,
+          values: _propValues(props, fields),
         ),
       );
     }
     if (out.isEmpty) {
       throw const ReportShapeException('The GeoJSON has no polygons');
     }
-    return ReportShapeLayer(out);
+    return ReportShapeLayer(out, fields: fields);
+  }
+
+  static Map<String, String> _propValues(
+    Map<String, Object?> props,
+    List<String> fields,
+  ) {
+    final Map<String, String> values = <String, String>{};
+    for (final MapEntry<String, Object?> entry in props.entries) {
+      final String name = entry.key.trim();
+      if (name.isEmpty) {
+        continue;
+      }
+      if (!fields.any((String f) => f.toLowerCase() == name.toLowerCase())) {
+        fields.add(name);
+      }
+      final Object? raw = entry.value;
+      values[name] = raw == null ? '' : '$raw'.trim();
+    }
+    return values;
   }
 
   static List<ReportShapeRing> _shpRings(ByteData data, int start, int end) {
@@ -599,6 +735,86 @@ class ReportShapeLayer {
     return null;
   }
 
+  static String? _dbfLabelName(Uint8List? attributes, String? requested) {
+    if (attributes == null) {
+      return null;
+    }
+    final _Dbf dbf = _Dbf.parse(attributes);
+    return _namedColumn(dbf.fields, dbf.column(requested), const <String>[
+      'name',
+      'name_en',
+      'name_ar',
+      'label',
+      'title',
+    ]);
+  }
+
+  static String? _geoLabelName(String text, String? requested) {
+    final List<String> fields = _geoFields(text);
+    if (fields.isEmpty) {
+      return null;
+    }
+    if (requested != null && requested.trim().isNotEmpty) {
+      for (final String name in fields) {
+        if (name.toLowerCase() == requested.trim().toLowerCase()) {
+          return name;
+        }
+      }
+    }
+    return _namedColumn(fields, -1, const <String>[
+      'name',
+      'name_en',
+      'name_ar',
+      'label',
+      'title',
+    ]);
+  }
+
+  static List<String> _geoFields(String text) {
+    final Object? decoded;
+    try {
+      decoded = ReportData.fromJsonValue(jsonDecode(text));
+    } on FormatException {
+      return const <String>[];
+    }
+    if (decoded is! Map<String, Object?>) {
+      return const <String>[];
+    }
+    final Object? list = decoded['features'];
+    if (list is! List<Object?> || list.isEmpty) {
+      return const <String>[];
+    }
+    final Object? first = list.first;
+    if (first is! Map<String, Object?>) {
+      return const <String>[];
+    }
+    final Object? props = first['properties'];
+    if (props is! Map<String, Object?>) {
+      return const <String>[];
+    }
+    return <String>[for (final String key in props.keys) key];
+  }
+
+  static String? _namedColumn(
+    List<String> fields,
+    int named,
+    List<String> prefer,
+  ) {
+    if (named >= 0 &&
+        named < fields.length &&
+        fields[named].trim().isNotEmpty) {
+      return fields[named];
+    }
+    for (final String want in prefer) {
+      for (final String name in fields) {
+        if (name.toLowerCase() == want && name.trim().isNotEmpty) {
+          return name;
+        }
+      }
+    }
+    return null;
+  }
+
   static String? _dbfKeyName(Uint8List? attributes, String? requested) {
     if (attributes == null) {
       return null;
@@ -735,9 +951,11 @@ class ReportShapeLayer {
     return out;
   }
 
-  static int _q(double degrees, double limit) {
+  /// Microdegrees. 0.000001° is about 11 cm, so a diagonal border does
+  /// not turn into a staircase when the map is drawn large.
+  static int _micro(double degrees, double limit) {
     final double c = degrees.clamp(-limit, limit).toDouble();
-    return (c * 100).round().clamp(-32767, 32767);
+    return (c * 1000000).round().clamp(-200000000, 200000000);
   }
 
   static void _u16(BytesBuilder b, int v) {
@@ -745,8 +963,8 @@ class ReportShapeLayer {
     b.add(d.buffer.asUint8List());
   }
 
-  static void _i16(BytesBuilder b, int v) {
-    final ByteData d = ByteData(2)..setInt16(0, v, Endian.little);
+  static void _i32(BytesBuilder b, int v) {
+    final ByteData d = ByteData(4)..setInt32(0, v, Endian.little);
     b.add(d.buffer.asUint8List());
   }
 
@@ -769,6 +987,13 @@ class ReportShapeLayer {
       throw const ReportShapeException('Truncated shape layer');
     }
     return data.getInt16(o, Endian.little);
+  }
+
+  static int _readI32(ByteData data, int o) {
+    if (o + 4 > data.lengthInBytes) {
+      throw const ReportShapeException('Truncated shape layer');
+    }
+    return data.getInt32(o, Endian.little);
   }
 
   static (String, int) _readStr(Uint8List bytes, int o) {

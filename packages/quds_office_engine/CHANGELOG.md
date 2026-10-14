@@ -2,6 +2,19 @@
 
 All notable changes to `quds_office_engine` are documented here.
 
+## 1.4.0
+
+- A shape map labels each region from an attribute, a calculated column on
+  the shape table, or a formula in `labelField`. The formula may name shape
+  attributes directly (`Name`, `Concat(Name, "\n", SHAPE_Area)`) as well as
+  `Row.`.
+- The map title, the region labels, and the legend each have their own font.
+  `titleStyle`, `labelStyle`, and `legendStyle` set family, size, bold,
+  italic, and color. An empty field inherits the chart font. An empty label
+  color keeps the contrast color, white on a dark region. XML writes
+  `titleFont`, `titleSize`, `titleBold`, `titleItalic`, and `titleColor`,
+  and the same prefixes for `label` and `legend`.
+
 ## 1.3.0
 
 - Report charts add percent-stacked columns, stacked area, column-and-line

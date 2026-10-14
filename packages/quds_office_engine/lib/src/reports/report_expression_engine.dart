@@ -5,8 +5,10 @@ import 'dart:math' as math;
 
 import 'arabic_tafqeet.dart';
 import 'english_words.dart';
+import 'report_data.dart';
 import 'report_expression.dart';
 import 'report_format.dart';
+import 'report_shape.dart';
 import 'report_value.dart';
 
 /// Host-provided function: `MYFN(a, b)` receives evaluated arguments.
@@ -264,6 +266,316 @@ class QudsExpressionEngine {
       }
       throw ReportExpressionException(e.message, source: expression.source);
     }
+  }
+
+  /// True when [source] is a `{{ }}` template rather than a bare name.
+  static bool isTemplate(String? source) => (source ?? '').contains('{{');
+
+  /// True when a map label is a formula. A single column name stays an
+  /// attribute lookup. `CONCAT(name, "\n", code)` and `Row.name` are formulas,
+  /// as is any `{{ }}` template.
+  static bool isLabelFormula(String? source) {
+    final String s = (source ?? '').trim();
+    if (s.isEmpty) {
+      return false;
+    }
+    if (s.contains('{{')) {
+      return true;
+    }
+    return !_plainName(s);
+  }
+
+  static bool _plainName(String s) {
+    final int first = s.codeUnitAt(0);
+    if (!_nameStart(first)) {
+      return false;
+    }
+    for (int i = 1; i < s.length; i++) {
+      final int c = s.codeUnitAt(i);
+      if (!_nameStart(c) && (c < 0x30 || c > 0x39)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  static bool _nameStart(int c) =>
+      (c >= 0x41 && c <= 0x5A) ||
+      (c >= 0x61 && c <= 0x7A) ||
+      c == 0x5F ||
+      c > 0x7F;
+
+  /// Caption of each category key when [labelField] is a formula.
+  /// The first row for a key wins. A failing formula yields an empty caption
+  /// so the map does not fall back to the region key.
+  ///
+  /// [shapes] supplies the map file's columns. They are written onto the
+  /// matched row, so `name` and `Row.name` both read the region.
+  Map<String, String> regionCaptions(
+    String labelField,
+    String? category,
+    List<ReportValue> rows,
+    ReportScope scope, {
+    ReportShapeLayer? shapes,
+  }) {
+    final bool wrapped = labelField.contains('{{');
+    final ReportTemplateText? template;
+    final ReportExpression? expression;
+    try {
+      if (wrapped) {
+        template = ReportTemplateText.parse(labelField);
+        expression = null;
+      } else {
+        template = null;
+        expression = ReportExpression.parse(labelField);
+      }
+    } on ReportExpressionException {
+      return <String, String>{};
+    }
+    ReportExpression? cat;
+    final String catSrc = (category ?? '').trim();
+    if (catSrc.isNotEmpty) {
+      try {
+        cat = ReportExpression.parse(catSrc);
+      } on ReportExpressionException {
+        cat = null;
+      }
+    }
+    final Map<String, String> out = <String, String>{};
+    for (int r = 0; r < rows.length; r++) {
+      final ReportScope rs = scope.copyWith(row: rows[r], rowIndex: r);
+      final String key;
+      try {
+        key = cat == null ? '${r + 1}' : formatter.display(evaluate(cat, rs));
+      } on ReportExpressionException {
+        continue;
+      }
+      if (out.containsKey(key)) {
+        continue;
+      }
+      final ReportScope labeled = scope.copyWith(
+        row: _labelRow(rows[r], key, shapes),
+        rowIndex: r,
+      );
+      var caption = '';
+      try {
+        caption = template != null
+            ? interpolateParsed(template, labeled)
+            : formatter.display(evaluate(expression!, labeled));
+      } on ReportExpressionException {
+        caption = '';
+      }
+      out[key] = caption;
+    }
+    return out;
+  }
+
+  /// Caption of every region when [field] is a calculated or stored column
+  /// of the report rather than an attribute stored in the shape file.
+  /// Keys are [ReportShapeFeature.key]. Empty when [field] is a formula or
+  /// a real shape attribute.
+  Map<String, String>? shapeFieldLabels({
+    required String field,
+    required ReportShapeLayer layer,
+    required ReportDataSchema schema,
+    ReportRecord? data,
+    String? keyField,
+  }) {
+    final String name = field.trim();
+    if (name.isEmpty || isLabelFormula(name)) {
+      return null;
+    }
+    final bool onLayer = layer.fields.any(
+      (String f) => f.toLowerCase() == name.toLowerCase(),
+    );
+    String? expression;
+    for (final ReportDataTable table in schema.tables) {
+      final ReportDataColumn? column = table.column(name);
+      if (column != null && column.isCalculated) {
+        expression = column.expression;
+        break;
+      }
+    }
+    if (expression == null && onLayer) {
+      return null;
+    }
+    ReportExpression? parsed;
+    if (expression != null) {
+      try {
+        parsed = ReportExpression.parse(expression);
+      } on ReportExpressionException {
+        return null;
+      }
+    }
+    final List<ReportRecord> rows = parsed == null && data != null
+        ? _recordsWith(data, name)
+        : const <ReportRecord>[];
+    if (parsed == null && rows.isEmpty) {
+      return null;
+    }
+    final Map<String, String> out = <String, String>{};
+    for (final ReportShapeFeature feature in layer.features) {
+      if (parsed != null) {
+        final ReportScope scope = ReportScope(
+          data: data ?? ReportRecord.empty,
+          variables: ReportRecord.empty,
+          system: ReportSystemInfo(now: DateTime.utc(2020)),
+          row: _featureRecord(feature, layer),
+        );
+        try {
+          out[feature.key] = formatter.display(evaluate(parsed, scope));
+        } on ReportExpressionException {
+          out[feature.key] = '';
+        }
+        continue;
+      }
+      final ReportRecord? row = _rowForFeature(rows, feature, keyField);
+      final ReportValue? cell = row?.field(name);
+      if (cell != null && cell is! ReportNull) {
+        out[feature.key] = formatter.display(cell);
+      }
+    }
+    return out.isEmpty ? null : out;
+  }
+
+  List<ReportRecord> _recordsWith(ReportRecord root, String field) {
+    final List<ReportRecord> out = <ReportRecord>[];
+    void walk(ReportValue value, int depth) {
+      if (depth > 6) {
+        return;
+      }
+      if (value is ReportList) {
+        final List<ReportRecord> records = <ReportRecord>[
+          for (final ReportValue item in value.items)
+            if (item is ReportRecord) item,
+        ];
+        if (records.any((ReportRecord r) => r.field(field) != null)) {
+          out.addAll(records);
+        }
+        for (final ReportValue item in value.items) {
+          walk(item, depth + 1);
+        }
+      } else if (value is ReportRecord) {
+        for (final ReportValue child in value.fields.values) {
+          walk(child, depth + 1);
+        }
+      }
+    }
+
+    walk(root, 0);
+    return out;
+  }
+
+  ReportRecord? _rowForFeature(
+    List<ReportRecord> rows,
+    ReportShapeFeature feature,
+    String? keyField,
+  ) {
+    final String key = feature.key.trim().toLowerCase();
+    if (key.isEmpty) {
+      return null;
+    }
+    final String named = (keyField ?? '').trim();
+    if (named.isNotEmpty) {
+      for (final ReportRecord row in rows) {
+        final ReportValue? cell = row.field(named);
+        if (cell != null && cell.displayText.trim().toLowerCase() == key) {
+          return row;
+        }
+      }
+    }
+    for (final ReportRecord row in rows) {
+      for (final ReportValue cell in row.fields.values) {
+        if (cell is ReportNull) {
+          continue;
+        }
+        if (cell.displayText.trim().toLowerCase() == key) {
+          return row;
+        }
+      }
+    }
+    return null;
+  }
+
+  /// Label of one region from its own columns. Used when the chart's data
+  /// set has no row for that region, so `Name` and `SHAPE_Area` still draw.
+  String shapeCaption(
+    String labelField,
+    ReportShapeFeature feature,
+    ReportShapeLayer layer,
+  ) {
+    final ReportScope scope = ReportScope(
+      data: ReportRecord.empty,
+      variables: ReportRecord.empty,
+      system: ReportSystemInfo(now: DateTime.utc(2020)),
+      row: _featureRecord(feature, layer),
+    );
+    try {
+      if (labelField.contains('{{')) {
+        return interpolate(labelField, scope);
+      }
+      return formatter.display(evaluateSource(labelField, scope));
+    } on ReportExpressionException {
+      return '';
+    }
+  }
+
+  /// The data row with the matched region's attributes on top, so a label
+  /// formula reads the map file by bare name or by `Row.`.
+  ReportValue _labelRow(ReportValue row, String key, ReportShapeLayer? shapes) {
+    if (shapes == null) {
+      return row;
+    }
+    final ReportShapeFeature? feature = shapes.find(key);
+    if (feature == null) {
+      return row;
+    }
+    final Map<String, ReportValue> fields = <String, ReportValue>{};
+    if (row is ReportRecord) {
+      fields.addAll(row.fields);
+    }
+    fields.addAll(_featureRecord(feature, shapes).fields);
+    return ReportRecord(fields);
+  }
+
+  ReportRecord _featureRecord(
+    ReportShapeFeature feature,
+    ReportShapeLayer layer,
+  ) {
+    final Map<String, ReportValue> fields = <String, ReportValue>{};
+    final List<String> columns = layer.fields.isEmpty
+        ? const <String>['key', 'label']
+        : layer.fields;
+    for (final String name in columns) {
+      final String text = _shapeCell(feature, name);
+      if (text.isEmpty) {
+        continue;
+      }
+      fields[name] = ReportText(text);
+    }
+    if (!fields.keys.any((String n) => n.toLowerCase() == 'key')) {
+      fields['key'] = ReportText(feature.key);
+    }
+    if (feature.label.isNotEmpty &&
+        !fields.keys.any((String n) => n.toLowerCase() == 'label')) {
+      fields['label'] = ReportText(feature.label);
+    }
+    return ReportRecord(fields);
+  }
+
+  static String _shapeCell(ReportShapeFeature feature, String name) {
+    final String stored = feature.valueOf(name);
+    if (stored.isNotEmpty) {
+      return stored;
+    }
+    final String n = name.toLowerCase();
+    if (n == 'key') {
+      return feature.key;
+    }
+    if (n == 'label') {
+      return feature.label;
+    }
+    return '';
   }
 
   /// Expands every `{{ }}` placeholder in [template].
