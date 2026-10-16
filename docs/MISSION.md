@@ -63,7 +63,13 @@ export (`OfficePdfExport` / writer `PdfDocument`). Do not start until Phases
 A report module that builds on the Phase 4 writer and the Phase 5 editor
 patterns. It is not a new phase.
 
-- Engine (`lib/src/reports/`, exported by `quds_reports.dart`):
+- Published entry `packages/quds_reports` (`package:quds_reports/quds_reports.dart`)
+  is the report API: the same objects as the engine library below, plus
+  `PdfSaveOptions`, `SfntFont`, `BrokenLine`, and `ShapedGlyph`. Do not move
+  `lib/src/reports/` out of the engine.
+- Designer entry `package:quds_office_editor/quds_reports.dart` exports the
+  designer and `package:quds_reports/quds_reports.dart` together.
+- Engine (`lib/src/reports/`, also exported by `quds_office_engine/quds_reports.dart`):
   - Template model and XML parser/validator/writer.
   - Expression engine with `TAFQEET`.
   - Paginating generator to a primitive layout.

@@ -7,6 +7,7 @@
 
 <p align="center">
   <a href="https://pub.dev/packages/quds_office_engine"><img alt="engine" src="https://img.shields.io/pub/v/quds_office_engine.svg?label=quds_office_engine&color=2B579A"/></a>
+  <a href="https://pub.dev/packages/quds_reports"><img alt="reports" src="https://img.shields.io/pub/v/quds_reports.svg?label=quds_reports&color=C9A227"/></a>
   <a href="https://pub.dev/packages/quds_office_editor"><img alt="editor" src="https://img.shields.io/pub/v/quds_office_editor.svg?label=quds_office_editor&color=217346"/></a>
   <a href="LICENSE"><img alt="license" src="https://img.shields.io/badge/license-MIT-0B1F3A"/></a>
   <img alt="sdk" src="https://img.shields.io/badge/Dart-3.12+-0175C2?logo=dart&logoColor=white"/>
@@ -15,7 +16,7 @@
 
 ---
 
-Two packages and one desktop app. Depend on each package **on its own**.
+Three packages and one desktop app. Depend on each package **on its own**.
 
 > **1.0 is out.** Both packages are stable and follow semantic versioning.
 > See *What 1.0 brings* in the [engine](packages/quds_office_engine#what-10-brings)
@@ -24,6 +25,7 @@ Two packages and one desktop app. Depend on each package **on its own**.
 | Package | Runtime | What it is | pub.dev |
 | --- | --- | --- | --- |
 | **[`quds_office_engine`](packages/quds_office_engine)** | Pure Dart | OOXML + OPC/ZIP + formulas + PDF 1.7 | [pub.dev/packages/quds_office_engine](https://pub.dev/packages/quds_office_engine) |
+| **[`quds_reports`](packages/quds_reports)** | Pure Dart | `.qrep` band reports: templates, expressions, PDF / XLSX / DOCX | [pub.dev/packages/quds_reports](https://pub.dev/packages/quds_reports) |
 | **[`quds_office_editor`](packages/quds_office_editor)** | Flutter | Interactive Word / Sheet / Slide / PDF surfaces and the report designer | [pub.dev/packages/quds_office_editor](https://pub.dev/packages/quds_office_editor) |
 | **[`quds_report_studio`](apps/quds_report_studio)** | Flutter desktop app | Standalone report editor: open, design, preview, export `.qrep` | [Windows and Linux installers](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/tag/studio-v1.4.0) |
 
@@ -116,11 +118,26 @@ dependencies:
   quds_office_engine: ^1.4.0
 ```
 
-### Editor (pulls the engine)
+### Reports only (CLI, server, isolates, Flutter)
 
 ```yaml
 dependencies:
-  quds_office_editor: ^1.4.0
+  quds_reports: ^1.4.0
+```
+
+```dart
+import 'package:quds_reports/quds_reports.dart';
+```
+
+`QudsReportEngine` from that import is the engine's report engine. PDF, XLSX,
+DOCX, expressions, `.qrep` packages, charts, and shape maps are all on it.
+The designer is `package:quds_office_editor/quds_reports.dart`.
+
+### Editor (pulls the engine and quds_reports)
+
+```yaml
+dependencies:
+  quds_office_editor: ^1.5.0
 ```
 
 This repository is a [Dart workspace](https://dart.dev/tools/pub/workspaces). From the root:
@@ -336,6 +353,7 @@ flowchart LR
 quds_office_suite/
 ├── packages/
 │   ├── quds_office_engine/     ← publish this to pub.dev
+│   ├── quds_reports/           ← publish this to pub.dev
 │   └── quds_office_editor/     ← publish this to pub.dev
 │       └── example/            Quds Office Studio (not published)
 ├── apps/
@@ -348,10 +366,11 @@ quds_office_suite/
 
 ## Publishing
 
-Packages are published **separately**, engine first (the editor depends on it):
+Packages are published **separately**, engine first, then reports, then the editor:
 
 ```bash
 cd packages/quds_office_engine && dart pub publish
+cd packages/quds_reports && dart pub publish
 cd packages/quds_office_editor && flutter pub publish
 ```
 

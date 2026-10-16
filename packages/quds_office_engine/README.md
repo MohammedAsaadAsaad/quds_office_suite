@@ -302,8 +302,10 @@ A report engine in the Crystal Reports / FastReport style, in pure Dart. A
 `.qrep` file is a small ZIP package: an XML layout (bands with absolutely
 positioned elements and `{{ }}` expressions) plus the images and fonts saved
 with the report. Feed it a `Map` of data and get paginated **PDF**, **XLSX**, or
-**DOCX** bytes. The visual designer is `QudsReportDesigner` in
-[`quds_office_editor`](https://pub.dev/packages/quds_office_editor).
+**DOCX** bytes. The same API is published as
+[`quds_reports`](https://pub.dev/packages/quds_reports)
+(`package:quds_reports/quds_reports.dart`). The visual designer is
+`package:quds_office_editor/quds_reports.dart`.
 
 <table>
   <tr>

@@ -165,8 +165,11 @@ Future<void> main() async {
 A visual designer for `.qrep` **band reports**: invoices, statements,
 dashboards, vouchers. It works like Crystal Reports or FastReport, but it is
 pure Flutter `RenderBox` with no platform views. The templates, expressions,
-pagination, and exporters come from the engine's
-[`quds_reports.dart`](https://pub.dev/documentation/quds_office_engine/latest/quds_reports/).
+pagination, and exporters come from
+[`quds_reports`](https://pub.dev/packages/quds_reports). Import
+`package:quds_office_editor/quds_reports.dart` for the designer and
+`QudsReportEngine` together. `quds_office_editor.dart` still exports the
+designer.
 
 ![Report designer: chart selected, inspector showing chart data](example/screenshots/report_designer.png)
 
@@ -200,7 +203,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:quds_office_editor/quds_office_editor.dart';
+import 'package:quds_office_editor/quds_reports.dart';
 
 class ReportHost extends StatefulWidget {
   const ReportHost({super.key});

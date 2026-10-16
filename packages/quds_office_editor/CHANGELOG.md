@@ -2,6 +2,14 @@
 
 All notable changes to `quds_office_editor` are documented here.
 
+## 1.5.0
+
+Built on `quds_office_engine` 1.4.0 and `quds_reports` 1.4.0.
+
+- `package:quds_office_editor/quds_reports.dart` is the report designer and
+  the report engine in one import: canvas, inspector, toolbox, preview, data
+  explorer, bundled fonts, ready-made templates, and `QudsReportEngine`.
+
 ## 1.4.0
 
 Built on `quds_office_engine` 1.4.0.
