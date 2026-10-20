@@ -428,7 +428,7 @@ class QudsReportXmlParser {
           final ReportBandKind? kind = ReportBandKind.fromXml(child.localName);
           if (kind != null) {
             _warn(child.localName, 'Band outside <Bands>; accepted');
-            _readBand(child, kind);
+            _readBand(child, kind, section: 0);
           } else {
             _warn(child.localName, 'Unknown element ignored');
           }
@@ -581,6 +581,8 @@ class QudsReportXmlParser {
         type: type,
         description: _attr(v, const <String>['description', 'label']) ?? '',
         format: _attr(v, const <String>['format']),
+        prompt: _bool(v, const <String>['prompt', 'ask'], path) ?? false,
+        required: _bool(v, const <String>['required'], path) ?? false,
       );
       switch (type) {
         case ReportVariableType.text:
@@ -707,23 +709,73 @@ class QudsReportXmlParser {
   }
 
   void _readBands(XmlElement bands) {
+    var nextSection = 0;
     for (final XmlElement b in bands.childElements) {
+      if (b.localName == 'Section') {
+        while (_template.bandIn(ReportBandKind.detail, nextSection) != null ||
+            _template.bandIn(ReportBandKind.groupHeader, nextSection) !=
+                null ||
+            _template.bandIn(ReportBandKind.groupFooter, nextSection) !=
+                null) {
+          nextSection++;
+        }
+        _readSection(b, nextSection);
+        nextSection++;
+        continue;
+      }
       final ReportBandKind? kind = ReportBandKind.fromXml(b.localName);
       if (kind == null) {
         _error('Bands/${b.localName}', 'Unknown band');
         continue;
       }
-      _readBand(b, kind);
+      _readBand(b, kind, section: 0);
     }
   }
 
-  void _readBand(XmlElement b, ReportBandKind kind) {
-    final String path = 'Bands/${kind.xmlName}';
-    if (_template.band(kind) != null) {
-      _error(path, 'Duplicate ${kind.xmlName} band');
-      return;
+  void _readSection(XmlElement section, int index) {
+    final String path = 'Bands/Section[$index]';
+    final String? dataSet = _attr(section, const <String>[
+      'dataSet',
+      'dataSource',
+      'source',
+    ]);
+    var sawDetail = false;
+    for (final XmlElement b in section.childElements) {
+      final ReportBandKind? kind = ReportBandKind.fromXml(b.localName);
+      if (kind == null ||
+          (kind != ReportBandKind.groupHeader &&
+              kind != ReportBandKind.detail &&
+              kind != ReportBandKind.groupFooter)) {
+        _warn('$path/${b.localName}', 'Ignored outside a data section');
+        continue;
+      }
+      final ReportBand? band = _readBand(b, kind, section: index);
+      if (band != null &&
+          band.kind == ReportBandKind.detail &&
+          band.dataSet == null &&
+          dataSet != null) {
+        band.dataSet = dataSet;
+      }
+      if (kind == ReportBandKind.detail) {
+        sawDetail = true;
+      }
     }
-    final ReportBand band = ReportBand(kind: kind);
+    if (!sawDetail) {
+      _warn(path, 'Section has no Detail band');
+    }
+  }
+
+  ReportBand? _readBand(XmlElement b, ReportBandKind kind, {required int section}) {
+    final String path = 'Bands/${kind.xmlName}';
+    final bool data =
+        kind == ReportBandKind.groupHeader ||
+        kind == ReportBandKind.detail ||
+        kind == ReportBandKind.groupFooter;
+    if (_template.bandIn(kind, data ? section : 0) != null) {
+      _error(path, 'Duplicate ${kind.xmlName} band');
+      return null;
+    }
+    final ReportBand band = ReportBand(kind: kind, section: data ? section : 0);
     band.height = _len(b, const <String>['height'], path) ?? 0;
     band.dataSet = _attr(b, const <String>['dataSet', 'dataSource', 'source']);
     band.rowHeight = _len(b, const <String>['rowHeight'], path);
@@ -787,6 +839,7 @@ class QudsReportXmlParser {
       }
     }
     _template.bands.add(band);
+    return band;
   }
 
   String? _expr(String? raw, String path) {
@@ -870,6 +923,10 @@ class QudsReportXmlParser {
         type = 'Shape';
       case 'Chart':
         type = 'Chart';
+      case 'Crosstab':
+        type = 'Crosstab';
+      case 'Subreport':
+        type = 'Subreport';
       case 'Line':
       case 'Rectangle':
       case 'Ellipse':
@@ -895,6 +952,8 @@ class QudsReportXmlParser {
         shapeKind ?? (type.toLowerCase() == 'shape' ? null : type),
       ),
       'chart' => _readChart(e, p),
+      'crosstab' => _readCrosstab(e, p),
+      'subreport' => _readSubreport(e, p),
       _ => null,
     };
     if (el == null) {
@@ -1098,6 +1157,29 @@ class QudsReportXmlParser {
       'colorfield',
       'labelfield',
     },
+    ReportCrosstabElement() => const <String>{
+      'dataset',
+      'datasource',
+      'source',
+      'rowfield',
+      'row',
+      'columnfield',
+      'column',
+      'valuefield',
+      'value',
+      'aggregate',
+      'maxcolumns',
+      'fontsize',
+      'headerbold',
+    },
+    ReportSubreportElement() => const <String>{
+      'template',
+      'report',
+      'name',
+      'dataset',
+      'datasource',
+      'source',
+    },
   };
 
   void _readBox(ReportElement el, XmlElement e, String path) {
@@ -1122,8 +1204,26 @@ class QudsReportXmlParser {
   ReportTextElement _readText(XmlElement e, String path) {
     final ReportTextElement t = ReportTextElement();
     _readBox(t, e, path);
-    t.text =
-        _attr(e, const <String>['text', 'value', 'expression']) ?? _content(e);
+    for (final XmlElement child in e.childElements) {
+      if (child.localName != 'Run') {
+        continue;
+      }
+      t.runs.add(
+        ReportTextRun(
+          text: _content(child),
+          bold: _bool(child, const <String>['bold'], path),
+          italic: _bool(child, const <String>['italic'], path),
+          fontSize: _num(child, const <String>['fontSize', 'size'], path),
+          color: _color(child, const <String>['color'], path),
+          underline: _bool(child, const <String>['underline'], path),
+          link: _attr(child, const <String>['link', 'href']),
+        ),
+      );
+    }
+    t.text = t.runs.isEmpty
+        ? (_attr(e, const <String>['text', 'value', 'expression']) ??
+              _content(e))
+        : t.plainText;
     _checkTemplate(t.text, path);
     t.style
       ..fontFamily = _attr(e, const <String>['fontFamily', 'font'])
@@ -1239,6 +1339,8 @@ class QudsReportXmlParser {
             'code-128': ReportBarcodeType.code128,
             'qrcode': ReportBarcodeType.qr,
             'qr-code': ReportBarcodeType.qr,
+            'ean-13': ReportBarcodeType.ean13,
+            'ean13': ReportBarcodeType.ean13,
           },
         ) ??
         (forceQr && e.localName == 'QrCode'
@@ -1246,7 +1348,7 @@ class QudsReportXmlParser {
             : ReportBarcodeType.code128);
     bc.showText =
         _bool(e, const <String>['showText'], path) ??
-        bc.symbology == ReportBarcodeType.code128;
+        bc.symbology != ReportBarcodeType.qr;
     bc.color = _color(e, const <String>['color', 'foreColor'], path);
     bc.background = _color(e, const <String>['background', 'backColor'], path);
     bc.fontSize = _num(e, const <String>['fontSize'], path) ?? 8;
@@ -1333,6 +1435,55 @@ class QudsReportXmlParser {
           unit: ReportUnit.pt,
         ) ??
         (kind == ReportShapeKind.roundedRectangle ? 6 : 0);
+    return s;
+  }
+
+  ReportCrosstabElement _readCrosstab(XmlElement e, String path) {
+    final ReportCrosstabElement c = ReportCrosstabElement();
+    _readBox(c, e, path);
+    c.dataSet = _attr(e, const <String>['dataSet', 'dataSource', 'source']);
+    c.rowField =
+        _expr(_attr(e, const <String>['rowField', 'row']), '$path@rowField') ??
+        '';
+    c.columnField =
+        _expr(
+          _attr(e, const <String>['columnField', 'column']),
+          '$path@columnField',
+        ) ??
+        '';
+    c.valueField =
+        _expr(
+          _attr(e, const <String>['valueField', 'value']),
+          '$path@valueField',
+        ) ??
+        '';
+    c.aggregate =
+        _enum(
+          e,
+          const <String>['aggregate'],
+          ReportChartAggregate.values,
+          path,
+        ) ??
+        ReportChartAggregate.sum;
+    c.maxColumns =
+        _num(e, const <String>['maxColumns'], path)?.round() ?? 12;
+    c.fontSize = _num(e, const <String>['fontSize'], path) ?? 9;
+    c.headerBold = _bool(e, const <String>['headerBold'], path) ?? true;
+    return c;
+  }
+
+  ReportSubreportElement _readSubreport(XmlElement e, String path) {
+    final ReportSubreportElement s = ReportSubreportElement();
+    _readBox(s, e, path);
+    s.templateName =
+        _attr(e, const <String>['template', 'report', 'name']) ?? '';
+    s.dataSet = _expr(
+      _attr(e, const <String>['dataSet', 'dataSource', 'source']),
+      '$path@dataSet',
+    );
+    if (s.templateName.trim().isEmpty) {
+      _error(path, 'Subreport needs a template name');
+    }
     return s;
   }
 
@@ -1834,6 +1985,9 @@ class QudsReportXmlParser {
             if (b.kind == ReportBandKind.detail && e.dataSet == null) {
               _warn(ep, 'Chart in Detail without a dataSet plots one row');
             }
+          case ReportCrosstabElement():
+          case ReportSubreportElement():
+            break;
         }
       }
       if (b.kind == ReportBandKind.detail) {
@@ -1914,7 +2068,7 @@ class QudsReportXmlWriter {
       b.write('$indent<Variables>\n');
       for (final ReportVariable v in t.variables) {
         b.write(
-          '$indent$indent<Var${_attrs(<String, String>{'name': v.name, if (v.type != ReportVariableType.text) 'type': v.type.name, 'value': v.value, if (v.format != null && v.format!.trim().isNotEmpty) 'format': v.format!.trim(), if (v.description.isNotEmpty) 'description': v.description})}/>\n',
+          '$indent$indent<Var${_attrs(<String, String>{'name': v.name, if (v.type != ReportVariableType.text) 'type': v.type.name, 'value': v.value, if (v.format != null && v.format!.trim().isNotEmpty) 'format': v.format!.trim(), if (v.description.isNotEmpty) 'description': v.description, if (v.prompt) 'prompt': 'true', if (v.required) 'required': 'true'})}/>\n',
         );
       }
       b.write('$indent</Variables>\n');
@@ -1950,7 +2104,30 @@ class QudsReportXmlWriter {
     }
 
     b.write('$indent<Bands>\n');
+    final bool wrapped = t.bands.any((ReportBand band) => band.section > 0);
+    int? openSection;
     for (final ReportBand band in t.bands) {
+      final bool data =
+          band.kind == ReportBandKind.groupHeader ||
+          band.kind == ReportBandKind.detail ||
+          band.kind == ReportBandKind.groupFooter;
+      if (wrapped && data && openSection != band.section) {
+        if (openSection != null) {
+          b.write('$indent$indent</Section>\n');
+        }
+        openSection = band.section;
+        final ReportBand? detail = t.bandIn(ReportBandKind.detail, band.section);
+        b.write(
+          '$indent$indent<Section${_attrs(<String, String>{if (detail?.dataSet != null) 'dataSet': detail!.dataSet!})}>\n',
+        );
+      }
+      if (wrapped && !data && openSection != null) {
+        b.write('$indent$indent</Section>\n');
+        openSection = null;
+      }
+      final String bandPad = wrapped && data
+          ? '$indent$indent$indent'
+          : '$indent$indent';
       final Map<String, String> ba = <String, String>{
         if (band.kind == ReportBandKind.detail && band.dataSet != null)
           'dataSet': band.dataSet!,
@@ -1971,14 +2148,17 @@ class QudsReportXmlWriter {
         ...band.extraAttributes,
       };
       if (band.elements.isEmpty) {
-        b.write('$indent$indent<${band.kind.xmlName}${_attrs(ba)}/>\n');
+        b.write('$bandPad<${band.kind.xmlName}${_attrs(ba)}/>\n');
         continue;
       }
-      b.write('$indent$indent<${band.kind.xmlName}${_attrs(ba)}>\n');
+      b.write('$bandPad<${band.kind.xmlName}${_attrs(ba)}>\n');
       for (final ReportElement e in band.elements) {
-        _writeElement(b, e, '$indent$indent$indent', len, pt);
+        _writeElement(b, e, '$bandPad$indent', len, pt);
       }
-      b.write('$indent$indent</${band.kind.xmlName}>\n');
+      b.write('$bandPad</${band.kind.xmlName}>\n');
+    }
+    if (openSection != null) {
+      b.write('$indent$indent</Section>\n');
     }
     b.write('$indent</Bands>\n');
     b.write('</QudsReport>\n');
@@ -2045,7 +2225,15 @@ class QudsReportXmlWriter {
           if (e.lineSpacing != 1.0) 'lineSpacing': pt(e.lineSpacing),
           ...tail,
         };
-        if (e.text.isEmpty) {
+        if (e.runs.isNotEmpty) {
+          b.write('$pad<Element${_attrs(a)}>\n');
+          for (final ReportTextRun run in e.runs) {
+            b.write(
+              '$pad$indent<Run${_attrs(<String, String>{if (run.bold == true) 'bold': 'true', if (run.italic == true) 'italic': 'true', if (run.fontSize != null) 'fontSize': pt(run.fontSize!), if (run.color != null) 'color': run.color!, if (run.underline == true) 'underline': 'true', if (run.link != null && run.link!.isNotEmpty) 'link': run.link!})}>${encodeXmlText(run.text)}</Run>\n',
+            );
+          }
+          b.write('$pad</Element>\n');
+        } else if (e.text.isEmpty) {
           b.write('$pad<Element${_attrs(a)}/>\n');
         } else {
           final String body = e.text.contains('\n')
@@ -2059,7 +2247,7 @@ class QudsReportXmlWriter {
         );
       case ReportBarcodeElement():
         b.write(
-          '$pad<Element${_attrs(<String, String>{'type': 'Barcode', ...common, ...box(), 'symbology': e.symbology.name, 'value': e.data, if (e.showText != (e.symbology == ReportBarcodeType.code128)) 'showText': '${e.showText}', if (e.color != null) 'color': e.color!, if (e.background != null) 'background': e.background!, if (e.fontSize != 8) 'fontSize': pt(e.fontSize), ...tail})}/>\n',
+          '$pad<Element${_attrs(<String, String>{'type': 'Barcode', ...common, ...box(), 'symbology': e.symbology.name, 'value': e.data, if (e.showText != (e.symbology != ReportBarcodeType.qr)) 'showText': '${e.showText}', if (e.color != null) 'color': e.color!, if (e.background != null) 'background': e.background!, if (e.fontSize != 8) 'fontSize': pt(e.fontSize), ...tail})}/>\n',
         );
       case ReportShapeElement():
         final Map<String, String> geometry = e.kind == ReportShapeKind.line
@@ -2209,6 +2397,14 @@ class QudsReportXmlWriter {
           );
         }
         b.write('$pad</Chart>\n');
+      case ReportCrosstabElement():
+        b.write(
+          '$pad<Crosstab${_attrs(<String, String>{...common, ...box(), if (e.dataSet != null) 'dataSet': e.dataSet!, 'rowField': e.rowField, 'columnField': e.columnField, 'valueField': e.valueField, if (e.aggregate != ReportChartAggregate.sum) 'aggregate': e.aggregate.name, if (e.maxColumns != 12) 'maxColumns': '${e.maxColumns}', if (e.fontSize != 9) 'fontSize': pt(e.fontSize), if (!e.headerBold) 'headerBold': 'false', ...tail})}/>\n',
+        );
+      case ReportSubreportElement():
+        b.write(
+          '$pad<Subreport${_attrs(<String, String>{...common, ...box(), 'template': e.templateName, if (e.dataSet != null) 'dataSet': e.dataSet!, ...tail})}/>\n',
+        );
     }
   }
 

@@ -420,6 +420,8 @@ class ReportDesignerStrings {
     'Font family': 'عائلة الخط',
     'Text color': 'لون النص',
     'Value': 'القيمة',
+    'Ask before preview': 'اسأل قبل المعاينة',
+    'Required': 'مطلوب',
     'Label': 'التسمية',
     'Border color': 'لون الإطار',
     'Border width': 'سماكة الإطار',

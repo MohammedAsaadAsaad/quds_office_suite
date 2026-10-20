@@ -49,7 +49,7 @@ Pure Dart. A server, a CLI, and a Flutter app call the same
 
 ```yaml
 dependencies:
-  quds_reports: ^1.4.0
+  quds_reports: ^1.5.0
 ```
 
 ```dart
@@ -84,12 +84,12 @@ and a chart gallery with a country shape map.
 
 | Platform | Installer | Portable |
 | --- | --- | --- |
-| Windows 10/11 (x64) | [QudsReportStudio-1.4.0-windows-x64-setup.exe](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.4.0/QudsReportStudio-1.4.0-windows-x64-setup.exe) | [QudsReportStudio-1.4.0-windows-x64-portable.zip](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.4.0/QudsReportStudio-1.4.0-windows-x64-portable.zip) |
-| Debian / Ubuntu (x64) | [quds-report-studio_1.4.0_amd64.deb](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.4.0/quds-report-studio_1.4.0_amd64.deb) | [QudsReportStudio-1.4.0-linux-x64.tar.gz](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.4.0/QudsReportStudio-1.4.0-linux-x64.tar.gz) |
+| Windows 10/11 (x64) | [QudsReportStudio-1.5.0-windows-x64-setup.exe](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.5.0/QudsReportStudio-1.5.0-windows-x64-setup.exe) | [QudsReportStudio-1.5.0-windows-x64-portable.zip](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.5.0/QudsReportStudio-1.5.0-windows-x64-portable.zip) |
+| Debian / Ubuntu (x64) | [quds-report-studio_1.5.0_amd64.deb](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.5.0/quds-report-studio_1.5.0_amd64.deb) | [QudsReportStudio-1.5.0-linux-x64.tar.gz](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.5.0/QudsReportStudio-1.5.0-linux-x64.tar.gz) |
 
 - **Windows:** run the setup. It doesn't need admin rights unless you
   choose "all users". Uninstall it from *Settings › Apps*.
-- **Debian / Ubuntu:** `sudo apt install ./quds-report-studio_1.4.0_amd64.deb`,
+- **Debian / Ubuntu:** `sudo apt install ./quds-report-studio_1.5.0_amd64.deb`,
   and `sudo apt remove quds-report-studio` to uninstall.
 - **Other Linux distributions:** extract the tar.gz and run `./install.sh`
   (per user, no root). Run `~/.local/opt/quds-report-studio/uninstall.sh`
@@ -98,7 +98,7 @@ and a chart gallery with a country shape map.
   for `.qrep` files, so double-clicking a report opens it in the studio.
 
 Checksums and every build are on the
-[studio 1.4.0 release](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/tag/studio-v1.4.0).
+[studio 1.5.0 release](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/tag/studio-v1.5.0).
 
 <table>
   <tr>
@@ -284,7 +284,7 @@ QudsReportDesigner(
 );
 ```
 
-`ReportTemplateLibrary.bundled()` loads the 20 templates that ship with the
+`ReportTemplateLibrary.bundled()` loads the 22 templates that ship with the
 editor. Download the studio from the links above if you want the designer
 without embedding it.
 
@@ -398,7 +398,7 @@ bytes written here open in the studio.
 | --- | --- |
 | A server, a CLI, a queue worker | `package:quds_reports/quds_reports.dart` |
 | A Flutter designer | `package:quds_office_editor/quds_reports.dart` |
-| The desktop app itself | [Quds Report Studio](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/tag/studio-v1.4.0) |
+| The desktop app itself | [Quds Report Studio](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/tag/studio-v1.5.0) |
 
 Word, Excel, PowerPoint, and `PdfFile` stay in
 [`quds_office_engine`](https://pub.dev/packages/quds_office_engine). This

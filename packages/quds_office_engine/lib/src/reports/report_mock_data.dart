@@ -319,6 +319,16 @@ class _Bindings {
               _text(p.label);
               _expr(p.value);
             }
+          case ReportCrosstabElement():
+            final String? crossSet = e.dataSet;
+            if (crossSet != null && crossSet.trim().isNotEmpty) {
+              datasets.add(_stripData(crossSet.trim()));
+            }
+            _expr(e.rowField);
+            _expr(e.columnField);
+            _expr(e.valueField);
+          case ReportSubreportElement():
+            _expr(e.dataSet);
           case ReportTableElement():
             final String? tableSet = e.dataSet;
             if (tableSet != null && tableSet.trim().isNotEmpty) {

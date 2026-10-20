@@ -1518,6 +1518,7 @@ class _QudsSheetEditorState extends State<QudsSheetEditor> {
                       findHits: _c.findSession.hits,
                       activeFindIndex: _c.findSession.index,
                       formulaBar: _c.formulaBarText,
+                      nameBox: _c.nameBoxText,
                       frozenRows: widget.frozenRows > 0
                           ? widget.frozenRows
                           : _c.sheet.freezeRows,

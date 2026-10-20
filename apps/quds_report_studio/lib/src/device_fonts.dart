@@ -1,10 +1,19 @@
 import 'dart:io';
 import 'dart:isolate';
+import 'dart:typed_data';
 
 import 'package:quds_office_editor/quds_office_editor.dart';
 
-/// One upright TrueType face found on disk.
-typedef DeviceFontFace = ({String path, int weight});
+/// One TrueType face found on disk.
+typedef DeviceFontFace = ({String path, int weight, bool italic});
+
+/// The four faces a report package can embed for one family.
+typedef DeviceFontPick = ({
+  DeviceFontFace? regular,
+  DeviceFontFace? bold,
+  DeviceFontFace? italic,
+  DeviceFontFace? boldItalic,
+});
 
 /// Faces per family and the writing systems each family covers.
 typedef DeviceFontIndex = ({
@@ -17,8 +26,8 @@ typedef DeviceFontIndex = ({
 ///
 /// Folders are scanned once, in a background isolate, reading only each
 /// file's table directory and `name` / `OS/2` / `head` tables. Collections,
-/// CFF (`.otf`), italic faces, and fonts whose license forbids embedding are
-/// left out.
+/// CFF (`.otf`) and fonts whose license forbids embedding are left out.
+/// Italic faces are kept as `italic.ttf` and `boldItalic.ttf`.
 class StudioDeviceFonts implements ReportDeviceFonts, ReportDeviceFontScripts {
   StudioDeviceFonts({List<String>? folders})
     : folders = folders ?? defaultFolders();
@@ -79,23 +88,41 @@ class StudioDeviceFonts implements ReportDeviceFonts, ReportDeviceFontScripts {
     if (faces == null) {
       return null;
     }
-    final (DeviceFontFace? regular, DeviceFontFace? bold) = pick(faces);
-    if (regular == null && bold == null) {
+    final DeviceFontPick chosen = pick(faces);
+    if (chosen.regular == null &&
+        chosen.bold == null &&
+        chosen.italic == null &&
+        chosen.boldItalic == null) {
       return null;
     }
+    Future<Uint8List?> read(DeviceFontFace? face) async =>
+        face == null ? null : File(face.path).readAsBytes();
     return ReportFontFiles(
-      regular: regular == null ? null : await File(regular.path).readAsBytes(),
-      bold: bold == null ? null : await File(bold.path).readAsBytes(),
+      regular: await read(chosen.regular),
+      bold: await read(chosen.bold),
+      italic: await read(chosen.italic),
+      boldItalic: await read(chosen.boldItalic),
     );
   }
 
-  /// The regular face (weight below 600 closest to 400) and the bold face
-  /// (weight 600 or more closest to 700) of one family.
-  static (DeviceFontFace?, DeviceFontFace?) pick(List<DeviceFontFace> faces) {
+  /// Upright and italic faces closest to weights 400 and 700.
+  static DeviceFontPick pick(List<DeviceFontFace> faces) {
     DeviceFontFace? regular;
     DeviceFontFace? bold;
+    DeviceFontFace? italic;
+    DeviceFontFace? boldItalic;
     for (final DeviceFontFace f in faces) {
-      if (f.weight < 600) {
+      if (f.italic) {
+        if (f.weight < 600) {
+          if (italic == null ||
+              (f.weight - 400).abs() < (italic.weight - 400).abs()) {
+            italic = f;
+          }
+        } else if (boldItalic == null ||
+            (f.weight - 700).abs() < (boldItalic.weight - 700).abs()) {
+          boldItalic = f;
+        }
+      } else if (f.weight < 600) {
         if (regular == null ||
             (f.weight - 400).abs() < (regular.weight - 400).abs()) {
           regular = f;
@@ -105,7 +132,12 @@ class StudioDeviceFonts implements ReportDeviceFonts, ReportDeviceFontScripts {
         bold = f;
       }
     }
-    return (regular, bold);
+    return (
+      regular: regular,
+      bold: bold,
+      italic: italic,
+      boldItalic: boldItalic,
+    );
   }
 
   /// Upright embeddable faces under [roots], grouped by family. Unreadable
@@ -171,15 +203,21 @@ class StudioDeviceFonts implements ReportDeviceFonts, ReportDeviceFontScripts {
         handle.setPositionSync(offset);
         return handle.readSync(count);
       });
-      if (info.italic || !ReportPackage.isValidFontFamily(info.family)) {
+      if (!ReportPackage.isValidFontFamily(info.family)) {
         return;
       }
-      final DeviceFontFace face = (path: file.path, weight: info.weight);
+      final DeviceFontFace face = (
+        path: file.path,
+        weight: info.weight,
+        italic: info.italic,
+      );
       final List<DeviceFontFace> faces = out.putIfAbsent(
         info.family,
         () => <DeviceFontFace>[],
       );
-      if (!faces.any((DeviceFontFace f) => f.weight == face.weight)) {
+      if (!faces.any(
+        (DeviceFontFace f) => f.weight == face.weight && f.italic == face.italic,
+      )) {
         faces.add(face);
       }
       scripts

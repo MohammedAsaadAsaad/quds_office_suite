@@ -493,6 +493,7 @@ builders — same pattern as `QudsWordEditor`.
 - Full prepress (PDF/X color-managed print)
 - 3D, video, sound playback
 - OCR (no bitmap-to-text engine in-tree)
+- PDF-to-Office design recovery. `PdfToOffice` places each line and each JPEG/PNG in a page-anchored box, turns a ruled grid into a table, and turns vector bars, wedges, or a polyline into a chart. An outline or a dot-leader list becomes a table of contents. It does not rebuild masters, read a chart that is only a picture, or read a scanned page
 
 ---
 

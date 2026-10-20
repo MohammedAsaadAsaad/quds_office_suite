@@ -36,9 +36,14 @@ class FontSubsetter {
   final SfntFont font;
 
   /// subset API.
-  FontSubset subset(Iterable<int> codePoints) {
+  FontSubset subset(Iterable<int> codePoints, {Iterable<int> extraGlyphIds = const <int>[]}) {
     final Set<int> wanted = <int>{0};
     final Map<int, int> unicodeToOld = <int, int>{};
+    for (final int gid in extraGlyphIds) {
+      if (gid > 0) {
+        wanted.add(gid);
+      }
+    }
     for (final int cp in codePoints) {
       final int gid = font.glyphIdFor(cp);
       if (gid == 0) {

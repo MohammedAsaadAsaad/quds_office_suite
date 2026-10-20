@@ -358,6 +358,15 @@ class XlsxSheetBuilder {
   /// Charts floating over the sheet.
   final List<XlsxSheetChart> charts = <XlsxSheetChart>[];
 
+  /// Pictures floating over the sheet (PNG or JPEG).
+  final List<XlsxSheetPicture> pictures = <XlsxSheetPicture>[];
+
+  /// Left-aligned odd-page header text.
+  String? oddHeader;
+
+  /// Left-aligned odd-page footer text.
+  String? oddFooter;
+
   /// Anchors a DrawingML `c:chartSpace` part with its top-left corner at
   /// cell ([row], [col]) and the given size in points.
   void addChart({
@@ -374,6 +383,25 @@ class XlsxSheetBuilder {
         widthEmu: (widthPoints * 12700).round(),
         heightEmu: (heightPoints * 12700).round(),
         xml: chartXml,
+      ),
+    );
+  }
+
+  /// Anchors a PNG or JPEG with its top-left corner at cell ([row], [col]).
+  void addPicture({
+    required int row,
+    required int col,
+    required double widthPoints,
+    required double heightPoints,
+    required Uint8List bytes,
+  }) {
+    pictures.add(
+      XlsxSheetPicture(
+        row: row,
+        col: col,
+        widthEmu: (widthPoints * 12700).round(),
+        heightEmu: (heightPoints * 12700).round(),
+        bytes: bytes,
       ),
     );
   }
@@ -489,6 +517,33 @@ class XlsxSheetChart {
   final String xml;
 }
 
+/// PNG or JPEG anchored on a worksheet.
+class XlsxSheetPicture {
+  /// XlsxSheetPicture API.
+  const XlsxSheetPicture({
+    required this.row,
+    required this.col,
+    required this.widthEmu,
+    required this.heightEmu,
+    required this.bytes,
+  });
+
+  /// Zero-based anchor row.
+  final int row;
+
+  /// Zero-based anchor column.
+  final int col;
+
+  /// widthEmu API.
+  final int widthEmu;
+
+  /// heightEmu API.
+  final int heightEmu;
+
+  /// PNG or JPEG bytes.
+  final Uint8List bytes;
+}
+
 /// Multi-sheet workbook writer with styles, freeze, merges, RTL, and filters.
 class XlsxWorkbookBuilder {
   /// XlsxWorkbookBuilder API.
@@ -599,7 +654,8 @@ class XlsxWorkbookBuilder {
       final String uri = '/xl/worksheets/sheet$id.xml';
       String? drawingRid;
       final List<XlsxSheetChart> charts = sheets[i].charts;
-      if (charts.isNotEmpty) {
+      final List<XlsxSheetPicture> pictures = sheets[i].pictures;
+      if (charts.isNotEmpty || pictures.isNotEmpty) {
         drawingCount++;
         drawingRid = 'rIdDrawing1';
         final String drawingUri = '/xl/drawings/drawing$drawingCount.xml';
@@ -640,6 +696,43 @@ class XlsxWorkbookBuilder {
             '<c:chart xmlns:c="${OfficeNamespaces.c}" r:id="rIdChart${k + 1}"/>'
             '</a:graphicData></a:graphic></xdr:graphicFrame>'
             '<xdr:clientData/></xdr:oneCellAnchor>',
+          );
+        }
+        var imageCount = 0;
+        for (int k = 0; k < pictures.length; k++) {
+          imageCount++;
+          final XlsxSheetPicture picture = pictures[k];
+          final bool jpeg =
+              picture.bytes.length > 2 &&
+              picture.bytes[0] == 0xFF &&
+              picture.bytes[1] == 0xD8;
+          final String ext = jpeg ? 'jpeg' : 'png';
+          final String media = '/xl/media/image$drawingCount$imageCount.$ext';
+          package.createPart(
+            media,
+            jpeg ? 'image/jpeg' : 'image/png',
+            picture.bytes,
+          );
+          final String rel = 'rIdPic$imageCount';
+          drawingRels.add(
+            type: RelationshipTypes.image,
+            target: '../media/image$drawingCount$imageCount.$ext',
+            id: rel,
+          );
+          anchors.write(
+            '<xdr:oneCellAnchor><xdr:from><xdr:col>${picture.col}</xdr:col>'
+            '<xdr:colOff>0</xdr:colOff><xdr:row>${picture.row}</xdr:row>'
+            '<xdr:rowOff>0</xdr:rowOff></xdr:from>'
+            '<xdr:ext cx="${picture.widthEmu}" cy="${picture.heightEmu}"/>'
+            '<xdr:pic><xdr:nvPicPr>'
+            '<xdr:cNvPr id="${charts.length + k + 2}" name="Picture $imageCount"/>'
+            '<xdr:cNvPicPr><a:picLocks noChangeAspect="1"/></xdr:cNvPicPr>'
+            '</xdr:nvPicPr><xdr:blipFill><a:blip r:embed="$rel"/>'
+            '<a:stretch><a:fillRect/></a:stretch></xdr:blipFill>'
+            '<xdr:spPr><a:xfrm><a:off x="0" y="0"/>'
+            '<a:ext cx="${picture.widthEmu}" cy="${picture.heightEmu}"/>'
+            '</a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr>'
+            '</xdr:pic><xdr:clientData/></xdr:oneCellAnchor>',
           );
         }
         package.createPart(
@@ -829,6 +922,22 @@ class XlsxWorkbookBuilder {
         );
       }
       buf.write('</mergeCells>');
+    }
+    if (sheet.oddHeader != null || sheet.oddFooter != null) {
+      buf.write('<headerFooter>');
+      final String? header = sheet.oddHeader;
+      final String? footer = sheet.oddFooter;
+      if (header != null) {
+        buf.write(
+          '<oddHeader>&amp;L${OfficeMarkup.escape(header)}</oddHeader>',
+        );
+      }
+      if (footer != null) {
+        buf.write(
+          '<oddFooter>&amp;L${OfficeMarkup.escape(footer)}</oddFooter>',
+        );
+      }
+      buf.write('</headerFooter>');
     }
     if (drawingRid != null) {
       buf.write('<drawing r:id="$drawingRid"/>');

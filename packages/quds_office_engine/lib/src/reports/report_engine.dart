@@ -144,8 +144,10 @@ class QudsReportEngine {
   }) {
     final ReportPackage package = ReportPackage.decode(bytes);
     final ReportParseResult parsed = QudsReportXmlParser().parse(package.xml);
+    final ReportTemplate template = parsed.templateOrThrow
+      ..subreports.addAll(package.subreports);
     return QudsReportEngine(
-      parsed.templateOrThrow,
+      template,
       fonts: package.fontRegistry(base: fonts),
       images: <String, Uint8List>{...package.images, ...?images},
       shapes: package.shapes,
@@ -350,6 +352,13 @@ class QudsReportEngine {
               check('$ep/Point[$p]', e.points[p].label);
               check('$ep/Point[$p]@value', e.points[p].value, expression: true);
             }
+          case ReportCrosstabElement():
+            check('$ep@dataSet', e.dataSet, expression: true);
+            check('$ep@rowField', e.rowField, expression: true);
+            check('$ep@columnField', e.columnField, expression: true);
+            check('$ep@valueField', e.valueField, expression: true);
+          case ReportSubreportElement():
+            check('$ep@dataSet', e.dataSet, expression: true);
         }
       }
     }

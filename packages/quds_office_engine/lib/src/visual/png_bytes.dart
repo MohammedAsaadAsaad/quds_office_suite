@@ -67,6 +67,61 @@ abstract final class PngBytes {
     return out.toBytes();
   }
 
+  /// PNG from packed RGB pixels, three bytes per pixel, top row first.
+  static Uint8List fromRgb({
+    required int width,
+    required int height,
+    required Uint8List pixels,
+  }) {
+    return _fromPacked(
+      width: width,
+      height: height,
+      pixels: pixels,
+      channels: 3,
+    );
+  }
+
+  /// PNG from packed RGBA pixels, four bytes per pixel, top row first.
+  static Uint8List fromRgba({
+    required int width,
+    required int height,
+    required Uint8List pixels,
+  }) {
+    return _fromPacked(
+      width: width,
+      height: height,
+      pixels: pixels,
+      channels: 4,
+    );
+  }
+
+  static Uint8List _fromPacked({
+    required int width,
+    required int height,
+    required Uint8List pixels,
+    required int channels,
+  }) {
+    final int row = width * channels;
+    final Uint8List raw = Uint8List((row + 1) * height);
+    var src = 0;
+    var dst = 0;
+    for (var y = 0; y < height; y++) {
+      raw[dst++] = 0;
+      final int take = src + row <= pixels.length ? row : pixels.length - src;
+      if (take > 0) {
+        raw.setRange(dst, dst + take, pixels, src);
+      }
+      src += row;
+      dst += row;
+    }
+    final BytesBuilder out = BytesBuilder(copy: false);
+    out.add(<int>[137, 80, 78, 71, 13, 10, 26, 10]);
+    _chunk(out, 'IHDR', _ihdr(width, height, colorType: channels == 4 ? 6 : 2));
+    _chunk(out, 'IDAT', _zlib(raw));
+    _chunk(out, 'IEND', Uint8List(0));
+    return out.toBytes();
+  }
+
   /// Raster of a chart or diagram so Word/LibreOffice can show the visual.
   static Uint8List fromVisual(OfficeVisual visual, {int? width, int? height}) {
     final int w = (width ?? visual.width.round()).clamp(80, 1200);

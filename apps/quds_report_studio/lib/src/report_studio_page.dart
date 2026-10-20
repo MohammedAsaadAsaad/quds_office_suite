@@ -415,9 +415,30 @@ class ReportStudioPageState extends State<ReportStudioPage> {
 
   bool _printing = false;
 
+  /// Asks for [ReportVariable.prompt] values. Cancel leaves the current mode.
+  Future<bool> _promptParameters(List<ReportVariable> prompts) async {
+    final Map<String, Object?>? answers = await showDialog<Map<String, Object?>>(
+      context: context,
+      builder: (BuildContext context) => _ParameterDialog(
+        strings: _s,
+        prompts: prompts,
+        previous: _doc.controller.runtimeVariables,
+      ),
+    );
+    if (answers == null) {
+      return false;
+    }
+    _doc.controller.setRuntimeValues(answers);
+    return true;
+  }
+
   /// Renders the report with the preview data and opens the print dialog.
   Future<void> printReport() async {
     _finishEdits();
+    final List<ReportVariable> prompts = _doc.controller.promptVariables;
+    if (prompts.isNotEmpty && !await _promptParameters(prompts)) {
+      return;
+    }
     try {
       await _print(await _doc.controller.export(ReportExportFormat.pdf));
     } on Object catch (e) {
@@ -487,6 +508,7 @@ class ReportStudioPageState extends State<ReportStudioPage> {
                   onPickFont: _pickFonts,
                   onPickData: _pickData,
                   onPickShape: _pickShape,
+                  onPromptParameters: _promptParameters,
                   deviceFonts: widget.deviceFonts,
                 ),
               ),
@@ -1174,4 +1196,477 @@ class _StatusChip extends StatelessWidget {
             ),
     );
   }
+}
+
+/// Collects one answer per prompted variable. Cancel pops null.
+class _ParameterDialog extends StatefulWidget {
+  const _ParameterDialog({
+    required this.strings,
+    required this.prompts,
+    required this.previous,
+  });
+
+  final StudioStrings strings;
+  final List<ReportVariable> prompts;
+  final Map<String, Object?> previous;
+
+  @override
+  State<_ParameterDialog> createState() => _ParameterDialogState();
+}
+
+class _ParameterDialogState extends State<_ParameterDialog> {
+  late final List<TextEditingController> _fields;
+  late final List<bool> _flags;
+  String? _error;
+  int? _invalid;
+
+  @override
+  void initState() {
+    super.initState();
+    _fields = <TextEditingController>[
+      for (final ReportVariable v in widget.prompts)
+        if (v.type != ReportVariableType.boolean)
+          TextEditingController(text: _initial(v)),
+    ];
+    _flags = <bool>[
+      for (final ReportVariable v in widget.prompts)
+        if (v.type == ReportVariableType.boolean) _initialBool(v),
+    ];
+  }
+
+  String _initial(ReportVariable v) {
+    final Object? prior = widget.previous[v.name];
+    if (prior != null) {
+      return '$prior';
+    }
+    return v.value;
+  }
+
+  bool _initialBool(ReportVariable v) {
+    final Object? prior = widget.previous[v.name];
+    if (prior is bool) {
+      return prior;
+    }
+    return switch (v.literal()) {
+      ReportBool(:final bool value) => value,
+      _ => false,
+    };
+  }
+
+  @override
+  void dispose() {
+    for (final TextEditingController c in _fields) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  void _submit() {
+    final Map<String, Object?> out = <String, Object?>{};
+    var text = 0;
+    var flag = 0;
+    for (var i = 0; i < widget.prompts.length; i++) {
+      final ReportVariable v = widget.prompts[i];
+      if (v.type == ReportVariableType.boolean) {
+        out[v.name] = _flags[flag];
+        flag++;
+        continue;
+      }
+      final String raw = _fields[text].text;
+      text++;
+      if (v.required && raw.trim().isEmpty) {
+        setState(() {
+          _invalid = i;
+          _error = widget.strings.t('This value is required');
+        });
+        return;
+      }
+      out[v.name] = _typed(v, raw);
+    }
+    Navigator.pop(context, out);
+  }
+
+  Object? _typed(ReportVariable v, String raw) {
+    final String s = raw.trim();
+    switch (v.type) {
+      case ReportVariableType.number:
+        final String n = s.replaceAll(',', '').replaceAll(' ', '');
+        return num.tryParse(n) ?? raw;
+      case ReportVariableType.date:
+        return DateTime.tryParse(s) ?? raw;
+      case ReportVariableType.boolean:
+        return s == 'true';
+      case ReportVariableType.text:
+      case ReportVariableType.list:
+      case ReportVariableType.expression:
+        return raw;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final StudioStrings s = widget.strings;
+    final ThemeData theme = Theme.of(context);
+    final bool dark = theme.brightness == Brightness.dark;
+    final ColorScheme scheme = theme.colorScheme;
+    final Color header = dark
+        ? const Color(0xFF1B2433)
+        : const Color(0xFF1F3B63);
+    final Color paper = dark ? const Color(0xFF24272D) : Colors.white;
+    final Color card = dark ? const Color(0xFF1B1E23) : const Color(0xFFF4F6F9);
+    final Color line = dark ? const Color(0xFF3A3F47) : const Color(0xFFE3E7ED);
+    final Color muted = dark
+        ? const Color(0xFF9AA1AB)
+        : const Color(0xFF6B7280);
+    final List<Widget> fields = <Widget>[];
+    var text = 0;
+    var flag = 0;
+    final int firstText = widget.prompts.indexWhere(
+      (ReportVariable v) => v.type != ReportVariableType.boolean,
+    );
+    for (var i = 0; i < widget.prompts.length; i++) {
+      final ReportVariable v = widget.prompts[i];
+      final bool invalid = _invalid == i;
+      if (v.type == ReportVariableType.boolean) {
+        final int slot = flag;
+        flag++;
+        fields.add(
+          _card(
+            card: card,
+            line: invalid ? scheme.error : line,
+            child: _boolRow(s, v, slot, muted),
+          ),
+        );
+      } else {
+        final int slot = text;
+        text++;
+        fields.add(
+          _card(
+            card: card,
+            line: invalid ? scheme.error : line,
+            child: _textRow(
+              s,
+              v,
+              slot,
+              promptIndex: i,
+              muted: muted,
+              scheme: scheme,
+              paper: paper,
+              autofocus: i == firstText,
+              invalid: invalid,
+            ),
+          ),
+        );
+      }
+    }
+    return Dialog(
+      backgroundColor: paper,
+      elevation: 16,
+      shadowColor: const Color(0x66000000),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      clipBehavior: Clip.antiAlias,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 460),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            _header(s, header),
+            ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.sizeOf(context).height * 0.56,
+              ),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(18, 16, 18, 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: fields,
+                ),
+              ),
+            ),
+            Divider(height: 1, color: line),
+            Padding(
+              padding: const EdgeInsetsDirectional.fromSTEB(12, 10, 12, 12),
+              child: Row(
+                children: <Widget>[
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: Text(s.t('Cancel')),
+                  ),
+                  const Spacer(),
+                  FilledButton.icon(
+                    onPressed: _submit,
+                    icon: const Icon(Icons.arrow_forward, size: 18),
+                    label: Text(s.t('Continue')),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _header(StudioStrings s, Color header) {
+    return DecoratedBox(
+      decoration: BoxDecoration(color: header),
+      child: Padding(
+        padding: const EdgeInsetsDirectional.fromSTEB(18, 16, 18, 16),
+        child: Row(
+          children: <Widget>[
+            Container(
+              width: 40,
+              height: 40,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: const Color(0x24FFFFFF),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(
+                Icons.tune_rounded,
+                color: Colors.white,
+                size: 22,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    s.t('Report parameters'),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      height: 1.2,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    s.t(
+                      'Enter the values for this run. Saved defaults stay in the template.',
+                    ),
+                    style: const TextStyle(
+                      color: Color(0xD6FFFFFF),
+                      fontSize: 12,
+                      height: 1.35,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _card({
+    required Color card,
+    required Color line,
+    required Widget child,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+      decoration: BoxDecoration(
+        color: card,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: line),
+      ),
+      child: child,
+    );
+  }
+
+  Widget _boolRow(StudioStrings s, ReportVariable v, int slot, Color muted) {
+    final String label = v.description.isEmpty ? v.name : v.description;
+    return Row(
+      children: <Widget>[
+        Icon(_typeIcon(v.type), size: 18, color: const Color(0xFF2B5797)),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              _labelRow(s, label, v.required),
+              const SizedBox(height: 2),
+              Text(
+                '${v.name} · ${s.t(_typeLabel(v.type))}',
+                style: TextStyle(color: muted, fontSize: 11.5),
+              ),
+            ],
+          ),
+        ),
+        Switch(
+          value: _flags[slot],
+          onChanged: (bool value) => setState(() => _flags[slot] = value),
+        ),
+      ],
+    );
+  }
+
+  Widget _textRow(
+    StudioStrings s,
+    ReportVariable v,
+    int slot, {
+    required int promptIndex,
+    required Color muted,
+    required ColorScheme scheme,
+    required Color paper,
+    required bool autofocus,
+    required bool invalid,
+  }) {
+    final String label = v.description.isEmpty ? v.name : v.description;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        _labelRow(s, label, v.required),
+        const SizedBox(height: 2),
+        Text(
+          '${v.name} · ${s.t(_typeLabel(v.type))}',
+          style: TextStyle(color: muted, fontSize: 11.5),
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          controller: _fields[slot],
+          autofocus: autofocus,
+          keyboardType: _keyboard(v.type),
+          style: const TextStyle(fontSize: 14),
+          onChanged: (_) {
+            if (_invalid == promptIndex) {
+              setState(() {
+                _invalid = null;
+                _error = null;
+              });
+            }
+          },
+          onSubmitted: (_) => _submit(),
+          decoration: InputDecoration(
+            isDense: true,
+            filled: true,
+            fillColor: paper,
+            hintText: _hint(s, v.type),
+            hintStyle: TextStyle(color: muted, fontSize: 13),
+            prefixIcon: Icon(_typeIcon(v.type), size: 18),
+            prefixIconConstraints: const BoxConstraints(
+              minWidth: 40,
+              minHeight: 36,
+            ),
+            suffixIcon: v.type == ReportVariableType.date
+                ? IconButton(
+                    tooltip: s.t('Pick a date'),
+                    icon: const Icon(Icons.calendar_today_outlined, size: 18),
+                    onPressed: () => _pickDate(slot),
+                  )
+                : null,
+            errorText: invalid ? _error : null,
+            contentPadding: const EdgeInsets.symmetric(vertical: 12),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(color: scheme.outlineVariant),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(
+                color: invalid ? scheme.error : scheme.outlineVariant,
+              ),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(
+                color: invalid ? scheme.error : const Color(0xFF2B5797),
+                width: 1.4,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _labelRow(StudioStrings s, String label, bool required) {
+    return Row(
+      children: <Widget>[
+        Flexible(
+          child: Text(
+            label,
+            style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600),
+          ),
+        ),
+        if (required) ...<Widget>[
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+            decoration: BoxDecoration(
+              color: const Color(0x1AB3261E),
+              borderRadius: BorderRadius.circular(99),
+            ),
+            child: Text(
+              s.t('Required'),
+              style: const TextStyle(
+                color: Color(0xFFB3261E),
+                fontSize: 10.5,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Future<void> _pickDate(int slot) async {
+    final DateTime initial =
+        DateTime.tryParse(_fields[slot].text.trim()) ?? DateTime.now();
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(1900),
+      lastDate: DateTime(2100),
+    );
+    if (picked == null || !mounted) {
+      return;
+    }
+    final String month = picked.month.toString().padLeft(2, '0');
+    final String day = picked.day.toString().padLeft(2, '0');
+    setState(() {
+      _fields[slot].text = '${picked.year}-$month-$day';
+      _invalid = null;
+      _error = null;
+    });
+  }
+
+  String _typeLabel(ReportVariableType type) => switch (type) {
+    ReportVariableType.text => 'Text value',
+    ReportVariableType.number => 'Number value',
+    ReportVariableType.date => 'Date value',
+    ReportVariableType.boolean => 'Yes or no',
+    ReportVariableType.list => 'List value',
+    ReportVariableType.expression => 'Expression value',
+  };
+
+  IconData _typeIcon(ReportVariableType type) => switch (type) {
+    ReportVariableType.text => Icons.notes_outlined,
+    ReportVariableType.number => Icons.tag,
+    ReportVariableType.date => Icons.calendar_today_outlined,
+    ReportVariableType.boolean => Icons.toggle_on_outlined,
+    ReportVariableType.list => Icons.format_list_bulleted,
+    ReportVariableType.expression => Icons.functions,
+  };
+
+  TextInputType _keyboard(ReportVariableType type) => switch (type) {
+    ReportVariableType.number => TextInputType.number,
+    ReportVariableType.date => TextInputType.datetime,
+    _ => TextInputType.text,
+  };
+
+  String? _hint(StudioStrings s, ReportVariableType type) => switch (type) {
+    ReportVariableType.date => 'yyyy-MM-dd',
+    ReportVariableType.list => s.t('Separate items with ;'),
+    ReportVariableType.expression => s.t('Formula without braces'),
+    _ => null,
+  };
 }

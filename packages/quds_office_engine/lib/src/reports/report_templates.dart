@@ -83,6 +83,7 @@ class ReportTemplateInfo {
     this._familyTitle,
     this._familyTitleAr,
     this.order = 0,
+    this.subreports = const <String, String>{},
   }) : _layout = xml,
        family = family ?? id,
        _source = null;
@@ -116,6 +117,7 @@ class ReportTemplateInfo {
       _familyTitleAr = m.familyTitleAr,
       _images = (() => package.images),
       sampleData = (() => package.sampleData ?? <String, Object?>{}),
+      subreports = package.subreports,
       _source = package;
 
   /// Reads a template `.qrep` ([ReportPackage.decode], then
@@ -169,6 +171,9 @@ class ReportTemplateInfo {
   /// Data shaped like the bindings the template expects.
   final Map<String, Object?> Function() sampleData;
 
+  /// Child layouts stored at `subreports/<name>.xml`.
+  final Map<String, String> subreports;
+
   /// [ReportTemplateLanguage.arabic] for [rtl] templates.
   ReportTemplateLanguage get language =>
       rtl ? ReportTemplateLanguage.arabic : ReportTemplateLanguage.english;
@@ -210,6 +215,7 @@ class ReportTemplateInfo {
         images: images(),
         sampleData: sampleData(),
         template: manifest,
+        subreports: subreports,
       );
 
   /// Catalog details as saved in a template `.qrep`.
@@ -274,6 +280,56 @@ class ReportTemplateInfo {
 abstract final class ReportTemplates {
   /// Every template, in display order (families in order, Arabic first).
   static const List<ReportTemplateInfo> all = <ReportTemplateInfo>[
+    ReportTemplateInfo(
+      id: 'feature_showcase_ar',
+      family: 'feature_showcase',
+      title: 'Sales order (Arabic)',
+      titleAr: 'أمر بيع (عربي)',
+      familyTitle: 'Sales order',
+      familyTitleAr: 'أمر بيع',
+      description:
+          'Sales order that asks for the customer, purchase order, and '
+          'delivery date, then prints a rich confirmation, an italic note, '
+          'an EAN-13 code, a nested delivery schedule, the item table, and '
+          'a branch crosstab.',
+      descriptionAr:
+          'أمر بيع يسأل عن العميل وأمر الشراء وموعد التوريد، ثم يطبع تأكيداً '
+          'غنياً وملاحظة مائلة ورمز EAN-13 وملحق توريد متداخلاً وجدول الأصناف '
+          'وجدولاً محورياً للفروع.',
+      category: ReportTemplateCategory.sales,
+      rtl: true,
+      order: -1,
+      xml: _featureShowcase,
+      strings: _featureShowcaseAr,
+      sampleData: _featureShowcaseArData,
+      images: _logoImages,
+      subreports: _featureSubreportsAr,
+    ),
+    ReportTemplateInfo(
+      id: 'feature_showcase_en',
+      family: 'feature_showcase',
+      title: 'Sales order (English)',
+      titleAr: 'أمر بيع (إنجليزي)',
+      familyTitle: 'Sales order',
+      familyTitleAr: 'أمر بيع',
+      description:
+          'Sales order that asks for the customer, purchase order, and '
+          'delivery date, then prints a rich confirmation, an italic note, '
+          'an EAN-13 code, a nested delivery schedule, the item table, and '
+          'a branch crosstab.',
+      descriptionAr:
+          'أمر بيع يسأل عن العميل وأمر الشراء وموعد التوريد، ثم يطبع تأكيداً '
+          'غنياً وملاحظة مائلة ورمز EAN-13 وملحق توريد متداخلاً وجدول الأصناف '
+          'وجدولاً محورياً للفروع.',
+      category: ReportTemplateCategory.sales,
+      rtl: false,
+      order: -1,
+      xml: _featureShowcase,
+      strings: _featureShowcaseEn,
+      sampleData: _featureShowcaseEnData,
+      images: _logoImages,
+      subreports: _featureSubreportsEn,
+    ),
     ReportTemplateInfo(
       id: 'sales_invoice_ar',
       family: 'sales_invoice',
@@ -3211,6 +3267,301 @@ Map<String, Object?> _chartGalleryData(bool ar) {
           'name': pick(en, arabic),
           'revenue': revenue,
         },
+    ],
+  };
+}
+
+const String _featureShowcase = r'''<?xml version="1.0" encoding="UTF-8"?>
+<QudsReport name="[[name]]" isRtl="[[rtl]]" pageSize="A4" orientation="Portrait" defaultFont="[[font]]" defaultFontSize="9">
+    <Settings>
+        <Margins top="12mm" bottom="12mm" left="12mm" right="12mm"/>
+        <Colors primary="#1E3A8A" accent="#B45309" muted="#64748B" light="#F8FAFC" border="#E2E8F0" text="#0F172A"/>
+    </Settings>
+    <Variables>
+        <Var name="customer" value="[[customer]]" prompt="true" required="true" description="[[customerHint]]"/>
+        <Var name="po" value="[[po]]" prompt="true" description="[[poHint]]"/>
+        <Var name="deliverBy" type="date" value="[[deliverBy]]" prompt="true" description="[[deliverHint]]"/>
+    </Variables>
+    <Bands>
+        <PageHeader height="8mm" printOnFirstPage="false">
+            <Text name="pageTitle" x="12mm" y="1mm" width="130mm" height="6mm" fontSize="8" color="muted">[[pageTitle]] · {{Variables.customer}}</Text>
+            <Text x="148mm" y="1mm" width="50mm" height="6mm" fontSize="8" color="muted" alignment="end">{{Data.order.number}}</Text>
+        </PageHeader>
+        <ReportHeader height="114mm">
+            <Image name="logo" source="logo" x="12mm" y="1mm" width="18mm" height="18mm"/>
+            <Text name="companyName" x="34mm" y="1mm" width="78mm" height="8mm" fontSize="14" bold="true" color="primary">{{Data.company.name}}</Text>
+            <Text x="34mm" y="9mm" width="78mm" height="4.5mm" fontSize="8" color="muted">{{Data.company.address}}</Text>
+            <Text x="34mm" y="13.5mm" width="78mm" height="4.5mm" fontSize="8" color="muted" direction="ltr">{{Data.company.phone}}  |  {{Data.company.email}}</Text>
+            <Text name="reportTitle" x="116mm" y="0mm" width="82mm" height="10mm" fontSize="20" bold="true" color="primary" alignment="end">[[title]]</Text>
+            <Barcode name="ean" x="150mm" y="11mm" width="48mm" height="14mm" symbology="ean13" value="4006381333931" fontSize="7"/>
+            <Rectangle x="12mm" y="28mm" width="186mm" height="0.7mm" fill="accent" strokeWidth="0"/>
+            <Shape kind="RoundedRectangle" name="customerCard" x="12mm" y="32mm" width="68mm" height="26mm" fill="light" strokeWidth="0" cornerRadius="3pt"/>
+            <Text x="15mm" y="34mm" width="62mm" height="4mm" fontSize="7.5" color="muted">[[customerCaption]]</Text>
+            <Text name="customerName" x="15mm" y="39mm" width="62mm" height="8mm" fontSize="11" bold="true">{{Variables.customer}}</Text>
+            <Text x="15mm" y="48mm" width="62mm" height="7mm" fontSize="8" color="muted">{{Data.billTo.city}}</Text>
+            <Shape kind="RoundedRectangle" name="orderCard" x="84mm" y="32mm" width="55mm" height="26mm" fill="light" strokeWidth="0" cornerRadius="3pt"/>
+            <Text x="87mm" y="34mm" width="49mm" height="4mm" fontSize="7.5" color="muted">[[orderCaption]]</Text>
+            <Text name="orderNumber" x="87mm" y="39mm" width="49mm" height="6mm" fontSize="10" bold="true">{{Data.order.number}}</Text>
+            <Text x="87mm" y="46mm" width="49mm" height="4mm" fontSize="7.5" color="muted">[[dateCaption]]</Text>
+            <Text x="87mm" y="50.5mm" width="49mm" height="5mm" fontSize="8.5" bold="true">{{Data.order.date | date:[[date]]}}</Text>
+            <Shape kind="RoundedRectangle" name="deliveryCard" x="143mm" y="32mm" width="55mm" height="26mm" fill="light" strokeWidth="0" cornerRadius="3pt"/>
+            <Text x="146mm" y="34mm" width="49mm" height="4mm" fontSize="7.5" color="muted">[[poHint]]</Text>
+            <Text name="poValue" x="146mm" y="39mm" width="49mm" height="6mm" fontSize="10" bold="true">{{Variables.po}}</Text>
+            <Text x="146mm" y="46mm" width="49mm" height="4mm" fontSize="7.5" color="muted">[[deliverHint]]</Text>
+            <Text name="deliverValue" x="146mm" y="50.5mm" width="49mm" height="5mm" fontSize="8.5" bold="true">{{Variables.deliverBy}}</Text>
+            <Text name="blurb" x="12mm" y="62mm" width="186mm" height="7mm" fontSize="10">
+                <Run>[[lead]]</Run>
+                <Run bold="true" link="https://quds.example"> [[linkLabel]]</Run>
+            </Text>
+            <Text name="aside" x="12mm" y="70mm" width="186mm" height="5.5mm" fontSize="9" italic="true" color="muted">[[italicLine]]</Text>
+            <Shape kind="RoundedRectangle" name="scheduleFrame" x="12mm" y="78mm" width="186mm" height="34mm" fill="#FFFFFF" color="border" strokeWidth="0.6" cornerRadius="3pt"/>
+            <Subreport name="deliveryNote" template="delivery" dataSet="deliveries" x="14mm" y="78mm" width="182mm" height="34mm"/>
+        </ReportHeader>
+        <Section dataSet="items">
+            <Detail height="8mm">
+                <Table name="itemsTable" x="12mm" y="0mm" width="186mm" showGrid="false" headerBackground="primary" headerColor="#FFFFFF" stripeColor="light" fontSize="9" headerFontSize="8" rowHeight="7.2mm" headerHeight="8mm" padding="3pt">
+                    <Columns>
+                        <Column width="28mm" header="[[colSku]]" align="start"/>
+                        <Column width="86mm" header="[[colDescription]]" align="start"/>
+                        <Column width="18mm" header="[[colQty]]" align="center"/>
+                        <Column width="27mm" header="[[colPrice]]" align="end"/>
+                        <Column width="27mm" header="[[colAmount]]" align="end"/>
+                    </Columns>
+                    <RowTemplate>
+                        <Cell field="item.sku"/>
+                        <Cell field="item.description"/>
+                        <Cell field="item.qty"/>
+                        <Cell field="item.price" format="n2"/>
+                        <Cell field="item.qty * item.price" format="n2" bold="true"/>
+                    </RowTemplate>
+                </Table>
+            </Detail>
+            <GroupFooter height="16mm">
+                <Text x="118mm" y="1mm" width="40mm" height="6mm" fontSize="9" color="muted" alignment="end">[[subtotal]]</Text>
+                <Text name="subtotal" x="158mm" y="1mm" width="40mm" height="6mm" fontSize="9" alignment="end">{{SUM(item.qty * item.price) | n2}}</Text>
+                <Shape kind="RoundedRectangle" name="totalBar" x="116mm" y="8mm" width="82mm" height="8mm" fill="primary" strokeWidth="0" cornerRadius="3pt"/>
+                <Text x="120mm" y="8mm" width="34mm" height="8mm" fontSize="10" bold="true" color="#FFFFFF" verticalAlignment="middle">[[totalDue]]</Text>
+                <Text name="grandTotal" x="150mm" y="8mm" width="44mm" height="8mm" fontSize="11" bold="true" color="#FFFFFF" alignment="end" verticalAlignment="middle">{{SUM(item.qty * item.price) | [[money]]}}</Text>
+            </GroupFooter>
+        </Section>
+        <Section>
+            <Detail height="46mm">
+                <Text name="pivotTitle" x="12mm" y="2mm" width="186mm" height="6mm" fontSize="10" bold="true" color="primary">[[pivotTitle]]</Text>
+                <Crosstab name="salesPivot" dataSet="sales" rowField="item.branch" columnField="item.month" valueField="item.amount" x="12mm" y="9mm" width="186mm" height="34mm" headerBold="true"/>
+            </Detail>
+        </Section>
+        <PageFooter height="8mm">
+            <Line x1="12mm" y1="1mm" x2="198mm" y2="1mm" color="border" strokeWidth="0.4"/>
+            <Text x="12mm" y="2.5mm" width="120mm" height="5mm" fontSize="7.5" color="muted">[[thanks]]</Text>
+            <Text x="140mm" y="2.5mm" width="58mm" height="5mm" fontSize="7.5" color="muted" alignment="end">[[page]] {{System.PageNumber}} [[of]] {{System.TotalPages}}</Text>
+        </PageFooter>
+    </Bands>
+</QudsReport>
+''';
+
+const String _deliveryNoteAr = r'''<?xml version="1.0" encoding="UTF-8"?>
+<QudsReport name="delivery" isRtl="true" pageSize="Custom" pageWidth="182mm" pageHeight="34mm" orientation="Landscape" defaultFont="Noto Naskh Arabic" defaultFontSize="8.5">
+    <Settings>
+        <Margins top="0mm" bottom="0mm" left="0mm" right="0mm"/>
+        <Colors primary="#1E3A8A" muted="#64748B" light="#F8FAFC" text="#0F172A"/>
+    </Settings>
+    <Bands>
+        <ReportHeader height="6.5mm">
+            <Rectangle x="0mm" y="0mm" width="182mm" height="6.5mm" fill="primary" strokeWidth="0"/>
+            <Text name="scheduleTitle" x="3mm" y="0.4mm" width="176mm" height="5.6mm" fontSize="9" bold="true" color="#FFFFFF" verticalAlignment="middle">ملحق التوريد</Text>
+        </ReportHeader>
+        <Detail dataSet="items" height="6mm">
+            <Table name="schedule" x="0mm" y="0mm" width="182mm" showGrid="false" headerBackground="light" headerColor="primary" fontSize="8.5" headerFontSize="7.5" rowHeight="6mm" headerHeight="6mm" padding="2pt">
+                <Columns>
+                    <Column width="36mm" header="الموعد" align="start"/>
+                    <Column width="110mm" header="موقع التسليم" align="start"/>
+                    <Column width="36mm" header="الكمية" align="center"/>
+                </Columns>
+                <RowTemplate>
+                    <Cell field="item.when"/>
+                    <Cell field="item.site"/>
+                    <Cell field="item.qty"/>
+                </RowTemplate>
+            </Table>
+        </Detail>
+    </Bands>
+</QudsReport>
+''';
+
+const String _deliveryNoteEn = r'''<?xml version="1.0" encoding="UTF-8"?>
+<QudsReport name="delivery" isRtl="false" pageSize="Custom" pageWidth="182mm" pageHeight="34mm" orientation="Landscape" defaultFont="Liberation Sans" defaultFontSize="8.5">
+    <Settings>
+        <Margins top="0mm" bottom="0mm" left="0mm" right="0mm"/>
+        <Colors primary="#1E3A8A" muted="#64748B" light="#F8FAFC" text="#0F172A"/>
+    </Settings>
+    <Bands>
+        <ReportHeader height="6.5mm">
+            <Rectangle x="0mm" y="0mm" width="182mm" height="6.5mm" fill="primary" strokeWidth="0"/>
+            <Text name="scheduleTitle" x="3mm" y="0.4mm" width="176mm" height="5.6mm" fontSize="9" bold="true" color="#FFFFFF" verticalAlignment="middle">Delivery schedule</Text>
+        </ReportHeader>
+        <Detail dataSet="items" height="6mm">
+            <Table name="schedule" x="0mm" y="0mm" width="182mm" showGrid="false" headerBackground="light" headerColor="primary" fontSize="8.5" headerFontSize="7.5" rowHeight="6mm" headerHeight="6mm" padding="2pt">
+                <Columns>
+                    <Column width="36mm" header="WHEN" align="start"/>
+                    <Column width="110mm" header="SITE" align="start"/>
+                    <Column width="36mm" header="QTY" align="center"/>
+                </Columns>
+                <RowTemplate>
+                    <Cell field="item.when"/>
+                    <Cell field="item.site"/>
+                    <Cell field="item.qty"/>
+                </RowTemplate>
+            </Table>
+        </Detail>
+    </Bands>
+</QudsReport>
+''';
+
+const Map<String, String> _featureSubreportsAr = <String, String>{
+  'delivery': _deliveryNoteAr,
+};
+
+const Map<String, String> _featureSubreportsEn = <String, String>{
+  'delivery': _deliveryNoteEn,
+};
+
+const Map<String, String> _featureShowcaseAr = <String, String>{
+  ..._ar,
+  'name': 'أمر بيع',
+  'pageTitle': 'أمر بيع',
+  'title': 'أمر بيع',
+  'lead': 'نؤكد قبول الطلب وفق الشروط المنشورة.',
+  'linkLabel': 'شروط التوريد',
+  'italicLine': 'الأسعار شاملة التجهيز، والتوريد حسب الملحق أدناه.',
+  'customer': 'مؤسسة النور للتجارة',
+  'customerHint': 'اسم العميل',
+  'po': 'PO-441',
+  'poHint': 'أمر الشراء',
+  'deliverBy': '2026-10-24',
+  'deliverHint': 'موعد التوريد',
+  'orderCaption': 'رقم الأمر',
+  'dateCaption': 'التاريخ',
+  'customerCaption': 'العميل',
+  'colSku': 'الرمز',
+  'colDescription': 'الوصف',
+  'colQty': 'الكمية',
+  'colPrice': 'السعر',
+  'colAmount': 'المبلغ',
+  'subtotal': 'المجموع',
+  'totalDue': 'الإجمالي',
+  'pivotTitle': 'مبيعات الفروع',
+  'thanks': 'شركة القدس للتقنية',
+};
+
+const Map<String, String> _featureShowcaseEn = <String, String>{
+  ..._en,
+  'name': 'Sales order',
+  'pageTitle': 'Sales order',
+  'title': 'SALES ORDER',
+  'lead': 'We confirm this order under the published terms.',
+  'linkLabel': 'Delivery terms',
+  'italicLine': 'Prices include preparation. Delivery follows the schedule below.',
+  'customer': 'Al-Noor Trading',
+  'customerHint': 'Customer',
+  'po': 'PO-441',
+  'poHint': 'Purchase order',
+  'deliverBy': '2026-10-24',
+  'deliverHint': 'Deliver by',
+  'orderCaption': 'Order',
+  'dateCaption': 'Date',
+  'customerCaption': 'Customer',
+  'colSku': 'SKU',
+  'colDescription': 'DESCRIPTION',
+  'colQty': 'QTY',
+  'colPrice': 'PRICE',
+  'colAmount': 'AMOUNT',
+  'subtotal': 'Subtotal',
+  'totalDue': 'TOTAL',
+  'pivotTitle': 'Sales by branch',
+  'thanks': 'Quds Technology Co.',
+};
+
+Map<String, Object?> _featureShowcaseArData() => _featureShowcaseData(true);
+
+Map<String, Object?> _featureShowcaseEnData() => _featureShowcaseData(false);
+
+Map<String, Object?> _featureShowcaseData(bool ar) {
+  String t(String en, String arabic) => ar ? arabic : en;
+  return <String, Object?>{
+    'company': <String, Object?>{
+      'name': t('Quds Technology Co.', 'شركة القدس للتقنية'),
+      'address': t('Republic Street, Tripoli', 'طرابلس — شارع الجمهورية'),
+      'phone': '+218 21 444 0101',
+      'email': 'sales@quds.example',
+    },
+    'billTo': <String, Object?>{
+      'city': t('Tripoli', 'طرابلس'),
+    },
+    'order': <String, Object?>{
+      'number': 'SO-2026-0142',
+      'date': DateTime(2026, 10, 10),
+    },
+    'items': <Map<String, Object?>>[
+      <String, Object?>{
+        'sku': 'QOS-ENT',
+        'description': t(
+          'Enterprise license, per seat',
+          'ترخيص مؤسسات لكل مستخدم',
+        ),
+        'qty': 12,
+        'price': 180,
+      },
+      <String, Object?>{
+        'sku': 'QOS-SUP',
+        'description': t('Annual support', 'دعم سنوي'),
+        'qty': 12,
+        'price': 36,
+      },
+      <String, Object?>{
+        'sku': 'QOS-TRN',
+        'description': t('On-site training day', 'يوم تدريب في الموقع'),
+        'qty': 3,
+        'price': 220,
+      },
+    ],
+    'deliveries': <Map<String, Object?>>[
+      <String, Object?>{
+        'when': '22/10/2026',
+        'site': t('Tripoli headquarters', 'المقر — طرابلس'),
+        'qty': 12,
+      },
+      <String, Object?>{
+        'when': '24/10/2026',
+        'site': t('Benghazi office', 'مكتب بنغازي'),
+        'qty': 8,
+      },
+      <String, Object?>{
+        'when': '02/11/2026',
+        'site': t('Misrata warehouse', 'مخزن مصراتة'),
+        'qty': 7,
+      },
+    ],
+    'sales': <Map<String, Object?>>[
+      <String, Object?>{
+        'branch': t('East', 'الشرق'),
+        'month': t('Jan', 'يناير'),
+        'amount': 18,
+      },
+      <String, Object?>{
+        'branch': t('East', 'الشرق'),
+        'month': t('Feb', 'فبراير'),
+        'amount': 11,
+      },
+      <String, Object?>{
+        'branch': t('West', 'الغرب'),
+        'month': t('Jan', 'يناير'),
+        'amount': 9,
+      },
+      <String, Object?>{
+        'branch': t('West', 'الغرب'),
+        'month': t('Feb', 'فبراير'),
+        'amount': 6,
+      },
     ],
   };
 }

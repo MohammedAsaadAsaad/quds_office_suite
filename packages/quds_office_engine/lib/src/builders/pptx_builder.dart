@@ -43,6 +43,114 @@ class PptxPalette {
   final String gold;
 }
 
+/// A text box on a [PptxDeckBuilder.addPlacedSlide], in page points.
+class PptxPlacedText {
+  /// PptxPlacedText API.
+  const PptxPlacedText({
+    required this.xPt,
+    required this.yPt,
+    required this.wPt,
+    required this.hPt,
+    required this.text,
+    this.sizePt = 12,
+    this.bold = false,
+    this.italic = false,
+    this.color = '222222',
+  });
+
+  /// Left, top-left origin.
+  final double xPt;
+
+  /// Top, top-left origin.
+  final double yPt;
+
+  /// Width in points.
+  final double wPt;
+
+  /// Height in points.
+  final double hPt;
+
+  /// text API.
+  final String text;
+
+  /// Font size in points.
+  final double sizePt;
+
+  /// bold API.
+  final bool bold;
+
+  /// italic API.
+  final bool italic;
+
+  /// `RRGGBB`.
+  final String color;
+}
+
+/// Kind of chart placed on a freeform slide.
+enum PptxPlacedChartKind { column, bar, pie, line }
+
+/// A native chart on a [PptxDeckBuilder.addPlacedSlide], in page points.
+class PptxPlacedChart {
+  /// PptxPlacedChart API.
+  const PptxPlacedChart({
+    required this.xPt,
+    required this.yPt,
+    required this.wPt,
+    required this.hPt,
+    required this.title,
+    required this.kind,
+    required this.points,
+  });
+
+  /// Left, top-left origin.
+  final double xPt;
+
+  /// Top, top-left origin.
+  final double yPt;
+
+  /// Width in points.
+  final double wPt;
+
+  /// Height in points.
+  final double hPt;
+
+  /// title API.
+  final String title;
+
+  /// kind API.
+  final PptxPlacedChartKind kind;
+
+  /// points API.
+  final List<ChartPoint> points;
+}
+
+/// A PNG picture on a [PptxDeckBuilder.addPlacedSlide], in page points.
+class PptxPlacedPicture {
+  /// PptxPlacedPicture API.
+  const PptxPlacedPicture({
+    required this.xPt,
+    required this.yPt,
+    required this.wPt,
+    required this.hPt,
+    required this.pngBytes,
+  });
+
+  /// Left, top-left origin.
+  final double xPt;
+
+  /// Top, top-left origin.
+  final double yPt;
+
+  /// Width in points.
+  final double wPt;
+
+  /// Height in points.
+  final double hPt;
+
+  /// PNG bytes. JPEG and raw pixels are not accepted here.
+  final Uint8List pngBytes;
+}
+
 /// Fluent PowerPoint builder: geometric layouts, charts, notes, contain-fit images.
 class PptxDeckBuilder {
   /// PptxDeckBuilder API.
@@ -385,6 +493,105 @@ class PptxDeckBuilder {
         notes: notes,
       ),
     );
+  }
+
+  /// One slide of absolutely positioned text and PNG pictures.
+  ///
+  /// Coordinates are page points with a top-left origin, the same space as
+  /// a PDF display list. The slide size is [slideWidth] and [slideHeight].
+  void addPlacedSlide({
+    required List<PptxPlacedText> texts,
+    required List<PptxPlacedPicture> pictures,
+    List<PptxPlacedChart> charts = const <PptxPlacedChart>[],
+  }) {
+    final List<String> shapes = <String>[];
+    final List<int> imageIds = <int>[];
+    final List<int> chartIds = <int>[];
+    for (final PptxPlacedChart chart in charts) {
+      if (chart.points.isEmpty) {
+        continue;
+      }
+      final String xml = chart.kind == PptxPlacedChartKind.column
+          ? DrawingmlCharts.bar(
+              title: chart.title.isEmpty ? 'Chart' : chart.title,
+              series: chart.points,
+              rtl: rtl,
+              horizontal: false,
+              theme: theme,
+            )
+          : _chartXml(
+              chart.title,
+              switch (chart.kind) {
+                PptxPlacedChartKind.bar => ChartKind.bar,
+                PptxPlacedChartKind.pie => ChartKind.pie,
+                PptxPlacedChartKind.line => ChartKind.line,
+                PptxPlacedChartKind.column => ChartKind.bar,
+              },
+              chart.points,
+              const <ChartSeries>[],
+            );
+      if (!xml.contains('<c:pt ')) {
+        continue;
+      }
+      _chartSeq += 1;
+      _charts.add((id: _chartSeq, xml: xml));
+      chartIds.add(_chartSeq);
+      shapes.add(
+        _chartFrame(
+          _chartSeq,
+          x: _ptToEmu(chart.xPt),
+          y: _ptToEmu(chart.yPt),
+          cx: _ptToEmu(chart.wPt < 8 ? 8 : chart.wPt),
+          cy: _ptToEmu(chart.hPt < 8 ? 8 : chart.hPt),
+        ),
+      );
+    }
+    for (final PptxPlacedPicture picture in pictures) {
+      if (picture.pngBytes.isEmpty) {
+        continue;
+      }
+      final int imgId = _addImage(picture.pngBytes);
+      imageIds.add(imgId);
+      shapes.add(
+        _picture(
+          imgId,
+          _ptToEmu(picture.xPt),
+          _ptToEmu(picture.yPt),
+          _ptToEmu(picture.wPt),
+          _ptToEmu(picture.hPt),
+        ),
+      );
+    }
+    for (final PptxPlacedText text in texts) {
+      final String value = text.text.trim();
+      if (value.isEmpty) {
+        continue;
+      }
+      shapes.add(
+        _textBox(
+          _ptToEmu(text.xPt),
+          _ptToEmu(text.yPt),
+          _ptToEmu(text.wPt < 8 ? 8 : text.wPt),
+          _ptToEmu(text.hPt < text.sizePt ? text.sizePt : text.hPt),
+          value,
+          sizePt: text.sizePt.round().clamp(6, 96),
+          bold: text.bold,
+          italic: text.italic,
+          color: text.color,
+        ),
+      );
+    }
+    if (shapes.isEmpty) {
+      shapes.add(_textBox(400000, 400000, slideWidth - 800000, 600000, ' '));
+    }
+    _slides.add(
+      _SlideDraft(shapes: shapes, imageIds: imageIds, chartIds: chartIds),
+    );
+  }
+
+  int _ptToEmu(double points) {
+    final int emu = (points * 12700).round();
+    return emu < 0 ? 0 : emu;
   }
 
   /// addSplitMediaSlide API.

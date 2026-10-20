@@ -1,3 +1,5 @@
+import '../properties/wml_properties.dart';
+import 'wml_clone.dart';
 import 'wml_document.dart';
 import 'wml_run_edit.dart';
 
@@ -144,5 +146,116 @@ abstract final class WordMailMerge {
       copies.add(next);
     }
     return copies;
+  }
+
+  /// One merged document. A table row that contains `MERGEFIELD` or `«Field»`
+  /// is repeated once per [records] entry. When no such row exists, the body
+  /// is repeated with a page break between records.
+  static WmlDocument documentFor(
+    WmlDocument template,
+    List<Map<String, String>> records,
+  ) {
+    final WmlDocument out = WmlDocument(
+      sections: <WmlSection>[
+        for (final WmlSection section in template.sections)
+          WmlSection(
+            blocks: <WmlBlock>[
+              for (final WmlBlock block in section.blocks)
+                WmlClone.block(block),
+            ],
+            pageSize: section.pageSize,
+            margins: section.margins,
+          ),
+      ],
+      mailMergeRecords: <Map<String, String>>[
+        for (final Map<String, String> row in records) Map<String, String>.from(row),
+      ],
+    );
+    if (records.isEmpty) {
+      return out;
+    }
+    if (_expandMergeRows(out, records)) {
+      merge(out, records.first);
+      return out;
+    }
+    if (out.sections.isEmpty) {
+      return out;
+    }
+    final WmlSection dest = out.sections.first;
+    final List<WmlBlock> body = List<WmlBlock>.from(dest.blocks);
+    dest.blocks.clear();
+    for (int i = 0; i < records.length; i++) {
+      if (i > 0) {
+        dest.blocks.add(
+          WmlParagraph(inlines: <WmlInline>[WmlBreak(WmlBreakType.page)]),
+        );
+      }
+      final WmlDocument scratch = WmlDocument(
+        sections: <WmlSection>[
+          WmlSection(
+            blocks: <WmlBlock>[
+              for (final WmlBlock block in body) WmlClone.block(block),
+            ],
+          ),
+        ],
+      );
+      merge(scratch, records[i]);
+      dest.blocks.addAll(scratch.sections.first.blocks);
+    }
+    return out;
+  }
+
+  static bool _expandMergeRows(
+    WmlDocument document,
+    List<Map<String, String>> records,
+  ) {
+    var expanded = false;
+    for (final WmlSection section in document.sections) {
+      for (final WmlBlock block in section.blocks) {
+        if (block is! WmlTable) {
+          continue;
+        }
+        final List<WmlTableRow> next = <WmlTableRow>[];
+        for (final WmlTableRow row in block.rows) {
+          if (fieldsOf(
+            WmlDocument(
+              sections: <WmlSection>[
+                WmlSection(
+                  blocks: <WmlBlock>[
+                    WmlTable(rows: <WmlTableRow>[row]),
+                  ],
+                ),
+              ],
+            ),
+          ).isEmpty) {
+            next.add(row);
+            continue;
+          }
+          expanded = true;
+          for (final Map<String, String> record in records) {
+            final WmlTableRow copy = WmlClone.table(
+              WmlTable(rows: <WmlTableRow>[row]),
+            ).rows.first;
+            merge(
+              WmlDocument(
+                sections: <WmlSection>[
+                  WmlSection(
+                    blocks: <WmlBlock>[
+                      WmlTable(rows: <WmlTableRow>[copy]),
+                    ],
+                  ),
+                ],
+              ),
+              record,
+            );
+            next.add(copy);
+          }
+        }
+        block.rows
+          ..clear()
+          ..addAll(next);
+      }
+    }
+    return expanded;
   }
 }

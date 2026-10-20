@@ -110,8 +110,16 @@ jobs:
           base="https://github.com/${GH_REPO}/releases/download/${TAG}"
           cat > "$RUNNER_TEMP/notes.md" <<EOF
           Desktop designer for \`.qrep\` band reports, built on
-          [quds_office_engine](https://pub.dev/packages/quds_office_engine) and
-          [quds_office_editor](https://pub.dev/packages/quds_office_editor).
+          [quds_office_engine](https://pub.dev/packages/quds_office_engine) 1.5.0 and
+          [quds_office_editor](https://pub.dev/packages/quds_office_editor) 1.6.0.
+
+          ### What's new
+
+          - A sales order template, in Arabic and English: prompted customer, purchase order, and delivery date; a rich confirmation; an italic note; an EAN-13 code; a nested delivery schedule; an item table; and a branch crosstab.
+          - Preview, print, and export ask for the prompted values first. Cancel leaves the current mode.
+          - File › Convert PDF is gone. Turning a PDF into Word, Excel, or PowerPoint stays an engine API (\`PdfToOffice\`).
+
+          Reports in this version also add multiple detail sections, crosstabs, subreports inside the \`.qrep\`, rich text links, italic font files, and Excel pictures plus a sheet header. PDF stamps can use a supplied Arabic font, and redaction removes text operators inside the rectangle.
 
           | Platform | Installer | Portable |
           | --- | --- | --- |

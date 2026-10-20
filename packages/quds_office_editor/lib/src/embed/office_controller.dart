@@ -6799,6 +6799,44 @@ class SheetEditorController extends OfficeController {
     return '${SmlCellRef(range.minCol, range.minRow).a1}:${SmlCellRef(range.maxCol, range.maxRow).a1}';
   }
 
+  /// Name-box label: a defined name when the selection is that range.
+  String get nameBoxText {
+    final SmlRange range = selection.range;
+    for (final SmlNamedRange named in workbook.namedRanges) {
+      if (named.sheetName.isNotEmpty && named.sheetName != sheet.name) {
+        continue;
+      }
+      final SmlRange namedRange = named.range;
+      if (namedRange.minCol == range.minCol &&
+          namedRange.maxCol == range.maxCol &&
+          namedRange.minRow == range.minRow &&
+          namedRange.maxRow == range.maxRow) {
+        return named.name;
+      }
+    }
+    return selectionAddress;
+  }
+
+  /// Selects the workbook name [name], switching sheets when it names one.
+  bool selectNamedRange(String name) {
+    final SmlNamedRange? named = workbook.namedRange(name);
+    if (named == null) {
+      return false;
+    }
+    final int index = workbook.sheets.indexWhere(
+      (SmlWorksheet candidate) => candidate.name == named.sheetName,
+    );
+    if (index >= 0) {
+      _activeSheet = index;
+    }
+    selection
+      ..kind = SheetSelectionKind.cells
+      ..anchor = named.range.start
+      ..focus = named.range.end;
+    notifyListeners();
+    return true;
+  }
+
   /// formulaBarText API.
   String get formulaBarText {
     if (cellEditor.editing) {
@@ -8567,12 +8605,14 @@ class SheetEditorController extends OfficeController {
     if (!config.allowsMutation) {
       return;
     }
+    final String sheetTitle = sheetName ?? sheet.name;
+    final SmlRange chosen = range ?? selection.range;
+    workbook.namedRanges.removeWhere(
+      (SmlNamedRange existing) =>
+          existing.name.toLowerCase() == name.toLowerCase(),
+    );
     workbook.namedRanges.add(
-      SmlNamedRange(
-        name: name,
-        sheetName: sheetName ?? sheet.name,
-        range: range ?? selection.range,
-      ),
+      SmlNamedRange(name: name, sheetName: sheetTitle, range: chosen),
     );
     notifyListeners();
   }

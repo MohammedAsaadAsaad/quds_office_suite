@@ -115,6 +115,28 @@ void main() {
     }
   });
 
+  test('Word PDF Arabic comes back as logical letters', () {
+    if (naskh == null) {
+      markTestSkipped('Noto Naskh Arabic is not next to the engine package');
+    }
+    final Uint8List pdf = OfficePdfExport.word(
+      _doc('$_phrase 2026'),
+      fonts: OfficeFontSet(
+        primary: naskh,
+        fallbacks: <SfntFont>[if (latin != null) latin],
+      ),
+      title: 'Arabic',
+    );
+    final String text = PdfToOffice.recover(PdfFile.open(pdf))
+        .pages
+        .expand((PdfOfficePage page) => page.lines)
+        .map((PdfOfficeLine line) => line.text)
+        .join('\n');
+    expect(text, contains('تقرير ربع سنوي'));
+    expect(text, contains('2026'));
+    expect(text, isNot(contains('ﺮ')));
+  });
+
   test('Latin-only export does not WinAnsi-mojibake Arabic', () {
     if (latin == null) {
       markTestSkipped('Liberation Sans is not next to the engine package');

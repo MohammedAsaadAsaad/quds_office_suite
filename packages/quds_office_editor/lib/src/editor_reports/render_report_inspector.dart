@@ -2388,6 +2388,8 @@ class RenderReportInspector extends RenderBox
           chartType.isShapeMap
               ? (ReportToolbarIcon.map, 'Map')
               : (ReportToolbarIcon.chart, 'Chart'),
+        ReportCrosstabElement() => (ReportToolbarIcon.chart, 'Crosstab'),
+        ReportSubreportElement() => (ReportToolbarIcon.text, 'Subreport'),
       };
       return (
         icon,

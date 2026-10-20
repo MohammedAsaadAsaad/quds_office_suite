@@ -172,12 +172,18 @@ void main() {
     expect(await device.load('Nope'), isNull);
     expect(
       StudioDeviceFonts.pick(<DeviceFontFace>[
-        (path: 'light', weight: 300),
-        (path: 'book', weight: 450),
-        (path: 'black', weight: 900),
-        (path: 'semi', weight: 600),
+        (path: 'light', weight: 300, italic: false),
+        (path: 'book', weight: 450, italic: false),
+        (path: 'black', weight: 900, italic: false),
+        (path: 'semi', weight: 600, italic: false),
+        (path: 'booki', weight: 400, italic: true),
       ]),
-      ((path: 'book', weight: 450), (path: 'semi', weight: 600)),
+      (
+        regular: (path: 'book', weight: 450, italic: false),
+        bold: (path: 'semi', weight: 600, italic: false),
+        italic: (path: 'booki', weight: 400, italic: true),
+        boldItalic: null,
+      ),
     );
 
     final ReportDocument doc = ReportDocument();

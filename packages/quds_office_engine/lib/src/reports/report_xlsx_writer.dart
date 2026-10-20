@@ -16,9 +16,9 @@ import 'report_value.dart';
 /// Band texts become rows (side-by-side elements share a row, mapped to the
 /// columns under them); table rows become real rows with typed cells — numbers
 /// stay numeric with a number format derived from the cell `format`, dates
-/// become Excel serials. Charts become native Excel charts with their data
-/// written as a table below. Page headers/footers, images, barcodes, and
-/// shapes are page decorations and are not exported.
+/// become Excel serials. Charts become native Excel charts. Images, barcodes,
+/// and non-line shapes are drawings. A text-only page header or footer becomes
+/// the sheet header or footer.
 class ReportXlsxWriter {
   /// ReportXlsxWriter API.
   const ReportXlsxWriter();
@@ -35,6 +35,8 @@ class ReportXlsxWriter {
     for (int c = 0; c < columns.count; c++) {
       sheet.colWidth(c, _excelWidth(columns.widths[c]));
     }
+    sheet.oddHeader = _bandPlainText(t.band(ReportBandKind.pageHeader));
+    sheet.oddFooter = _bandPlainText(t.band(ReportBandKind.pageFooter));
     final _Writer w = _Writer(book, sheet, columns, t);
     ReportFlowEntry? previous;
     for (final ReportFlowEntry entry in layout.flow) {
@@ -53,6 +55,23 @@ class ReportXlsxWriter {
       previous = entry;
     }
     return book.build();
+  }
+
+  static String? _bandPlainText(ReportBand? band) {
+    if (band == null) {
+      return null;
+    }
+    final StringBuffer buf = StringBuffer();
+    for (final ReportElement e in band.elements) {
+      if (e is ReportTextElement && e.plainText.trim().isNotEmpty) {
+        if (buf.isNotEmpty) {
+          buf.write(' ');
+        }
+        buf.write(e.plainText.trim());
+      }
+    }
+    final String text = buf.toString();
+    return text.isEmpty ? null : text;
   }
 
   static double _excelWidth(double points) {
@@ -170,6 +189,8 @@ class _Writer {
             else if (i is ReportFlowTableBlock)
               i
             else if (i is ReportFlowChart && !i.data.isEmpty)
+              i
+            else if (i is ReportFlowImage)
               i,
         ]..sort(
           (ReportFlowItem a, ReportFlowItem b) =>
@@ -187,6 +208,19 @@ class _Writer {
       }
       if (first is ReportFlowChart) {
         _chart(first);
+        i++;
+        continue;
+      }
+      if (first is ReportFlowImage) {
+        final (int col, int _) = columns.span(first.rect);
+        sheet.addPicture(
+          row: row,
+          col: col,
+          widthPoints: first.rect.width,
+          heightPoints: first.rect.height,
+          bytes: first.bytes,
+        );
+        row++;
         i++;
         continue;
       }

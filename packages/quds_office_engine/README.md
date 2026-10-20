@@ -101,12 +101,12 @@ shape map.
 
 | Platform | Installer | Portable |
 | --- | --- | --- |
-| Windows 10/11 (x64) | [QudsReportStudio-1.4.0-windows-x64-setup.exe](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.4.0/QudsReportStudio-1.4.0-windows-x64-setup.exe) | [QudsReportStudio-1.4.0-windows-x64-portable.zip](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.4.0/QudsReportStudio-1.4.0-windows-x64-portable.zip) |
-| Debian / Ubuntu (x64) | [quds-report-studio_1.4.0_amd64.deb](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.4.0/quds-report-studio_1.4.0_amd64.deb) | [QudsReportStudio-1.4.0-linux-x64.tar.gz](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.4.0/QudsReportStudio-1.4.0-linux-x64.tar.gz) |
+| Windows 10/11 (x64) | [QudsReportStudio-1.5.0-windows-x64-setup.exe](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.5.0/QudsReportStudio-1.5.0-windows-x64-setup.exe) | [QudsReportStudio-1.5.0-windows-x64-portable.zip](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.5.0/QudsReportStudio-1.5.0-windows-x64-portable.zip) |
+| Debian / Ubuntu (x64) | [quds-report-studio_1.5.0_amd64.deb](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.5.0/quds-report-studio_1.5.0_amd64.deb) | [QudsReportStudio-1.5.0-linux-x64.tar.gz](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.5.0/QudsReportStudio-1.5.0-linux-x64.tar.gz) |
 
 - **Windows:** run the setup. It doesn't need admin rights unless you
   choose "all users". Uninstall it from *Settings › Apps*.
-- **Debian / Ubuntu:** `sudo apt install ./quds-report-studio_1.4.0_amd64.deb`,
+- **Debian / Ubuntu:** `sudo apt install ./quds-report-studio_1.5.0_amd64.deb`,
   and `sudo apt remove quds-report-studio` to uninstall.
 - **Other Linux distributions:** extract the tar.gz and run `./install.sh`
   (per user, no root). Run `~/.local/opt/quds-report-studio/uninstall.sh`
@@ -115,7 +115,7 @@ shape map.
   for `.qrep` files, so double-clicking a report opens it in the studio.
 
 All files and SHA-256 checksums are on the
-[release page](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/tag/studio-v1.4.0).
+[release page](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/tag/studio-v1.5.0).
 
 <table>
   <tr>
@@ -169,7 +169,7 @@ The bytes are yours. There is no hidden conversion API.
 quds_office_engine          pure Dart, no dart:ui
 ├── OPC / ZIP / OLE         docx · xlsx · pptx
 ├── Word / Sheet / Slide    models, layout, formulas, motion
-├── PdfFile                 open, display list, extract, annotate
+├── PdfFile                 open, display list, extract, annotate, to Office
 ├── PdfToolbox              merge, split, rotate, stamp, crop
 ├── pdf_widgets             constraint layout → PdfDocument
 ├── pdf_templates           100+ report skins on top of widgets
@@ -258,7 +258,7 @@ along the diagonal — Arabic cannot be cut glyph by glyph and still join.
 
 ```yaml
 dependencies:
-  quds_office_engine: ^1.4.0
+  quds_office_engine: ^1.5.0
 ```
 
 ```bash
@@ -287,7 +287,7 @@ import 'package:quds_office_engine/pdf_widgets.dart' as pw;
 | **pdf_widgets** | Constraint layout: flex, text, tables, charts, images, TOC, headers, footers, watermarks. Synchronous `Document.save()` |
 | **Band reports** | `.qrep` packages (XML layout + embedded images, fonts, and shape layers) with bands, groups, expressions, typed variables, tables, barcodes/QR, charts, and shape maps → PDF, XLSX, DOCX. 20 ready-made templates (10 families, Arabic + English) with saved images |
 | **pdf_templates** | 100+ classified reports with **distinct `SheetSkin` layouts**, LTR/RTL, and brand themes |
-| **PdfFile** | Open PDF 1.7, paint a display list, extract text, annotate, fill AcroForm, incremental save |
+| **PdfFile** | Open PDF 1.7, paint a display list, extract text, annotate, fill AcroForm, incremental save, `PdfToOffice` |
 | **PdfToolbox** | Merge, extract, split, reorder, remove, rotate, reverse, insert, mix, stamp, number, Bates, crop — a new file with resources grafted |
 | **Platform** | Own ZIP, Deflate, CFBF/OLE, XML, AES, repair, and isolate open/save |
 
@@ -571,8 +571,8 @@ Word and Excel show a bar of the region values.
 
 ### Ready-made templates
 
-Twenty production-style templates ship as ready-made `.qrep` files in
-`quds_office_editor`'s `templates/` folder: ten families, each in an
+Twenty-two production-style templates ship as ready-made `.qrep` files in
+`quds_office_editor`'s `templates/` folder: eleven families, each in an
 **Arabic (RTL)** and an **English** version, grouped by
 `ReportTemplateCategory`. Every template carries sample data, and most carry
 **pre-saved images** (logo, stamp, signature, seal, product photos).
@@ -1157,6 +1157,15 @@ JPEG / Flate / LZW / CCITT images, image masks, indexed palettes, form
 XObjects, inline images, Type 3 charprocs, axial and radial shadings, optional
 content, and text with ToUnicode, WinAnsi, MacRoman, PDFDoc, and ActualText.
 
+`PdfToOffice.toDocx`, `toXlsx`, and `toPptx` copy that text into Office.
+DOCX places each line and each JPEG or PNG in a page-anchored box, turns a
+ruled table into a Word table, and turns vector bars, wedges, or a polyline
+into a chart. A PDF outline or a dot-leader list becomes a table of contents.
+XLSX is those tables plus each chart's values, with other text as one column.
+PPTX is one slide per page of positioned text, PNG pictures, and those charts.
+`recover` returns the pages and a notice when a page has no text layer.
+Scanned pixels, and a chart that is only a picture, are not read.
+
 Annotations and appearance streams, AcroForm fill, XFDF, viewer preferences,
 and page insert / delete / rotate live on `PdfFile`. `/XFA` is flagged, not
 extracted. `/StructTreeRoot` is exposed; `PdfExtract.readingOrder` walks
@@ -1306,7 +1315,7 @@ These are not hidden TODOs. They are the contract.
 | Multi-series Office charts | One series per chart (`OfficeVisual.points`); further series are not drawn |
 | Slide text alignment and anchoring inherited from layouts and masters | Geometry and colors inherit; alignment comes from the shape's own paragraphs, and `bodyPr anchor` is not read |
 | PDF body reflow (edit text like Word) | Annotations, form fill, page assembly |
-| OCR, image recompress, PDF-to-Office layout recovery | Text extract from the content stream only |
+| OCR, image recompress, rebuilt PDF design | `PdfToOffice` places lines and JPEG/PNG in page-anchored boxes, rebuilds a ruled table, and rebuilds a vector chart. An outline becomes a table of contents. A page with no text layer is reported. Scanned pixels, and a pictured chart, are not read |
 | Creating signatures, full CMS/PAdES trust | ByteRange + `messageDigest` match (`valid`/`invalid`) |
 | Certified PDF/A or PDF/UA | Optional XMP extras; detection, not certification |
 | In-engine CFF / Type 1 raster, JPEG2000 | OTTO wrap for a host loader; JPX stays unsupported |

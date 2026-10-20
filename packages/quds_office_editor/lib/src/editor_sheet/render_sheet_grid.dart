@@ -33,6 +33,7 @@ class SheetGrid extends LeafRenderObjectWidget {
     this.frozenRows = 0,
     this.frozenCols = 0,
     this.formulaBar = '',
+    this.nameBox = '',
     this.config = const OfficeSurfaceConfig(),
     this.hasFocus = false,
     this.semanticsLabel = '',
@@ -90,6 +91,9 @@ class SheetGrid extends LeafRenderObjectWidget {
 
   /// formulaBar API.
   final String formulaBar;
+
+  /// Name box: a defined name, or the selection address.
+  final String nameBox;
 
   /// config API.
   final OfficeSurfaceConfig config;
@@ -214,6 +218,7 @@ class SheetGrid extends LeafRenderObjectWidget {
       frozenRows: frozenRows,
       frozenCols: frozenCols,
       formulaBar: formulaBar,
+      nameBox: nameBox,
       config: config,
       hasFocus: hasFocus,
       semanticsLabel: semanticsLabel,
@@ -263,6 +268,7 @@ class SheetGrid extends LeafRenderObjectWidget {
       ..frozenRows = frozenRows
       ..frozenCols = frozenCols
       ..formulaBar = formulaBar
+      ..nameBox = nameBox
       ..config = config
       ..hasFocus = hasFocus
       ..semanticsLabel = semanticsLabel
@@ -315,6 +321,7 @@ class RenderSheetGrid extends RenderBox implements MouseTrackerAnnotation {
     required this.frozenRows,
     required this.frozenCols,
     required this.formulaBar,
+    required this.nameBox,
     required this.config,
     required this.hasFocus,
     required this.semanticsLabel,
@@ -372,6 +379,9 @@ class RenderSheetGrid extends RenderBox implements MouseTrackerAnnotation {
 
   /// formulaBar API.
   String formulaBar;
+
+  /// nameBox API.
+  String nameBox;
 
   /// config API.
   OfficeSurfaceConfig config;
@@ -2333,6 +2343,7 @@ class RenderSheetGrid extends RenderBox implements MouseTrackerAnnotation {
         canvas,
         size,
         formulaBar,
+        nameBox: nameBox,
         theme: _theme,
         fontFamily: _theme.fontFamily,
         rtl: _rtl,

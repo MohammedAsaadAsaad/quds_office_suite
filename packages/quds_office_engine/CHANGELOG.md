@@ -2,6 +2,60 @@
 
 All notable changes to `quds_office_engine` are documented here.
 
+## 1.5.0
+
+- A variable can ask for a value before preview, print, and export
+  (`prompt`, `required`). The saved value stays the sample default.
+- A report can hold more than one detail. Each `<Section>` has its own
+  data set, group header, and group footer. A file with only section 0
+  stays a single flat report.
+- A crosstab pivots a data set by row field, column field, and value, using
+  the existing aggregates. Empty cells show 0. More than 12 columns keeps
+  the first 12 and warns.
+- A subreport draws another template stored at `subreports/<name>.xml` in
+  the same package, once, or once per row when it sits in a repeating
+  detail. The child is shifted into the parent box. A child taller than
+  the parent content area warns.
+- A text element can hold `<Run>` children: bold, italic, size, color,
+  underline, and a link. The link becomes a PDF URI annotation and a Word
+  hyperlink.
+- Fonts accept `italic.ttf` and `boldItalic.ttf` beside the regular and
+  bold faces. Shear is used only when the real italic face is absent.
+- Barcodes add EAN-13. Twelve digits gain a check digit; a wrong check
+  digit warns.
+- Excel export draws images and barcodes as pictures, and writes a text
+  page header or footer into the sheet header. Word export draws a barcode
+  as PNG, and a shape that is not a horizontal line as an image.
+- An image taller than the page continues on the next page. A chart that
+  does not fit moves to the next page; one taller than the content box is
+  scaled to fit, with a warning.
+- `PdfToOffice` reads a PDF file into DOCX, XLSX, or a freeform PPTX.
+  DOCX keeps each line and each JPEG or PNG in a page-anchored box, turns
+  a clearly ruled grid into a table, and turns vector bars, pie wedges, or
+  a polyline into a native chart. A PDF outline or a dot-leader list becomes
+  a table of contents, and link annotations become hyperlinks. XLSX keeps
+  those tables and each chart's values, and writes other text as a single
+  column.
+  PPTX puts each page on a slide of positioned text boxes and PNG pictures.
+  A page with no text layer is reported. Scanned pixels are not read.
+- `CffRaster` fills a Type 2 charstring into a bitmap. It is not a general
+  CFF text face for PDF.
+- `GsubLigatures` applies OpenType GSUB lookup type 4 before line breaking,
+  and the ligature glyph is subsetted into the PDF font.
+- Redaction in remove-content mode clears `Tj` and hex strings whose text
+  origin lies inside the rectangle, then paints black. Other operators stay.
+- `PdfToolbox.stamp` and `numberPages` embed a supplied TrueType face and
+  shape Arabic. Without those bytes they still use Helvetica and skip
+  non-Latin text.
+- `WordMailMerge.documentFor` repeats a table row that contains
+  `MERGEFIELD` once per record, and otherwise repeats the body with a page
+  break between records.
+- Ready-made templates add a sales order (`feature_showcase_ar` and
+  `feature_showcase_en`): prompted customer, purchase order, and delivery
+  date, a rich confirmation, an italic note, an EAN-13 code, a nested
+  delivery schedule, an item table, and a branch crosstab.
+- JBIG2 arithmetic, symbol, and text regions are still not decoded.
+
 ## 1.4.0
 
 - A shape map labels each region from an attribute, a calculated column on

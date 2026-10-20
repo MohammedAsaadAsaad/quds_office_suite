@@ -261,6 +261,8 @@ class RenderReportProblems extends RenderBox implements MouseTrackerAnnotation {
       ReportElementType.barcode => 'Barcode',
       ReportElementType.shape => 'Shape',
       ReportElementType.chart => 'Chart',
+      ReportElementType.crosstab => 'Crosstab',
+      ReportElementType.subreport => 'Subreport',
     });
     final String? name = e.name;
     return name == null || name.isEmpty ? kind : '$kind "$name"';

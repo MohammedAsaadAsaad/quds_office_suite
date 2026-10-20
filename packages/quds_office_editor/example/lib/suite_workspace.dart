@@ -13,6 +13,7 @@ import 'studio_files.dart';
 import 'studio_find_pane.dart';
 import 'studio_pdf_gallery.dart';
 import 'studio_pdf_gallery_dialog.dart';
+import 'studio_pdf_office.dart';
 import 'studio_pdf_tools.dart';
 import 'studio_pdf_surface.dart';
 import 'studio_window.dart';
@@ -1098,7 +1099,142 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
           ),
         ],
       ),
+      StudioRibbonGroup(
+        title: _arabic ? 'تحويل' : 'Convert',
+        children: <Widget>[
+          _cmd(
+            Icons.description_outlined,
+            'Word',
+            _opening || _isSaving ? null : () => _convertOpenPdf('docx'),
+          ),
+          _cmd(
+            Icons.grid_on_outlined,
+            'Excel',
+            _opening || _isSaving ? null : () => _convertOpenPdf('xlsx'),
+          ),
+          _cmd(
+            Icons.slideshow_outlined,
+            'PowerPoint',
+            _opening || _isSaving ? null : () => _convertOpenPdf('pptx'),
+          ),
+        ],
+      ),
     ];
+  }
+
+  Future<void> _convertOpenPdf(String extension) async {
+    if (_pdf.file == null || _opening || _isSaving) {
+      return;
+    }
+    final PdfOfficeExportResult? result = await studioPdfOfficeDialog(
+      context: context,
+      arabic: _arabic,
+      extension: extension,
+      readBytes: _pdf.saveBytes,
+    );
+    if (result == null || !mounted) {
+      return;
+    }
+    final String? error = result.error;
+    if (error != null) {
+      _toast(
+        error == 'empty'
+            ? (_arabic ? 'الملف بلا صفحات.' : 'This PDF has no pages.')
+            : (_arabic ? 'تعذّر التحويل: $error' : 'Convert failed: $error'),
+      );
+      return;
+    }
+    final Uint8List? bytes = result.bytes;
+    if (bytes == null) {
+      return;
+    }
+    final String stem = _pdfName.toLowerCase().endsWith('.pdf')
+        ? _pdfName.substring(0, _pdfName.length - 4)
+        : _pdfName;
+    final String? picked = await StudioFiles.pickSavePath(
+      fileName: '$stem.$extension',
+    );
+    if (picked == null || !mounted) {
+      return;
+    }
+    final String path = StudioFiles.withExtension(picked, '$stem.$extension');
+    try {
+      await File(path).writeAsBytes(bytes, flush: true);
+    } on FileSystemException catch (error) {
+      _toast(_arabic ? 'تعذّر الحفظ: $error' : 'Save failed: $error');
+      return;
+    }
+    if (!mounted) {
+      return;
+    }
+    final List<String> notes = _pdfConvertNotes(result.notes);
+    final String saved = StudioFiles.nameOf(path);
+    if (notes.isEmpty) {
+      _toast(_arabic ? 'تم التحويل: $saved' : 'Converted $saved');
+      return;
+    }
+    await showDialog<void>(
+      context: context,
+      builder: (BuildContext context) => AlertDialog(
+        title: Text(_arabic ? 'ملاحظات التحويل' : 'Conversion notes'),
+        content: SizedBox(
+          width: 420,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(_arabic ? 'تم التحويل: $saved' : 'Converted $saved'),
+              const SizedBox(height: 12),
+              for (final String line in notes.take(12))
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Text(line),
+                ),
+            ],
+          ),
+        ),
+        actions: <Widget>[
+          FilledButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(_arabic ? 'موافق' : 'OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<String> _pdfConvertNotes(List<PdfOfficeExportNote> notes) {
+    return <String>[
+      for (final PdfOfficeExportNote note in notes)
+        _pdfConvertLine(note.page, _pdfExportNoteText(note)),
+    ];
+  }
+
+  String _pdfConvertLine(int? page, String message) {
+    final int number = (page ?? 0) + 1;
+    return _arabic ? 'الصفحة $number: $message' : 'Page $number: $message';
+  }
+
+  String _pdfExportNoteText(PdfOfficeExportNote note) {
+    return switch (note.kind) {
+      'noExtractableText' => _arabic
+          ? 'لا يوجد نص قابل للاستخراج. الصفحات الممسوحة لا تُقرأ.'
+          : 'No extractable text on this page. Scanned pages are not read.',
+      'rotationFlattened' => _arabic
+          ? 'كُتب النص المدار كسطر أفقي.'
+          : 'Rotated text was written as a horizontal line.',
+      'jpegOnSlide' => _arabic
+          ? 'صور JPEG تُحفظ في Word. الشرائح تضمّن PNG فقط.'
+          : 'JPEG pictures are saved in Word. Slides embed PNG only.',
+      'imageSkipped' => note.message.startsWith('JPX')
+          ? (_arabic
+                ? 'صور JPX وJBIG2 لا تُضمَّن.'
+                : 'JPX and JBIG2 images are not embedded.')
+          : (_arabic
+                ? 'تُضمَّن صور JPEG وPNG فقط.'
+                : 'Only JPEG and PNG images are embedded.'),
+      _ => note.message,
+    };
   }
 
   Future<void> _openPdfSampleGallery() async {
@@ -4403,6 +4539,7 @@ class _SuiteWorkspaceState extends State<SuiteWorkspace> {
       'layout' => _arabic ? 'التخطيط' : 'layout',
       'formulas' => _arabic ? 'الصيغ' : 'formulas',
       'apply' => _arabic ? 'العرض' : 'display',
+      'convert' => _arabic ? 'التحويل' : 'convert',
       _ => _openStage,
     };
     final String heavy = _openHeavy

@@ -10,8 +10,11 @@ import 'report_fonts.dart';
 /// set; a missing face falls back to the other.
 class ReportFontFiles {
   /// ReportFontFiles API.
-  ReportFontFiles({this.regular, this.bold})
-    : assert(regular != null || bold != null, 'Need at least one face');
+  ReportFontFiles({this.regular, this.bold, this.italic, this.boldItalic})
+    : assert(
+        regular != null || bold != null || italic != null || boldItalic != null,
+        'Need at least one face',
+      );
 
   /// Upright regular face (weight closest to 400).
   final Uint8List? regular;
@@ -19,21 +22,40 @@ class ReportFontFiles {
   /// Upright bold face (weight 600 or more).
   final Uint8List? bold;
 
-  /// Total size of the files in bytes.
-  int get byteLength => (regular?.length ?? 0) + (bold?.length ?? 0);
+  /// Italic face (`italic.ttf`).
+  final Uint8List? italic;
 
-  /// Copy with [face] set to [bytes] (bold when [bold] is true).
-  ReportFontFiles withFace(Uint8List bytes, {required bool bold}) => bold
-      ? ReportFontFiles(regular: regular, bold: bytes)
-      : ReportFontFiles(regular: bytes, bold: this.bold);
+  /// Bold-italic face (`boldItalic.ttf`).
+  final Uint8List? boldItalic;
+
+  /// Total size of the files in bytes.
+  int get byteLength =>
+      (regular?.length ?? 0) +
+      (bold?.length ?? 0) +
+      (italic?.length ?? 0) +
+      (boldItalic?.length ?? 0);
+
+  /// Copy with one face replaced.
+  ReportFontFiles withFace(
+    Uint8List bytes, {
+    required bool bold,
+    bool italic = false,
+  }) => ReportFontFiles(
+    regular: !bold && !italic ? bytes : regular,
+    bold: bold && !italic ? bytes : this.bold,
+    italic: !bold && italic ? bytes : this.italic,
+    boldItalic: bold && italic ? bytes : boldItalic,
+  );
 
   /// Registers this family in [registry] under [family].
   void registerIn(ReportFontRegistry registry, String family) {
-    final Uint8List upright = regular ?? bold!;
+    final Uint8List base = regular ?? bold ?? italic ?? boldItalic!;
     registry.registerBytes(
       family,
-      upright,
+      base,
       bold: regular == null ? null : bold,
+      italic: italic,
+      boldItalic: boldItalic,
     );
   }
 }

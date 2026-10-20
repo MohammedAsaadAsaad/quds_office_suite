@@ -24,7 +24,7 @@ dart pub logins   # or: flutter pub login
 Confirm the account that will own the packages on [pub.dev](https://pub.dev).
 
 `quds_reports` carries the same version as `quds_office_engine` (currently
-`1.4.0`). The editor is `1.5.0` and depends on both. CHANGELOG entries must
+`1.5.0`). The editor is `1.6.0` and depends on both. CHANGELOG entries must
 exist for the version you publish.
 
 ---
@@ -51,7 +51,7 @@ flutter pub publish --dry-run
 Fix every warning you can: missing LICENSE, short description, undocumented
 public API, leftover `publish_to: none`, path dependencies.
 
-The editor depends on `quds_office_engine: ^1.4.0` and `quds_reports: ^1.4.0`.
+The editor depends on `quds_office_engine: ^1.5.0` and `quds_reports: ^1.5.0`.
 Inside the workspace, Dart resolves the local packages. On pub.dev, those
 versions must already exist **before** you publish the editor. Publish
 `quds_reports` only after the matching engine version is on pub.dev.
@@ -97,8 +97,8 @@ flutter pub publish
 ## 6. Tag the monorepo
 
 ```bash
-git tag v1.4.0
-git push origin v1.4.0
+git tag v1.5.0
+git push origin v1.5.0
 ```
 
 If later versions diverge, tag per package (`engine-v0.2.0`, `editor-v0.2.0`).

@@ -22,11 +22,11 @@ is what the chart draws until you import a file.
 
 | Platform | Installer | Portable |
 | --- | --- | --- |
-| Windows 10/11 (x64) | [QudsReportStudio-1.4.0-windows-x64-setup.exe](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.4.0/QudsReportStudio-1.4.0-windows-x64-setup.exe) | [QudsReportStudio-1.4.0-windows-x64-portable.zip](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.4.0/QudsReportStudio-1.4.0-windows-x64-portable.zip) |
-| Debian / Ubuntu (x64) | [quds-report-studio_1.4.0_amd64.deb](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.4.0/quds-report-studio_1.4.0_amd64.deb) | [QudsReportStudio-1.4.0-linux-x64.tar.gz](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.4.0/QudsReportStudio-1.4.0-linux-x64.tar.gz) |
+| Windows 10/11 (x64) | [QudsReportStudio-1.5.0-windows-x64-setup.exe](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.5.0/QudsReportStudio-1.5.0-windows-x64-setup.exe) | [QudsReportStudio-1.5.0-windows-x64-portable.zip](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.5.0/QudsReportStudio-1.5.0-windows-x64-portable.zip) |
+| Debian / Ubuntu (x64) | [quds-report-studio_1.5.0_amd64.deb](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.5.0/quds-report-studio_1.5.0_amd64.deb) | [QudsReportStudio-1.5.0-linux-x64.tar.gz](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/download/studio-v1.5.0/QudsReportStudio-1.5.0-linux-x64.tar.gz) |
 
 Checksums are on the
-[release page](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/tag/studio-v1.4.0).
+[release page](https://github.com/MohammedAsaadAsaad/quds_office_suite/releases/tag/studio-v1.5.0).
 
 ### Install and uninstall
 
@@ -34,7 +34,7 @@ Checksums are on the
 | --- | --- | --- |
 | Windows setup | Run it. It installs for the current user without admin rights, or for all users if you pick that in the first dialog | *Settings › Apps › Quds Report Studio*. This also removes the `.qrep` association |
 | Windows portable | Extract the zip and run `quds_report_studio.exe` | Run `unregister-qrep.cmd`, then delete the folder |
-| `.deb` | `sudo apt install ./quds-report-studio_1.4.0_amd64.deb` | `sudo apt remove quds-report-studio` |
+| `.deb` | `sudo apt install ./quds-report-studio_1.5.0_amd64.deb` | `sudo apt remove quds-report-studio` |
 | Linux tar.gz | Extract it and run `./install.sh` (per user, into `~/.local/opt/quds-report-studio`) | `~/.local/opt/quds-report-studio/uninstall.sh` (add `--purge` to delete settings) |
 
 ### Opening `.qrep` files
@@ -298,12 +298,12 @@ section for the full API.
 
 **File › New from template** opens a categorized catalog: pick a category
 (Sales, Finance, Inventory, Analytics, Human resources), then a family, then
-**العربية** or **English**. Each of the ten families ships both versions
-(20 templates):
+**العربية** or **English**. Each of the eleven families ships both versions
+(22 templates):
 
 | Category | Templates |
 | --- | --- |
-| Sales | VAT sales invoice, commercial invoice, product catalog |
+| Sales | Sales order (customer prompt, rich confirmation, italic note, EAN-13, nested delivery schedule, item table, branch crosstab), VAT sales invoice, commercial invoice, product catalog |
 | Finance | Customer account statement, receipt voucher |
 | Inventory | Inventory status |
 | Analytics | Sales performance dashboard, chart gallery (every chart, and a country map bound to a `countries` table) |
@@ -398,7 +398,7 @@ packaging/linux/build_packages.sh
 
 # Windows (setup.exe); needs Inno Setup 6
 flutter build windows --release
-iscc /DAppVersion=1.4.0 packaging\windows\quds_report_studio.iss
+iscc /DAppVersion=1.5.0 packaging\windows\quds_report_studio.iss
 ```
 
 ## Tests and screenshots

@@ -13,10 +13,12 @@ import 'report_expression.dart';
 import 'report_expression_engine.dart';
 import 'report_fonts.dart';
 import 'report_layout.dart';
+import 'report_png.dart';
 import 'report_shape.dart';
 import 'report_template.dart';
 import 'report_units.dart';
 import 'report_value.dart';
+import 'report_xml.dart';
 
 /// Lays out a [ReportTemplate] against data.
 ///
@@ -260,6 +262,8 @@ class ReportGenerator {
             uses(title) ||
                 series.any((ReportChartSeries s) => uses(s.name)) ||
                 points.any((ReportChartPoint p) => uses(p.label)),
+          ReportCrosstabElement() => false,
+          ReportSubreportElement() => false,
         };
         if (hit) {
           return true;
@@ -332,6 +336,7 @@ class _Flow {
   ReportScope? _repeatGroupScope;
   ReportTableElement? _activeTable;
   ReportScope? _activeTableScope;
+  ReportBand? _activeDetail;
 
   ReportTemplate get t => g.template;
 
@@ -365,8 +370,26 @@ class _Flow {
     }
     _placePageHeader(reportScope, afterReportHeader: true);
 
-    if (detail != null) {
+    final List<ReportSection> sections = t.sections;
+    if (sections.isEmpty && detail != null) {
       _runGroups(detail, allRows);
+    } else {
+      for (final ReportSection section in sections) {
+        final ReportBand? band = section.detail;
+        if (band == null) {
+          continue;
+        }
+        _activeDetail = band;
+        _runGroups(
+          band,
+          _prepareRows(band, base),
+          header: section.groupHeader,
+          footer: section.groupFooter,
+        );
+        _activeDetail = null;
+        _repeatGroupBand = null;
+        _repeatGroupScope = null;
+      }
     }
 
     final ReportBand? summary = t.band(ReportBandKind.reportSummary);
@@ -392,9 +415,18 @@ class _Flow {
     ),
   );
 
-  void _runGroups(ReportBand detail, List<ReportValue> rows) {
-    final ReportBand? groupHeader = t.band(ReportBandKind.groupHeader);
-    final ReportBand? groupFooter = t.band(ReportBandKind.groupFooter);
+  void _runGroups(
+    ReportBand detail,
+    List<ReportValue> rows, {
+    ReportBand? header,
+    ReportBand? footer,
+  }) {
+    final ReportBand? groupHeader =
+        header ??
+        (detail.section == 0 ? t.band(ReportBandKind.groupHeader) : null);
+    final ReportBand? groupFooter =
+        footer ??
+        (detail.section == 0 ? t.band(ReportBandKind.groupFooter) : null);
     final String? groupBy =
         _nonEmpty(detail.groupBy) ?? _nonEmpty(groupHeader?.groupBy);
     final List<_Group> groups = groupBy == null
@@ -615,7 +647,7 @@ class _Flow {
       }
       final ReportTableElement? table = _activeTable;
       final ReportScope? tableScope = _activeTableScope;
-      final ReportBand? detail = t.detail;
+      final ReportBand? detail = _activeDetail ?? t.detail;
       if (table != null && tableScope != null && detail != null) {
         _emit(_tableHeader(table, _pageScope(tableScope), detail));
       }
@@ -1042,6 +1074,7 @@ class _Flow {
       rtl: item.rtl,
       underline: item.underline,
       background: best.fill,
+      spans: item.spans,
     );
   }
 
@@ -1060,6 +1093,7 @@ class _Flow {
         rtl: item.rtl,
         underline: item.underline,
         background: item.background,
+        spans: item.spans,
       ),
       ReportFlowImage() => ReportFlowImage(
         elementId: item.elementId,
@@ -1095,7 +1129,204 @@ class _Flow {
       ReportShapeElement() => _shapeElement(e, x, kind),
       ReportTableElement() => _inlineTable(e, scope, kind),
       ReportChartElement() => _chartElement(e, x, scope, kind),
+      ReportCrosstabElement() => _crosstabElement(e, scope, kind),
+      ReportSubreportElement() => _subreportElement(e, x, scope),
     };
+  }
+
+  _Box _crosstabElement(
+    ReportCrosstabElement e,
+    ReportScope scope,
+    ReportBandKind kind,
+  ) {
+    final String? set = _nonEmpty(e.dataSet);
+    final List<ReportValue> rows = set == null
+        ? (scope.aggregateRows ?? const <ReportValue>[])
+        : _datasetRows(set, scope);
+    final List<String> rowKeys = <String>[];
+    final List<String> colKeys = <String>[];
+    final Map<String, Map<String, List<double>>> grid =
+        <String, Map<String, List<double>>>{};
+    for (int i = 0; i < rows.length; i++) {
+      final ReportScope rs = scope.copyWith(row: rows[i], rowIndex: i);
+      final String rowKey = e.rowField.trim().isEmpty
+          ? ''
+          : g.engine.formatter.display(_evaluate(e.rowField, rs));
+      final String colKey = e.columnField.trim().isEmpty
+          ? ''
+          : g.engine.formatter.display(_evaluate(e.columnField, rs));
+      final double value = e.valueField.trim().isEmpty
+          ? 0
+          : _evaluate(e.valueField, rs).asNumber?.toDouble() ?? 0;
+      if (!grid.containsKey(rowKey)) {
+        rowKeys.add(rowKey);
+        grid[rowKey] = <String, List<double>>{};
+      }
+      final Map<String, List<double>> cols = grid[rowKey]!;
+      if (!cols.containsKey(colKey) && !colKeys.contains(colKey)) {
+        colKeys.add(colKey);
+      }
+      (cols[colKey] ??= <double>[]).add(value);
+    }
+    final int cap = e.maxColumns < 1 ? 1 : e.maxColumns;
+    if (colKeys.length > cap) {
+      warnings.add(
+        'Crosstab kept $cap of ${colKeys.length} columns',
+      );
+      colKeys.removeRange(cap, colKeys.length);
+    }
+    final int n = colKeys.length + 1;
+    final double width = e.width > 0 ? e.width : 72.0 * n;
+    final ReportTableElement table = ReportTableElement(
+      x: e.x,
+      y: e.y,
+      width: width,
+      height: e.height,
+      fontSize: e.fontSize,
+      headerBold: e.headerBold,
+      columns: <ReportTableColumn>[
+        for (int i = 0; i < n; i++)
+          ReportTableColumn(header: i == 0 ? '' : colKeys[i - 1]),
+      ],
+    );
+    final List<ReportPrimitive> out = <ReportPrimitive>[];
+    var y = 0.0;
+    void add(_Box b) {
+      for (final ReportPrimitive p in b.primitives) {
+        out.add(_move(p, 0, y));
+      }
+      y += b.height;
+    }
+
+    add(_tableHeader(table, scope, ReportBand(kind: kind)));
+    for (final String rowKey in rowKeys) {
+      final Map<String, List<double>> cols =
+          grid[rowKey] ?? <String, List<double>>{};
+      add(
+        _tableBodyRow(
+          table,
+          <ReportTableCell>[
+            ReportTableCell(text: rowKey),
+            for (final String col in colKeys)
+              ReportTableCell(
+                text: g.engine.formatter.display(
+                  ReportNumber(_combine(e.aggregate, cols[col] ?? <double>[])),
+                ),
+              ),
+          ],
+          scope,
+          ReportBand(kind: kind),
+          stripe: false,
+          minHeight: e.fontSize + 6,
+        ),
+      );
+    }
+    return _Box(out, y == 0 ? e.height : y);
+  }
+
+  double _combine(ReportChartAggregate aggregate, List<double> values) {
+    if (values.isEmpty) {
+      return 0;
+    }
+    switch (aggregate) {
+      case ReportChartAggregate.sum:
+        return values.fold<double>(0, (double a, double b) => a + b);
+      case ReportChartAggregate.avg:
+        return values.fold<double>(0, (double a, double b) => a + b) /
+            values.length;
+      case ReportChartAggregate.count:
+        return values.length.toDouble();
+      case ReportChartAggregate.min:
+        return values.reduce((double a, double b) => a < b ? a : b);
+      case ReportChartAggregate.max:
+        return values.reduce((double a, double b) => a > b ? a : b);
+      case ReportChartAggregate.first:
+        return values.first;
+      case ReportChartAggregate.last:
+        return values.last;
+    }
+  }
+
+  final Set<String> _subreportStack = <String>{};
+
+  _Box _subreportElement(
+    ReportSubreportElement e,
+    double x,
+    ReportScope scope,
+  ) {
+    final String name = e.templateName.trim();
+    final String? xml = t.subreports[name];
+    if (xml == null || xml.isEmpty) {
+      warnings.add('Missing subreport "$name"');
+      return _Box(const <ReportPrimitive>[], 0);
+    }
+    if (!_subreportStack.add(name)) {
+      warnings.add('Subreport "$name" refers to itself');
+      return _Box(const <ReportPrimitive>[], 0);
+    }
+    try {
+      final ReportParseResult parsed = QudsReportXmlParser().parse(xml);
+      if (!parsed.readable) {
+        warnings.add('Subreport "$name" has errors');
+        return _Box(const <ReportPrimitive>[], 0);
+      }
+      final ReportTemplate child = parsed.template;
+      child.subreports.addAll(t.subreports);
+      final ReportRecord data = _subreportData(e, scope);
+      final ReportDocumentLayout layout = ReportGenerator(
+        template: child,
+        engine: g.engine,
+        shaper: g.shaper,
+        images: g.images,
+        shapes: g.shapes,
+        now: g.now,
+        userName: g.userName,
+        variableOverrides: g.variableOverrides,
+        strict: g.strict,
+      ).generate(data);
+      final List<ReportPrimitive> out = <ReportPrimitive>[];
+      var cursor = 0.0;
+      final double content =
+          child.pageHeight - child.margins.top - child.margins.bottom;
+      for (final ReportPageLayout page in layout.pages) {
+        for (final ReportPrimitive p in page.primitives) {
+          out.add(_move(p, x - child.margins.left, cursor - child.margins.top));
+        }
+        cursor += content;
+      }
+      warnings.addAll(layout.warnings);
+      final double height = cursor == 0 ? e.height : cursor;
+      if (height > t.pageHeight - t.margins.top - t.margins.bottom) {
+        warnings.add('Subreport "$name" is taller than one page');
+      }
+      return _Box(out, height);
+    } on Object catch (err) {
+      warnings.add('Subreport "$name" failed: $err');
+      return _Box(const <ReportPrimitive>[], 0);
+    } finally {
+      _subreportStack.remove(name);
+    }
+  }
+
+  ReportRecord _subreportData(ReportSubreportElement e, ReportScope scope) {
+    final String? set = _nonEmpty(e.dataSet);
+    if (set == null) {
+      final ReportValue? row = scope.row;
+      if (row is ReportRecord) {
+        return row;
+      }
+      return scope.data;
+    }
+    final ReportValue value = _evaluate(set, scope);
+    if (value is ReportRecord) {
+      return value;
+    }
+    if (value is ReportList) {
+      return ReportRecord(<String, ReportValue>{'items': value});
+    }
+    return ReportRecord(<String, ReportValue>{
+      'items': ReportList(<ReportValue>[value]),
+    });
   }
 
   ReportFontSpec _font(ReportTextStyle style) => ReportFontSpec(
@@ -1120,12 +1351,146 @@ class _Flow {
     _ => a,
   };
 
+  _Box _richText(
+    ReportTextElement e,
+    double x,
+    ReportScope scope,
+    ReportBandKind kind,
+  ) {
+    final bool rtl = _rtl(e.direction);
+    final double inner = e.width - 2 * e.padding;
+    final double maxWidth = inner < 1 ? 1 : inner;
+    final List<ReportPrimitive> out = <ReportPrimitive>[];
+    final List<ReportFlowSpan> spans = <ReportFlowSpan>[];
+    var cursorX = 0.0;
+    var cursorY = 0.0;
+    var lineHeight = 0.0;
+    void wrap() {
+      cursorY += lineHeight;
+      cursorX = 0;
+      lineHeight = 0;
+    }
+
+    for (final ReportTextRun run in e.runs) {
+      final ({String text, ReportValue value}) tv = _textValue(
+        run.text,
+        scope,
+        null,
+      );
+      if (tv.text.isEmpty) {
+        continue;
+      }
+      final ReportFontSpec font = ReportFontSpec(
+        family: e.style.fontFamily ?? t.defaultFont,
+        size: run.fontSize ?? e.style.fontSize ?? t.defaultFontSize,
+        bold: run.bold ?? e.style.bold ?? false,
+        italic: run.italic ?? e.style.italic ?? false,
+      );
+      final ReportColor color = t.resolveColor(
+        run.color ?? e.style.color,
+        t.textColor,
+      );
+      final bool underline = run.underline ?? e.style.underline ?? false;
+      spans.add(
+        ReportFlowSpan(
+          text: tv.text,
+          font: font,
+          color: color,
+          underline: underline,
+          link: run.link,
+        ),
+      );
+      final ReportShapedText single = g.shaper.shape(
+        tv.text,
+        font,
+        maxWidth: 100000,
+        rtl: rtl,
+        wrap: false,
+      );
+      if (cursorX > 0 && cursorX + single.maxLineWidth > maxWidth) {
+        wrap();
+      }
+      final ReportShapedText shaped =
+          single.maxLineWidth <= maxWidth - cursorX + ReportGenerator._eps
+          ? single
+          : g.shaper.shape(
+              tv.text,
+              font,
+              maxWidth: maxWidth,
+              rtl: rtl,
+              wrap: e.wordWrap,
+              lineSpacing: e.lineSpacing,
+            );
+      final double w = shaped.maxLineWidth > maxWidth
+          ? maxWidth
+          : shaped.maxLineWidth;
+      final double left = rtl
+          ? x + e.padding + maxWidth - cursorX - w
+          : x + e.padding + cursorX;
+      out.add(
+        ReportTextPrimitive(
+          bounds: ReportRect(left, cursorY, w, shaped.height),
+          elementId: e.id,
+          band: kind,
+          text: tv.text,
+          shaped: shaped,
+          contentRect: ReportRect(left, cursorY, w, shaped.height),
+          font: font,
+          color: color,
+          align: ReportTextAlign.left,
+          verticalAlign: ReportVerticalAlign.top,
+          rtl: rtl,
+          underline: underline,
+          link: run.link,
+        ),
+      );
+      if (shaped.lines.length > 1) {
+        cursorY += shaped.height;
+        cursorX = 0;
+        lineHeight = 0;
+      } else {
+        cursorX += shaped.maxLineWidth;
+        if (shaped.height > lineHeight) {
+          lineHeight = shaped.height;
+        }
+      }
+    }
+    final double content = cursorY + lineHeight;
+    final double need = content + 2 * e.padding;
+    var h = e.height;
+    if ((e.canGrow && need > h) || (e.canShrink && need < h && need > 0)) {
+      h = need;
+    }
+    return _Box(
+      out,
+      h,
+      flow: <ReportFlowItem>[
+        ReportFlowText(
+          elementId: e.id,
+          rect: ReportRect(x, 0, e.width, h),
+          text: spans.map((ReportFlowSpan s) => s.text).join(),
+          value: ReportText(spans.map((ReportFlowSpan s) => s.text).join()),
+          format: null,
+          font: _font(e.style),
+          color: t.resolveColor(e.style.color, t.textColor),
+          align: _physical(e.align, rtl: rtl),
+          rtl: rtl,
+          underline: e.style.underline ?? false,
+          spans: spans,
+        ),
+      ],
+    );
+  }
+
   _Box _textElement(
     ReportTextElement e,
     double x,
     ReportScope scope,
     ReportBandKind kind,
   ) {
+    if (e.runs.isNotEmpty) {
+      return _richText(e, x, scope, kind);
+    }
     final ({String text, ReportValue value}) tv = _textValue(
       e.text,
       scope,
@@ -1366,8 +1731,12 @@ class _Flow {
     if (text.isEmpty) {
       return _Box(out, e.height);
     }
+    final List<ReportFlowItem> flow = <ReportFlowItem>[];
     try {
       if (e.symbology == ReportBarcodeType.qr) {
+        final List<List<bool>> matrix = const QrEncoder().encode(
+          String.fromCharCodes(utf8.encode(text)),
+        );
         out.add(
           ReportBarcodePrimitive(
             bounds: bounds,
@@ -1375,16 +1744,21 @@ class _Flow {
             band: kind,
             symbology: e.symbology,
             color: color,
-            matrix: const QrEncoder().encode(
-              String.fromCharCodes(utf8.encode(text)),
-            ),
+            matrix: matrix,
           ),
         );
-        return _Box(out, e.height);
+        flow.add(
+          ReportFlowImage(
+            elementId: e.id,
+            rect: bounds,
+            bytes: encodeMatrixPng(matrix),
+          ),
+        );
+        return _Box(out, e.height, flow: flow);
       }
-      final List<bool> modules = const Code128Encoder().encodeWithQuietZone(
-        text,
-      );
+      final List<bool> modules = e.symbology == ReportBarcodeType.ean13
+          ? const Ean13Encoder().encode(text)
+          : const Code128Encoder().encodeWithQuietZone(text);
       final ReportFontSpec font = ReportFontSpec(
         family: t.defaultFont,
         size: e.fontSize,
@@ -1410,6 +1784,13 @@ class _Flow {
           modules: modules,
         ),
       );
+      flow.add(
+        ReportFlowImage(
+          elementId: e.id,
+          rect: ReportRect(x, 0, e.width, barH),
+          bytes: encodeBarcodePng(modules),
+        ),
+      );
       if (label != null && barH < e.height) {
         out.add(
           ReportTextPrimitive(
@@ -1430,7 +1811,7 @@ class _Flow {
     } on ArgumentError catch (err) {
       warnings.add('Barcode ${e.displayName}: ${err.message}');
     }
-    return _Box(out, e.height);
+    return _Box(out, e.height, flow: flow);
   }
 
   _Box _shapeElement(ReportShapeElement e, double x, ReportBandKind kind) {
@@ -1483,7 +1864,21 @@ class _Flow {
         ellipse: e.kind == ReportShapeKind.ellipse,
         lineStyle: e.lineStyle,
       ),
-    ], e.height);
+    ], e.height, flow: <ReportFlowItem>[
+      ReportFlowImage(
+        elementId: e.id,
+        rect: ReportRect(x, 0, e.width, e.height),
+        bytes: encodeShapePng(
+          width: e.width.round().clamp(1, 512),
+          height: e.height.round().clamp(1, 512),
+          rgb: (e.fill == null
+                  ? stroke
+                  : t.resolveColor(e.fill, ReportColor.transparent))
+              .argb,
+          ellipse: e.kind == ReportShapeKind.ellipse,
+        ),
+      ),
+    ]);
   }
 
   // ---------------------------------------------------------------- charts
@@ -1496,7 +1891,15 @@ class _Flow {
   ) {
     _atomic.add(e.id);
     final ReportChartData data = _chartData(e, scope);
-    final ReportRect bounds = ReportRect(x, 0, e.width, e.height);
+    final double room =
+        t.pageHeight - t.margins.top - t.margins.bottom - _footerReserve(1);
+    final double height = e.height > room && room > 8 ? room : e.height;
+    if (height < e.height - 0.5) {
+      warnings.add(
+        'Chart ${e.displayName} was scaled to the page (${height.toStringAsFixed(0)} pt)',
+      );
+    }
+    final ReportRect bounds = ReportRect(x, 0, e.width, height);
     final List<ReportPrimitive> out = <ReportPrimitive>[];
     final bool border = e.borderWidth > 0 && e.borderColor != null;
     if (e.background != null || border) {
@@ -1536,7 +1939,7 @@ class _Flow {
     );
     return _Box(
       out,
-      e.height,
+      height,
       flow: <ReportFlowItem>[
         ReportFlowChart(elementId: e.id, rect: bounds, data: data),
       ],
@@ -2356,6 +2759,38 @@ class _Flow {
           );
           toRest(tail, -tail.bounds.top);
         }
+      } else if (p is ReportImagePrimitive && b.height > 1) {
+        final double keep = cut - b.top;
+        final double span = b.height;
+        final double frac = (keep / span).clamp(0.0, 1.0);
+        if (frac > 0.02) {
+          first.add(
+            ReportImagePrimitive(
+              bounds: ReportRect(b.left, b.top, b.width, keep),
+              elementId: p.elementId,
+              band: p.band,
+              bytes: p.bytes,
+              imageRect: ReportRect(b.left, b.top, b.width, keep),
+              cropTop: p.cropTop,
+              cropHeight: p.cropHeight * frac,
+            ),
+          );
+        }
+        final double tail = span - keep;
+        if (tail > 1 && frac < 0.98) {
+          toRest(
+            ReportImagePrimitive(
+              bounds: ReportRect(b.left, cut, b.width, tail),
+              elementId: p.elementId,
+              band: p.band,
+              bytes: p.bytes,
+              imageRect: ReportRect(b.left, cut, b.width, tail),
+              cropTop: p.cropTop + p.cropHeight * frac,
+              cropHeight: p.cropHeight * (1 - frac),
+            ),
+            -cut,
+          );
+        }
       } else if (p is ReportRectPrimitive && !p.ellipse) {
         first.add(
           _rectWith(p, ReportRect(b.left, b.top, b.width, cut - b.top)),
@@ -2444,6 +2879,7 @@ ReportPrimitive _move(ReportPrimitive p, double dx, double dy) {
       verticalAlign: p.verticalAlign,
       rtl: p.rtl,
       underline: p.underline,
+      link: p.link,
     ),
     ReportRectPrimitive() => ReportRectPrimitive(
       bounds: p.bounds.translate(dx, dy),
@@ -2474,6 +2910,8 @@ ReportPrimitive _move(ReportPrimitive p, double dx, double dy) {
       band: p.band,
       bytes: p.bytes,
       imageRect: p.imageRect.translate(dx, dy),
+      cropTop: p.cropTop,
+      cropHeight: p.cropHeight,
     ),
     ReportBarcodePrimitive() => ReportBarcodePrimitive(
       bounds: p.bounds.translate(dx, dy),

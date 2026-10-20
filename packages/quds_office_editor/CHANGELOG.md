@@ -2,6 +2,22 @@
 
 All notable changes to `quds_office_editor` are documented here.
 
+## 1.6.0
+
+Built on `quds_office_engine` 1.5.0 and `quds_reports` 1.5.0.
+
+- The report toolbox adds a section, a crosstab, and a subreport. The
+  inspector edits their fields. Variables have "ask before preview" and
+  "required".
+- Ctrl+B toggles bold on the selected run of a rich paragraph.
+- Bundled Liberation faces include italic and bold italic, and an embedded
+  family stores those two slots beside regular and bold.
+- The Excel formula bar shows the selection address or the matching defined
+  name, and choosing that name selects its range.
+- Word revisions draw a translucent mark in addition to the underline or
+  strike.
+- Ready-made templates add the sales order family, Arabic and English.
+
 ## 1.5.0
 
 Built on `quds_office_engine` 1.4.0 and `quds_reports` 1.4.0.

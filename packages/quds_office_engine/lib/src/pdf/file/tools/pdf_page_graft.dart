@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import '../../../fonts/sfnt_parser.dart';
 import '../cos/pdf_cos.dart';
 import '../cos/pdf_cos_write.dart';
 import '../cos/pdf_store.dart';
@@ -21,6 +22,7 @@ class PdfGraftSlot {
     this.cropBottom = 0,
     this.cropRight = 0,
     this.cropTop = 0,
+    this.embeddedFont,
   }) : width = 0,
        height = 0,
        blank = false;
@@ -36,6 +38,7 @@ class PdfGraftSlot {
       cropBottom = 0,
       cropRight = 0,
       cropTop = 0,
+      embeddedFont = null,
       blank = true;
 
   /// file API.
@@ -47,9 +50,12 @@ class PdfGraftSlot {
   /// Added to the page's `/Rotate`, in 90° steps. Does not edit MediaBox.
   final int extraRotate;
 
-  /// Extra content stream painted after the page (stamp, numbers). Latin
-  /// Helvetica only — not an embedded face, and not a content rewrite.
+  /// Extra content stream painted after the page (stamp, numbers).
+  /// Helvetica unless [embeddedFont] is set.
   final String? overlay;
+
+  /// Subset TrueType used as `/QzF` when the overlay shows glyph ids.
+  final Uint8List? embeddedFont;
 
   /// `/ca` and `/CA` for [overlay]. Viewers that honor ExtGState use this.
   final double overlayOpacity;
@@ -139,7 +145,7 @@ class _Assembler {
     }
     final String? overlay = slot.overlay;
     if (overlay != null && overlay.isNotEmpty) {
-      _appendOverlay(cloned, overlay, slot.overlayOpacity);
+      _appendOverlay(cloned, overlay, slot.overlayOpacity, slot);
     }
     final int id = _next++;
     _bodies[id] = cloned;
@@ -280,6 +286,69 @@ class _Assembler {
   }
 
   int? _stampFontId;
+  int? _embeddedFontId;
+
+  int _embedFace(Uint8List bytes) {
+    final SfntFont face = SfntFont.parse(bytes);
+    final int fileId = _put(
+      PdfCosStream(
+        PdfCosDict(<String, PdfCos>{'Length1': PdfCosInt(bytes.length)}),
+        bytes,
+      ),
+    );
+    final int units = face.unitsPerEm <= 0 ? 1000 : face.unitsPerEm;
+    int pdf(int value) => (value * 1000 / units).round();
+    final List<PdfCos> widths = <PdfCos>[];
+    for (int gid = 1; gid < face.numGlyphs && gid < 4096; gid++) {
+      widths
+        ..add(PdfCosInt(gid))
+        ..add(PdfCosArray(<PdfCos>[PdfCosInt(pdf(face.advanceWidth(gid)))]));
+    }
+    final int descriptorId = _put(
+      PdfCosDict(<String, PdfCos>{
+        'Type': const PdfCosName('FontDescriptor'),
+        'FontName': const PdfCosName('QudsStamp'),
+        'Flags': const PdfCosInt(4),
+        'FontBBox': PdfCosArray(<PdfCos>[
+          PdfCosInt(pdf(face.xMin)),
+          PdfCosInt(pdf(face.yMin)),
+          PdfCosInt(pdf(face.xMax)),
+          PdfCosInt(pdf(face.yMax)),
+        ]),
+        'ItalicAngle': const PdfCosInt(0),
+        'Ascent': PdfCosInt(pdf(face.ascender)),
+        'Descent': PdfCosInt(pdf(face.descender)),
+        'CapHeight': PdfCosInt(pdf(face.capHeight)),
+        'StemV': const PdfCosInt(80),
+        'FontFile2': PdfCosRef(fileId),
+      }),
+    );
+    final int cidId = _put(
+      PdfCosDict(<String, PdfCos>{
+        'Type': const PdfCosName('Font'),
+        'Subtype': const PdfCosName('CIDFontType2'),
+        'BaseFont': const PdfCosName('QudsStamp'),
+        'CIDSystemInfo': PdfCosDict(<String, PdfCos>{
+          'Registry': PdfCosString(Uint8List.fromList(utf8.encode('Adobe'))),
+          'Ordering': PdfCosString(Uint8List.fromList(utf8.encode('Identity'))),
+          'Supplement': const PdfCosInt(0),
+        }),
+        'FontDescriptor': PdfCosRef(descriptorId),
+        'DW': const PdfCosInt(500),
+        'W': PdfCosArray(widths),
+        'CIDToGIDMap': const PdfCosName('Identity'),
+      }),
+    );
+    return _put(
+      PdfCosDict(<String, PdfCos>{
+        'Type': const PdfCosName('Font'),
+        'Subtype': const PdfCosName('Type0'),
+        'BaseFont': const PdfCosName('QudsStamp'),
+        'Encoding': const PdfCosName('Identity-H'),
+        'DescendantFonts': PdfCosArray(<PdfCos>[PdfCosRef(cidId)]),
+      }),
+    );
+  }
 
   void _applyCrop(PdfCosDict page, PdfPageInfo info, PdfGraftSlot slot) {
     if (slot.cropLeft == 0 &&
@@ -304,17 +373,28 @@ class _Assembler {
     ]);
   }
 
-  void _appendOverlay(PdfCosDict page, String overlay, double opacity) {
+  void _appendOverlay(
+    PdfCosDict page,
+    String overlay,
+    double opacity,
+    PdfGraftSlot slot,
+  ) {
     final PdfCosDict resources = _privateDict(page, 'Resources');
     final PdfCosDict fonts = _privateDict(resources, 'Font');
-    _stampFontId ??= _put(
-      PdfCosDict(<String, PdfCos>{
-        'Type': const PdfCosName('Font'),
-        'Subtype': const PdfCosName('Type1'),
-        'BaseFont': const PdfCosName('Helvetica'),
-      }),
-    );
-    fonts['QzF'] = PdfCosRef(_stampFontId!);
+    final Uint8List? embedded = slot.embeddedFont;
+    if (embedded != null) {
+      _embeddedFontId ??= _embedFace(embedded);
+      fonts['QzF'] = PdfCosRef(_embeddedFontId!);
+    } else {
+      _stampFontId ??= _put(
+        PdfCosDict(<String, PdfCos>{
+          'Type': const PdfCosName('Font'),
+          'Subtype': const PdfCosName('Type1'),
+          'BaseFont': const PdfCosName('Helvetica'),
+        }),
+      );
+      fonts['QzF'] = PdfCosRef(_stampFontId!);
+    }
     final double alpha = opacity.clamp(0.0, 1.0);
     final int gs = _put(
       PdfCosDict(<String, PdfCos>{

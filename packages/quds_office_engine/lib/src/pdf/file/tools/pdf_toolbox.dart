@@ -1,5 +1,8 @@
 import 'dart:typed_data';
 
+import '../../../bidi/arabic_shaping.dart';
+import '../../../fonts/font_subsetter.dart';
+import '../../../fonts/sfnt_parser.dart';
 import '../model/pdf_file.dart';
 import '../model/pdf_page_info.dart';
 import 'pdf_page_graft.dart';
@@ -208,28 +211,48 @@ abstract final class PdfToolbox {
     return _one(slots);
   }
 
-  /// Paints [text] over selected pages with Helvetica. Does not embed a font
-  /// and does not reshape Arabic. [opacity] is `/ca` (viewers that honor it).
+  /// Paints [text] over selected pages. Without [fontBytes] the face is
+  /// Helvetica and non-Latin letters are skipped. With [fontBytes] the face
+  /// is embedded and Arabic is shaped before the glyphs are shown.
   static Uint8List stamp(
     Uint8List bytes, {
     required String text,
     double fontSize = 48,
     double opacity = 0.22,
     List<String> ranges = const <String>[],
+    Uint8List? fontBytes,
   }) {
-    final String literal = _pdfLiteral(text);
-    if (literal.isEmpty) {
+    final double size = fontSize < 6 ? 6 : fontSize;
+    if (fontBytes == null) {
+      final String literal = _pdfLiteral(text);
+      if (literal.isEmpty) {
+        throw ArgumentError('stamp text is empty');
+      }
+      return _decorate(
+        bytes,
+        ranges: ranges,
+        overlay: (PdfPageInfo page, int index, int count) {
+          final double width = size * 0.5 * literal.length;
+          final double x = page.cropBox.llx + (page.cropBox.width - width) / 2;
+          final double y = page.cropBox.lly + page.cropBox.height / 2;
+          return _overlay(literal, size, x, y);
+        },
+        opacity: opacity,
+      );
+    }
+    final _EmbeddedStamp face = _EmbeddedStamp(fontBytes, text);
+    if (face.hex(text).isEmpty) {
       throw ArgumentError('stamp text is empty');
     }
-    final double size = fontSize < 6 ? 6 : fontSize;
     return _decorate(
       bytes,
       ranges: ranges,
+      embeddedFont: face.bytes,
       overlay: (PdfPageInfo page, int index, int count) {
-        final double width = size * 0.5 * literal.length;
+        final double width = face.width(text, size);
         final double x = page.cropBox.llx + (page.cropBox.width - width) / 2;
         final double y = page.cropBox.lly + page.cropBox.height / 2;
-        return _overlay(literal, size, x, y);
+        return face.overlay(text, size, x, y);
       },
       opacity: opacity,
     );
@@ -237,8 +260,8 @@ abstract final class PdfToolbox {
 
   /// Footer page numbers. [pattern] may contain `{n}` and `{N}`.
   ///
-  /// Optional [bates] is a Latin prefix in the top corner (`FILE-000001`).
-  /// Helvetica only.
+  /// Optional [bates] is a prefix in the top corner (`FILE-000001`).
+  /// [fontBytes] embeds that face and shapes Arabic; otherwise Helvetica.
   static Uint8List numberPages(
     Uint8List bytes, {
     String pattern = '{n} / {N}',
@@ -247,33 +270,64 @@ abstract final class PdfToolbox {
     int batesDigits = 6,
     String header = '',
     List<String> ranges = const <String>[],
+    Uint8List? fontBytes,
   }) {
+    final _EmbeddedStamp? face = fontBytes == null
+        ? null
+        : _EmbeddedStamp(
+            fontBytes,
+            '$pattern $bates $header 0123456789/',
+          );
     return _decorate(
       bytes,
       ranges: ranges,
+      embeddedFont: face?.bytes,
       overlay: (PdfPageInfo page, int index, int count) {
         final int shown = start + index;
-        final String label = _pdfLiteral(
-          pattern.replaceAll('{n}', '$shown').replaceAll('{N}', '$count'),
-        );
+        final String rawLabel = pattern
+            .replaceAll('{n}', '$shown')
+            .replaceAll('{N}', '$count');
+        final String label = face == null ? _pdfLiteral(rawLabel) : rawLabel;
         final double size = 10;
-        final double width = size * 0.5 * label.length;
+        final double width = face == null
+            ? size * 0.5 * label.length
+            : face.width(label, size);
         final double x = page.cropBox.llx + (page.cropBox.width - width) / 2;
         final double y = page.cropBox.lly + 28;
-        final StringBuffer ops = StringBuffer(_overlay(label, size, x, y));
+        final StringBuffer ops = StringBuffer(
+          face == null
+              ? _overlay(label, size, x, y)
+              : face.overlay(label, size, x, y),
+        );
         if (bates.trim().isNotEmpty) {
-          final String mark = _pdfLiteral(
-            '${bates.trim()}-${shown.toString().padLeft(batesDigits < 1 ? 1 : batesDigits, '0')}',
-          );
-          final double bx = page.cropBox.urx - 36 - size * 0.52 * mark.length;
+          final String rawMark =
+              '${bates.trim()}-${shown.toString().padLeft(batesDigits < 1 ? 1 : batesDigits, '0')}';
+          final String mark = face == null ? _pdfLiteral(rawMark) : rawMark;
+          final double markWidth = face == null
+              ? size * 0.52 * mark.length
+              : face.width(mark, 9);
+          final double bx = page.cropBox.urx - 36 - markWidth;
           final double by = page.cropBox.ury - 36;
-          ops.write(_overlay(mark, 9, bx, by));
-        }
-        final String head = _pdfLiteral(header);
-        if (head.isNotEmpty) {
           ops.write(
-            _overlay(head, 10, page.cropBox.llx + 36, page.cropBox.ury - 36),
+            face == null
+                ? _overlay(mark, 9, bx, by)
+                : face.overlay(mark, 9, bx, by),
           );
+        }
+        if (header.trim().isNotEmpty) {
+          final String head = face == null ? _pdfLiteral(header) : header;
+          if (head.isNotEmpty) {
+            ops.write(
+              face == null
+                  ? _overlay(head, 10, page.cropBox.llx + 36, page.cropBox.ury - 36)
+                  : face.overlay(
+                      head,
+                      10,
+                      page.cropBox.llx + 36,
+                      page.cropBox.ury - 36,
+                    ),
+            );
+          }
         }
         return ops.toString();
       },
@@ -320,6 +374,7 @@ abstract final class PdfToolbox {
     required List<String> ranges,
     required String Function(PdfPageInfo page, int index, int count) overlay,
     double opacity = 1,
+    Uint8List? embeddedFont,
   }) {
     final PdfFile file = PdfFile.open(bytes);
     final Set<int> chosen = ranges.isEmpty
@@ -340,6 +395,7 @@ abstract final class PdfToolbox {
               ? overlay(file.pageAt(i), i, file.pageCount)
               : null,
           overlayOpacity: opacity,
+          embeddedFont: chosen.contains(i) ? embeddedFont : null,
         ),
     ]);
   }
@@ -542,4 +598,52 @@ abstract final class PdfToolbox {
   }
 
   static Uint8List _one(List<PdfGraftSlot> slots) => PdfPageGraft.write(slots);
+}
+
+class _EmbeddedStamp {
+  _EmbeddedStamp(Uint8List fontBytes, String sample)
+    : font = SfntFont.parse(fontBytes),
+      subset = FontSubsetter(SfntFont.parse(fontBytes)).subset(
+        <int>{
+          for (final ShapedChar char in ArabicShaper.shape(sample))
+            char.codePoint,
+        },
+      );
+
+  final SfntFont font;
+  final FontSubset subset;
+
+  Uint8List get bytes => subset.bytes;
+
+  String hex(String text) {
+    final StringBuffer out = StringBuffer();
+    for (final ShapedChar char in ArabicShaper.shape(text)) {
+      final int gid = subset.unicodeToNewGlyph[char.codePoint] ?? 0;
+      if (gid == 0 || char.advanceFactor == 0) {
+        continue;
+      }
+      out.write(gid.toRadixString(16).padLeft(4, '0'));
+    }
+    return out.toString();
+  }
+
+  double width(String text, double size) {
+    var w = 0.0;
+    for (final ShapedChar char in ArabicShaper.shape(text)) {
+      if (char.advanceFactor == 0) {
+        continue;
+      }
+      final int old = font.glyphIdFor(char.codePoint);
+      w += font.advanceWidth(old) * size / font.unitsPerEm * char.advanceFactor;
+    }
+    return w;
+  }
+
+  String overlay(String text, double size, double x, double y) {
+    final String glyphs = hex(text);
+    if (glyphs.isEmpty) {
+      return '';
+    }
+    return 'q /QzG gs 0.35 0.35 0.35 rg BT /QzF $size Tf 1 0 0 1 $x $y Tm <$glyphs> Tj ET Q\n';
+  }
 }

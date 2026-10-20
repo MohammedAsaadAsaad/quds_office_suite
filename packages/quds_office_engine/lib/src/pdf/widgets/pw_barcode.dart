@@ -145,3 +145,92 @@ class Barcode extends Widget {
     ).layout(context, constraints);
   }
 }
+
+/// EAN-13 modules (bars = true), including quiet zones.
+class Ean13Encoder {
+  /// Ean13Encoder API.
+  const Ean13Encoder();
+
+  static const List<String> _l = <String>[
+    '0001101',
+    '0011001',
+    '0010011',
+    '0111101',
+    '0100011',
+    '0110001',
+    '0101111',
+    '0111011',
+    '0110111',
+    '0001011',
+  ];
+  static const List<String> _g = <String>[
+    '0100111',
+    '0110011',
+    '0011011',
+    '0100001',
+    '0011101',
+    '0111001',
+    '0000101',
+    '0010001',
+    '0001001',
+    '0010111',
+  ];
+  static const List<String> _r = <String>[
+    '1110010',
+    '1100110',
+    '1101100',
+    '1000010',
+    '1011100',
+    '1001110',
+    '1010000',
+    '1000100',
+    '1001000',
+    '1110100',
+  ];
+  static const List<String> _parity = <String>[
+    'LLLLLL',
+    'LLGLGG',
+    'LLGGLG',
+    'LLGGGL',
+    'LGLLGG',
+    'LGGLLG',
+    'LGGGLL',
+    'LGLGLG',
+    'LGLGGL',
+    'LGGLGL',
+  ];
+
+  /// Encodes 12 or 13 digits. A 12-digit payload gets its check digit.
+  List<bool> encode(String data) {
+    final String digits = data.trim();
+    if (!RegExp(r'^\d{12,13}$').hasMatch(digits)) {
+      throw ArgumentError.value(data, 'data', 'EAN-13 needs 12 or 13 digits');
+    }
+    final String body = digits.length == 12 ? '$digits${check(digits)}' : digits;
+    if (digits.length == 13 && check(digits.substring(0, 12)) != digits[12]) {
+      throw ArgumentError.value(data, 'data', 'EAN-13 check digit is wrong');
+    }
+    final String parity = _parity[int.parse(body[0])];
+    final StringBuffer bits = StringBuffer('0000000101');
+    for (int i = 0; i < 6; i++) {
+      final int d = int.parse(body[i + 1]);
+      bits.write(parity[i] == 'L' ? _l[d] : _g[d]);
+    }
+    bits.write('01010');
+    for (int i = 0; i < 6; i++) {
+      bits.write(_r[int.parse(body[i + 7])]);
+    }
+    bits.write('101000000');
+    return <bool>[for (final int c in bits.toString().codeUnits) c == 0x31];
+  }
+
+  /// Modulo-10 check digit for the first 12 digits.
+  static String check(String twelve) {
+    var sum = 0;
+    for (int i = 0; i < 12; i++) {
+      final int d = twelve.codeUnitAt(i) - 0x30;
+      sum += d * (i.isEven ? 1 : 3);
+    }
+    return '${(10 - sum % 10) % 10}';
+  }
+}

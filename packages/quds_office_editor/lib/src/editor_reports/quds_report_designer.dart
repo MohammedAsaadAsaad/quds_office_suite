@@ -59,6 +59,7 @@ class QudsReportDesigner extends StatefulWidget {
     this.deviceFonts,
     this.onPickData,
     this.onPickShape,
+    this.onPromptParameters,
     this.strings,
   });
 
@@ -113,6 +114,13 @@ class QudsReportDesigner extends StatefulWidget {
   /// The host shows the print dialog, for example with the `printing`
   /// package.
   final Future<void> Function(Uint8List pdf)? onPrint;
+
+  /// Asked before preview, print, and export when the template has
+  /// [ReportVariable.prompt] variables. Return false to stay put. The host
+  /// writes the answers with [ReportDesignerController.setRuntimeValues].
+  /// Design mode itself does not ask. Null skips the question.
+  final Future<bool> Function(List<ReportVariable> prompts)?
+  onPromptParameters;
 
   /// Ready-made reports offered by the Templates button (hidden when empty).
   /// Picking one replaces the template and uses its sample data. Null offers
@@ -916,9 +924,30 @@ class _QudsReportDesignerState extends State<QudsReportDesigner> {
     setState(() => _message = '${_t('Loaded')} "${info.title}"');
   }
 
+  Future<void> _goPreview() async {
+    if (_c.mode == ReportDesignMode.preview) {
+      _c.togglePreview();
+      return;
+    }
+    if (!await _promptParameters()) {
+      return;
+    }
+    _c.mode = ReportDesignMode.preview;
+  }
+
+  Future<bool> _promptParameters() async {
+    final Future<bool> Function(List<ReportVariable>)? ask =
+        widget.onPromptParameters;
+    final List<ReportVariable> prompts = _c.promptVariables;
+    if (ask == null || prompts.isEmpty) {
+      return true;
+    }
+    return ask(prompts);
+  }
+
   Future<void> _export(ReportExportFormat format) async {
     final void Function(ReportExportFormat, Uint8List)? sink = widget.onExport;
-    if (sink == null) {
+    if (sink == null || !await _promptParameters()) {
       return;
     }
     setState(
@@ -943,7 +972,7 @@ class _QudsReportDesignerState extends State<QudsReportDesigner> {
 
   Future<void> _print() async {
     final Future<void> Function(Uint8List)? sink = widget.onPrint;
-    if (sink == null) {
+    if (sink == null || !await _promptParameters()) {
       return;
     }
     setState(() => _message = '${_t('Preparing to print')}…');
@@ -1116,6 +1145,25 @@ class _QudsReportDesignerState extends State<QudsReportDesigner> {
       title: 'Map',
       description:
           'Regions from a shape file. Color each one from a column, joined by a key.',
+    ),
+    ReportToolboxEntry(
+      tool: ReportDesignTool.section,
+      icon: ReportToolbarIcon.table,
+      title: 'Section',
+      description: 'Another detail table, with its own data set.',
+      gapBefore: true,
+    ),
+    ReportToolboxEntry(
+      tool: ReportDesignTool.crosstab,
+      icon: ReportToolbarIcon.chart,
+      title: 'Crosstab',
+      description: 'Rows by one field, columns by another, with a total.',
+    ),
+    ReportToolboxEntry(
+      tool: ReportDesignTool.subreport,
+      icon: ReportToolbarIcon.text,
+      title: 'Subreport',
+      description: 'A child template stored in the same report file.',
     ),
   ];
 
@@ -1321,7 +1369,7 @@ class _QudsReportDesignerState extends State<QudsReportDesigner> {
       case 'fit':
         _c.fitWidth();
       case 'mode':
-        _c.togglePreview();
+        _goPreview();
       case 'data':
         _c.toggleData();
       case 'export':
@@ -1399,6 +1447,10 @@ class _QudsReportDesignerState extends State<QudsReportDesigner> {
     }
     final LogicalKeyboardKey key = event.logicalKey;
     if (_c.editingId != null) {
+      if (_ctrl && key == LogicalKeyboardKey.keyB) {
+        _c.toggleRunBold();
+        return KeyEventResult.handled;
+      }
       return _editKey(
         _c.textEditor,
         event,
@@ -1448,7 +1500,7 @@ class _QudsReportDesignerState extends State<QudsReportDesigner> {
       );
     }
     if (key == LogicalKeyboardKey.f5) {
-      _c.togglePreview();
+      _goPreview();
       return KeyEventResult.handled;
     }
     if (key == LogicalKeyboardKey.f6) {

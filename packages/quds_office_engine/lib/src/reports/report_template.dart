@@ -65,7 +65,7 @@ enum ReportTextDirection { auto, rtl, ltr }
 enum ReportImageFit { contain, cover, fill, none }
 
 /// Barcode symbology.
-enum ReportBarcodeType { code128, qr }
+enum ReportBarcodeType { code128, qr, ean13 }
 
 /// Shape kind.
 enum ReportShapeKind { line, rectangle, roundedRectangle, ellipse }
@@ -184,7 +184,7 @@ enum ReportChartAggregate { sum, avg, count, min, max, first, last }
 enum ReportChartSort { none, category, value }
 
 /// Element kind (mirrors `type="…"`).
-enum ReportElementType { text, image, table, barcode, shape, chart }
+enum ReportElementType { text, image, table, barcode, shape, chart, crosstab, subreport }
 
 /// Enum value for [name] ignoring case, `-`, and `_`.
 T? reportEnumByName<T extends Enum>(List<T> values, String? name) {
@@ -414,6 +414,8 @@ class ReportVariable {
     this.type = ReportVariableType.text,
     this.description = '',
     this.format,
+    this.prompt = false,
+    this.required = false,
   });
 
   /// Name; dots group variables into folders, so `stats.sum` is referenced
@@ -452,6 +454,13 @@ class ReportVariable {
 
   /// Format used when the designer inserts the variable (`currency:LYD`).
   String? format;
+
+  /// The studio asks for a value before preview, print, and export.
+  /// [value] stays the saved default and the design-time sample.
+  bool prompt;
+
+  /// A prompted run cannot continue while the answer is empty.
+  bool required;
 
   /// Placeholder the designer inserts for this variable.
   String get placeholder {
@@ -539,6 +548,8 @@ class ReportVariable {
     type: type,
     description: description,
     format: format,
+    prompt: prompt,
+    required: required,
   );
 }
 
@@ -602,6 +613,8 @@ sealed class ReportElement {
       ReportElementType.barcode => 'Barcode',
       ReportElementType.shape => 'Shape',
       ReportElementType.chart => 'Chart',
+      ReportElementType.crosstab => 'Crosstab',
+      ReportElementType.subreport => 'Subreport',
     };
     final String? n = name;
     return n == null || n.isEmpty ? kind : '$kind "$n"';
@@ -615,7 +628,55 @@ sealed class ReportElement {
     ReportElementType.barcode => 'barcode',
     ReportElementType.shape => 'shape',
     ReportElementType.chart => 'chart',
+    ReportElementType.crosstab => 'crosstab',
+    ReportElementType.subreport => 'subreport',
   };
+}
+
+/// One styled slice of a [ReportTextElement].
+class ReportTextRun {
+  /// ReportTextRun API.
+  ReportTextRun({
+    this.text = '',
+    this.bold,
+    this.italic,
+    this.fontSize,
+    this.color,
+    this.underline,
+    this.link,
+  });
+
+  /// Literal or `{{ }}` text.
+  String text;
+
+  /// bold API.
+  bool? bold;
+
+  /// italic API.
+  bool? italic;
+
+  /// Points. Null uses the element size.
+  double? fontSize;
+
+  /// color API.
+  String? color;
+
+  /// underline API.
+  bool? underline;
+
+  /// URI. Null is plain text.
+  String? link;
+
+  /// copy API.
+  ReportTextRun copy() => ReportTextRun(
+    text: text,
+    bold: bold,
+    italic: italic,
+    fontSize: fontSize,
+    color: color,
+    underline: underline,
+    link: link,
+  );
 }
 
 /// Static or bound text.
@@ -644,7 +705,9 @@ class ReportTextElement extends ReportElement {
     this.borderWidth = 0,
     this.background,
     this.lineSpacing = 1.0,
-  }) : style = style ?? ReportTextStyle();
+    List<ReportTextRun>? runs,
+  }) : style = style ?? ReportTextStyle(),
+       runs = runs ?? <ReportTextRun>[];
 
   /// Template text with `{{ }}` placeholders.
   String text;
@@ -688,6 +751,14 @@ class ReportTextElement extends ReportElement {
   /// Line-height multiplier.
   double lineSpacing;
 
+  /// Mixed slices. Empty means [text] uses [style] alone.
+  final List<ReportTextRun> runs;
+
+  /// [text], or the runs joined when they are present.
+  String get plainText => runs.isEmpty
+      ? text
+      : runs.map((ReportTextRun r) => r.text).join();
+
   @override
   ReportElementType get type => ReportElementType.text;
 
@@ -715,6 +786,7 @@ class ReportTextElement extends ReportElement {
     borderWidth: borderWidth,
     background: background,
     lineSpacing: lineSpacing,
+    runs: <ReportTextRun>[for (final ReportTextRun r in runs) r.copy()],
   );
 }
 
@@ -1640,6 +1712,140 @@ class ReportTableElement extends ReportElement {
   );
 }
 
+/// Pivot of one data set: one row per [rowField], one column per [columnField].
+class ReportCrosstabElement extends ReportElement {
+  /// ReportCrosstabElement API.
+  ReportCrosstabElement({
+    super.id,
+    super.name,
+    super.x,
+    super.y,
+    super.width,
+    super.height,
+    super.visibleWhen,
+    super.extraAttributes,
+    this.dataSet,
+    this.rowField = '',
+    this.columnField = '',
+    this.valueField = '',
+    this.aggregate = ReportChartAggregate.sum,
+    this.maxColumns = 12,
+    this.fontSize = 9,
+    this.headerBold = true,
+  });
+
+  /// Data set path. Null uses the band's rows.
+  String? dataSet;
+
+  /// Expression for the row header (`item.branch`).
+  String rowField;
+
+  /// Expression for the column header (`item.month`).
+  String columnField;
+
+  /// Expression for the aggregated number (`item.amount`).
+  String valueField;
+
+  /// How values that share a row and column combine.
+  ReportChartAggregate aggregate;
+
+  /// Columns after this count are dropped and reported as a warning.
+  int maxColumns;
+
+  /// Body font size, points.
+  double fontSize;
+
+  /// headerBold API.
+  bool headerBold;
+
+  @override
+  ReportElementType get type => ReportElementType.crosstab;
+
+  @override
+  ReportCrosstabElement clone({bool keepId = false}) => ReportCrosstabElement(
+    id: keepId ? id : null,
+    name: name,
+    x: x,
+    y: y,
+    width: width,
+    height: height,
+    visibleWhen: visibleWhen,
+    extraAttributes: Map<String, String>.of(extraAttributes),
+    dataSet: dataSet,
+    rowField: rowField,
+    columnField: columnField,
+    valueField: valueField,
+    aggregate: aggregate,
+    maxColumns: maxColumns,
+    fontSize: fontSize,
+    headerBold: headerBold,
+  );
+}
+
+/// Renders another template stored at `subreports/<name>.xml` in the package.
+class ReportSubreportElement extends ReportElement {
+  /// ReportSubreportElement API.
+  ReportSubreportElement({
+    super.id,
+    super.name,
+    super.x,
+    super.y,
+    super.width,
+    super.height,
+    super.visibleWhen,
+    super.extraAttributes,
+    this.templateName = '',
+    this.dataSet,
+  });
+
+  /// Key under `subreports/` without the extension.
+  String templateName;
+
+  /// Expression for the child data. A list becomes `{items: …}`.
+  /// Null passes the current row, or the parent data when there is no row.
+  String? dataSet;
+
+  @override
+  ReportElementType get type => ReportElementType.subreport;
+
+  @override
+  ReportSubreportElement clone({bool keepId = false}) => ReportSubreportElement(
+    id: keepId ? id : null,
+    name: name,
+    x: x,
+    y: y,
+    width: width,
+    height: height,
+    visibleWhen: visibleWhen,
+    extraAttributes: Map<String, String>.of(extraAttributes),
+    templateName: templateName,
+    dataSet: dataSet,
+  );
+}
+
+/// One data region: optional group header, a detail band, optional group footer.
+class ReportSection {
+  /// ReportSection API.
+  const ReportSection({
+    required this.index,
+    this.groupHeader,
+    this.detail,
+    this.groupFooter,
+  });
+
+  /// Zero-based section, matching [ReportBand.section].
+  final int index;
+
+  /// groupHeader API.
+  final ReportBand? groupHeader;
+
+  /// detail API.
+  final ReportBand? detail;
+
+  /// groupFooter API.
+  final ReportBand? groupFooter;
+}
+
 /// One band section with its elements.
 class ReportBand {
   /// ReportBand API.
@@ -1660,6 +1866,7 @@ class ReportBand {
     this.repeatOnEveryPage = false,
     this.background,
     this.visibleWhen,
+    this.section = 0,
     List<ReportElement>? elements,
     Map<String, String>? extraAttributes,
   }) : elements = elements ?? <ReportElement>[],
@@ -1717,6 +1924,10 @@ class ReportBand {
   /// visibleWhen API.
   String? visibleWhen;
 
+  /// Which data section this band belongs to. Page and report bands stay 0.
+  /// A second `<Section>` is 1, so a report can print two detail tables.
+  int section;
+
   /// elements API.
   final List<ReportElement> elements;
 
@@ -1753,6 +1964,7 @@ class ReportBand {
     repeatOnEveryPage: repeatOnEveryPage,
     background: background,
     visibleWhen: visibleWhen,
+    section: section,
     elements: <ReportElement>[
       for (final ReportElement e in elements) e.clone(keepId: keepIds),
     ],
@@ -1780,12 +1992,14 @@ class ReportTemplate {
     List<ReportBand>? bands,
     ReportDataSchema? dataSchema,
     Map<String, String>? extraAttributes,
+    Map<String, String>? subreports,
   }) : margins = margins ?? ReportMargins(),
        colors = colors ?? <String, String>{},
        variables = variables ?? <ReportVariable>[],
        bands = bands ?? <ReportBand>[],
        dataSchema = dataSchema ?? ReportDataSchema(),
-       extraAttributes = extraAttributes ?? <String, String>{};
+       extraAttributes = extraAttributes ?? <String, String>{},
+       subreports = subreports ?? <String, String>{};
 
   /// name API.
   String name;
@@ -1838,6 +2052,9 @@ class ReportTemplate {
 
   /// extraAttributes API.
   final Map<String, String> extraAttributes;
+
+  /// Child templates keyed by name (`subreports/<name>.xml` in the package).
+  final Map<String, String> subreports;
 
   /// Oriented page width, points.
   double get pageWidth => orientation == ReportOrientation.landscape
@@ -1911,12 +2128,66 @@ class ReportTemplate {
     return created;
   }
 
-  /// Sorts bands into canonical order.
-  void sortBands() =>
-      bands.sort((ReportBand a, ReportBand b) => a.kind.index - b.kind.index);
+  /// Sorts bands into canonical order. Data bands stay grouped by [ReportBand.section].
+  void sortBands() => bands.sort((ReportBand a, ReportBand b) {
+    final int ao = _bandOrder(a);
+    final int bo = _bandOrder(b);
+    return ao == bo ? a.section - b.section : ao - bo;
+  });
 
-  /// The detail band, if any.
+  static int _bandOrder(ReportBand b) => switch (b.kind) {
+    ReportBandKind.reportHeader => 0,
+    ReportBandKind.pageHeader => 1,
+    ReportBandKind.groupHeader => 100 + b.section * 10,
+    ReportBandKind.detail => 101 + b.section * 10,
+    ReportBandKind.groupFooter => 102 + b.section * 10,
+    ReportBandKind.pageFooter => 100000,
+    ReportBandKind.reportSummary => 100001,
+  };
+
+  /// The first detail band, if any.
   ReportBand? get detail => band(ReportBandKind.detail);
+
+  /// Detail regions in section order. A template with one detail is one section.
+  List<ReportSection> get sections {
+    final Set<int> ids = <int>{};
+    for (final ReportBand b in bands) {
+      switch (b.kind) {
+        case ReportBandKind.groupHeader:
+        case ReportBandKind.detail:
+        case ReportBandKind.groupFooter:
+          ids.add(b.section);
+        case ReportBandKind.reportHeader:
+        case ReportBandKind.pageHeader:
+        case ReportBandKind.pageFooter:
+        case ReportBandKind.reportSummary:
+          break;
+      }
+    }
+    if (ids.isEmpty) {
+      return <ReportSection>[];
+    }
+    final List<int> sorted = ids.toList()..sort();
+    return <ReportSection>[
+      for (final int i in sorted)
+        ReportSection(
+          index: i,
+          groupHeader: bandIn(ReportBandKind.groupHeader, i),
+          detail: bandIn(ReportBandKind.detail, i),
+          groupFooter: bandIn(ReportBandKind.groupFooter, i),
+        ),
+    ];
+  }
+
+  /// Band of [kind] inside [section], or null.
+  ReportBand? bandIn(ReportBandKind kind, int section) {
+    for (final ReportBand b in bands) {
+      if (b.kind == kind && b.section == section) {
+        return b;
+      }
+    }
+    return null;
+  }
 
   /// Every element with its band.
   Iterable<(ReportBand, ReportElement)> get allElements sync* {
@@ -2059,5 +2330,6 @@ class ReportTemplate {
     ],
     dataSchema: dataSchema.copy(),
     extraAttributes: Map<String, String>.of(extraAttributes),
+    subreports: Map<String, String>.of(subreports),
   );
 }

@@ -96,6 +96,7 @@ abstract final class LineBreaker {
     /// non-justify aligns). Word layout keeps the default [true].
     bool justify = true,
     MarkAttachFn? markAttachOf,
+    List<ShapedGlyph> Function(List<ShapedGlyph> glyphs)? ligate,
   }) {
     if (text.isEmpty) {
       return <BrokenLine>[
@@ -111,12 +112,9 @@ abstract final class LineBreaker {
     final BidiParagraph bidi = Uax9Bidi.reorder(text, baseLevel: baseLevel);
     // Wrap in logical order, then apply UAX #9 L2 per line. Reordering the
     // whole paragraph first inverts RTL wraps (logical start on a later line).
-    final List<ShapedGlyph> logical = _logicalGlyphs(
-      text,
-      bidi,
-      widthOf,
-      glyphIdOf,
-    );
+    final List<ShapedGlyph> logical = ligate == null
+        ? _logicalGlyphs(text, bidi, widthOf, glyphIdOf)
+        : ligate(_logicalGlyphs(text, bidi, widthOf, glyphIdOf));
     if (logical.isEmpty) {
       return <BrokenLine>[];
     }

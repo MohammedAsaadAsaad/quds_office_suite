@@ -42,6 +42,8 @@ class ReportPdfWriter {
     final ReportFontRegistry fonts = layout.fonts;
     final Map<SfntFont, Set<int>> used =
         LinkedHashMap<SfntFont, Set<int>>.identity();
+    final Map<SfntFont, Set<int>> extraGlyphs =
+        LinkedHashMap<SfntFont, Set<int>>.identity();
     for (final ReportPageLayout page in layout.pages) {
       for (final ReportPrimitive p in page.primitives) {
         if (p is! ReportTextPrimitive) {
@@ -57,6 +59,7 @@ class ReportPdfWriter {
               p.font.family,
               cp,
               bold: p.font.bold,
+              italic: p.font.italic,
             );
             if (face == null) {
               continue;
@@ -64,6 +67,9 @@ class ReportPdfWriter {
             used.putIfAbsent(face, () => <int>{})
               ..add(cp)
               ..add(_drawable(face, cp));
+            if (glyph.glyphId > 0) {
+              extraGlyphs.putIfAbsent(face, () => <int>{}).add(glyph.glyphId);
+            }
           }
         }
       }
@@ -75,7 +81,10 @@ class ReportPdfWriter {
       final String name = 'F$nameIndex';
       nameIndex = nameIndex == 1 ? 3 : nameIndex + 1;
       embedded[e.key] = PdfEmbeddedFace(
-        subset: FontSubsetter(e.key).subset(e.value),
+        subset: FontSubsetter(e.key).subset(
+          e.value,
+          extraGlyphIds: extraGlyphs[e.key] ?? const <int>{},
+        ),
         source: e.key,
         resourceName: name,
       );
@@ -105,8 +114,23 @@ class ReportPdfWriter {
         images: images,
         rasters: rasters,
       );
+      final List<PdfLinkAnnot> links = <PdfLinkAnnot>[];
       for (final ReportPrimitive p in page.primitives) {
         painter.paint(p);
+        if (p is ReportTextPrimitive) {
+          final String? uri = p.link;
+          if (uri != null && uri.isNotEmpty) {
+            links.add(
+              PdfLinkAnnot(
+                x: p.bounds.left,
+                y: p.bounds.top,
+                width: p.bounds.width,
+                height: p.bounds.height,
+                uri: uri,
+              ),
+            );
+          }
+        }
       }
       canvas.endText();
       doc.addPage(
@@ -115,6 +139,7 @@ class ReportPdfWriter {
           height: layout.pageHeight,
           content: canvas.toStream(),
           images: images,
+          links: links,
         ),
       );
     }
@@ -303,17 +328,24 @@ class _PagePainter {
     );
     final ReportRect r = p.imageRect;
     final ReportRect b = p.bounds;
+    final bool sliced = p.cropTop > 0.001 || p.cropHeight < 0.999;
     final bool overflow =
-        r.left < b.left - 0.01 ||
-        r.top < b.top - 0.01 ||
-        r.right > b.right + 0.01 ||
-        r.bottom > b.bottom + 0.01;
-    if (overflow) {
+        !sliced &&
+        (r.left < b.left - 0.01 ||
+            r.top < b.top - 0.01 ||
+            r.right > b.right + 0.01 ||
+            r.bottom > b.bottom + 0.01);
+    if (sliced || overflow) {
       canvas.save();
       canvas.clipRect(b.left, b.top, b.width, b.height);
     }
-    canvas.drawImage(name, r.left, r.top, r.width, r.height);
-    if (overflow) {
+    if (sliced && p.cropHeight > 0) {
+      final double fullH = b.height / p.cropHeight;
+      canvas.drawImage(name, b.left, b.top - fullH * p.cropTop, b.width, fullH);
+    } else {
+      canvas.drawImage(name, r.left, r.top, r.width, r.height);
+    }
+    if (sliced || overflow) {
       canvas.restore();
     }
   }
@@ -349,7 +381,14 @@ class _PagePainter {
         final double extra = glyph.isSpace && broken.justificationRatio != 0
             ? broken.justificationRatio * 3
             : 0;
-        _glyph(p, cp, x + glyph.paintDx, baseline - glyph.paintDy, hex);
+        _glyph(
+          p,
+          cp,
+          x + glyph.paintDx,
+          baseline - glyph.paintDy,
+          hex,
+          glyphId: glyph.glyphId,
+        );
         x += glyph.advance + extra;
       }
       if (p.underline && line.width > 0) {
@@ -371,26 +410,40 @@ class _PagePainter {
     int cp,
     double x,
     double baseline,
-    String hex,
-  ) {
-    final SfntFont? face = fonts.faceFor(p.font.family, cp, bold: p.font.bold);
+    String hex, {
+    int glyphId = 0,
+  }) {
+    final SfntFont? face = fonts.faceFor(
+      p.font.family,
+      cp,
+      bold: p.font.bold,
+      italic: p.font.italic,
+    );
     if (face != null) {
       final PdfEmbeddedFace? embed = embedded[face];
       if (embed == null) {
         return;
       }
       final int paintCp = ReportPdfWriter._drawable(face, cp);
+      final int? fromGlyph = glyphId > 0
+          ? embed.subset.oldToNewGlyph[glyphId]
+          : null;
       final int gid =
+          fromGlyph ??
           embed.subset.unicodeToNewGlyph[paintCp] ??
           embed.subset.unicodeToNewGlyph[cp] ??
           0;
+      final ReportFontFamily? family = fonts.family(p.font.family);
+      final SfntFont? realItalic = p.font.bold
+          ? family?.boldItalic
+          : family?.italic;
       canvas.showGlyph(
         x: x,
         y: baseline,
         fontSize: p.font.size,
         glyphId: gid,
         color: hex,
-        italic: p.font.italic,
+        italic: p.font.italic && !identical(face, realItalic),
         bold: p.font.bold && !realBold.contains(face),
         fontName: embed.resourceName,
       );

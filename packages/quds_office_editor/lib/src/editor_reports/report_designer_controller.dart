@@ -65,6 +65,15 @@ enum ReportDesignTool {
 
   /// A signature line with a caption.
   signature,
+
+  /// Adds another detail section.
+  section,
+
+  /// Draw a crosstab.
+  crosstab,
+
+  /// Draw a subreport frame.
+  subreport,
 }
 
 /// Alignment and sizing commands for the selection.
@@ -869,6 +878,7 @@ class ReportDesignerController extends ChangeNotifier {
     shapes: shapes,
     fonts: embeddedFonts,
     sampleData: _sample,
+    subreports: _template.subreports,
   ).encode();
 
   /// Replaces the template, [images], [embeddedFonts] and [sampleData] from
@@ -885,6 +895,7 @@ class ReportDesignerController extends ChangeNotifier {
       shapes: package.shapes,
       fonts: package.fonts,
       sampleData: package.sampleData,
+      subreports: package.subreports,
     );
   }
 
@@ -901,8 +912,12 @@ class ReportDesignerController extends ChangeNotifier {
     Map<String, Uint8List>? shapes,
     Map<String, ReportFontFiles>? fonts,
     Map<String, Object?>? sampleData,
+    Map<String, String>? subreports,
   }) {
     final ReportParseResult parsed = _parseReadable(xml);
+    if (subreports != null) {
+      parsed.template.subreports.addAll(subreports);
+    }
     replaceTemplate(
       parsed.template,
       images: images,
@@ -924,6 +939,7 @@ class ReportDesignerController extends ChangeNotifier {
       shapes: package.shapes,
       fonts: package.fonts,
       sampleData: package.sampleData,
+      subreports: package.subreports,
     );
   }
 
@@ -940,6 +956,7 @@ class ReportDesignerController extends ChangeNotifier {
   }) {
     _endEdits();
     _template = template;
+    runtimeVariables.clear();
     _template.assignElementNames();
     _loadDiagnostics = const <ReportDiagnostic>[];
     _problemsRevision = -1;
@@ -1341,6 +1358,26 @@ class ReportDesignerController extends ChangeNotifier {
     return _merged!;
   }
 
+  /// Answers collected for [ReportVariable.prompt] variables. They override
+  /// the saved defaults for preview and export, and are not written to the
+  /// template.
+  final Map<String, Object?> runtimeVariables = <String, Object?>{};
+
+  /// Variables the host should ask for before preview, print, and export.
+  List<ReportVariable> get promptVariables => <ReportVariable>[
+    for (final ReportVariable v in _template.variables)
+      if (v.prompt) v,
+  ];
+
+  /// Replaces [runtimeVariables] and refreshes the preview.
+  void setRuntimeValues(Map<String, Object?> values) {
+    runtimeVariables
+      ..clear()
+      ..addAll(values);
+    _previewRevision = -1;
+    notifyListeners();
+  }
+
   /// Engine bound to the current template.
   QudsReportEngine get engine => QudsReportEngine(
     _template,
@@ -1350,6 +1387,7 @@ class ReportDesignerController extends ChangeNotifier {
     embeddedFonts: embeddedFonts,
     clock: clock,
     userName: userName,
+    variables: runtimeVariables,
   );
 
   /// Static template checks (unknown functions, bad expressions).
@@ -2027,6 +2065,28 @@ class ReportDesignerController extends ChangeNotifier {
 
   // ------------------------------------------------------------ editing
 
+  /// Appends a detail band in a new section and selects it.
+  void addSection() {
+    _mutate(() {
+      var next = 0;
+      for (final ReportBand b in _template.bands) {
+        if (b.section >= next) {
+          next = b.section + 1;
+        }
+      }
+      final ReportBand detail = ReportBand(
+        kind: ReportBandKind.detail,
+        section: next,
+        height: 20 * 72 / 25.4,
+        dataSet: 'Data.items$next',
+      );
+      _template.bands.add(detail);
+      _template.sortBands();
+      _selectedBand = detail.kind;
+      return true;
+    });
+  }
+
   /// Creates an element for [tool] in [band] at physical, band-relative
   /// [rect]. A tiny rect gets the tool's default size. Selects it.
   ReportElement? addElement(
@@ -2035,6 +2095,10 @@ class ReportDesignerController extends ChangeNotifier {
     ReportRect rect,
   ) {
     if (tool == ReportDesignTool.select) {
+      return null;
+    }
+    if (tool == ReportDesignTool.section) {
+      addSection();
       return null;
     }
     final ReportBand? target = _template.band(band);
@@ -2231,6 +2295,27 @@ class ReportDesignerController extends ChangeNotifier {
           width: 50 * mm,
           kind: ReportShapeKind.line,
           strokeColor: 'primary',
+        );
+      case ReportDesignTool.section:
+        return ReportTextElement(width: 40 * mm, height: 8 * mm, text: '');
+      case ReportDesignTool.crosstab:
+        final String crossRow = band.kind == ReportBandKind.detail
+            ? 'item'
+            : 'row';
+        return ReportCrosstabElement(
+          width: 120 * mm,
+          height: 40 * mm,
+          dataSet: band.dataSet ?? 'Data.items',
+          rowField: '$crossRow.branch',
+          columnField: '$crossRow.month',
+          valueField: '$crossRow.amount',
+        );
+      case ReportDesignTool.subreport:
+        return ReportSubreportElement(
+          width: 120 * mm,
+          height: 40 * mm,
+          templateName: 'child',
+          dataSet: 'Data.items',
         );
     }
   }
@@ -2543,8 +2628,81 @@ class ReportDesignerController extends ChangeNotifier {
         ..add(id);
     }
     editingId = id;
-    textEditor.begin(e.text, multiline: true);
+    textEditor.begin(e.plainText, multiline: true);
     notifyListeners();
+  }
+
+  /// Bolds or unbolds the edited selection and keeps it as runs.
+  void toggleRunBold() {
+    final String? id = editingId;
+    final ReportElement? element = id == null
+        ? null
+        : _template.findElement(id)?.$2;
+    if (element is! ReportTextElement || !textEditor.hasSelection) {
+      return;
+    }
+    final String all = textEditor.formulaBar;
+    final int start = textEditor.selectionStart;
+    final int end = textEditor.selectionEnd;
+    final List<ReportTextRun> source =
+        element.runs.isEmpty || element.plainText != all
+        ? <ReportTextRun>[
+            ReportTextRun(text: all, bold: element.style.bold),
+          ]
+        : <ReportTextRun>[for (final ReportTextRun r in element.runs) r.copy()];
+    final bool on = !_rangeBold(source, start, end);
+    element.runs
+      ..clear()
+      ..addAll(_restyle(source, start, end, bold: on));
+    element.text = all;
+    _changed();
+  }
+
+  bool _rangeBold(List<ReportTextRun> runs, int start, int end) {
+    var at = 0;
+    for (final ReportTextRun run in runs) {
+      final int next = at + run.text.length;
+      if (next > start && at < end && run.bold != true) {
+        return false;
+      }
+      at = next;
+    }
+    return true;
+  }
+
+  List<ReportTextRun> _restyle(
+    List<ReportTextRun> runs,
+    int start,
+    int end, {
+    required bool bold,
+  }) {
+    final List<ReportTextRun> out = <ReportTextRun>[];
+    var at = 0;
+    for (final ReportTextRun run in runs) {
+      final int next = at + run.text.length;
+      final int left = start > at ? start : at;
+      final int right = end < next ? end : next;
+      if (right <= left) {
+        out.add(run);
+      } else {
+        if (left > at) {
+          final ReportTextRun head = run.copy()
+            ..text = run.text.substring(0, left - at);
+          out.add(head);
+        }
+        final ReportTextRun mid = run.copy()
+          ..text = run.text.substring(left - at, right - at)
+          ..bold = bold;
+        out.add(mid);
+        if (right < next) {
+          final ReportTextRun tail = run.copy()
+            ..text = run.text.substring(right - at);
+          out.add(tail);
+        }
+      }
+      at = next;
+    }
+    return out;
   }
 
   /// Commits on-canvas text editing.
@@ -3222,6 +3380,10 @@ class ReportDesignerController extends ChangeNotifier {
         out.addAll(_tableProps(e));
       case ReportChartElement():
         out.addAll(_chartProps(e));
+      case ReportCrosstabElement():
+        out.addAll(_crosstabProps(e));
+      case ReportSubreportElement():
+        out.addAll(_subreportProps(e));
     }
     return out;
   }
@@ -4701,6 +4863,34 @@ class ReportDesignerController extends ChangeNotifier {
           group: g,
         ),
         ReportProperty(
+          key: 'var.$i.prompt',
+          label: 'Ask before preview',
+          kind: ReportPropertyKind.toggle,
+          value: _bool(v.prompt),
+          group: g,
+        ),
+        ReportProperty(
+          key: 'var.$i.required',
+          label: 'Required',
+          kind: ReportPropertyKind.toggle,
+          value: _bool(v.required),
+          group: g,
+        ),
+        ReportProperty(
+          key: 'var.$i.prompt',
+          label: 'Ask before preview',
+          kind: ReportPropertyKind.toggle,
+          value: _bool(v.prompt),
+          group: g,
+        ),
+        ReportProperty(
+          key: 'var.$i.required',
+          label: 'Required',
+          kind: ReportPropertyKind.toggle,
+          value: _bool(v.required),
+          group: g,
+        ),
+        ReportProperty(
           key: 'var.$i.ref',
           label: 'Reference',
           kind: ReportPropertyKind.note,
@@ -4946,6 +5136,16 @@ class ReportDesignerController extends ChangeNotifier {
         x.format = _opt(v);
       case 'description':
         x.description = v.trim();
+      case 'prompt':
+        x.prompt = v == 'true';
+        if (!x.prompt) {
+          x.required = false;
+        }
+      case 'required':
+        x.required = v == 'true';
+        if (x.required) {
+          x.prompt = true;
+        }
       case 'remove':
         t.variables.removeAt(i);
       default:
@@ -6955,6 +7155,14 @@ class ReportDesignerController extends ChangeNotifier {
             ..label = f(p.label)
             ..value = f(p.value);
         }
+      case ReportCrosstabElement():
+        e
+          ..rowField = f(e.rowField)
+          ..columnField = f(e.columnField)
+          ..valueField = f(e.valueField)
+          ..dataSet = opt(e.dataSet);
+      case ReportSubreportElement():
+        e.dataSet = opt(e.dataSet);
     }
   }
 
@@ -7590,12 +7798,6 @@ class ReportDesignerController extends ChangeNotifier {
 
   ReportFontFileInfo _uprightFace(Uint8List bytes) {
     final ReportFontFileInfo info = ReportFontFile.inspect(bytes);
-    if (info.italic) {
-      throw ReportFontException(
-        '${info.family} ${info.style} is italic; reports use the upright '
-        'regular and bold faces',
-      );
-    }
     if (!ReportPackage.isValidFontFamily(info.family)) {
       throw ReportFontException(
         '"${info.family}" cannot be used as a family name',
@@ -7607,16 +7809,21 @@ class ReportDesignerController extends ChangeNotifier {
   void _putFace(ReportFontFileInfo info, Uint8List bytes) {
     final ReportFontFiles? old = embeddedFonts[info.family];
     embeddedFonts[info.family] = old == null
-        ? (info.bold
-              ? ReportFontFiles(bold: bytes)
-              : ReportFontFiles(regular: bytes))
-        : old.withFace(bytes, bold: info.bold);
+        ? ReportFontFiles(
+            regular: !info.bold && !info.italic ? bytes : null,
+            bold: info.bold && !info.italic ? bytes : null,
+            italic: !info.bold && info.italic ? bytes : null,
+            boldItalic: info.bold && info.italic ? bytes : null,
+          )
+        : old.withFace(bytes, bold: info.bold, italic: info.italic);
     _fontsRevision++;
   }
 
   static String _faceNames(ReportFontFiles f) => <String>[
     if (f.regular != null) 'Regular',
     if (f.bold != null) 'Bold',
+    if (f.italic != null) 'Italic',
+    if (f.boldItalic != null) 'Bold Italic',
   ].join(' + ');
 
   static String _byteSize(int bytes) {
@@ -7921,7 +8128,121 @@ class ReportDesignerController extends ChangeNotifier {
       ReportShapeElement() => _applyShape(e, key, v),
       ReportTableElement() => _applyTable(e, key, v),
       ReportChartElement() => _applyChart(e, key, v),
+      ReportCrosstabElement() => _applyCrosstab(e, key, v),
+      ReportSubreportElement() => _applySubreport(e, key, v),
     };
+  }
+
+  List<ReportProperty> _crosstabProps(ReportCrosstabElement e) {
+    const String g = 'Crosstab';
+    return <ReportProperty>[
+      ReportProperty(
+        key: 'dataSet',
+        label: 'Data set',
+        kind: ReportPropertyKind.text,
+        value: e.dataSet ?? '',
+        group: g,
+      ),
+      ReportProperty(
+        key: 'rowField',
+        label: 'Row field',
+        kind: ReportPropertyKind.expression,
+        value: e.rowField,
+        group: g,
+      ),
+      ReportProperty(
+        key: 'columnField',
+        label: 'Column field',
+        kind: ReportPropertyKind.expression,
+        value: e.columnField,
+        group: g,
+      ),
+      ReportProperty(
+        key: 'valueField',
+        label: 'Value field',
+        kind: ReportPropertyKind.expression,
+        value: e.valueField,
+        group: g,
+      ),
+      ReportProperty(
+        key: 'aggregate',
+        label: 'Aggregate',
+        kind: ReportPropertyKind.choice,
+        value: e.aggregate.name,
+        options: _names(ReportChartAggregate.values),
+        group: g,
+      ),
+      ReportProperty(
+        key: 'maxColumns',
+        label: 'Max columns',
+        kind: ReportPropertyKind.number,
+        value: _num(e.maxColumns.toDouble()),
+        group: g,
+      ),
+    ];
+  }
+
+  List<ReportProperty> _subreportProps(ReportSubreportElement e) {
+    const String g = 'Subreport';
+    return <ReportProperty>[
+      ReportProperty(
+        key: 'templateName',
+        label: 'Template',
+        kind: ReportPropertyKind.text,
+        value: e.templateName,
+        group: g,
+      ),
+      ReportProperty(
+        key: 'dataSet',
+        label: 'Data set',
+        kind: ReportPropertyKind.expression,
+        value: e.dataSet ?? '',
+        group: g,
+      ),
+    ];
+  }
+
+  bool _applyCrosstab(ReportCrosstabElement e, String key, String v) {
+    switch (key) {
+      case 'dataSet':
+        e.dataSet = _opt(v);
+      case 'rowField':
+        e.rowField = v.trim();
+      case 'columnField':
+        e.columnField = v.trim();
+      case 'valueField':
+        e.valueField = v.trim();
+      case 'aggregate':
+        final ReportChartAggregate? a = reportEnumByName(
+          ReportChartAggregate.values,
+          v,
+        );
+        if (a == null || a == e.aggregate) {
+          return false;
+        }
+        e.aggregate = a;
+      case 'maxColumns':
+        final double? n = _parseNum(v);
+        if (n == null) {
+          return false;
+        }
+        e.maxColumns = n.round().clamp(1, 64);
+      default:
+        return false;
+    }
+    return true;
+  }
+
+  bool _applySubreport(ReportSubreportElement e, String key, String v) {
+    switch (key) {
+      case 'templateName':
+        e.templateName = v.trim();
+      case 'dataSet':
+        e.dataSet = _opt(v);
+      default:
+        return false;
+    }
+    return true;
   }
 
   bool _applyChart(ReportChartElement e, String key, String v) {

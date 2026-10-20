@@ -26,6 +26,33 @@ sealed class ReportPrimitive {
   final ReportBandKind? band;
 }
 
+/// One styled slice inside a [ReportFlowText].
+final class ReportFlowSpan {
+  /// ReportFlowSpan API.
+  const ReportFlowSpan({
+    required this.text,
+    required this.font,
+    required this.color,
+    this.underline = false,
+    this.link,
+  });
+
+  /// text API.
+  final String text;
+
+  /// font API.
+  final ReportFontSpec font;
+
+  /// color API.
+  final ReportColor color;
+
+  /// underline API.
+  final bool underline;
+
+  /// link API.
+  final String? link;
+}
+
 /// Shaped paragraph inside [contentRect].
 final class ReportTextPrimitive extends ReportPrimitive {
   /// ReportTextPrimitive API.
@@ -42,6 +69,7 @@ final class ReportTextPrimitive extends ReportPrimitive {
     required this.verticalAlign,
     required this.rtl,
     this.underline = false,
+    this.link,
   });
 
   /// Full logical text.
@@ -70,6 +98,9 @@ final class ReportTextPrimitive extends ReportPrimitive {
 
   /// underline API.
   final bool underline;
+
+  /// URI annotation for this slice. Null is plain text.
+  final String? link;
 
   /// Top of the first line box after vertical alignment.
   double get firstLineTop {
@@ -266,6 +297,8 @@ final class ReportImagePrimitive extends ReportPrimitive {
     super.band,
     required this.bytes,
     required this.imageRect,
+    this.cropTop = 0,
+    this.cropHeight = 1,
   });
 
   /// PNG or JPEG bytes.
@@ -273,6 +306,12 @@ final class ReportImagePrimitive extends ReportPrimitive {
 
   /// Fitted destination (may exceed [bounds] for `cover`).
   final ReportRect imageRect;
+
+  /// Fraction of the source skipped above this slice (0–1).
+  final double cropTop;
+
+  /// Fraction of the source drawn in [bounds] (1 is the whole image).
+  final double cropHeight;
 }
 
 /// Barcode modules painted inside [bounds].
@@ -488,6 +527,7 @@ final class ReportFlowText extends ReportFlowItem {
     required this.rtl,
     this.underline = false,
     this.background,
+    this.spans = const <ReportFlowSpan>[],
   });
 
   /// text API.
@@ -516,6 +556,9 @@ final class ReportFlowText extends ReportFlowItem {
 
   /// background API.
   final ReportColor? background;
+
+  /// Mixed slices. Empty means [text] is one run.
+  final List<ReportFlowSpan> spans;
 }
 
 /// Image element with resolved bytes.

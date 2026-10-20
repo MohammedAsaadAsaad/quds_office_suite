@@ -79,9 +79,11 @@ class ReportPackage {
     Map<String, Uint8List>? shapes,
     this.sampleData,
     this.template,
+    Map<String, String>? subreports,
   }) : images = images ?? <String, Uint8List>{},
        fonts = fonts ?? <String, ReportFontFiles>{},
-       shapes = shapes ?? <String, Uint8List>{};
+       shapes = shapes ?? <String, Uint8List>{},
+       subreports = subreports ?? <String, String>{};
 
   /// Parses `.qrep` bytes: a package ZIP or a legacy plain-XML template.
   ///
@@ -106,10 +108,10 @@ class ReportPackage {
     }
     final Map<String, Uint8List> images = <String, Uint8List>{};
     final Map<String, Uint8List> shapes = <String, Uint8List>{};
+    final Map<String, String> subreports = <String, String>{};
     Map<String, Object?>? sample;
     ReportTemplateManifest? template;
-    final Map<String, (Uint8List?, Uint8List?)> faces =
-        <String, (Uint8List?, Uint8List?)>{};
+    final Map<String, _FontSlots> faces = <String, _FontSlots>{};
     for (final ZipEntry entry in zip.entries) {
       if (entry.isDirectory) {
         continue;
@@ -119,17 +121,26 @@ class ReportPackage {
           '${entry.fileName} exceeds ${maxEntryBytes ~/ (1024 * 1024)} MB',
         );
       }
-      final (String, bool)? face = _fontFace(entry.fileName);
+      final (String, _FontSlot)? face = _fontFace(entry.fileName);
       if (face != null) {
-        final (String family, bool bold) = face;
+        final (String family, _FontSlot slot) = face;
         final Uint8List data = _read(zip, entry.fileName);
         try {
           ReportFontFile.inspect(data);
         } on ReportFontException catch (e) {
           throw ReportPackageException('${entry.fileName}: ${e.message}');
         }
-        final (Uint8List?, Uint8List?) slots = faces[family] ?? (null, null);
-        faces[family] = bold ? (slots.$1, data) : (data, slots.$2);
+        final _FontSlots slots = faces.putIfAbsent(family, _FontSlots.new);
+        switch (slot) {
+          case _FontSlot.regular:
+            slots.regular = data;
+          case _FontSlot.bold:
+            slots.bold = data;
+          case _FontSlot.italic:
+            slots.italic = data;
+          case _FontSlot.boldItalic:
+            slots.boldItalic = data;
+        }
         continue;
       }
       if (entry.fileName == sampleDataEntry) {
@@ -169,6 +180,15 @@ class ReportPackage {
         shapes[shapeKey] = data;
         continue;
       }
+      final String? sub = _subreportKey(entry.fileName);
+      if (sub != null) {
+        try {
+          subreports[sub] = _text(_read(zip, entry.fileName));
+        } on FormatException {
+          throw ReportPackageException('${entry.fileName} is not UTF-8');
+        }
+        continue;
+      }
       final String? key = _imageKey(entry.fileName);
       if (key == null) {
         continue;
@@ -190,12 +210,17 @@ class ReportPackage {
       images: images,
       shapes: shapes,
       fonts: <String, ReportFontFiles>{
-        for (final MapEntry<String, (Uint8List?, Uint8List?)> f
-            in faces.entries)
-          f.key: ReportFontFiles(regular: f.value.$1, bold: f.value.$2),
+        for (final MapEntry<String, _FontSlots> f in faces.entries)
+          f.key: ReportFontFiles(
+            regular: f.value.regular,
+            bold: f.value.bold,
+            italic: f.value.italic,
+            boldItalic: f.value.boldItalic,
+          ),
       },
       sampleData: sample,
       template: template,
+      subreports: subreports,
     );
   }
 
@@ -208,11 +233,15 @@ class ReportPackage {
   /// Folder holding embedded shape layers (`shapes/<name>.qmap`).
   static const String shapesFolder = 'shapes/';
 
-  /// Folder holding embedded fonts (`fonts/<family>/regular.ttf|bold.ttf`).
+  /// Folder holding embedded fonts
+  /// (`fonts/<family>/regular.ttf|bold.ttf|italic.ttf|boldItalic.ttf`).
   static const String fontsFolder = 'fonts/';
 
   /// Design-time data entry (JSON object).
   static const String sampleDataEntry = 'data/sample.json';
+
+  /// Child report templates (`subreports/<name>.xml`).
+  static const String subreportsFolder = 'subreports/';
 
   /// Content of the leading `mimetype` entry.
   static const String mimeType = 'application/vnd.quds.qrep+zip';
@@ -228,6 +257,9 @@ class ReportPackage {
 
   /// Embedded shape layers by name (`shape="name"` on a shape map).
   final Map<String, Uint8List> shapes;
+
+  /// Child templates by name (`subreports/<name>.xml`).
+  final Map<String, String> subreports;
 
   /// Embedded TrueType families by name (`fontFamily="Cairo"`).
   final Map<String, ReportFontFiles> fonts;
@@ -274,7 +306,13 @@ class ReportPackage {
     final ReportFontRegistry out = ReportFontRegistry();
     if (base != null) {
       for (final ReportFontFamily f in base.families) {
-        out.register(f.name, regular: f.regular, bold: f.bold);
+        out.register(
+          f.name,
+          regular: f.regular,
+          bold: f.bold,
+          italic: f.italic,
+          boldItalic: f.boldItalic,
+        );
       }
       out.defaultFamily = base.defaultFamily ?? out.defaultFamily;
     }
@@ -340,6 +378,13 @@ class ReportPackage {
       }
       zip.addFile('$imagesFolder$key.${format.extension}', data, store: true);
     }
+    final List<String> subNames = subreports.keys.toList()..sort();
+    for (final String key in subNames) {
+      if (!isValidKey(key)) {
+        throw ReportPackageException('Invalid subreport name "$key"');
+      }
+      zip.addFile('$subreportsFolder$key.xml', utf8.encode(subreports[key]!));
+    }
     final List<String> shapeNames = shapes.keys.toList()..sort();
     for (final String key in shapeNames) {
       if (!isValidKey(key)) {
@@ -356,6 +401,8 @@ class ReportPackage {
       for (final (String face, Uint8List? data) in <(String, Uint8List?)>[
         ('regular', files.regular),
         ('bold', files.bold),
+        ('italic', files.italic),
+        ('boldItalic', files.boldItalic),
       ]) {
         if (data == null) {
           continue;
@@ -382,7 +429,7 @@ class ReportPackage {
     return zip.close();
   }
 
-  static (String, bool)? _fontFace(String fileName) {
+  static (String, _FontSlot)? _fontFace(String fileName) {
     if (!fileName.startsWith(fontsFolder)) {
       return null;
     }
@@ -393,8 +440,10 @@ class ReportPackage {
       return null;
     }
     return switch (parts[1].toLowerCase()) {
-      'regular.ttf' => (parts[0], false),
-      'bold.ttf' => (parts[0], true),
+      'regular.ttf' => (parts[0], _FontSlot.regular),
+      'bold.ttf' => (parts[0], _FontSlot.bold),
+      'italic.ttf' => (parts[0], _FontSlot.italic),
+      'bolditalic.ttf' => (parts[0], _FontSlot.boldItalic),
       _ => null,
     };
   }
@@ -406,6 +455,20 @@ class ReportPackage {
     final String key = fileName.substring(
       shapesFolder.length,
       fileName.length - 5,
+    );
+    if (key.isEmpty || key.contains('/')) {
+      return null;
+    }
+    return isValidKey(key) ? key : null;
+  }
+
+  static String? _subreportKey(String fileName) {
+    if (!fileName.startsWith(subreportsFolder) || !fileName.endsWith('.xml')) {
+      return null;
+    }
+    final String key = fileName.substring(
+      subreportsFolder.length,
+      fileName.length - 4,
     );
     if (key.isEmpty || key.contains('/')) {
       return null;
@@ -442,4 +505,13 @@ class ReportPackage {
         bytes[2] == 0xBF;
     return utf8.decode(bom ? Uint8List.sublistView(bytes, 3) : bytes);
   }
+}
+
+enum _FontSlot { regular, bold, italic, boldItalic }
+
+class _FontSlots {
+  Uint8List? regular;
+  Uint8List? bold;
+  Uint8List? italic;
+  Uint8List? boldItalic;
 }

@@ -1925,11 +1925,33 @@ class _Frame {
     textMatrix = textLine.copy();
   }
 
+  /// ActualText with nothing decodable in the showing operator.
+  void _emitActualTextOnly() {
+    final String? marked = actualText;
+    if (marked == null || marked.isEmpty || actualTextEmitted || hidden) {
+      return;
+    }
+    final ({double x, double y, double size}) start = _textDraw();
+    runs.add(
+      PdfTextRun(
+        text: marked,
+        x: start.x,
+        y: start.y,
+        width: 0,
+        height: start.size <= 0 ? 12 : start.size,
+      ),
+    );
+    actualTextEmitted = true;
+  }
+
   void show(Object value) {
     final ({String text, List<int> codes, List<String> glyphs}) run = _decode(
       value,
     );
     if (run.text.isEmpty && run.codes.isEmpty) {
+      // A marked span can carry ActualText while the WinAnsi showing is
+      // empty (Arabic on Helvetica). The marked string is the line.
+      _emitActualTextOnly();
       return;
     }
     if (hidden) {
@@ -1960,6 +1982,7 @@ class _Frame {
         item,
       );
       if (run.text.isEmpty && run.codes.isEmpty) {
+        _emitActualTextOnly();
         continue;
       }
       if (hidden) {

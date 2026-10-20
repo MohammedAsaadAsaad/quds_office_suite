@@ -8,6 +8,7 @@ import '../bidi/line_breaker.dart';
 import '../bidi/uax9_bidi.dart';
 import '../fonts/font_metrics.dart';
 import '../fonts/gpos_mark_to_base.dart';
+import '../fonts/gsub_ligature.dart';
 import '../fonts/sfnt_parser.dart';
 import '../pdf/file/text/pdf_std14.dart';
 
@@ -23,13 +24,15 @@ class ReportFontException implements Exception {
   String toString() => 'ReportFontException: $message';
 }
 
-/// Regular / bold faces of one family.
+/// Regular, bold, italic, and bold-italic faces of one family.
 class ReportFontFamily {
   /// ReportFontFamily API.
   const ReportFontFamily({
     required this.name,
     required this.regular,
     this.bold,
+    this.italic,
+    this.boldItalic,
   });
 
   /// Family name as referenced by templates (`Cairo`).
@@ -41,9 +44,22 @@ class ReportFontFamily {
   /// Real bold face; when null bold text is synthesized.
   final SfntFont? bold;
 
-  /// Face for [bold] (falls back to [regular]).
-  SfntFont face({required bool bold}) =>
-      bold ? (this.bold ?? regular) : regular;
+  /// Real italic face; when null italic text is sheared.
+  final SfntFont? italic;
+
+  /// Real bold-italic face.
+  final SfntFont? boldItalic;
+
+  /// Face for [bold] and [italic] (falls back toward [regular]).
+  SfntFont face({required bool bold, bool italic = false}) {
+    if (bold && italic) {
+      return boldItalic ?? this.italic ?? this.bold ?? regular;
+    }
+    if (italic) {
+      return this.italic ?? regular;
+    }
+    return bold ? (this.bold ?? regular) : regular;
+  }
 }
 
 /// Families available to the report engine.
@@ -69,28 +85,61 @@ class ReportFontRegistry {
   bool get isEmpty => _families.isEmpty;
 
   /// Registers parsed faces. Replaces an existing family of the same name.
-  void register(String family, {required SfntFont regular, SfntFont? bold}) {
-    if (!regular.hasTable('glyf')) {
-      throw ReportFontException(
-        'Font "$family" has no glyf table (CFF/OTF outlines cannot be embedded)',
-      );
+  void register(
+    String family, {
+    required SfntFont regular,
+    SfntFont? bold,
+    SfntFont? italic,
+    SfntFont? boldItalic,
+  }) {
+    void requireGlyf(SfntFont face, String slot) {
+      if (!face.hasTable('glyf')) {
+        throw ReportFontException(
+          '$slot face of "$family" has no glyf table '
+          '(CFF/OTF outlines cannot be embedded)',
+        );
+      }
     }
-    if (bold != null && !bold.hasTable('glyf')) {
-      throw ReportFontException('Bold face of "$family" has no glyf table');
+
+    requireGlyf(regular, 'Regular');
+    if (bold != null) {
+      requireGlyf(bold, 'Bold');
+    }
+    if (italic != null) {
+      requireGlyf(italic, 'Italic');
+    }
+    if (boldItalic != null) {
+      requireGlyf(boldItalic, 'Bold italic');
     }
     _families.removeWhere(
       (ReportFontFamily f) => f.name.toLowerCase() == family.toLowerCase(),
     );
-    _families.add(ReportFontFamily(name: family, regular: regular, bold: bold));
+    _families.add(
+      ReportFontFamily(
+        name: family,
+        regular: regular,
+        bold: bold,
+        italic: italic,
+        boldItalic: boldItalic,
+      ),
+    );
     defaultFamily ??= family;
   }
 
   /// Parses and registers TTF bytes.
-  void registerBytes(String family, Uint8List regular, {Uint8List? bold}) {
+  void registerBytes(
+    String family,
+    Uint8List regular, {
+    Uint8List? bold,
+    Uint8List? italic,
+    Uint8List? boldItalic,
+  }) {
     register(
       family,
       regular: SfntFont.parse(regular),
       bold: bold == null ? null : SfntFont.parse(bold),
+      italic: italic == null ? null : SfntFont.parse(italic),
+      boldItalic: boldItalic == null ? null : SfntFont.parse(boldItalic),
     );
   }
 
@@ -125,12 +174,17 @@ class ReportFontRegistry {
   );
 
   /// Face that draws [codePoint] for [family], or null for Helvetica.
-  SfntFont? faceFor(String? family, int codePoint, {required bool bold}) {
+  SfntFont? faceFor(
+    String? family,
+    int codePoint, {
+    required bool bold,
+    bool italic = false,
+  }) {
     final ReportFontFamily? primary = this.family(family);
     if (primary == null) {
       return null;
     }
-    final SfntFont first = primary.face(bold: bold);
+    final SfntFont first = primary.face(bold: bold, italic: italic);
     if (_covers(first, codePoint)) {
       return first;
     }
@@ -138,7 +192,7 @@ class ReportFontRegistry {
       if (identical(f, primary)) {
         continue;
       }
-      final SfntFont face = f.face(bold: bold);
+      final SfntFont face = f.face(bold: bold, italic: italic);
       if (_covers(face, codePoint)) {
         return face;
       }
@@ -163,6 +217,12 @@ class ReportFontRegistry {
       yield f.regular;
       if (f.bold != null) {
         yield f.bold!;
+      }
+      if (f.italic != null) {
+        yield f.italic!;
+      }
+      if (f.boldItalic != null) {
+        yield f.boldItalic!;
       }
     }
   }
@@ -262,6 +322,7 @@ class ReportTextShaper {
       spec.family,
       codePoint,
       bold: spec.bold,
+      italic: spec.italic,
     );
     if (face != null) {
       return FontMetrics(font: face, fontSizePoints: spec.size).characterWidth(
@@ -280,7 +341,7 @@ class ReportTextShaper {
     final ReportFontFamily? fam = fonts.family(spec.family);
     if (fam != null) {
       return FontMetrics(
-            font: fam.face(bold: spec.bold),
+            font: fam.face(bold: spec.bold, italic: spec.italic),
             fontSizePoints: spec.size,
           ).lineHeight *
           lineSpacing;
@@ -294,7 +355,7 @@ class ReportTextShaper {
     final double base;
     if (fam != null) {
       base = FontMetrics(
-        font: fam.face(bold: spec.bold),
+        font: fam.face(bold: spec.bold, italic: spec.italic),
         fontSizePoints: spec.size,
       ).ascender;
     } else {
@@ -324,30 +385,47 @@ class ReportTextShaper {
     double lineSpacing = 1,
   }) {
     final String key =
-        '${spec.family}|${spec.size}|${spec.bold}|$rtl|$wrap|$justify|$lineSpacing|'
+        '${spec.family}|${spec.size}|${spec.bold}|${spec.italic}|'
+        '$rtl|$wrap|$justify|$lineSpacing|'
         '${maxWidth.toStringAsFixed(2)}|$text';
     final ReportShapedText? hit = _cache[key];
     if (hit != null) {
       return hit;
     }
     final double width = wrap ? (maxWidth < 1 ? 1 : maxWidth) : 1e9;
-    final SfntFont? primary = fonts.family(spec.family)?.face(bold: spec.bold);
+    final SfntFont? primary = fonts
+        .family(spec.family)
+        ?.face(bold: spec.bold, italic: spec.italic);
     final List<BrokenLine> broken = LineBreaker.breakLines(
       text: text,
       maxWidth: width,
       widthOf: (int cp) => advance(cp, spec),
       glyphIdOf: (int cp) =>
-          fonts.faceFor(spec.family, cp, bold: spec.bold)?.glyphIdFor(cp) ?? cp,
+          fonts
+              .faceFor(spec.family, cp, bold: spec.bold, italic: spec.italic)
+              ?.glyphIdFor(cp) ??
+          cp,
       markAttachOf: primary == null
           ? null
           : GposMarkToBase.fnFor(
               primary,
               spec.size,
               faceFor: (int cp) =>
-                  fonts.faceFor(spec.family, cp, bold: spec.bold),
+                  fonts.faceFor(
+                    spec.family,
+                    cp,
+                    bold: spec.bold,
+                    italic: spec.italic,
+                  ),
             ),
       baseLevel: rtl ? 1 : 0,
       justify: justify,
+      ligate: primary == null
+          ? null
+          : (List<ShapedGlyph> glyphs) {
+              final GsubLigatures gsub = GsubLigatures.of(primary);
+              return gsub.isEmpty ? glyphs : gsub.rewrite(glyphs);
+            },
     );
     final List<ReportTextLine> lines = <ReportTextLine>[
       for (final BrokenLine b in broken)

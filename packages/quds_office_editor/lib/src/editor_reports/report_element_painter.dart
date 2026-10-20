@@ -71,6 +71,9 @@ class ReportElementPainter {
         _paintShape(canvas, layout, e, r);
       case ReportChartElement():
         _paintChart(canvas, t, e, r, fonts ?? _defaultFonts, shapes, data);
+      case ReportCrosstabElement():
+      case ReportSubreportElement():
+        _paintFrame(canvas, r, e.displayName);
     }
   }
 
@@ -724,6 +727,24 @@ class ReportElementPainter {
     } else {
       _guideOutline(canvas, r);
     }
+  }
+
+  void _paintFrame(Canvas canvas, Rect r, String label) {
+    canvas.drawRect(
+      r,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1
+        ..color = const Color(0xFF6B7280),
+    );
+    final TextPainter painter = TextPainter(
+      text: TextSpan(
+        text: label,
+        style: const TextStyle(fontSize: 11, color: Color(0xFF374151)),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout(maxWidth: r.width > 8 ? r.width - 8 : r.width);
+    painter.paint(canvas, r.topLeft + const Offset(4, 4));
   }
 
   /// Chart drawn by the engine's renderer: static points with their literal

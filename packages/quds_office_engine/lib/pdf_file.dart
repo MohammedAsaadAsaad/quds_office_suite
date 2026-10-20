@@ -17,3 +17,6 @@ export 'src/pdf/file/model/pdf_page_info.dart';
 export 'src/pdf/file/text/pdf_extract.dart';
 export 'src/pdf/file/tools/pdf_page_view.dart';
 export 'src/pdf/file/tools/pdf_toolbox.dart';
+export 'src/pdf/office/pdf_office_isolate.dart';
+export 'src/pdf/office/pdf_office_model.dart';
+export 'src/pdf/office/pdf_to_office.dart';

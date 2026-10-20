@@ -26,6 +26,8 @@ abstract final class ReportBundledFonts {
       'Liberation Sans',
       await asset('LiberationSans-Regular.ttf'),
       bold: await asset('LiberationSans-Bold.ttf'),
+      italic: await asset('LiberationSans-Italic.ttf'),
+      boldItalic: await asset('LiberationSans-BoldItalic.ttf'),
     );
     fonts.registerBytes(
       'Noto Naskh Arabic',
@@ -36,11 +38,15 @@ abstract final class ReportBundledFonts {
       'Liberation Serif',
       await asset('LiberationSerif-Regular.ttf'),
       bold: await asset('LiberationSerif-Bold.ttf'),
+      italic: await asset('LiberationSerif-Italic.ttf'),
+      boldItalic: await asset('LiberationSerif-BoldItalic.ttf'),
     );
     fonts.registerBytes(
       'Liberation Mono',
       await asset('LiberationMono-Regular.ttf'),
       bold: await asset('LiberationMono-Bold.ttf'),
+      italic: await asset('LiberationMono-Italic.ttf'),
+      boldItalic: await asset('LiberationMono-BoldItalic.ttf'),
     );
     fonts.defaultFamily = 'Liberation Sans';
     return fonts;

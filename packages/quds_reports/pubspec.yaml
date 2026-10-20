@@ -2,7 +2,7 @@ name: quds_reports
 description: >-
   Band reports for Dart: .qrep templates, expressions, Arabic Tafqeet,
   pagination, charts, and PDF, XLSX, and DOCX export.
-version: 1.4.0
+version: 1.5.0
 homepage: https://github.com/MohammedAsaadAsaad/quds_office_suite
 repository: https://github.com/MohammedAsaadAsaad/quds_office_suite/tree/main/packages/quds_reports
 issue_tracker: https://github.com/MohammedAsaadAsaad/quds_office_suite/issues
@@ -49,7 +49,7 @@ environment:
   sdk: ^3.12.0
 
 dependencies:
-  quds_office_engine: ^1.4.0
+  quds_office_engine: ^1.5.0
 
 dev_dependencies:
   lints: ^6.0.0

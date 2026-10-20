@@ -3756,13 +3756,20 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
         }
         final double x = glyph.x;
         final double w = glyph.advance;
+        canvas.drawRect(
+          Rect.fromLTWH(x, line.y, w, line.height),
+          Paint()
+            ..color = revision.kind == WmlRevisionKind.insert
+                ? const Color(0x3327AE60)
+                : const Color(0x33C0392B),
+        );
         if (revision.kind == WmlRevisionKind.insert) {
           canvas.drawLine(
             Offset(x, line.y + line.height - 1),
             Offset(x + w, line.y + line.height - 1),
             Paint()
               ..color = const Color(0xFF1B7A3A)
-              ..strokeWidth = 1.1,
+              ..strokeWidth = 1.6,
           );
         } else {
           canvas.drawLine(
@@ -3770,7 +3777,7 @@ class RenderWordCanvas extends RenderBox implements MouseTrackerAnnotation {
             Offset(x + w, line.y + line.height * 0.55),
             Paint()
               ..color = const Color(0xFFC0392B)
-              ..strokeWidth = 1.1,
+              ..strokeWidth = 1.6,
           );
         }
       }

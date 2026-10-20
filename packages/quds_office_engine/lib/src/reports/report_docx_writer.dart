@@ -205,7 +205,7 @@ class ReportDocxWriter {
   }
 
   static void _addMedia(OpcPackage package, _Part part) {
-    if (part.images.isEmpty && part.charts.isEmpty) {
+    if (part.images.isEmpty && part.charts.isEmpty && part.links.isEmpty) {
       return;
     }
     final RelationshipCollection rels = package.relationshipsFor(part.uri);
@@ -227,6 +227,15 @@ class ReportDocxWriter {
         type: RelationshipTypes.chart,
         target: 'charts/${chart.file}',
         id: chart.rId,
+      );
+    }
+    for (final ({String id, String url}) link in part.links) {
+      rels.add(
+        type:
+            'http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink',
+        target: link.url,
+        id: link.id,
+        targetMode: RelationshipTargetMode.external,
       );
     }
   }
@@ -303,6 +312,8 @@ class ReportDocxWriter {
         case ReportBarcodeElement():
         case ReportTableElement():
         case ReportChartElement():
+        case ReportCrosstabElement():
+        case ReportSubreportElement():
           break;
       }
     }
@@ -435,6 +446,19 @@ class _Part {
   final StringBuffer xml = StringBuffer();
   final List<_Image> images = <_Image>[];
   final List<_Chart> charts = <_Chart>[];
+  final List<({String id, String url})> links = <({String id, String url})>[];
+
+  /// Relationship id for an external [url].
+  String hyperlink(String url) {
+    for (final ({String id, String url}) link in links) {
+      if (link.url == url) {
+        return link.id;
+      }
+    }
+    final String id = 'rIdLink${links.length + 1}';
+    links.add((id: id, url: url));
+    return id;
+  }
 
   String addChart(String xml) {
     ids.chart++;
@@ -460,15 +484,43 @@ class _Part {
 }
 
 class _Run {
-  const _Run.text(this.text) : field = null;
+  const _Run.text(
+    this.text, {
+    this.bold,
+    this.italic,
+    this.size,
+    this.underline,
+    this.link,
+  }) : field = null;
 
-  const _Run.field(String instruction, this.text) : field = instruction;
+  const _Run.field(String instruction, this.text)
+    : field = instruction,
+      bold = null,
+      italic = null,
+      size = null,
+      underline = null,
+      link = null;
 
   /// Literal text, or the cached field result.
   final String text;
 
   /// Field instruction (`PAGE`), or null for literal text.
   final String? field;
+
+  /// Overrides the paragraph bold.
+  final bool? bold;
+
+  /// Overrides the paragraph italic.
+  final bool? italic;
+
+  /// Overrides the paragraph size, points.
+  final double? size;
+
+  /// Overrides the paragraph underline.
+  final bool? underline;
+
+  /// External URI.
+  final String? link;
 }
 
 sealed class _Item {
@@ -547,7 +599,19 @@ class _BlockWriter {
           list.add(
             _Para(
               rect: f.rect,
-              runs: <_Run>[_Run.text(f.text)],
+              runs: f.spans.isEmpty
+                  ? <_Run>[_Run.text(f.text)]
+                  : <_Run>[
+                      for (final ReportFlowSpan s in f.spans)
+                        _Run.text(
+                          s.text,
+                          bold: s.font.bold,
+                          italic: s.font.italic,
+                          size: s.font.size,
+                          underline: s.underline,
+                          link: s.link,
+                        ),
+                    ],
               font: f.font,
               color: f.color,
               align: f.align,
@@ -903,7 +967,7 @@ class _BlockWriter {
       '<w:jc w:val="$jc"/></w:pPr>',
     );
     for (final _Run run in p.runs) {
-      final String rPr = _rPr(p, run.text);
+      final String rPr = _rPr(p, run);
       final String? field = run.field;
       if (field != null) {
         out
@@ -917,6 +981,10 @@ class _BlockWriter {
         continue;
       }
       final List<String> lines = run.text.split('\n');
+      final String? link = run.link;
+      if (link != null && link.isNotEmpty) {
+        out.write('<w:hyperlink r:id="${part.hyperlink(link)}">');
+      }
       out.write('<w:r>$rPr');
       for (int i = 0; i < lines.length; i++) {
         if (i > 0) {
@@ -927,25 +995,31 @@ class _BlockWriter {
         );
       }
       out.write('</w:r>');
+      if (link != null && link.isNotEmpty) {
+        out.write('</w:hyperlink>');
+      }
     }
     out.write('</w:p>');
     return out.toString();
   }
 
-  String _rPr(_Para p, String text) {
+  String _rPr(_Para p, _Run run) {
     final String face = OfficeMarkup.escapeAttr(
       p.font.family.isEmpty
           ? (t.defaultFont.isEmpty ? 'Arial' : t.defaultFont)
           : p.font.family,
     );
-    final int sz = (p.font.size * 2).round();
+    final bool bold = run.bold ?? p.font.bold;
+    final bool italic = run.italic ?? p.font.italic;
+    final bool underline = run.underline ?? p.underline;
+    final int sz = ((run.size ?? p.font.size) * 2).round();
     return '<w:rPr><w:rFonts w:ascii="$face" w:hAnsi="$face" w:cs="$face" w:eastAsia="$face"/>'
-        '${p.font.bold ? '<w:b/><w:bCs/>' : ''}'
-        '${p.font.italic ? '<w:i/><w:iCs/>' : ''}'
-        '${p.underline ? '<w:u w:val="single"/>' : ''}'
+        '${bold ? '<w:b/><w:bCs/>' : ''}'
+        '${italic ? '<w:i/><w:iCs/>' : ''}'
+        '${underline ? '<w:u w:val="single"/>' : ''}'
         '<w:color w:val="${p.color.hex}"/>'
         '<w:sz w:val="$sz"/><w:szCs w:val="$sz"/>'
-        '${_hasRtl(text) ? '<w:rtl/>' : ''}</w:rPr>';
+        '${_hasRtl(run.text) ? '<w:rtl/>' : ''}</w:rPr>';
   }
 
   static bool _hasRtl(String s) {

@@ -49,9 +49,11 @@ class OfficeChrome {
     OfficeTheme theme = OfficeTheme.light,
     String? fontFamily,
     bool rtl = false,
+    String nameBox = '',
     List<(int start, int end, Color color)> highlights =
         const <(int, int, Color)>[],
   }) {
+    const double nameW = 96;
     canvas.drawRect(
       Rect.fromLTWH(0, 0, size.width, 28),
       Paint()..color = theme.chromeFill,
@@ -60,6 +62,25 @@ class OfficeChrome {
       Rect.fromLTWH(0, 27, size.width, 1),
       Paint()..color = theme.gridLine,
     );
+    canvas.drawRect(
+      const Rect.fromLTWH(4, 4, nameW - 8, 20),
+      Paint()..color = theme.pageBackground,
+    );
+    canvas.drawRect(
+      const Rect.fromLTWH(4, 4, nameW - 8, 20),
+      Paint()
+        ..color = theme.gridLine
+        ..style = PaintingStyle.stroke,
+    );
+    final ParagraphBuilder name = ParagraphBuilder(
+      ParagraphStyle(fontSize: 12, fontFamily: fontFamily),
+    )..addText(nameBox);
+    final Paragraph nameParagraph = name.build()
+      ..layout(const ParagraphConstraints(width: nameW - 16));
+    canvas.drawParagraph(nameParagraph, const Offset(8, 6));
+    canvas.save();
+    canvas.clipRect(Rect.fromLTWH(nameW, 0, size.width - nameW, 28));
+    canvas.translate(nameW, 0);
     final ParagraphBuilder b = ParagraphBuilder(
       ParagraphStyle(
         fontSize: 12,
@@ -95,8 +116,9 @@ class OfficeChrome {
       }
     }
     final Paragraph p = b.build()
-      ..layout(ParagraphConstraints(width: size.width - 16));
+      ..layout(ParagraphConstraints(width: size.width - nameW - 16));
     canvas.drawParagraph(p, const Offset(8, 6));
+    canvas.restore();
   }
 
   /// paintSheetHeader API.

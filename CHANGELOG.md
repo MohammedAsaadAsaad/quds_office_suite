@@ -5,6 +5,23 @@ This repository is a Dart workspace. Each published package keeps its own change
 - [`packages/quds_office_engine/CHANGELOG.md`](packages/quds_office_engine/CHANGELOG.md)
 - [`packages/quds_office_editor/CHANGELOG.md`](packages/quds_office_editor/CHANGELOG.md)
 
+## 1.5.0 / 1.6.0
+
+Engine **1.5.0**, reports **1.5.0**, editor **1.6.0**, and Report Studio **1.5.0**.
+
+- Reports ask for prompted values before preview, print, and export. A
+  report can hold several detail sections, a crosstab, and a nested
+  subreport. Text can mix runs and links. Fonts can embed italic. Barcodes
+  include EAN-13. Excel gains pictures and a sheet header; tall images
+  continue on the next page.
+- The new sales order template (Arabic and English) shows those pieces
+  together, including a delivery schedule drawn by a subreport.
+- PDF reading can turn a file into Word, Excel, or PowerPoint. Stamps can
+  use a supplied Arabic font. Redaction removes text operators inside the
+  rectangle. GSUB ligatures are applied when the face has them.
+- Report Studio drops File › Convert PDF. The parameter dialog collects the
+  run values.
+
 ## 1.4.0 / 1.4.0
 
 Engine **1.4.0**, editor **1.4.0**, and Report Studio **1.4.0**.

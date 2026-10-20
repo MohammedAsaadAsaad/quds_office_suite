@@ -890,8 +890,8 @@ void main() {
       final List<ReportTemplateInfo> all = await ReportTemplateLibrary.bundled(
         bundle: _DirectoryBundle('templates', ReportTemplateLibrary.folder),
       );
-      expect(all, hasLength(20));
-      expect(all.first.id, 'sales_invoice_ar');
+      expect(all, hasLength(22));
+      expect(all.first.id, 'feature_showcase_ar');
       expect(all.last.category, ReportTemplateCategory.hr);
       expect(
         () => ReportTemplateInfo.fromPackage(ReportPackage(xml: sampleXml)),

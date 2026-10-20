@@ -11,6 +11,7 @@ import '../crypto/pdf_security.dart';
 import '../decode/pdf_cms.dart';
 import '../interp/pdf_display_list.dart';
 import '../interp/pdf_interpreter.dart';
+import '../text/pdf_stream_redact.dart';
 import '../tools/pdf_page_graft.dart';
 import 'pdf_annot.dart';
 import 'pdf_extra.dart';
@@ -464,10 +465,29 @@ class PdfFile {
       final PdfPageRec rec = pageRec(pageIndex);
       final String overlay =
           'q 0 0 0 rg ${rect.x} ${rect.y} ${rect.width} ${rect.height} re f Q\n';
-      final Uint8List extra = Uint8List.fromList(utf8.encode(overlay));
-      rec.pendingContent = extra;
+      final String stripped = PdfStreamRedactor.strip(
+        utf8.decode(_pageStream(rec.dict), allowMalformed: true),
+        rect,
+      );
+      rec.pendingContent = Uint8List.fromList(utf8.encode('$stripped\n$overlay'));
       rec.dirty = true;
     }
+  }
+
+  Uint8List _pageStream(PdfCosDict dict) {
+    final PdfCos? contents = dict['Contents'];
+    if (contents is PdfCosArray) {
+      final BytesBuilder out = BytesBuilder(copy: false);
+      for (final PdfCos item in contents.items) {
+        final Uint8List? part = store.streamBytes(item);
+        if (part != null) {
+          out.add(part);
+          out.addByte(0x0A);
+        }
+      }
+      return out.takeBytes();
+    }
+    return store.streamBytes(contents) ?? Uint8List(0);
   }
 
   /// signatures API — ByteRange coverage plus CMS `messageDigest` when present.

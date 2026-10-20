@@ -1896,7 +1896,7 @@ void main() {
         for (final ReportTemplateInfo t in ReportTemplates.all) t.id,
       };
       expect(ids, hasLength(ReportTemplates.all.length));
-      expect(ReportTemplates.families, hasLength(10));
+      expect(ReportTemplates.families, hasLength(11));
       for (final String family in ReportTemplates.families) {
         final List<ReportTemplateInfo> v = ReportTemplates.variants(family);
         expect(
@@ -3218,6 +3218,109 @@ void main() {
         'beta_en',
         'zeta_en',
       ]);
+    });
+
+    test('prompt variables round-trip and two sections print in order', () {
+      const String xml = '''
+<QudsReport>
+  <Variables>
+    <Var name="branch" value="Tripoli" prompt="true" required="true"/>
+  </Variables>
+  <Bands>
+    <Detail height="8mm" dataSet="items">
+      <Text x="0" y="0" width="80mm" height="6mm">{{item.name}}</Text>
+    </Detail>
+    <Section dataSet="payments">
+      <Detail height="8mm">
+        <Text x="0" y="0" width="80mm" height="6mm">pay {{item.ref}}</Text>
+      </Detail>
+    </Section>
+  </Bands>
+</QudsReport>''';
+      final QudsReportEngine engine = QudsReportEngine.fromXml(xml);
+      expect(engine.template.variables.single.prompt, isTrue);
+      expect(engine.template.variables.single.required, isTrue);
+      expect(engine.template.sections, hasLength(2));
+      expect(engine.template.sections[1].detail!.dataSet, 'payments');
+      final String again = QudsReportEngine.fromXml(engine.toXml()).toXml();
+      expect(again, engine.toXml());
+      final ReportDocumentLayout layout = engine.layout(<String, Object?>{
+        'items': <Object?>[
+          <String, Object?>{'name': 'Oil'},
+        ],
+        'payments': <Object?>[
+          <String, Object?>{'ref': 'P1'},
+        ],
+      });
+      final List<String> texts = pageTexts(layout.pages.first);
+      expect(texts.first, 'Oil');
+      expect(texts, contains('pay P1'));
+    });
+
+    test('crosstab pivots months and a subreport prints its child', () {
+      const String child = '''
+<QudsReport>
+  <Bands>
+    <Detail height="8mm" dataSet="items">
+      <Text x="0" y="0" width="40mm" height="6mm">{{item.sku}}</Text>
+    </Detail>
+  </Bands>
+</QudsReport>''';
+      const String xml = '''
+<QudsReport>
+  <Bands>
+    <Detail height="40mm">
+      <Crosstab x="0" y="0" width="80mm" height="30mm" dataSet="sales" rowField="item.branch" columnField="item.month" valueField="item.amount"/>
+      <Subreport x="0" y="32mm" width="80mm" height="20mm" template="lines" dataSet="lines"/>
+    </Detail>
+  </Bands>
+</QudsReport>''';
+      final QudsReportEngine engine = QudsReportEngine.fromXml(xml)
+        ..template.subreports['lines'] = child;
+      final ReportDocumentLayout layout = engine.layout(<String, Object?>{
+        'sales': <Object?>[
+          <String, Object?>{'branch': 'East', 'month': 'Jan', 'amount': 10},
+          <String, Object?>{'branch': 'East', 'month': 'Feb', 'amount': 5},
+          <String, Object?>{'branch': 'West', 'month': 'Jan', 'amount': 7},
+        ],
+        'lines': <Object?>[
+          <String, Object?>{'sku': 'A1'},
+        ],
+      });
+      final List<String> texts = pageTexts(layout.pages.first);
+      expect(texts, containsAll(<String>['East', 'West', 'Jan', 'Feb', '10', '5', '7', 'A1']));
+      final Uint8List packed = ReportPackage(
+        xml: engine.toXml(),
+        subreports: engine.template.subreports,
+      ).encode();
+      final ReportPackage back = ReportPackage.decode(packed);
+      expect(back.subreports['lines'], contains('sku'));
+    });
+
+    test('rich runs keep their text and a PDF link', () {
+      const String xml = '''
+<QudsReport>
+  <Bands>
+    <Detail height="12mm">
+      <Text x="0" y="0" width="120mm" height="8mm">
+        <Run bold="true">Hello </Run>
+        <Run fontSize="16" link="https://quds.example">world</Run>
+      </Text>
+    </Detail>
+  </Bands>
+</QudsReport>''';
+      final QudsReportEngine engine = QudsReportEngine.fromXml(xml);
+      final ReportTextElement text =
+          engine.template.detail!.elements.first as ReportTextElement;
+      expect(text.runs, hasLength(2));
+      expect(text.runs[1].link, 'https://quds.example');
+      final List<String> texts = pageTexts(engine.layout(const <String, Object?>{}).pages.first);
+      expect(texts, containsAll(<String>['Hello', 'world']));
+      final Uint8List pdf = engine.exportToPdfSync(const <String, Object?>{});
+      expect(utf8.decode(pdf, allowMalformed: true), contains('https://quds.example'));
+      final Uint8List docx = engine.exportToWordSync(const <String, Object?>{});
+      expect(partText(docx, '/word/document.xml'), contains('w:hyperlink'));
+      expect(partText(docx, '/word/document.xml'), contains('<w:b/>'));
     });
   });
 }
